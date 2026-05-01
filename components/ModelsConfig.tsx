@@ -1,6 +1,70 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+// Color icons (have their own fill colors — no background needed)
+import AnthropicIcon from "@lobehub/icons/es/Anthropic/components/Mono";
+import OpenAIIcon from "@lobehub/icons/es/OpenAI/components/Mono";
+import GoogleColorIcon from "@lobehub/icons/es/Google/components/Color";
+import DeepSeekColorIcon from "@lobehub/icons/es/DeepSeek/components/Color";
+import GroqIcon from "@lobehub/icons/es/Groq/components/Mono";
+import MistralColorIcon from "@lobehub/icons/es/Mistral/components/Color";
+import MoonshotIcon from "@lobehub/icons/es/Moonshot/components/Mono";
+import MinimaxColorIcon from "@lobehub/icons/es/Minimax/components/Color";
+import FireworksColorIcon from "@lobehub/icons/es/Fireworks/components/Color";
+import HuggingFaceColorIcon from "@lobehub/icons/es/HuggingFace/components/Color";
+import CerebrasColorIcon from "@lobehub/icons/es/Cerebras/components/Color";
+import OpenRouterIcon from "@lobehub/icons/es/OpenRouter/components/Mono";
+import XAIIcon from "@lobehub/icons/es/XAI/components/Mono";
+import CloudflareColorIcon from "@lobehub/icons/es/Cloudflare/components/Color";
+import VercelIcon from "@lobehub/icons/es/Vercel/components/Mono";
+import GithubCopilotIcon from "@lobehub/icons/es/GithubCopilot/components/Mono";
+import AwsColorIcon from "@lobehub/icons/es/Aws/components/Color";
+import AzureColorIcon from "@lobehub/icons/es/Azure/components/Color";
+import KimiColorIcon from "@lobehub/icons/es/Kimi/components/Color";
+import QwenColorIcon from "@lobehub/icons/es/Qwen/components/Color";
+import ZhipuColorIcon from "@lobehub/icons/es/Zhipu/components/Color";
+import CohereColorIcon from "@lobehub/icons/es/Cohere/components/Color";
+import PerplexityColorIcon from "@lobehub/icons/es/Perplexity/components/Color";
+import TogetherColorIcon from "@lobehub/icons/es/Together/components/Color";
+import GrokIcon from "@lobehub/icons/es/Grok/components/Mono";
+
+type IconComponent = React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
+
+// hasColor=true → Color icon (self-colored SVG, no wrapper)
+// hasColor=false → Mono icon (rendered with currentColor, inherits theme text color)
+const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }> = {
+  "anthropic":              { Icon: AnthropicIcon,        hasColor: false },
+  "openai":                 { Icon: OpenAIIcon,           hasColor: false },
+  "openai-codex":           { Icon: OpenAIIcon,           hasColor: false },
+  "google":                 { Icon: GoogleColorIcon,      hasColor: true },
+  "google-vertex":          { Icon: GoogleColorIcon,      hasColor: true },
+  "deepseek":               { Icon: DeepSeekColorIcon,    hasColor: true },
+  "groq":                   { Icon: GroqIcon,             hasColor: false },
+  "mistral":                { Icon: MistralColorIcon,     hasColor: true },
+  "moonshotai":             { Icon: MoonshotIcon,         hasColor: false },
+  "moonshotai-cn":          { Icon: MoonshotIcon,         hasColor: false },
+  "moonshot":               { Icon: MoonshotIcon,         hasColor: false },
+  "minimax":                { Icon: MinimaxColorIcon,     hasColor: true },
+  "minimax-cn":             { Icon: MinimaxColorIcon,     hasColor: true },
+  "fireworks":              { Icon: FireworksColorIcon,   hasColor: true },
+  "huggingface":            { Icon: HuggingFaceColorIcon, hasColor: true },
+  "cerebras":               { Icon: CerebrasColorIcon,    hasColor: true },
+  "openrouter":             { Icon: OpenRouterIcon,       hasColor: false },
+  "xai":                    { Icon: XAIIcon,              hasColor: false },
+  "cloudflare-ai-gateway":  { Icon: CloudflareColorIcon,  hasColor: true },
+  "cloudflare-workers-ai":  { Icon: CloudflareColorIcon,  hasColor: true },
+  "vercel-ai-gateway":      { Icon: VercelIcon,           hasColor: false },
+  "github-copilot":         { Icon: GithubCopilotIcon,    hasColor: false },
+  "amazon-bedrock":         { Icon: AwsColorIcon,         hasColor: true },
+  "azure-openai-responses": { Icon: AzureColorIcon,       hasColor: true },
+  "kimi-coding":            { Icon: KimiColorIcon,        hasColor: true },
+  "qwen":                   { Icon: QwenColorIcon,        hasColor: true },
+  "zai":                    { Icon: ZhipuColorIcon,       hasColor: true },
+  "cohere":                 { Icon: CohereColorIcon,      hasColor: true },
+  "perplexity":             { Icon: PerplexityColorIcon,  hasColor: true },
+  "together":               { Icon: TogetherColorIcon,    hasColor: true },
+  "grok":                   { Icon: GrokIcon,             hasColor: false },
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -9,6 +73,14 @@ interface OAuthProvider {
   name: string;
   usesCallbackServer: boolean;
   loggedIn: boolean;
+}
+
+interface ApiKeyProvider {
+  id: string;
+  displayName: string;
+  configured: boolean;
+  source?: string;
+  modelCount: number;
 }
 
 type OAuthLoginState =
@@ -49,7 +121,8 @@ interface ModelsJson {
 type Selection =
   | { type: "provider"; name: string }
   | { type: "model"; providerName: string; index: number }
-  | { type: "oauth"; providerId: string };
+  | { type: "oauth"; providerId: string }
+  | { type: "apikey"; providerId: string };
 
 const API_OPTIONS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
 
@@ -448,6 +521,279 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
   );
 }
 
+// ── API Key detail ────────────────────────────────────────────────────────────
+
+function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRefresh: () => void }) {
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
+
+  // Reset state when provider changes
+  useEffect(() => {
+    setApiKey("");
+    setError(null);
+    setSavedOk(false);
+  }, [provider.id]);
+
+  const handleSave = useCallback(async () => {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    setError(null);
+    setSavedOk(false);
+    try {
+      const res = await fetch(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: apiKey.trim() }),
+      });
+      const d = await res.json() as { success?: boolean; error?: string };
+      if (!res.ok || d.error) {
+        setError(d.error ?? `HTTP ${res.status}`);
+      } else {
+        setApiKey("");
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 2000);
+        onRefresh();
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [apiKey, provider.id, onRefresh]);
+
+  const handleRemove = useCallback(async () => {
+    setRemoving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, { method: "DELETE" });
+      const d = await res.json() as { success?: boolean; error?: string };
+      if (!res.ok || d.error) setError(d.error ?? `HTTP ${res.status}`);
+      else onRefresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setRemoving(false);
+    }
+  }, [provider.id, onRefresh]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <SectionTitle>API Key</SectionTitle>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "#4ade80" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}>
+            {provider.configured ? "configured" : "not configured"}
+          </span>
+        </div>
+      </div>
+
+      <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+        {provider.configured
+          ? `API key is stored. Enter a new key below to replace it, or disconnect to remove it.`
+          : `Enter your ${provider.displayName} API key to enable ${provider.modelCount} model${provider.modelCount !== 1 ? "s" : ""}.`}
+      </p>
+
+      <Field label="API Key">
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
+            placeholder={provider.configured ? "Enter new key to replace…" : "sk-…"}
+            style={{ ...inputStyle, flex: 1, fontFamily: "var(--font-mono)" }}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button
+            onClick={handleSave}
+            disabled={saving || !apiKey.trim() || savedOk}
+            style={{
+              padding: "6px 12px",
+              background: savedOk ? "#16a34a" : apiKey.trim() ? "var(--accent)" : "var(--bg-panel)",
+              border: "none", borderRadius: 5,
+              color: (apiKey.trim() || savedOk) ? "#fff" : "var(--text-dim)",
+              cursor: (saving || !apiKey.trim() || savedOk) ? "not-allowed" : "pointer",
+              fontSize: 12, fontWeight: 600, flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 5,
+            }}
+          >
+            {savedOk && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+            {savedOk ? "Saved" : saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </Field>
+
+      {error && <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{error}</p>}
+
+      {provider.configured && (
+        <button
+          onClick={handleRemove}
+          disabled={removing}
+          style={{
+            alignSelf: "flex-start", padding: "5px 12px",
+            background: "none", border: "1px solid rgba(239,68,68,0.3)",
+            borderRadius: 5, color: "#ef4444",
+            cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
+          }}
+        >
+          {removing ? "Removing…" : "Disconnect"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Provider icon ─────────────────────────────────────────────────────────────
+
+function ProviderIcon({ id, size }: { id: string; size: number }) {
+  const pi = PROVIDER_ICONS[id];
+  if (!pi) return null;
+  // Color icons: self-colored SVG, no wrapper needed
+  if (pi.hasColor) return <pi.Icon size={size} />;
+  // Mono icons: use currentColor so they adapt to light/dark theme
+  return <pi.Icon size={size} style={{ color: "var(--text-muted)" }} />;
+}
+
+// ── Add provider picker ───────────────────────────────────────────────────────
+
+interface AddProviderPickerProps {
+  oauthProviders: OAuthProvider[];
+  apiKeyProviders: ApiKeyProvider[];
+  onSelectOAuth: (id: string) => void;
+  onSelectApiKey: (id: string) => void;
+  onAddCustom: () => void;
+  onClose: () => void;
+}
+
+function AddProviderPicker({
+  oauthProviders, apiKeyProviders,
+  onSelectOAuth, onSelectApiKey, onAddCustom, onClose,
+}: AddProviderPickerProps) {
+  const [search, setSearch] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
+
+  const q = search.trim().toLowerCase();
+
+  const availableOAuth = oauthProviders.filter((p) => !p.loggedIn && (!q || p.name.toLowerCase().includes(q)));
+  const availableApiKey = apiKeyProviders.filter((p) => !p.configured && (!q || p.displayName.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)));
+  const showCustom = !q || "custom".includes(q) || "openai-compatible".includes(q);
+
+  const totalCount = availableOAuth.length + availableApiKey.length + (showCustom ? 1 : 0);
+
+  const cardStyle: React.CSSProperties = {
+    display: "flex", flexDirection: "row", alignItems: "center", gap: 8,
+    padding: "10px 12px",
+    background: "var(--bg-panel)",
+    border: "1px solid var(--border)",
+    borderRadius: 7,
+    cursor: "pointer",
+    textAlign: "left",
+    transition: "border-color 0.12s, background 0.12s",
+  };
+
+
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ width: 640, maxHeight: "72vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+        {/* Search */}
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            ref={inputRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+            placeholder="Search providers…"
+            style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
+          />
+        </div>
+
+        {/* Card grid */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+          {totalCount === 0 ? (
+            <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>No providers match</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+              {availableOAuth.length > 0 && (
+                <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Subscriptions</div>
+              )}
+              {availableOAuth.map((p) => (
+                <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
+                  style={cardStyle}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>OAuth</div>
+                  </div>
+                  <ProviderIcon id={p.id} size={28} />
+                </button>
+              ))}
+
+              {availableApiKey.length > 0 && (
+                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>API Key</div>
+              )}
+              {availableApiKey.map((p) => (
+                <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
+                  style={cardStyle}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount} models</div>
+                  </div>
+                  <ProviderIcon id={p.id} size={28} />
+                </button>
+              ))}
+
+              {showCustom && (
+                <div style={{ gridColumn: "1 / -1", paddingTop: (availableOAuth.length > 0 || availableApiKey.length > 0) ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Custom</div>
+              )}
+              {showCustom && (
+                <button
+                  onClick={() => { onAddCustom(); onClose(); }}
+                  style={cardStyle}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>OpenAI-compatible</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>Custom endpoint</div>
+                  </div>
+                  <span style={{ width: 26, height: 26, borderRadius: 5, background: "var(--bg-hover)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)" }}>
+                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ModelsConfig({ onClose }: { onClose: () => void }) {
@@ -458,11 +804,20 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [savedOk, setSavedOk] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
+  const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const loadOAuthProviders = useCallback(() => {
     fetch("/api/auth/providers")
       .then((r) => r.json())
       .then((d: { providers: OAuthProvider[] }) => setOauthProviders(d.providers))
+      .catch(() => {});
+  }, []);
+
+  const loadApiKeyProviders = useCallback(() => {
+    fetch("/api/auth/all-providers")
+      .then((r) => r.json())
+      .then((d: { providers: ApiKeyProvider[] }) => setApiKeyProviders(d.providers))
       .catch(() => {});
   }, []);
 
@@ -478,9 +833,10 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       .catch(() => setConfig({ providers: {} }))
       .finally(() => setLoading(false));
     loadOAuthProviders();
-  }, [loadOAuthProviders]);
+    loadApiKeyProviders();
+  }, [loadOAuthProviders, loadApiKeyProviders]);
 
-  const addProvider = useCallback(() => {
+  const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
     let n = 1;
     while (config.providers?.[finalName]) finalName = `new-provider-${n++}`;
@@ -574,6 +930,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   }, [config]);
 
   const providers = Object.entries(config.providers ?? {});
+  const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
+  const activeApiKey = apiKeyProviders.filter((p) => p.configured);
 
   // Resolve current detail
   const detailContent = (() => {
@@ -582,6 +940,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       const p = oauthProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
       return <OAuthDetail key={p.id} provider={p} onRefresh={loadOAuthProviders} />;
+    }
+    if (selection.type === "apikey") {
+      const p = apiKeyProviders.find((p) => p.id === selection.providerId);
+      if (!p) return null;
+      return <ApiKeyDetail key={p.id} provider={p} onRefresh={loadApiKeyProviders} />;
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];
@@ -611,6 +974,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   })();
 
   return (
+    <>
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ width: 860, height: "78vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
@@ -630,39 +994,48 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           {/* Left: tree */}
           <div style={{ width: 210, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)" }}>
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
-              {/* OAuth subscriptions group */}
-              {oauthProviders.length > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ padding: "4px 8px 6px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
-                    Subscriptions
+              {/* Active OAuth subscriptions */}
+              {activeOAuth.map((p) => {
+                const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => setSelection({ type: "oauth", providerId: p.id })}
+                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
+                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
+                  >
+                    <ProviderIcon id={p.id} size={16} />
+                    <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
                   </div>
-                  {oauthProviders.map((p) => {
-                    const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
-                    return (
-                      <div
-                        key={p.id}
-                        onClick={() => setSelection({ type: "oauth", providerId: p.id })}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
-                        onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
-                      >
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: p.loggedIn ? "#4ade80" : "var(--border)", flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {p.name}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  <div style={{ margin: "8px 8px 0", borderTop: "1px solid var(--border)" }} />
-                  <div style={{ padding: "6px 8px 2px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
-                    Custom providers
+                );
+              })}
+
+              {/* Active API key providers */}
+              {activeApiKey.map((p) => {
+                const isSelected = selection?.type === "apikey" && selection.providerId === p.id;
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => setSelection({ type: "apikey", providerId: p.id })}
+                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
+                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
+                  >
+                    <ProviderIcon id={p.id} size={16} />
+                    <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</span>
                   </div>
-                </div>
+                );
+              })}
+
+              {/* Divider before custom providers, only when there are active managed providers */}
+              {(activeOAuth.length > 0 || activeApiKey.length > 0) && providers.length > 0 && (
+                <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
               )}
+
+              {/* Custom providers */}
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>Loading…</div>
-              ) : providers.length === 0 ? (
-                <div style={{ padding: "4px 8px", fontSize: 11, color: "var(--text-dim)" }}>No providers yet</div>
               ) : providers.map(([pName, pData]) => {
                 const isProviderSelected = selection?.type === "provider" && selection.name === pName;
                 const models = pData.models ?? [];
@@ -724,7 +1097,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
             {/* Add provider */}
             <div style={{ borderTop: "1px solid var(--border)", padding: "8px 6px" }}>
-              <button onClick={addProvider} style={{
+              <button onClick={() => setPickerOpen(true)} style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                 width: "100%", padding: "6px 0", background: "none", border: "1px dashed var(--border)", borderRadius: 5,
                 color: "var(--text-muted)", cursor: "pointer", fontSize: 12,
@@ -776,5 +1149,16 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+    {pickerOpen && (
+      <AddProviderPicker
+        oauthProviders={oauthProviders}
+        apiKeyProviders={apiKeyProviders}
+        onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
+        onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
+        onAddCustom={addCustomProvider}
+        onClose={() => setPickerOpen(false)}
+      />
+    )}
+    </>
   );
 }
