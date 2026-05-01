@@ -66,12 +66,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const [value, setValue] = useState("");
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [modelDropdownRect, setModelDropdownRect] = useState<{ bottom: number; left: number; width: number } | null>(null);
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const modelDropdownPanelRef = useRef<HTMLDivElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -239,7 +241,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        modelDropdownPanelRef.current && !modelDropdownPanelRef.current.contains(e.target as Node)
+      ) {
         setModelDropdownOpen(false);
       }
       if (toolDropdownRef.current && !toolDropdownRef.current.contains(e.target as Node)) {
@@ -488,7 +493,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {modelOptions.length > 0 && currentName && onModelChange && (
                 <div ref={dropdownRef} style={{ position: "relative" }}>
                   <button
-                    onClick={() => setModelDropdownOpen((v) => !v)}
+                    onClick={(e) => {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setModelDropdownRect({ bottom: rect.bottom, left: rect.left, width: rect.width });
+                      setModelDropdownOpen((v) => !v);
+                    }}
                     disabled={isStreaming}
                     style={{
                       display: "flex", alignItems: "center", gap: 6,
@@ -524,12 +533,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     </svg>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
                   </button>
-                  {modelDropdownOpen && (
-                    <div style={{
-                      position: "absolute", bottom: "calc(100% + 6px)", left: 0,
-                      zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
+                  {modelDropdownOpen && modelDropdownRect && (() => {
+                    const maxH = Math.min(modelDropdownRect.bottom - 8, window.innerHeight * 0.6);
+                    const top = modelDropdownRect.bottom - maxH - 6;
+                    return (
+                    <div ref={modelDropdownPanelRef} style={{
+                      position: "fixed",
+                      top, left: modelDropdownRect.left,
+                      zIndex: 500, background: "var(--bg)", border: "1px solid var(--border)",
                       borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                      overflow: "hidden", width: "max-content", minWidth: "100%", maxHeight: "60vh", overflowY: "auto",
+                      overflow: "hidden", width: "max-content", minWidth: modelDropdownRect.width, maxHeight: maxH, overflowY: "auto",
                     }}>
                       {modelsByProvider.map((group, gi) => (
                         <div key={group.provider}>
@@ -572,7 +585,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </div>
                       ))}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
             )}
           </div>
