@@ -10,8 +10,6 @@ export async function GET() {
   const DISPLAY_NAMES: Record<string, string> = {
     "openai-codex": "ChatGPT Plus/Pro",
     "github-copilot": "GitHub Copilot",
-    "google-gemini-cli": "Gemini CLI",
-    "google-antigravity": "Antigravity",
   };
 
   const result = await Promise.all(
