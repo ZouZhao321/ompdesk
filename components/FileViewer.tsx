@@ -3,12 +3,14 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 interface Props {
   filePath: string;
   cwd?: string;
+  isDark?: boolean;
 }
 
 interface FileData {
@@ -392,14 +394,14 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
   );
 }
 
-export function FileViewer({ filePath, cwd }: Props) {
+export function FileViewer({ filePath, cwd, isDark }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} isDark={isDark} />;
 }
 
-function TextFileViewer({ filePath, cwd }: Props) {
+function TextFileViewer({ filePath, cwd, isDark }: Props) {
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -661,7 +663,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
           <iframe
             srcDoc={data.content}
             sandbox="allow-scripts"
-            style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+            style={{ width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
             title="HTML preview"
           />
         ) : isMarkdown && previewMode ? (
@@ -674,7 +676,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
         ) : (
           <SyntaxHighlighter
             language={data.language === "text" ? "plaintext" : data.language}
-            style={vs}
+            style={isDark ? vscDarkPlus : vs}
             showLineNumbers
             lineNumberStyle={{
               color: "var(--text-dim)",

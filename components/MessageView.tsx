@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import type {
   AgentMessage,
   UserMessage,
@@ -30,6 +31,7 @@ interface Props {
   onEditContent?: (content: string) => void;
   showTimestamp?: boolean;
   prevTimestamp?: number;
+  isDark?: boolean;
 }
 
 function formatTime(ts?: number): string | null {
@@ -64,12 +66,12 @@ function copyText(text: string): Promise<void> {
   }
 }
 
-export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp }: Props) {
+export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, isDark }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} isDark={isDark} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -284,6 +286,7 @@ function AssistantMessageView({
   modelNames,
   showTimestamp,
   prevTimestamp,
+  isDark,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -291,6 +294,7 @@ function AssistantMessageView({
   modelNames?: Record<string, string>;
   showTimestamp?: boolean;
   prevTimestamp?: number;
+  isDark?: boolean;
 }) {
   const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blocks = message.content ?? [];
@@ -450,7 +454,7 @@ function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blocks.map((block, i) => (
-          <BlockView key={i} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(i) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} />
+          <BlockView key={i} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(i) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} isDark={isDark} />
         ))}
       </div>
 
@@ -503,9 +507,9 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number> }) {
+function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, isDark }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; isDark?: boolean }) {
   if (block.type === "text") {
-    return <TextBlock block={block as TextContent} />;
+    return <TextBlock block={block as TextContent} isDark={isDark} />;
   }
   if (block.type === "thinking") {
     return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} />;
@@ -519,7 +523,7 @@ function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCal
   return null;
 }
 
-function TextBlock({ block }: { block: TextContent }) {
+function TextBlock({ block, isDark }: { block: TextContent; isDark?: boolean }) {
   return (
     <div className="markdown-body">
       <ReactMarkdown
@@ -530,7 +534,7 @@ function TextBlock({ block }: { block: TextContent }) {
             const raw = String(children);
             const isBlock = className?.includes("language-") || raw.includes("\n");
             if (isBlock) {
-              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
+              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isDark={isDark} />;
             }
             return (
               <code
@@ -674,7 +678,7 @@ function ToolCallBlock({ block, result, isRunning, duration }: { block: ToolCall
             fontSize: 12,
             lineHeight: 1.5,
             overflow: "auto",
-            background: "rgba(0,0,0,0.03)",
+            background: "var(--bg-subtle)",
             borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
@@ -705,7 +709,7 @@ function PairedResult({ text, isEmpty, isError }: {
     <div
       style={{
         borderTop: `1px solid ${isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)"}`,
-        background: isError ? "rgba(248,113,113,0.04)" : "rgba(0,0,0,0.02)",
+        background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
       }}
     >
       <pre
@@ -765,7 +769,7 @@ function formatUsage(usage: {
 
 
 
-function CodeBlock({ code, lang }: { code: string; lang: string }) {
+function CodeBlock({ code, lang, isDark }: { code: string; lang: string; isDark?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
@@ -814,7 +818,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
       </div>
       <SyntaxHighlighter
         language={lang || "text"}
-        style={vs}
+        style={isDark ? vscDarkPlus : vs}
         showLineNumbers
         lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal" }}
         customStyle={{
