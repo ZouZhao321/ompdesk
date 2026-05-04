@@ -6,11 +6,11 @@ import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useTheme } from "@/hooks/useTheme";
 
 interface Props {
   filePath: string;
   cwd?: string;
-  isDark?: boolean;
 }
 
 interface FileData {
@@ -394,14 +394,15 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
   );
 }
 
-export function FileViewer({ filePath, cwd, isDark }: Props) {
+export function FileViewer({ filePath, cwd }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} isDark={isDark} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} />;
 }
 
-function TextFileViewer({ filePath, cwd, isDark }: Props) {
+function TextFileViewer({ filePath, cwd }: Props) {
+  const { isDark } = useTheme();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

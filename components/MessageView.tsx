@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { useTheme } from "@/hooks/useTheme";
 import type {
   AgentMessage,
   UserMessage,
@@ -31,7 +32,6 @@ interface Props {
   onEditContent?: (content: string) => void;
   showTimestamp?: boolean;
   prevTimestamp?: number;
-  isDark?: boolean;
 }
 
 function formatTime(ts?: number): string | null {
@@ -66,12 +66,12 @@ function copyText(text: string): Promise<void> {
   }
 }
 
-export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, isDark }: Props) {
+export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} isDark={isDark} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -286,7 +286,6 @@ function AssistantMessageView({
   modelNames,
   showTimestamp,
   prevTimestamp,
-  isDark,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -294,7 +293,6 @@ function AssistantMessageView({
   modelNames?: Record<string, string>;
   showTimestamp?: boolean;
   prevTimestamp?: number;
-  isDark?: boolean;
 }) {
   const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blocks = message.content ?? [];
@@ -454,7 +452,7 @@ function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blocks.map((block, i) => (
-          <BlockView key={i} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(i) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} isDark={isDark} />
+          <BlockView key={i} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(i) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} />
         ))}
       </div>
 
@@ -507,9 +505,9 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, isDark }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; isDark?: boolean }) {
+function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number> }) {
   if (block.type === "text") {
-    return <TextBlock block={block as TextContent} isDark={isDark} />;
+    return <TextBlock block={block as TextContent} />;
   }
   if (block.type === "thinking") {
     return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} />;
@@ -523,7 +521,7 @@ function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCal
   return null;
 }
 
-function TextBlock({ block, isDark }: { block: TextContent; isDark?: boolean }) {
+function TextBlock({ block }: { block: TextContent }) {
   return (
     <div className="markdown-body">
       <ReactMarkdown
@@ -534,7 +532,7 @@ function TextBlock({ block, isDark }: { block: TextContent; isDark?: boolean }) 
             const raw = String(children);
             const isBlock = className?.includes("language-") || raw.includes("\n");
             if (isBlock) {
-              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isDark={isDark} />;
+              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
             }
             return (
               <code
@@ -769,7 +767,8 @@ function formatUsage(usage: {
 
 
 
-function CodeBlock({ code, lang, isDark }: { code: string; lang: string; isDark?: boolean }) {
+function CodeBlock({ code, lang }: { code: string; lang: string }) {
+  const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
