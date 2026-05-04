@@ -3,8 +3,10 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useTheme } from "@/hooks/useTheme";
 
 interface Props {
   filePath: string;
@@ -400,6 +402,7 @@ export function FileViewer({ filePath, cwd }: Props) {
 }
 
 function TextFileViewer({ filePath, cwd }: Props) {
+  const { isDark } = useTheme();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -661,7 +664,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
           <iframe
             srcDoc={data.content}
             sandbox="allow-scripts"
-            style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+            style={{ width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
             title="HTML preview"
           />
         ) : isMarkdown && previewMode ? (
@@ -674,7 +677,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
         ) : (
           <SyntaxHighlighter
             language={data.language === "text" ? "plaintext" : data.language}
-            style={vs}
+            style={isDark ? vscDarkPlus : vs}
             showLineNumbers
             lineNumberStyle={{
               color: "var(--text-dim)",

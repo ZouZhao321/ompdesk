@@ -5,6 +5,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { useTheme } from "@/hooks/useTheme";
 import type {
   AgentMessage,
   UserMessage,
@@ -674,7 +676,7 @@ function ToolCallBlock({ block, result, isRunning, duration }: { block: ToolCall
             fontSize: 12,
             lineHeight: 1.5,
             overflow: "auto",
-            background: "rgba(0,0,0,0.03)",
+            background: "var(--bg-subtle)",
             borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
@@ -705,7 +707,7 @@ function PairedResult({ text, isEmpty, isError }: {
     <div
       style={{
         borderTop: `1px solid ${isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)"}`,
-        background: isError ? "rgba(248,113,113,0.04)" : "rgba(0,0,0,0.02)",
+        background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
       }}
     >
       <pre
@@ -766,6 +768,7 @@ function formatUsage(usage: {
 
 
 function CodeBlock({ code, lang }: { code: string; lang: string }) {
+  const { isDark } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
@@ -814,7 +817,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
       </div>
       <SyntaxHighlighter
         language={lang || "text"}
-        style={vs}
+        style={isDark ? vscDarkPlus : vs}
         showLineNumbers
         lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal" }}
         customStyle={{

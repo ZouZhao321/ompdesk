@@ -68,7 +68,7 @@ function Toggle({
           width: 16,
           height: 16,
           borderRadius: "50%",
-          background: "#fff",
+          background: "var(--bg)",
           boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
           transition: "left 0.18s cubic-bezier(.4,0,.2,1)",
         }}
