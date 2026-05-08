@@ -309,10 +309,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRetryInfo(null);
         break;
       case "auto_compaction_start":
+      case "compaction_start":
         setIsCompacting(true);
         setCompactError(null);
         break;
       case "auto_compaction_end":
+      case "compaction_end":
         setIsCompacting(false);
         if (event.errorMessage) {
           setCompactError(event.errorMessage as string);

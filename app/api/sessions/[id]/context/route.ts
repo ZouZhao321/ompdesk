@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SessionManager } from "@mariozechner/pi-coding-agent";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { resolveSessionPath, buildSessionContext } from "@/lib/session-reader";
 
 export async function GET(

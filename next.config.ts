@@ -5,12 +5,12 @@ import { join } from "path";
 const { version } = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf8")) as { version: string };
 let piVersion = "unknown";
 try {
-  const piPkgPath = join(__dirname, "node_modules/@mariozechner/pi-coding-agent/package.json");
+  const piPkgPath = join(__dirname, "node_modules/@earendil-works/pi-coding-agent/package.json");
   piVersion = (JSON.parse(readFileSync(piPkgPath, "utf8")) as { version: string }).version;
 } catch { /* package not found, use default */ }
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@mariozechner/pi-coding-agent", "@mariozechner/pi-ai"],
+  serverExternalPackages: ["@earendil-works/pi-coding-agent", "@earendil-works/pi-ai"],
   allowedDevOrigins: ['192.168.*.*'],
   env: {
     NEXT_PUBLIC_APP_VERSION: version,

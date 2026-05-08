@@ -1,4 +1,4 @@
-import type { SessionManager, SettingsManager, AgentSessionEvent } from "@mariozechner/pi-coding-agent";
+import type { SessionManager, SettingsManager, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
 export interface ContextUsage {
   percent: number | null;
