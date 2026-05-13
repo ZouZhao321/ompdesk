@@ -8,6 +8,7 @@ export async function GET() {
   let modelList: { id: string; name: string; provider: string }[] = [];
   let defaultModel: { provider: string; modelId: string } | null = null;
   const thinkingLevels: Record<string, string[]> = {};
+  const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
 
   try {
     const agentDir = getAgentDir();
@@ -23,6 +24,7 @@ export async function GET() {
       const key = `${m.provider}:${m.id}`;
       nameMap.set(key, m.name);
       thinkingLevels[key] = getSupportedThinkingLevels(m);
+      if (m.thinkingLevelMap) thinkingLevelMaps[key] = m.thinkingLevelMap;
     }
 
     const settings = SettingsManager.create(process.cwd(), agentDir);
@@ -33,5 +35,5 @@ export async function GET() {
     }
   } catch { /* return empty */ }
 
-  return Response.json({ models: Object.fromEntries(nameMap), modelList, defaultModel, thinkingLevels });
+  return Response.json({ models: Object.fromEntries(nameMap), modelList, defaultModel, thinkingLevels, thinkingLevelMaps });
 }

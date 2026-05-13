@@ -320,6 +320,15 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 type ThinkingLevel = typeof THINKING_LEVELS[number];
 
+const LEVEL_COLORS: Record<ThinkingLevel, string> = {
+  off:     "var(--text-dim)",
+  minimal: "#6b7280",
+  low:     "#60a5fa",
+  medium:  "#a78bfa",
+  high:    "#f472b6",
+  xhigh:   "#fb923c",
+};
+
 function ThinkingLevelMapEditor({
   value,
   onChange,
@@ -340,54 +349,104 @@ function ThinkingLevelMapEditor({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {THINKING_LEVELS.map((level) => {
         const raw = map[level];
-        // raw === undefined → omitted (default); raw === null → disabled; raw is string → mapped
         const state: "omit" | "null" | "string" =
           !(level in map) ? "omit" : raw === null ? "null" : "string";
         const strVal = typeof raw === "string" ? raw : "";
+        const color = LEVEL_COLORS[level];
+
+        const btnBase: React.CSSProperties = {
+          padding: "4px 10px",
+          fontSize: 10,
+          border: "none",
+          cursor: "pointer",
+          fontWeight: 400,
+          transition: "background 0.1s, color 0.1s",
+          whiteSpace: "nowrap",
+          background: "var(--bg-panel)",
+          color: "var(--text-dim)",
+        };
+        const btnActive: React.CSSProperties = {
+          background: "var(--accent)",
+          color: "#fff",
+          fontWeight: 600,
+        };
+        const btnActiveDisabled: React.CSSProperties = {
+          background: "#ef4444",
+          color: "#fff",
+          fontWeight: 600,
+        };
 
         return (
-          <div key={level} style={{ display: "grid", gridTemplateColumns: "56px 1fr", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>{level}</span>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              {/* State selector */}
-              <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0 }}>
-                {(["omit", "string", "null"] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setLevel(level, s === "string" ? (strVal || level) : s === "null" ? null : s)}
-                    style={{
-                      padding: "2px 7px",
-                      fontSize: 10,
-                      border: "none",
-                      borderRight: s !== "null" ? "1px solid var(--border)" : "none",
-                      background: state === s ? "var(--accent)" : "var(--bg-panel)",
-                      color: state === s ? "#fff" : "var(--text-muted)",
-                      cursor: "pointer",
-                      fontFamily: s === "null" ? "var(--font-mono)" : "inherit",
-                    }}
-                  >
-                    {s === "omit" ? "default" : s === "null" ? "null" : "map"}
-                  </button>
-                ))}
-              </div>
-              {/* Value input, only shown when state is "string" */}
-              {state === "string" && (
-                <input
-                  value={strVal}
-                  onChange={(e) => setLevel(level, e.target.value)}
-                  placeholder={level}
-                  style={{ ...inputStyle, width: 110, fontFamily: "var(--font-mono)", fontSize: 11 }}
-                />
-              )}
-              {state === "null" && (
-                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>hidden / unsupported</span>
-              )}
-              {state === "omit" && (
-                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>provider default</span>
-              )}
+          <div
+            key={level}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "5px 4px",
+              borderRadius: 6,
+              background: "transparent",
+              border: "1px solid transparent",
+            }}
+          >
+            {/* Level badge */}
+            <div style={{ display: "flex", alignItems: "center", gap: 5, width: 68, flexShrink: 0 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, opacity: state === "null" ? 0.3 : 1 }} />
+              <span style={{
+                fontSize: 11,
+                fontFamily: "var(--font-mono)",
+                color: state === "null" ? "var(--text-dim)" : "var(--text-muted)",
+                textDecoration: state === "null" ? "line-through" : "none",
+              }}>
+                {level}
+              </span>
+            </div>
+
+            {/* Default + Disabled buttons */}
+            <div style={{ display: "flex", borderRadius: 5, border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0 }}>
+              <button
+                onClick={() => setLevel(level, "omit")}
+                style={{ ...btnBase, ...(state === "omit" ? btnActive : {}) }}
+              >
+                Default
+              </button>
+              <button
+                onClick={() => setLevel(level, null)}
+                style={{ ...btnBase, borderLeft: "1px solid var(--border)", ...(state === "null" ? btnActiveDisabled : {}) }}
+              >
+                Disabled
+              </button>
+            </div>
+
+            {/* Custom button + input fused */}
+            <div style={{ display: "flex", borderRadius: 5, border: `1px solid ${state === "string" ? "var(--accent)" : "var(--border)"}`, overflow: "hidden", transition: "border-color 0.1s" }}>
+              <button
+                onClick={() => setLevel(level, strVal || level)}
+                style={{ ...btnBase, ...(state === "string" ? btnActive : {}), borderRight: "1px solid var(--border)", flexShrink: 0 }}
+              >
+                Custom
+              </button>
+              <input
+                value={strVal}
+                onChange={(e) => setLevel(level, e.target.value)}
+                onFocus={() => { if (state !== "string") setLevel(level, strVal || level); }}
+                placeholder={level}
+                maxLength={10}
+                style={{
+                  width: "12ch",
+                  background: state === "string" ? "var(--bg)" : "var(--bg-panel)",
+                  border: "none",
+                  outline: "none",
+                  color: state === "string" ? "var(--text)" : "var(--text-dim)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  padding: "4px 7px",
+                  transition: "background 0.1s, color 0.1s",
+                }}
+              />
             </div>
           </div>
         );

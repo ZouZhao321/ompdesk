@@ -101,6 +101,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<{ id: string; name: string; provider: string }[]>([]);
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
+  const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModelState] = useState<{ provider: string; modelId: string } | null>(null);
   const [toolPreset, setToolPreset] = useState<"none" | "default" | "full">("default");
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
@@ -608,9 +609,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   // Load model list
   useEffect(() => {
-    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: { id: string; name: string; provider: string }[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]> }) => {
+    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: { id: string; name: string; provider: string }[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>> }) => {
       setModelNames(d.models);
       if (d.thinkingLevels) setModelThinkingLevels(d.thinkingLevels);
+      if (d.thinkingLevelMaps) setModelThinkingLevelMaps(d.thinkingLevelMaps);
       if (d.modelList) {
         setModelList(d.modelList);
         if (isNew && d.modelList.length > 0) {
@@ -635,7 +637,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, activeLeafId, messages, entryIds, streamState,
-    agentRunning, modelNames, modelList, modelThinkingLevels, newSessionModel, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, currentModel, displayModel, sessionStats,
     agentPhase,

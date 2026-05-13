@@ -33,6 +33,7 @@ interface Props {
   thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
   availableThinkingLevels?: string[] | null;
+  thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   soundEnabled?: boolean;
   onSoundToggle?: () => void;
@@ -61,7 +62,7 @@ const THINKING_LEVEL_DESC: Record<typeof THINKING_LEVELS[number], string> = {
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, onSteer, onFollowUp, isStreaming, model, modelNames, modelList, onModelChange,
   onCompact, onAbortCompaction, isCompacting, compactError, toolPreset, onToolPresetChange,
-  thinkingLevel, onThinkingLevelChange, availableThinkingLevels,
+  thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   soundEnabled, onSoundToggle,
 }: Props, ref) {
@@ -631,7 +632,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     <line x1="7" y1="18" x2="12" y2="18" />
                     <line x1="8" y1="21" x2="11" y2="21" />
                   </svg>
-                  <span>{thinkingLevel ?? "auto"}</span>
+                  <span>{(() => {
+                    const lvl = thinkingLevel ?? "auto";
+                    if (lvl === "auto" || !thinkingLevelMap) return lvl;
+                    const mapped = thinkingLevelMap[lvl];
+                    return mapped != null ? mapped : lvl;
+                  })()}</span>
                 </button>
                 {thinkingDropdownOpen && (
                   <div style={{
@@ -647,6 +653,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     }).map((lvl) => {
                       const isActive = (thinkingLevel ?? "auto") === lvl;
                       const desc = THINKING_LEVEL_DESC[lvl];
+                      const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
+                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
+                      const showOriginal = mappedVal != null && mappedVal !== lvl;
                       return (
                         <button
                           key={lvl}
@@ -667,7 +676,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           {isActive
                             ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
                             : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{lvl}</span>
+                          <span style={{ flex: 1 }}>
+                            {displayLabel}
+                            {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
+                          </span>
                           <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
                         </button>
                       );

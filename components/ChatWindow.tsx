@@ -93,7 +93,7 @@ function Typewriter({ phrases }: { phrases: string[] }) {
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onContextUsageChange }: Props) {
   const {
     loading, error, messages, entryIds, streamState,
-    agentRunning, modelNames, modelList, modelThinkingLevels, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, displayModel: displayModelValue, sessionStats,
     agentPhase,
@@ -163,6 +163,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
     : null;
 
+  const currentThinkingLevelMap = displayModelValue
+    ? (modelThinkingLevelMaps[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
+    : null;
+
   const chatInputElement = (
     <ChatInput
       ref={chatInputRef}
@@ -184,6 +188,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       thinkingLevel={thinkingLevel}
       onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
       availableThinkingLevels={availableThinkingLevels}
+      thinkingLevelMap={currentThinkingLevelMap}
       retryInfo={retryInfo}
       soundEnabled={soundEnabled}
       onSoundToggle={onSoundToggle}
