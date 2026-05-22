@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
+import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/file-paths";
 
 interface FileEntry {
   name: string;
@@ -27,13 +28,13 @@ interface Props {
 }
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
-  const encoded = dirPath.split("/").filter(Boolean).join("/");
+  const encoded = encodeFilePathForApi(dirPath);
   const res = await fetch(`/api/files/${encoded}?type=list`);
   if (!res.ok) return [];
   const data = await res.json() as { entries?: FileEntry[] };
   return (data.entries ?? []).map((e) => ({
     name: e.name,
-    fullPath: dirPath.replace(/\/$/, "") + "/" + e.name,
+    fullPath: joinFilePath(dirPath, e.name),
     isDir: e.isDir,
     size: e.size,
     children: e.isDir ? [] : undefined,
@@ -159,11 +160,7 @@ function TreeNode({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const base = cwd.replace(/\/$/, "");
-              const rel = node.fullPath.startsWith(base + "/")
-                ? node.fullPath.slice(base.length + 1)
-                : node.fullPath;
-              onAtMention(rel);
+              onAtMention(getRelativeFilePath(node.fullPath, cwd));
             }}
             title="Insert path into chat"
             style={{

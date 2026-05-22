@@ -7,6 +7,7 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTheme } from "@/hooks/useTheme";
+import { encodeFilePathForApi, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 
 interface Props {
   filePath: string;
@@ -22,13 +23,9 @@ interface FileData {
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"]);
 
 function isImagePath(filePath: string): boolean {
-  const base = filePath.split("/").pop() ?? "";
+  const base = getFileName(filePath);
   const ext = base.toLowerCase().split(".").pop() ?? "";
   return IMAGE_EXTS.has(ext);
-}
-
-function encodeFilePath(filePath: string): string {
-  return filePath.split("/").filter(Boolean).map(encodeURIComponent).join("/");
 }
 
 type DiffLine =
@@ -274,7 +271,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
-  const ext = (filePath.split("/").pop() ?? "").toLowerCase().split(".").pop() ?? "";
+  const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
   useEffect(() => {
     setBust(0);
@@ -288,7 +285,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
       esRef.current = null;
     }
 
-    const encoded = encodeFilePath(filePath);
+    const encoded = encodeFilePathForApi(filePath);
     const es = new EventSource(`/api/files/${encoded}?type=watch`);
     esRef.current = es;
 
@@ -309,7 +306,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
     };
   }, [filePath]);
 
-  const encoded = encodeFilePath(filePath);
+  const encoded = encodeFilePathForApi(filePath);
   const src = `/api/files/${encoded}?type=read${bust ? `&v=${bust}` : ""}`;
 
   const formatSizeStr = size != null ? formatSize(size) : null;
@@ -330,9 +327,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
         }}
       >
         <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {cwd && filePath.startsWith(cwd.replace(/\/$/, "") + "/")
-            ? filePath.slice(cwd.replace(/\/$/, "").length + 1)
-            : filePath}
+          {getRelativeFilePath(filePath, cwd)}
         </span>
         <span style={{ marginLeft: "auto" }}>{ext || "image"}</span>
         {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
@@ -415,7 +410,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
   const esRef = useRef<EventSource | null>(null);
 
   const fetchContent = useCallback((filePath: string, isRefresh = false) => {
-    const encoded = filePath.split("/").filter(Boolean).join("/");
+    const encoded = encodeFilePathForApi(filePath);
     return fetch(`/api/files/${encoded}?type=read`)
       .then((r) => r.json())
       .then((d: FileData & { error?: string }) => {
@@ -462,7 +457,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
     }).finally(() => setLoading(false));
 
     // Set up SSE watch
-    const encoded = filePath.split("/").filter(Boolean).join("/");
+    const encoded = encodeFilePathForApi(filePath);
     const es = new EventSource(`/api/files/${encoded}?type=watch`);
     esRef.current = es;
 
@@ -528,9 +523,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
         }}
       >
         <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {cwd && filePath.startsWith(cwd.replace(/\/$/, "") + "/")
-            ? filePath.slice(cwd.replace(/\/$/, "").length + 1)
-            : filePath}
+          {getRelativeFilePath(filePath, cwd)}
         </span>
         <span style={{ marginLeft: "auto" }}>{data.language}</span>
         {viewMode === "source" && <span>{lines.length} lines</span>}

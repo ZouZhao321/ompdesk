@@ -61,6 +61,22 @@ declare global {
 }
 
 const ALLOWED_ROOTS_TTL_MS = 5_000;
+const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
+
+function normalizeSlashes(filePath: string): string {
+  return filePath.replace(/\\/g, "/");
+}
+
+function isWindowsAbsolutePath(filePath: string): boolean {
+  return WINDOWS_ABSOLUTE_RE.test(filePath) || filePath.startsWith("\\\\") || filePath.startsWith("//");
+}
+
+function filePathFromSegments(segments: string[]): string {
+  const joined = segments.join("/");
+  const slashJoined = normalizeSlashes(joined);
+  if (isWindowsAbsolutePath(slashJoined)) return slashJoined;
+  return "/" + joined.replace(/^\/+/, "");
+}
 
 async function getAllowedRoots(): Promise<Set<string>> {
   const now = Date.now();
@@ -90,10 +106,16 @@ async function getAllowedRoots(): Promise<Set<string>> {
 }
 
 function isPathAllowed(target: string, allowedRoots: Set<string>): boolean {
-  const normalized = path.resolve(target);
   for (const root of allowedRoots) {
-    const normalizedRoot = path.resolve(root);
-    if (normalized === normalizedRoot || normalized.startsWith(normalizedRoot + path.sep)) {
+    const useWindowsRules = isWindowsAbsolutePath(target) || isWindowsAbsolutePath(root);
+    const resolver = useWindowsRules ? path.win32 : path;
+    const sep = useWindowsRules ? "\\" : path.sep;
+    const normalized = resolver.resolve(target);
+    const normalizedRoot = resolver.resolve(root);
+    const comparable = useWindowsRules ? normalized.toLowerCase() : normalized;
+    const comparableRoot = useWindowsRules ? normalizedRoot.toLowerCase() : normalizedRoot;
+    const rootWithSep = comparableRoot.endsWith(sep) ? comparableRoot : comparableRoot + sep;
+    if (comparable === comparableRoot || comparable.startsWith(rootWithSep)) {
       return true;
     }
   }
@@ -106,11 +128,7 @@ export async function GET(
 ) {
   try {
     const { path: segments } = await params;
-    // On Windows, the first segment is a drive letter like "C:" and the path
-    // must NOT be prefixed with "/" (else path.resolve yields "C:\C:\..." and
-    // the allowed-roots check always fails). On POSIX, keep the leading "/".
-    const isWinDrive = segments.length > 0 && /^[a-zA-Z]:$/.test(segments[0]);
-    const filePath = isWinDrive ? segments.join("/") : "/" + segments.join("/");
+    const filePath = filePathFromSegments(segments);
     const type = request.nextUrl.searchParams.get("type") ?? "list";
 
     const allowedRoots = await getAllowedRoots();
