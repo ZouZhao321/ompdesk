@@ -66,27 +66,51 @@ export async function GET(
         return;
       }
 
-      // Token to correlate the manual code POST
-      const token = `${provider}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const registry = getCallbackRegistry();
+      const activeTokens = new Set<string>();
+      let pendingManualRequest: { token: string; promise: Promise<string> } | undefined;
 
-      let manualCodeResolve: ((v: string) => void) | undefined;
-      let manualCodeReject: ((e: Error) => void) | undefined;
-      const manualCodePromise = new Promise<string>((resolve, reject) => {
-        manualCodeResolve = resolve;
-        manualCodeReject = reject;
-      });
+      const createClientInputRequest = () => {
+        const token = `${provider}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        activeTokens.add(token);
 
-      // Register for POST callback
-      registry.set(token, {
-        resolve: manualCodeResolve!,
-        reject: manualCodeReject!,
-      });
+        const promise = new Promise<string>((resolve, reject) => {
+          registry.set(token, {
+            resolve: (value) => {
+              activeTokens.delete(token);
+              registry.delete(token);
+              resolve(value);
+            },
+            reject: (error) => {
+              activeTokens.delete(token);
+              registry.delete(token);
+              reject(error);
+            },
+          });
+        });
+
+        return { token, promise };
+      };
+
+      const getManualInputRequest = () => {
+        if (!pendingManualRequest) {
+          pendingManualRequest = createClientInputRequest();
+          pendingManualRequest.promise
+            .finally(() => {
+              pendingManualRequest = undefined;
+            })
+            .catch(() => {});
+        }
+        return pendingManualRequest;
+      };
 
       // Cleanup: remove pending token and abort any waiting promise
       const cleanup = () => {
-        registry.delete(token);
-        manualCodeReject?.(new Error("Login cancelled"));
+        for (const token of activeTokens) {
+          registry.get(token)?.reject(new Error("Login cancelled"));
+          registry.delete(token);
+        }
+        activeTokens.clear();
       };
 
       // Also cancel on client disconnect
@@ -95,27 +119,54 @@ export async function GET(
       try {
         await authStorage.login(provider, {
           onAuth: (info: { url: string; instructions?: string }) => {
+            const request = getManualInputRequest();
             send(controller, {
               type: "auth",
               url: info.url,
               instructions: info.instructions ?? null,
-              token,
+              token: request.token,
+            });
+          },
+          onDeviceCode: (info: {
+            userCode: string;
+            verificationUri: string;
+            intervalSeconds?: number;
+            expiresInSeconds?: number;
+          }) => {
+            send(controller, {
+              type: "device_code",
+              userCode: info.userCode,
+              verificationUri: info.verificationUri,
+              intervalSeconds: info.intervalSeconds ?? null,
+              expiresInSeconds: info.expiresInSeconds ?? null,
             });
           },
           onPrompt: async (prompt: { message: string; placeholder?: string }) => {
+            const request = getManualInputRequest();
             send(controller, {
               type: "prompt_request",
               message: prompt.message,
               placeholder: prompt.placeholder ?? null,
-              token,
+              token: request.token,
             });
-            const value = await manualCodePromise;
+            const value = await request.promise;
             return value;
           },
           onProgress: (message: string) => {
             send(controller, { type: "progress", message });
           },
-          onManualCodeInput: () => manualCodePromise,
+          onSelect: async (prompt: { message: string; options: { id: string; label: string }[] }) => {
+            const request = createClientInputRequest();
+            send(controller, {
+              type: "select_request",
+              message: prompt.message,
+              options: prompt.options,
+              token: request.token,
+            });
+            const value = await request.promise;
+            return value || undefined;
+          },
+          onManualCodeInput: () => getManualInputRequest().promise,
           signal: abort.signal,
         });
 

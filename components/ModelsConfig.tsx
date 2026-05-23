@@ -87,7 +87,9 @@ type OAuthLoginState =
   | { phase: "idle" }
   | { phase: "connecting" }
   | { phase: "auth"; url: string; instructions: string | null; token: string }
+  | { phase: "device_code"; userCode: string; verificationUri: string; intervalSeconds: number | null; expiresInSeconds: number | null }
   | { phase: "prompt"; message: string; placeholder: string | null; token: string }
+  | { phase: "select"; message: string; options: { id: string; label: string }[]; token: string }
   | { phase: "progress"; message: string }
   | { phase: "success" }
   | { phase: "error"; message: string };
@@ -600,12 +602,25 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       const data = JSON.parse(e.data) as {
         type: string; url?: string; instructions?: string | null;
         token?: string; message?: string; placeholder?: string | null;
+        userCode?: string; verificationUri?: string; intervalSeconds?: number | null; expiresInSeconds?: number | null;
+        options?: { id: string; label: string }[];
       };
       if (data.type === "auth") {
         setLoginState({ phase: "auth", url: data.url!, instructions: data.instructions ?? null, token: data.token! });
         window.open(data.url!, "_blank", "noopener,noreferrer");
+      } else if (data.type === "device_code") {
+        setLoginState({
+          phase: "device_code",
+          userCode: data.userCode!,
+          verificationUri: data.verificationUri!,
+          intervalSeconds: data.intervalSeconds ?? null,
+          expiresInSeconds: data.expiresInSeconds ?? null,
+        });
+        window.open(data.verificationUri!, "_blank", "noopener,noreferrer");
       } else if (data.type === "prompt_request") {
         setLoginState({ phase: "prompt", message: data.message!, placeholder: data.placeholder ?? null, token: data.token! });
+      } else if (data.type === "select_request") {
+        setLoginState({ phase: "select", message: data.message!, options: data.options ?? [], token: data.token! });
       } else if (data.type === "progress") {
         setLoginState({ phase: "progress", message: data.message! });
       } else if (data.type === "success") {
@@ -653,8 +668,26 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
     }
   }, [provider.id]);
 
+  const submitSelection = useCallback(async (token: string, value: string) => {
+    setLoginState({ phase: "progress", message: "Continuing…" });
+    try {
+      const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, code: value }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        setLoginState({ phase: "error", message: d.error ?? `Server error ${res.status}` });
+      }
+    } catch (e) {
+      setLoginState({ phase: "error", message: e instanceof Error ? e.message : "Network error" });
+    }
+  }, [provider.id]);
+
   const isWorking = loginState.phase === "connecting" || loginState.phase === "progress" ||
-    loginState.phase === "auth" || loginState.phase === "prompt";
+    loginState.phase === "auth" || loginState.phase === "device_code" ||
+    loginState.phase === "prompt" || loginState.phase === "select";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -677,6 +710,24 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
         )}
         {loginState.phase === "connecting" && (
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Opening browser…</p>
+        )}
+        {loginState.phase === "select" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+              {loginState.message}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {loginState.options.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => submitSelection(loginState.token, option.id)}
+                  style={{ padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: "pointer", fontSize: 12, textAlign: "left" }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {(loginState.phase === "auth" || loginState.phase === "prompt") && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -711,6 +762,22 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
                 Submit
               </button>
             </div>
+          </div>
+        )}
+        {loginState.phase === "device_code" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+              Open the verification page and enter this code:
+            </p>
+            <div style={{ padding: "8px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
+              {loginState.userCode}
+            </div>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+              <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
+                {loginState.verificationUri}
+              </a>
+              {loginState.expiresInSeconds ? ` Expires in ${Math.ceil(loginState.expiresInSeconds / 60)} minutes.` : ""}
+            </p>
           </div>
         )}
         {loginState.phase === "progress" && (
