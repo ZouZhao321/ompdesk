@@ -11,6 +11,9 @@ const IGNORED_NAMES = new Set([
 
 const IGNORED_SUFFIXES = [".pyc"];
 
+const TEXT_PREVIEW_MAX_BYTES = 256 * 1024;
+const IMAGE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
+
 const IMAGE_EXT_TO_MIME: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
@@ -23,9 +26,30 @@ const IMAGE_EXT_TO_MIME: Record<string, string> = {
   avif: "image/avif",
 };
 
-function getImageMime(filePath: string): string | null {
+const AUDIO_EXT_TO_MIME: Record<string, string> = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  opus: "audio/ogg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  flac: "audio/flac",
+  weba: "audio/webm",
+  webm: "audio/webm",
+};
+
+function getExt(filePath: string): string {
   const ext = path.basename(filePath).toLowerCase().split(".").pop() ?? "";
-  return IMAGE_EXT_TO_MIME[ext] ?? null;
+  return ext;
+}
+
+function getImageMime(filePath: string): string | null {
+  return IMAGE_EXT_TO_MIME[getExt(filePath)] ?? null;
+}
+
+function getAudioMime(filePath: string): string | null {
+  return AUDIO_EXT_TO_MIME[getExt(filePath)] ?? null;
 }
 
 const EXT_TO_LANGUAGE: Record<string, string> = {
@@ -122,6 +146,104 @@ function isPathAllowed(target: string, allowedRoots: Set<string>): boolean {
   return false;
 }
 
+function createFileBodyStream(filePath: string, range?: { start: number; end: number }): ReadableStream<Uint8Array> {
+  const fileStream = fs.createReadStream(filePath, range);
+  let closed = false;
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      fileStream.on("data", (chunk: Buffer) => {
+        if (closed) return;
+        try {
+          controller.enqueue(new Uint8Array(chunk));
+        } catch {
+          closed = true;
+          fileStream.destroy();
+        }
+      });
+      fileStream.once("end", () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // The browser may cancel media probes before the file stream ends.
+        }
+      });
+      fileStream.once("error", (error) => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.error(error);
+        } catch {
+          // The response was already abandoned by the client.
+        }
+      });
+    },
+    cancel() {
+      closed = true;
+      fileStream.destroy();
+    },
+  });
+}
+
+function streamFile(filePath: string, stat: fs.Stats, contentType: string, rangeHeader: string | null): Response {
+  const headers = {
+    "Content-Type": contentType,
+    "Cache-Control": "no-cache",
+    "Accept-Ranges": "bytes",
+  };
+
+  if (!rangeHeader) {
+    return new Response(createFileBodyStream(filePath), {
+      headers: {
+        ...headers,
+        "Content-Length": String(stat.size),
+      },
+    });
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+  if (!match) {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        ...headers,
+        "Content-Range": `bytes */${stat.size}`,
+      },
+    });
+  }
+
+  let start = match[1] ? Number(match[1]) : 0;
+  let end = match[2] ? Number(match[2]) : stat.size - 1;
+  if (!match[1] && match[2]) {
+    const suffixLength = Number(match[2]);
+    start = Math.max(stat.size - suffixLength, 0);
+    end = stat.size - 1;
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= stat.size) {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        ...headers,
+        "Content-Range": `bytes */${stat.size}`,
+      },
+    });
+  }
+
+  end = Math.min(end, stat.size - 1);
+  const chunkSize = end - start + 1;
+  return new Response(createFileBodyStream(filePath, { start, end }), {
+    status: 206,
+    headers: {
+      ...headers,
+      "Content-Length": String(chunkSize),
+      "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+    },
+  });
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -149,22 +271,17 @@ export async function GET(
       }
       const imageMime = getImageMime(filePath);
       if (imageMime) {
-        // Limit image size to 10MB
-        if (stat.size > 10 * 1024 * 1024) {
+        if (stat.size > IMAGE_PREVIEW_MAX_BYTES) {
           return NextResponse.json({ error: "Image too large (>10MB)" }, { status: 413 });
         }
-        const buf = fs.readFileSync(filePath);
-        return new Response(new Uint8Array(buf), {
-          headers: {
-            "Content-Type": imageMime,
-            "Content-Length": String(stat.size),
-            "Cache-Control": "no-cache",
-          },
-        });
+        return streamFile(filePath, stat, imageMime, request.headers.get("range"));
       }
-      // Limit file size to 2MB
-      if (stat.size > 2 * 1024 * 1024) {
-        return NextResponse.json({ error: "File too large (>2MB)" }, { status: 413 });
+      const audioMime = getAudioMime(filePath);
+      if (audioMime) {
+        return streamFile(filePath, stat, audioMime, request.headers.get("range"));
+      }
+      if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
+        return NextResponse.json({ error: "File too large for preview (>256KB)" }, { status: 413 });
       }
       const content = fs.readFileSync(filePath, "utf-8");
       const language = getLanguage(filePath);
