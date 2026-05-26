@@ -121,6 +121,12 @@ interface ModelsJson {
   providers?: Record<string, ProviderEntry>;
 }
 
+type ModelTestState =
+  | { phase: "idle" }
+  | { phase: "testing" }
+  | { phase: "success"; latencyMs?: number; status?: number; responseText?: string }
+  | { phase: "error"; message: string; latencyMs?: number; status?: number };
+
 type Selection =
   | { type: "provider"; name: string }
   | { type: "model"; providerName: string; index: number }
@@ -479,22 +485,139 @@ function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
   return { ...model, compat: Object.keys(rest).length ? rest : undefined };
 }
 
-function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChange: (m: ModelEntry) => void; onDelete: () => void }) {
+function ModelDetail({
+  providerName,
+  provider,
+  model,
+  onChange,
+  onDelete,
+}: {
+  providerName: string;
+  provider: ProviderEntry;
+  model: ModelEntry;
+  onChange: (m: ModelEntry) => void;
+  onDelete: () => void;
+}) {
+  const [testState, setTestState] = useState<ModelTestState>({ phase: "idle" });
   const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) => onChange({ ...model, [k]: v });
   const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) => model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
   const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: string) => {
     const n = parseFloat(v);
     onChange({ ...model, cost: { ...(model.cost ?? {}), [k]: isNaN(n) ? undefined : n } });
   };
+  const testSummary = (() => {
+    if (testState.phase === "idle") return null;
+    if (testState.phase === "testing") return "Testing model connection...";
+    const meta = [
+      testState.latencyMs !== undefined ? `${testState.latencyMs}ms` : null,
+      testState.status !== undefined ? `HTTP ${testState.status}` : null,
+    ].filter(Boolean);
+    if (testState.phase === "success") {
+      return ["Connected", ...meta, testState.responseText || null].filter(Boolean).join(" · ");
+    }
+    return ["Failed", ...meta, testState.message].filter(Boolean).join(" · ");
+  })();
+
+  useEffect(() => {
+    setTestState({ phase: "idle" });
+  }, [providerName, provider.baseUrl, provider.api, provider.apiKey, model.id, model.api]);
+
+  const handleTest = useCallback(async () => {
+    if (!model.id.trim() || testState.phase === "testing") return;
+    setTestState({ phase: "testing" });
+    try {
+      const res = await fetch("/api/models-config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerName, provider, model }),
+      });
+      const d = await res.json() as {
+        ok?: boolean;
+        error?: string;
+        latencyMs?: number;
+        status?: number;
+        responseText?: string;
+      };
+      if (!res.ok || !d.ok) {
+        setTestState({
+          phase: "error",
+          message: d.error ?? `HTTP ${res.status}`,
+          latencyMs: d.latencyMs,
+          status: d.status,
+        });
+        return;
+      }
+      setTestState({
+        phase: "success",
+        latencyMs: d.latencyMs,
+        status: d.status,
+        responseText: d.responseText,
+      });
+    } catch (e) {
+      setTestState({ phase: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  }, [model, provider, providerName, testState.phase]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>Model</SectionTitle>
-        <button onClick={onDelete}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}>
-          Remove
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {testSummary && (
+            <span
+              title={testSummary}
+              style={{
+                maxWidth: 260,
+                height: 24,
+                padding: "0 8px",
+                border: `1px solid ${testState.phase === "error" ? "#fecaca" : testState.phase === "success" ? "#bbf7d0" : "var(--border)"}`,
+                borderRadius: 4,
+                background: testState.phase === "error" ? "#fee2e2" : testState.phase === "success" ? "#dcfce7" : "#e5e7eb",
+                color: "#111827",
+                fontSize: 11,
+                display: "inline-flex",
+                alignItems: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                boxSizing: "border-box",
+              }}
+            >
+              {testSummary}
+            </span>
+          )}
+          <button
+            onClick={handleTest}
+            disabled={!model.id.trim() || testState.phase === "testing"}
+            title="Test model connection"
+            style={{
+              height: 24,
+              padding: "0 8px",
+              background: testState.phase === "success" ? "#16a34a" : "none",
+              border: `1px solid ${testState.phase === "success" ? "#16a34a" : "var(--border)"}`,
+              borderRadius: 4,
+              color: testState.phase === "success" ? "#fff" : (!model.id.trim() || testState.phase === "testing") ? "var(--text-dim)" : "var(--text-muted)",
+              cursor: (!model.id.trim() || testState.phase === "testing") ? "not-allowed" : "pointer",
+              fontSize: 11,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxSizing: "border-box",
+              gap: 5,
+            }}
+          >
+            {testState.phase === "success" && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+            {testState.phase === "testing" ? "Testing…" : testState.phase === "success" ? "OK" : "Test"}
+          </button>
+          <button onClick={onDelete}
+            style={{ height: 24, padding: "0 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11, boxSizing: "border-box" }}>
+            Remove
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1272,6 +1395,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     return (
       <ModelDetail
         key={`${selection.providerName}-${selection.index}`}
+        providerName={selection.providerName}
+        provider={provider}
         model={model}
         onChange={(m) => updateModel(selection.providerName, selection.index, m)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
