@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useTheme } from "@/hooks/useTheme";
+import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/clipboard";
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { markdownRehypePlugins, markdownRemarkPlugins } from "@/lib/markdown";
@@ -123,6 +124,7 @@ function normalizeDisplayMath(markdown: string): string {
 
 function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boolean }) {
   const { isDark } = useTheme();
+  const { t } = useI18n();
   const [showPreview, setShowPreview] = useState(false);
   const [svg, setSvg] = useState<string | null>(null);
   const [renderedKey, setRenderedKey] = useState("");
@@ -171,10 +173,10 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
     <button
       onClick={() => setShowPreview((v) => !v)}
       disabled={isStreaming}
-      title={isStreaming ? "Preview available after streaming" : (showPreview ? "Show Mermaid source" : "Preview Mermaid diagram")}
+       title={isStreaming ? t("i18n.previewAfterStreaming") : (showPreview ? t("i18n.showMermaidSource") : t("i18n.previewMermaid"))}
       className={["markdown-code-action", showPreview ? "is-active" : ""].filter(Boolean).join(" ")}
     >
-      {showPreview ? "Source" : "Preview"}
+       {showPreview ? t("i18n.source") : t("i18n.preview")}
     </button>
   );
 
@@ -184,9 +186,9 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
 
   const body =
     failedKey === currentKey ? (
-      <div className="mermaid-block mermaid-block-error">Invalid Mermaid diagram</div>
+       <div className="mermaid-block mermaid-block-error">{t("i18n.invalidMermaid")}</div>
     ) : !svg || renderedKey !== currentKey ? (
-      <div className="mermaid-block mermaid-block-loading" aria-label="Rendering Mermaid diagram" />
+       <div className="mermaid-block mermaid-block-loading" aria-label={t("i18n.renderingMermaid")} />
     ) : (
       <div
         className="mermaid-block"
@@ -207,6 +209,7 @@ function MermaidBlock({ code, isStreaming }: { code: string; isStreaming?: boole
 
 function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; headerAction?: ReactNode }) {
   const { isDark } = useTheme();
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
@@ -226,7 +229,7 @@ function CodeBlock({ code, lang, headerAction }: { code: string; lang: string; h
             onClick={copy}
             className="markdown-code-action"
           >
-            {copied ? "copied" : "copy"}
+             {copied ? t("i18n.copied") : t("i18n.copy")}
           </button>
         </div>
       </div>
