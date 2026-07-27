@@ -7,9 +7,6 @@ export const enLocale: LocalePlugin = {
   messages: {
     "common.ok": "OK",
     "common.language": "Language",
-    "common.english": "English",
-    "common.simplifiedChinese": "Simplified Chinese",
-    "common.currentLanguage": "Current language",
     "common.models": "Models",
     "common.skills": "Skills",
     "common.plugins": "Plugins",
@@ -338,7 +335,7 @@ export const enLocale: LocalePlugin = {
     "i18n.package": "Package",
     "i18n.resources": "Resources",
     "i18n.installedPath": "Installed path",
-    "i18n.cwd": "Cwd",
+    "i18n.cwd": "CWD",
     "i18n.resolvedResources": "Resolved Resources",
     "i18n.reloadSession": "Reload session",
     "i18n.reloading": "Reloading...",

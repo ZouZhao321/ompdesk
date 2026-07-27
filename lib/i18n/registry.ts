@@ -31,9 +31,12 @@ export function getSupportedLocales(): string[] {
  * @returns 匹配的内置语言，无法匹配时返回英语
  */
 export function resolveBrowserLocale(languages: readonly string[]): Locale {
-  return languages.some((language) => language.toLowerCase() === "zh" || language.toLowerCase().startsWith("zh-"))
-    ? "zh-CN"
-    : "en";
+  for (const language of languages) {
+    const normalized = language.toLowerCase();
+    if (normalized === "en" || normalized.startsWith("en-")) return "en";
+    if (normalized === "zh" || normalized.startsWith("zh-")) return "zh-CN";
+  }
+  return "en";
 }
 
 registerLocale(enLocale);

@@ -29,6 +29,9 @@ type AutoNameStatus =
   | { kind: "success" }
   | { kind: "error"; message: string };
 
+const TOP_BAR_ICON_BUTTON_SIZE = 36;
+const LANGUAGE_MENU_WIDTH = 176;
+
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,6 +65,7 @@ export function AppShell() {
   }, []);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
+  const languageBtnRef = useRef<HTMLButtonElement>(null);
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
@@ -139,14 +143,25 @@ export function AppShell() {
   useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
     const update = () => {
-      const rect = topBarRef.current!.getBoundingClientRect();
-      setTopPanelPos({ top: rect.bottom, left: rect.left, width: rect.width });
+      const topBarRect = topBarRef.current!.getBoundingClientRect();
+      if (activeTopPanel === "language" && !isMobile && languageBtnRef.current) {
+        const buttonRect = languageBtnRef.current.getBoundingClientRect();
+        const width = Math.min(LANGUAGE_MENU_WIDTH, topBarRect.width);
+        const left = Math.min(
+          buttonRect.left - 1,
+          Math.max(topBarRect.left, topBarRect.right - width),
+        );
+        setTopPanelPos({ top: topBarRect.bottom, left, width });
+        return;
+      }
+      setTopPanelPos({ top: topBarRect.bottom, left: topBarRect.left, width: topBarRect.width });
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(topBarRef.current);
+    if (languageBtnRef.current) ro.observe(languageBtnRef.current);
     return () => ro.disconnect();
-  }, [activeTopPanel]);
+  }, [activeTopPanel, isMobile]);
 
   // Right panel — file tabs only
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
@@ -633,7 +648,7 @@ export function AppShell() {
              aria-label={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
+              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
               background: "none", border: "none", borderRight: "1px solid var(--border)",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
@@ -660,7 +675,7 @@ export function AppShell() {
             aria-pressed={isDark}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
+              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
               background: "none", border: "none", borderRight: "1px solid var(--border)",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
@@ -682,21 +697,45 @@ export function AppShell() {
             )}
            </button>
            <button
+             ref={languageBtnRef}
              type="button"
              onClick={() => toggleTopPanel("language")}
              title={translate("common.language")}
              aria-label={translate("common.language")}
+             aria-haspopup="menu"
+             aria-expanded={activeTopPanel === "language"}
              aria-pressed={activeTopPanel === "language"}
              style={{
                display: "flex", alignItems: "center", justifyContent: "center",
-               width: 36, height: 36, padding: 0,
+               width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
                background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
                border: "none", borderRight: "1px solid var(--border)",
                color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
                cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
              }}
+             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+             onMouseLeave={(e) => {
+               e.currentTarget.style.color = activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)";
+             }}
            >
-             <span aria-hidden="true" style={{ fontSize: 11, fontWeight: 700 }}>文A</span>
+             <svg
+               width="16"
+               height="16"
+               viewBox="0 0 24 24"
+               fill="none"
+               stroke="currentColor"
+               strokeWidth="1.8"
+               strokeLinecap="round"
+               strokeLinejoin="round"
+               aria-hidden="true"
+             >
+               <path d="m5 8 6 6" />
+               <path d="m4 14 6-6 2-3" />
+               <path d="M2 5h12" />
+               <path d="M7 2h1" />
+               <path d="m22 22-5-10-5 10" />
+               <path d="M14 18h6" />
+             </svg>
            </button>
           {showChat && (
             <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
@@ -977,10 +1016,18 @@ export function AppShell() {
               zIndex: 500,
             }}>
               {activeTopPanel === "language" && (
-                <div style={{ background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", padding: "8px 0" }}>
-                  <div style={{ padding: "4px 16px 8px", color: "var(--text-dim)", fontSize: 11 }}>
-                    {translate("common.currentLanguage")}
-                  </div>
+                <div
+                  role="menu"
+                  aria-label={translate("common.language")}
+                  style={{
+                    background: "var(--bg-panel)",
+                    borderLeft: "1px solid var(--border)",
+                    borderRight: "1px solid var(--border)",
+                    borderBottom: "1px solid var(--border)",
+                    overflow: "hidden",
+                    padding: 4,
+                  }}
+                >
                   {supportedLocales.map((plugin) => (
                     <button
                       key={plugin.id}
@@ -989,16 +1036,24 @@ export function AppShell() {
                         setLocale(plugin.id as typeof locale);
                         setActiveTopPanel(null);
                       }}
-                      aria-pressed={locale === plugin.id}
+                      role="menuitemradio"
+                      aria-checked={locale === plugin.id}
                       style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        width: "100%", padding: "8px 16px", border: "none",
+                        display: "flex", alignItems: "center",
+                        width: "100%", height: 34, padding: "0 10px",
+                        border: "none", borderRadius: 4,
                         background: locale === plugin.id ? "var(--bg-selected)" : "transparent",
                         color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
+                        transition: "background 0.1s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (locale !== plugin.id) e.currentTarget.style.background = "var(--bg-hover)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (locale !== plugin.id) e.currentTarget.style.background = "transparent";
                       }}
                     >
                       <span>{plugin.label}</span>
-                      {locale === plugin.id && <span aria-hidden="true">✓</span>}
                     </button>
                   ))}
                 </div>
