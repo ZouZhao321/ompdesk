@@ -1,4 +1,6 @@
-# omp-web
+<p align="center">
+  <img src="./docs/hero.png" alt="omp-web — Browser workspace for omp" width="100%">
+</p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/omp-web"><img src="https://img.shields.io/npm/v/omp-web?style=flat&colorA=222222&colorB=CB3837" alt="npm version"></a>
@@ -15,8 +17,6 @@
 The web view for [omp (oh-my-pi)](https://github.com/can1357/oh-my-pi). omp-web reads the sessions the `omp` CLI already writes and gives you a browser workspace for session browsing, real-time chat, model roles, provider configuration, skill management, and project file preview.
 
 It is not a separate agent: omp-web runs omp's own SDK in-process, against the same `~/.omp/agent` directory, so a session started in the terminal continues in the browser and back again.
-
-<img width="1912" height="1242" alt="image" src="https://github.com/user-attachments/assets/6a3932c0-5ed2-4682-b4a7-db7837c764ad" />
 
 
 ## Quick Start
