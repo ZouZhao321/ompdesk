@@ -12,6 +12,7 @@ import type {
   SessionTreeNode,
   SubagentSnapshot,
   ToolResultMessage,
+  UserMessage,
 } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
@@ -201,8 +202,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [onAgentEnd]);
 
   // 稳定化 onEditContent 引用，配合 React.memo 防止历史消息重渲染
-  const handleEditContent = useCallback((content: string) => {
-    chatInputRef?.current?.insertIfEmpty(content);
+  const handleEditContent = useCallback((message: UserMessage) => {
+    chatInputRef?.current?.replaceMessage(message);
   }, [chatInputRef]);
 
   const {
