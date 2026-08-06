@@ -1,10 +1,22 @@
-# omp-web
+<p align="center">
+  <img src="./docs/hero.png" alt="omp-web — Browser workspace for omp" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/omp-web"><img src="https://img.shields.io/npm/v/omp-web?style=flat&colorA=222222&colorB=CB3837" alt="npm version"></a>
+  <a href="https://github.com/ddallabenetta/omp-web/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ddallabenetta/omp-web?style=flat&colorA=222222&colorB=58A6FF" alt="License"></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&colorA=222222&logo=typescript&logoColor=white" alt="TypeScript"></a>
+  <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f472b6?style=flat&colorA=222222" alt="Bun"></a>
+</p>
+
+<p align="center">
+  Fork of <a href="https://github.com/agegr/pi-web">pi-web</a> by <a href="https://github.com/agegr">@agegr</a> 
+</p>
+
 
 The web view for [omp (oh-my-pi)](https://github.com/can1357/oh-my-pi). omp-web reads the sessions the `omp` CLI already writes and gives you a browser workspace for session browsing, real-time chat, model roles, provider configuration, skill management, and project file preview.
 
 It is not a separate agent: omp-web runs omp's own SDK in-process, against the same `~/.omp/agent` directory, so a session started in the terminal continues in the browser and back again.
-
-<img width="1912" height="1242" alt="image" src="https://github.com/user-attachments/assets/6a3932c0-5ed2-4682-b4a7-db7837c764ad" />
 
 
 ## Quick Start
@@ -124,6 +136,28 @@ Requests to loopback addresses are never proxied, so a local provider (Ollama, L
 - **See session state clearly**: context usage, cost, compaction state, and system prompt details are visible from the top bar.
 - **Configure less from the terminal**: manage providers, logins/API keys, model tests, plugins, and skill switches from the web UI.
 - **Use the interface in your language**: switch between the supported UI languages from the top bar.
+
+## Screenshots
+
+**Session browsing + file explorer** — projects and past sessions on the left, the project's real file tree underneath, ready to preview or attach to a message.
+
+![Sidebar with session browsing and the file explorer](./docs/screenshots/01-sidebar-and-explorer.png)
+
+**Real-time chat with model roles** — the agent's tool calls, cost, context usage, and the active model role are all visible while it works.
+
+![Chat view showing an agent run with tool calls, cost, and context usage](./docs/screenshots/02-chat-session.png)
+
+**Chat beside the project** — browse and preview a file next to the conversation without losing your place.
+
+![Chat pane next to a rendered Markdown file preview](./docs/screenshots/03-file-preview.png)
+
+**Model roles, configured once, used everywhere** — assign a model per role (`default`, `smol`, `plan`, `commit`, …); both omp-web and the omp CLI read the same `models.yml`.
+
+![Settings panel showing model role assignments](./docs/screenshots/04-settings.png)
+
+**Full omp theme support** — omp-web reads omp's own dark/light palette mappings from `~/.omp/agent/config.yml` and applies them live, so the web view matches the terminal.
+
+![Theme settings showing omp's dark and light palette mapping](./docs/screenshots/05-themes.png)
 
 ## Notes
 
