@@ -28,3 +28,10 @@ test("polls running sessions only while the tab is visible", () => {
 test("keeps subagents out of the left session sidebar", () => {
   assert.doesNotMatch(source, /SubagentRail|SubagentPanel|subagents/);
 });
+
+test("does not persist an unchanged fallback title ending in whitespace", () => {
+  assert.match(
+    sessionItemSource,
+    /const name = renameValue\.trim\(\);[\s\S]*?if \(renameValue === title \|\| name === \(session\.name \?\? ""\)\) return;/,
+  );
+});
