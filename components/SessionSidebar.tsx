@@ -1092,7 +1092,7 @@ export function SessionSidebar({ selectedSessionId, optimisticSession, onSelectS
           const showMore = sessions.length > PROJECT_SESSION_LIMIT;
 
           return (
-            <section key={project} style={{ marginBottom: 3 }}>
+            <section key={project} style={{ marginBottom: isCollapsed ? 3 : 9 }}>
               <div
                 ref={isSelectedProject ? wtDropdownRef : undefined}
                 onMouseEnter={() => setHoveredProject(project)}

@@ -349,6 +349,10 @@ export function AppShell() {
   }, [router, selectedSession]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    // Mark the target project before the cwd synchronization effect runs.
+    // Otherwise selecting a session in another project looks like a manual
+    // project switch and the just-selected session is cleared.
+    activeProjectRootRef.current = session.projectRoot ?? session.cwd;
     setNewSessionCwd(null);
     setSelectedSession(session);
     setSessionKey((k) => k + 1);
