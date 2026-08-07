@@ -11,6 +11,8 @@ import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, isEmptyThinkingBlock } from "@/lib/message-display";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
+import { TurnWrittenFiles } from "./TurnWrittenFiles";
+import type { WrittenFile } from "@/lib/turn-written-files";
 import type {
   AgentMessage,
   UserMessage,
@@ -190,6 +192,13 @@ interface Props {
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
+  /**
+   * Files this turn wrote, derived by the caller from the whole turn's
+   * successful write/edit tool calls. ChatWindow computes this because the
+   * saved-message path splits tool calls into their own entries, leaving the
+   * final answer text-only.
+   */
+  writtenFiles?: WrittenFile[];
 }
 
 function formatTime(ts?: number): string | null {
@@ -219,12 +228,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -472,6 +481,7 @@ function AssistantMessageView({
   prevTimestamp,
   sessionId,
   entryId,
+  writtenFiles,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -483,6 +493,7 @@ function AssistantMessageView({
   prevTimestamp?: number;
   sessionId?: string;
   entryId?: string;
+  writtenFiles?: WrittenFile[];
 }) {
   const { t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
@@ -683,6 +694,10 @@ function AssistantMessageView({
         >
           Error: {providerError}
         </div>
+      )}
+
+      {writtenFiles && writtenFiles.length > 0 && (
+        <TurnWrittenFiles files={writtenFiles} onOpenFile={onOpenFile} />
       )}
 
       <div style={{
@@ -1583,7 +1598,6 @@ function getResultDiff(result: ToolResultMessage): ResultDiff | null {
 
   return null;
 }
-
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

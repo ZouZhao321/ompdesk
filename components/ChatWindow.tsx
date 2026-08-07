@@ -17,6 +17,7 @@ import type {
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
+import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { MessageView } from "./MessageView";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -545,7 +546,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 if (isGroupAnchor(messages[i])) { lastAnchorIdx = i; break; }
               }
 
-              const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean } = {}): ReactNode => {
+              const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[] } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 const prevAssistantEntryId =
                   msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
@@ -583,6 +584,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     showTimestamp={showTimestamp}
                     prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
                     sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                    writtenFiles={options.writtenFiles}
                   />
                 );
               };
@@ -655,7 +657,19 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 }
 
                 if (finalAnswerMessage) {
-                  rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage }));
+                  // Each tool call is stored as its own assistant entry, so the
+                  // final answer alone carries no record of what the turn wrote.
+                  // Gather the turn's assistant blocks and derive the file list
+                  // from the write/edit calls among them.
+                  const turnContent: AssistantContentBlock[] = [];
+                  for (let i = userIdx + 1; i <= finalAssistantIdx; i++) {
+                    const m = messages[i];
+                    if (m?.role === "assistant") {
+                      for (const b of (m as AssistantMessage).content ?? []) turnContent.push(b);
+                    }
+                  }
+                  const writtenFiles = extractTurnWrittenFiles(turnContent, toolResultsMap, messageCwd);
+                  rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles }));
                 }
                 for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
                   rendered.push(renderMessage(renderIdx));
