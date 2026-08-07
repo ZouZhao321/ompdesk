@@ -85,6 +85,72 @@ test("renders shell blocks as themed terminal content", () => {
   assert.match(html, /components\/MessageView\.tsx/);
 });
 
+test("uses i/title in the standard header for grep, read, write, glob, and eval blocks", () => {
+  const cases = [
+    ["read", "i", "Verifico bridge startSessionReplay e campionamento", { i: "Verifico bridge startSessionReplay e campionamento", path: "lib/main.dart" }, "lib/main.dart"],
+    ["grep", "i", "Individuo avvio e stop del session replay", { i: "Individuo avvio e stop del session replay", path: "lib/main.dart" }, "lib/main.dart"],
+    ["write", "i", "Individuo simbolo Main dell'app Flutter", { i: "Individuo simbolo Main dell'app Flutter", path: "lib/main.dart" }, "lib/main.dart"],
+    ["glob", "i", "Individuo componenti TypeScript", { i: "Individuo componenti TypeScript", path: "components/**/*.tsx" }, "components/**/*.tsx"],
+    ["eval", "title", "Valuto il risultato del parser", { title: "Valuto il risultato del parser", code: "return 42" }, "return 42"],
+  ];
+
+  for (const [toolName, property, preview, input, fallback] of cases) {
+    const html = renderMessage({
+      role: "assistant",
+      provider: "openai",
+      model: "gpt-test",
+      content: [{
+        type: "toolCall",
+        toolCallId: `${toolName}-preview`,
+        toolName,
+        input,
+      }],
+    });
+
+    const renderedPreview = preview.replaceAll("'", "&#x27;");
+    const previewPosition = html.indexOf(renderedPreview);
+    const toolPosition = html.indexOf(`>${toolName}</span>`);
+    assert.ok(previewPosition > toolPosition, `expected ${property} from ${toolName} in the standard header`);
+    assert.doesNotMatch(html, /class="tool-intent-preview"/);
+    assert.ok(!html.includes(fallback), `expected ${toolName} fallback to stay out of the header`);
+  }
+});
+
+test("shows an operation icon beside every standard tool label", () => {
+  const cases = [
+    ["read", "read", "var(--accent)"],
+    ["write", "write", "var(--warning)"],
+    ["glob", "glob", "var(--accent-hover)"],
+    ["grep", "grep", "var(--accent)"],
+    ["edit", "edit", "var(--warning)"],
+    ["eval", "eval", "var(--accent-hover)"],
+    ["functions.task", "task", "var(--accent)"],
+    ["unknown_tool", "generic", "var(--text-dim)"],
+  ];
+
+  for (const [toolName, iconKind, themeColor] of cases) {
+    const html = renderMessage({
+      role: "assistant",
+      provider: "openai",
+      model: "gpt-test",
+      content: [{
+        type: "toolCall",
+        toolCallId: `${toolName}-icon`,
+        toolName,
+        input: {},
+      }],
+    });
+
+    const iconPosition = html.indexOf(`data-tool-icon="${iconKind}"`);
+    const iconEnd = html.indexOf(">", iconPosition);
+    const toolPosition = html.indexOf(`>${toolName}</span>`);
+    assert.ok(iconPosition >= 0, `expected ${iconKind} icon for ${toolName}`);
+    assert.ok(html.slice(iconPosition, iconEnd).includes(`color:${themeColor}`), `expected ${toolName} icon to use ${themeColor}`);
+    assert.ok(iconPosition < toolPosition, `expected ${iconKind} icon before ${toolName}`);
+  }
+});
+
+
 test("renders every todo task in an integrated checklist", () => {
   const html = renderToStaticMarkup(
     React.createElement(
