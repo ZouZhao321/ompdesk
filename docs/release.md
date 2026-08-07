@@ -28,6 +28,15 @@ the repository's `npm` environment must permit the release job to run. No npm
 token is stored in GitHub Actions.
 
 
+## Automated omp dependency releases
+
+`.github/workflows/update-omp.yml` checks the latest stable `oh-my-pi` release
+and opens a dependency PR when the runtime packages change. The PR also bumps
+the `omp-web` patch version. After that PR is merged, the workflow creates the
+matching `v<version>` GitHub tag and release, with the updated `oh-my-pi`
+version in the release notes, then dispatches the npm publish workflow for that
+tag.
+
 ## 1. Preflight
 
 ```bash

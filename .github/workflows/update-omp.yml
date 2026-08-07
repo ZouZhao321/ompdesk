@@ -7,8 +7,12 @@ on:
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
+  pull_request:
+    types:
+      - closed
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -19,6 +23,7 @@ concurrency:
 jobs:
   update:
     name: Open omp dependency PR
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Check out main
@@ -110,6 +115,24 @@ jobs:
           fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);
           NODE
 
+      - name: Bump omp-web patch version
+        id: package
+        if: steps.manifest.outputs.changed == 'true'
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(packageJson.version);
+          if (!match) {
+            throw new Error(`Unexpected omp-web version: ${packageJson.version}`);
+          }
+          const nextVersion = `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+          packageJson.version = nextVersion;
+          fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${nextVersion}\n`);
+          NODE
+
+
       - name: Refresh Bun lockfile
         if: steps.manifest.outputs.changed == 'true'
         run: bun install --lockfile-only
@@ -134,4 +157,87 @@ jobs:
 
             Upstream release: [${{ steps.release.outputs.tag }}](${{ steps.release.outputs.url }})
 
+            When merged, this PR will release `omp-web@${{ steps.package.outputs.version }}` with a note for `oh-my-pi v${{ steps.release.outputs.version }}`.
+
             The workflow refreshed `bun.lock` and ran `bun run typecheck` before opening this PR.
+
+  release:
+    name: Release omp-web patch
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'automation/omp-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out merged main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 1
+
+      - name: Read release metadata
+        id: metadata
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const packageVersion = packageJson.version;
+          if (!/^\d+\.\d+\.\d+$/.test(packageVersion)) {
+            throw new Error(`Unexpected omp-web version: ${packageVersion}`);
+          }
+
+          const names = [
+            '@oh-my-pi/pi-agent-core',
+            '@oh-my-pi/pi-ai',
+            '@oh-my-pi/pi-coding-agent',
+            '@oh-my-pi/pi-tui',
+            '@oh-my-pi/pi-utils',
+          ];
+          const versions = names.map((name) => {
+            const range = packageJson.dependencies?.[name];
+            const match = /^~(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(range || '');
+            if (!match) {
+              throw new Error(`Unexpected ${name} range: ${range}`);
+            }
+            return match[1];
+          });
+          if (new Set(versions).size !== 1) {
+            throw new Error(`@oh-my-pi/* packages do not share one version: ${versions.join(', ')}`);
+          }
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `package_version=${packageVersion}\nomp_version=${versions[0]}\n`,
+          );
+          NODE
+
+      - name: Create GitHub release
+        id: github_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.metadata.outputs.package_version }}
+          OMP_VERSION: ${{ steps.metadata.outputs.omp_version }}
+          TARGET_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          tag="v${PACKAGE_VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET_SHA" \
+            --title "omp-web $tag" \
+            --notes "Updated oh-my-pi to v${OMP_VERSION}."
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Start npm publish for the release tag
+        if: steps.github_release.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ steps.metadata.outputs.package_version }}
+        run: gh workflow run publish-npm.yml --repo "$GITHUB_REPOSITORY" --ref "$RELEASE_TAG" -f ref="$RELEASE_TAG"
