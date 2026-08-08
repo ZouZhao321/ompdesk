@@ -355,6 +355,19 @@ export function AppShell() {
     // Otherwise selecting a session in another project looks like a manual
     // project switch and the just-selected session is cleared.
     activeProjectRootRef.current = session.projectRoot ?? session.cwd;
+    // Re-clicking the already-open session must not remount the chat and
+    // re-run the full load/positioning cycle. Only skip when the effective
+    // cwd context already matches — otherwise a pending cwd move still needs
+    // the full re-select flow.
+    if (!isRestore && selectedSession) {
+      const sameProject =
+        (selectedSession.projectRoot ?? selectedSession.cwd) ===
+        (session.projectRoot ?? session.cwd);
+      if (selectedSession.id === session.id && sameProject) {
+        if (isMobile) setSidebarOpen(false);
+        return;
+      }
+    }
     setNewSessionCwd(null);
     setSelectedSession(session);
     setSessionKey((k) => k + 1);
@@ -372,7 +385,7 @@ export function AppShell() {
     if (!isRestore) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
-  }, [router, isMobile]);
+  }, [router, isMobile, selectedSession]);
 
   const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
     setSelectedSession(null);
