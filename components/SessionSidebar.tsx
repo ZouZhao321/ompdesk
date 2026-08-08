@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { useI18n } from "@/hooks/useI18n";
@@ -921,6 +921,22 @@ export function SessionSidebar({ selectedSessionId, optimisticSession, onSelectS
     else sessionsByProject.set(project, [session]);
   }
 
+  // Per-project activity counts (running / unread) for the project rows, keyed
+  // the same way as getRecentProjects (projectRoot ?? cwd). Small data set —
+  // cheap to recompute.
+  const projectActivity = useMemo(() => {
+    const counts = new Map<string, { running: number; unread: number }>();
+    for (const session of sessionsForDisplay) {
+      const key = session.projectRoot ?? session.cwd;
+      if (!key) continue;
+      let entry = counts.get(key);
+      if (!entry) { entry = { running: 0, unread: 0 }; counts.set(key, entry); }
+      if (runningSessionIds.has(session.id)) entry.running++;
+      if (unreadSessionIds.has(session.id)) entry.unread++;
+    }
+    return counts;
+  }, [sessionsForDisplay, runningSessionIds, unreadSessionIds]);
+
   const normalizedProjectFilter = projectFilter.trim().toLowerCase();
   const projectGroups = projectPaths.flatMap((project) => {
     const segments = project.replace(/[\\/]+$/, "").split(/[\\/]/);
@@ -1248,6 +1264,7 @@ export function SessionSidebar({ selectedSessionId, optimisticSession, onSelectS
                     <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
                   </svg>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                  {showProjectActivity(projectActivity.get(project), t)}
                 </button>
 
                 <button
@@ -1980,6 +1997,48 @@ function UnreadSessionIndicator() {
           <animate attributeName="opacity" values="0.32;0;0.32" dur="1.6s" repeatCount="indefinite" />
         </circle>
       </svg>
+    </span>
+  );
+}
+
+/**
+ * Compact per-project activity badges for the workspace selector dropdown items:
+ * a spinning running icon + count and an unread dot + count. Renders nothing
+ * when the project has no activity. Counts share the accent / unread colors of
+ * the per-session indicators so the two stay visually consistent.
+ */
+function showProjectActivity(
+  activity: { running: number; unread: number } | undefined,
+  t: (key: string) => string,
+): ReactNode {
+  if (!activity || (activity.running === 0 && activity.unread === 0)) return null;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}>
+      {activity.running > 0 && (
+        <span
+          title={t("sidebar.agentRunning")}
+          aria-label={`${t("sidebar.agentRunning")} (${activity.running})`}
+          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
+            <g>
+              <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
+              <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite" />
+            </g>
+          </svg>
+          {activity.running}
+        </span>
+      )}
+      {activity.unread > 0 && (
+        <span
+          title={t("sidebar.newSessionActivity")}
+          aria-label={`${t("sidebar.newSessionActivity")} (${activity.unread})`}
+          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
+        >
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
+          {activity.unread}
+        </span>
+      )}
     </span>
   );
 }
