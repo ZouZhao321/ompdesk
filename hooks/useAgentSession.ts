@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo, useReducer } from "react";
 import type {
   AgentMessage,
+  BlockingExtensionUiRequest,
   CustomMessage,
   ExtensionStatusItem,
   ExtensionUiRequest,
@@ -11,6 +12,7 @@ import type {
   SessionTreeNode,
   SubagentSnapshot,
 } from "@/lib/types";
+import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
 import { isPromptRejectedError, sendAgentCommand } from "@/lib/agent-client";
@@ -155,6 +157,7 @@ export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
+  onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
   modelsRefreshKey?: number;
@@ -349,7 +352,7 @@ type SlashCommandsResponse = {
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
+    session, newSessionCwd, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
   } = opts;
 
@@ -813,6 +816,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleExtensionUiRequest = useCallback((request: ExtensionUiRequest) => {
+    if (isBlockingExtensionUiRequest(request)) onAttentionNeeded?.(request);
+
     switch (request.method) {
       case "select":
       case "confirm":
@@ -863,7 +868,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         });
         break;
     }
-  }, [addNotice, opts.chatInputRef]);
+  }, [addNotice, onAttentionNeeded, opts.chatInputRef]);
 
   const settleUiStage = useCallback(() => {
     const wasRunning = agentRunningRef.current;
