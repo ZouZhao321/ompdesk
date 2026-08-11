@@ -53,7 +53,6 @@ test("offers the downstream context-menu hook only on a normal session row", () 
     /onContextMenu=\{confirmDelete \|\| renaming \? undefined : handleContextMenu\}/,
   );
 });
-
 test("manual and lifecycle refreshes bypass the server session-list cache", () => {
   assert.match(source, /force \? "\/api\/sessions\?force=1" : "\/api\/sessions"/);
   assert.match(source, /cache: "no-store"/);
