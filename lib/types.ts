@@ -378,11 +378,17 @@ export type SessionEntry =
 
 export type FileEntry = SessionHeader | SessionEntry;
 
+export interface BranchPreview {
+  role?: "user" | "assistant";
+  text: string;
+}
+
 export interface SessionTreeNode {
   entry: SessionEntry;
   children: SessionTreeNode[];
   label?: string;
   compressedEntryIds?: string[];
+  branchPreview?: BranchPreview;
 }
 
 export interface SessionInfo {
