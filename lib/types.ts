@@ -108,6 +108,88 @@ export interface BashExecutionMessage {
 }
 
 export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage | CustomMessage | BashExecutionMessage;
+export interface ExtensionAskDialogOption {
+  label: string;
+  description?: string;
+  preview?: string;
+}
+
+export interface ExtensionAskDialogQuestion {
+  id: string;
+  question: string;
+  header?: string;
+  options: ExtensionAskDialogOption[];
+  multi?: boolean;
+  recommended?: number;
+}
+
+export interface ExtensionAskDialogResultItem {
+  id: string;
+  question: string;
+  options: string[];
+  multi: boolean;
+  selectedOptions: string[];
+  customInput?: string;
+  note?: string;
+}
+
+export type ExtensionAskDialogResult =
+  | { kind: "submit"; results: ExtensionAskDialogResultItem[] }
+  | { kind: "chat" };
+
+export type SubagentStatus = "pending" | "running" | "completed" | "failed" | "aborted";
+
+export interface SubagentProgress {
+  index: number;
+  id: string;
+  agent: string;
+  status: SubagentStatus;
+  task: string;
+  assignment?: string;
+  description?: string;
+  lastIntent?: string;
+  currentTool?: string;
+  currentToolArgs?: string;
+  currentToolStartMs?: number;
+  recentTools: Array<{ tool: string; args: string; endMs: number }>;
+  recentOutput: string[];
+  toolCount: number;
+  requests: number;
+  tokens: number;
+  contextTokens?: number;
+  contextWindow?: number;
+  cost: number;
+  durationMs: number;
+  resolvedModel?: string;
+  resolvedModelIsFallback?: boolean;
+  retryState?: {
+    attempt: number;
+    maxAttempts: number;
+    delayMs: number;
+    errorMessage: string;
+    startedAtMs: number;
+  };
+  retryFailure?: {
+    attempt: number;
+    errorMessage: string;
+  };
+}
+
+export interface SubagentSnapshot {
+  id: string;
+  index: number;
+  agent: string;
+  agentSource: "bundled" | "user" | "project";
+  description?: string;
+  status: SubagentStatus;
+  task?: string;
+  assignment?: string;
+  sessionFile?: string;
+  lastUpdate: number;
+  progress?: SubagentProgress;
+  parentToolCallId?: string;
+}
+
 
 export type ExtensionUiRequest =
   | {
@@ -118,6 +200,22 @@ export type ExtensionUiRequest =
       options: string[];
       timeout?: number;
       expiresAt?: number;
+    }
+  | {
+      type: "extension_ui_request";
+      id: string;
+      method: "ask";
+      questions: ExtensionAskDialogQuestion[];
+      timeout?: number;
+      expiresAt?: number;
+    }
+  | {
+      type: "extension_ui_request";
+      id: string;
+      method: "plan_review";
+      title: string;
+      planFilePath: string;
+      planContent: string;
     }
   | {
       type: "extension_ui_request";

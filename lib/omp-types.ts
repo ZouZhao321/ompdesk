@@ -5,6 +5,8 @@ import type {
   SlashCommandInfo as OmpSlashCommandInfo,
   Theme,
 } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAskDialogQuestion, ExtensionAskDialogResult } from "./types";
+
 
 export interface ContextUsage {
   percent: number | null;
@@ -97,6 +99,8 @@ type WidgetOptionsLike = {
 };
 
 export interface ExtensionUiContextLike {
+  readonly timeoutStartsOnPresentation?: boolean;
+  askDialog?(questions: ExtensionAskDialogQuestion[], opts?: DialogOptionsLike): Promise<ExtensionAskDialogResult | undefined>;
   select(title: string, options: string[], opts?: DialogOptionsLike): Promise<string | undefined>;
   confirm(title: string, message: string, opts?: DialogOptionsLike): Promise<boolean>;
   input(title: string, placeholder?: string, opts?: DialogOptionsLike): Promise<string | undefined>;
@@ -189,6 +193,27 @@ export interface AgentSessionLike {
   getEnabledToolNames(): string[];
   setActiveToolsByName(names: string[]): Promise<void>;
   abortCompaction(): void;
+  getPlanModeState?(): {
+    enabled: boolean;
+    planFilePath: string;
+    workflow?: "parallel" | "sequential";
+    reentry?: boolean;
+  } | undefined;
+  setPlanModeState?(state: {
+    enabled: boolean;
+    planFilePath: string;
+    workflow?: "parallel" | "sequential";
+    reentry?: boolean;
+  } | undefined): void;
+  setPlanProposalHandler?(handler: ((title: string) => Promise<{
+    content: Array<{ type: "text"; text: string }>;
+    details?: unknown;
+  }>) | null): void;
+  preparePlanForReview?(title: string): Promise<{
+    content: Array<{ type: "text"; text: string }>;
+    details?: { planFilePath?: string; title?: string; planExists?: boolean };
+  }>;
+  setPlanReferencePath?(path: string): void;
   getContextUsage(): { tokens: number; contextWindow: number; percent: number } | undefined;
   dispose?(options?: { keepAlive?: boolean }): Promise<void>;
 }

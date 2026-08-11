@@ -9,6 +9,7 @@ import type {
   ExtensionWidgetItem,
   SessionInfo,
   SessionTreeNode,
+  SubagentSnapshot,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
@@ -81,6 +82,7 @@ type AgentStateResponse = {
   extensionStatuses?: ExtensionStatusItem[];
   extensionWidgets?: ExtensionWidgetItem[];
   queuedMessages?: { steering?: string[]; followUp?: string[] } | null;
+  subagents?: SubagentSnapshot[];
 };
 
 export interface QueuedMessages {
@@ -91,8 +93,26 @@ export interface QueuedMessages {
 function normalizeQueuedMessages(q?: { steering?: string[]; followUp?: string[] } | null): QueuedMessages {
   return { steering: q?.steering ?? [], followUp: q?.followUp ?? [] };
 }
+// State refreshes contain only live SDK entries; merge terminal frames into a bounded history.
+const MAX_SUBAGENT_HISTORY = 128;
 
-type ExtensionUiDialogRequest = Extract<ExtensionUiRequest, { method: "select" | "confirm" | "input" | "editor" }>;
+function mergeSubagentSnapshots(current: SubagentSnapshot[], incoming: SubagentSnapshot[]): SubagentSnapshot[] {
+  const byId = new Map(current.map((subagent) => [subagent.id, subagent]));
+  for (const subagent of incoming) byId.set(subagent.id, subagent);
+  const snapshots = [...byId.values()];
+  const active = snapshots
+    .filter((subagent) => subagent.status === "pending" || subagent.status === "running")
+    .sort((left, right) => left.index - right.index || left.id.localeCompare(right.id));
+  const finished = snapshots
+    .filter((subagent) => subagent.status !== "pending" && subagent.status !== "running")
+    .sort((left, right) => right.lastUpdate - left.lastUpdate || left.id.localeCompare(right.id));
+  return [...active, ...finished].slice(0, MAX_SUBAGENT_HISTORY);
+}
+
+type ExtensionUiDialogRequest = Extract<
+  ExtensionUiRequest,
+  { method: "select" | "confirm" | "input" | "editor" | "ask" | "plan_review" }
+>;
 type ExtensionUiCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
 export type NoticeType = "info" | "success" | "warning" | "error";
 
@@ -373,6 +393,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [extensionStatuses, setExtensionStatuses] = useState<ExtensionStatusItem[]>([]);
   const [extensionWidgets, setExtensionWidgets] = useState<ExtensionWidgetItem[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({ steering: [], followUp: [] });
+  const [subagents, setSubagents] = useState<SubagentSnapshot[]>([]);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const eventSourceSessionIdRef = useRef<string | null>(null);
@@ -494,6 +515,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (liveState.extensionStatuses !== undefined) setExtensionStatuses(liveState.extensionStatuses ?? []);
           if (liveState.extensionWidgets !== undefined) setExtensionWidgets(liveState.extensionWidgets ?? []);
           if (liveState.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(liveState.queuedMessages));
+          if (liveState.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, liveState.subagents ?? []));
         } else if (!agentState.running) {
           setQueuedMessages({ steering: [], followUp: [] });
         }
@@ -789,6 +811,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "confirm":
       case "input":
       case "editor":
+      case "ask":
+      case "plan_review":
         setExtensionDialog(request);
         break;
       case "notify": {
@@ -874,6 +898,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         ) return;
 
         const state = data.state;
+        setSubagents((current) => mergeSubagentSnapshots(current, state?.subagents ?? []));
         const promptActive = Boolean(data.running && state && (state.isStreaming || state.isPromptRunning));
         if (promptActive) {
           eventStreamGraceActiveRef.current = false;
@@ -891,6 +916,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), PROMPT_SETTLE_POLL_MS);
           return;
         }
+        if (data.running && (state?.subagents?.length ?? 0) > 0) {
+          eventStreamGraceTimerRef.current = setTimeout(
+            () => void checkServerIdle(),
+            CONTEXT_USAGE_REFRESH_MS,
+          );
+          return;
+        }
+
 
         eventStreamGraceActiveRef.current = false;
         eventStreamGraceTimerRef.current = null;
@@ -1006,6 +1039,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setIsCompacting(state?.isCompacting ?? false);
       setQueuedMessages(normalizeQueuedMessages(state?.queuedMessages));
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+      setSubagents((current) => mergeSubagentSnapshots(current, state?.subagents ?? []));
       const busy = data.running && state
         && (state.isStreaming || state.isPromptRunning || state.isCompacting);
       if (busy || !agentRunningRef.current) return;
@@ -1107,6 +1141,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
+              if (d.state?.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, d.state?.subagents ?? []));
               // Aborted turns can leave messages queued in pi (delivered with the
               // next turn); dead wrapper (no state) means the queue is gone.
               setQueuedMessages(normalizeQueuedMessages(d.state?.queuedMessages));
@@ -1225,6 +1260,88 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (tools.length === 0) return { kind: "waiting_model" };
           return { kind: "running_tools", tools };
         });
+        break;
+      }
+      case "subagent_lifecycle": {
+        const payload = event.payload as {
+          id?: string;
+          index?: number;
+          agent?: string;
+          agentSource?: SubagentSnapshot["agentSource"];
+          description?: string;
+          status?: "started" | "completed" | "failed" | "aborted";
+          sessionFile?: string;
+          parentToolCallId?: string;
+        } | undefined;
+        if (!payload?.id) break;
+        if (payload.status !== "started") {
+          const terminalStatus: SubagentSnapshot["status"] = payload.status === "failed"
+            ? "failed"
+            : payload.status === "aborted"
+              ? "aborted"
+              : "completed";
+          setSubagents((current) => {
+            const previous = current.find((subagent) => subagent.id === payload.id);
+            const finished: SubagentSnapshot = {
+              id: payload.id!,
+              index: payload.index ?? previous?.index ?? 0,
+              agent: payload.agent ?? previous?.agent ?? payload.id!,
+              agentSource: payload.agentSource ?? previous?.agentSource ?? "bundled",
+              description: payload.description ?? previous?.description,
+              status: terminalStatus,
+              task: previous?.task,
+              assignment: previous?.assignment,
+              sessionFile: payload.sessionFile ?? previous?.sessionFile,
+              parentToolCallId: payload.parentToolCallId ?? previous?.parentToolCallId,
+              lastUpdate: Date.now(),
+              progress: previous?.progress ? { ...previous.progress, status: terminalStatus } : undefined,
+            };
+            return mergeSubagentSnapshots(current, [finished]);
+          });
+          break;
+        }
+        const started: SubagentSnapshot = {
+          id: payload.id,
+          index: payload.index ?? 0,
+          agent: payload.agent ?? payload.id,
+          agentSource: payload.agentSource ?? "bundled",
+          description: payload.description,
+          status: "running",
+          sessionFile: payload.sessionFile,
+          parentToolCallId: payload.parentToolCallId,
+          lastUpdate: Date.now(),
+        };
+        setSubagents((previous) => mergeSubagentSnapshots(previous, [started]));
+        break;
+      }
+      case "subagent_progress": {
+        const payload = event.payload as {
+          index?: number;
+          agent?: string;
+          agentSource?: SubagentSnapshot["agentSource"];
+          task?: string;
+          assignment?: string;
+          sessionFile?: string;
+          parentToolCallId?: string;
+          progress?: SubagentSnapshot["progress"];
+        } | undefined;
+        if (!payload?.progress) break;
+        const progress = payload.progress;
+        const snapshot: SubagentSnapshot = {
+          id: progress.id,
+          index: payload.index ?? progress.index,
+          agent: payload.agent ?? progress.agent,
+          agentSource: payload.agentSource ?? "bundled",
+          description: progress.description,
+          status: progress.status,
+          task: payload.task ?? progress.task,
+          assignment: payload.assignment ?? progress.assignment,
+          sessionFile: payload.sessionFile,
+          parentToolCallId: payload.parentToolCallId,
+          lastUpdate: Date.now(),
+          progress,
+        };
+        setSubagents((previous) => mergeSubagentSnapshots(previous, [snapshot]));
         break;
       }
       case "queue_update":
@@ -1833,15 +1950,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             setBashRunning(true);
             void waitForBashSettlement(session.id);
           }
+          if ((agentState.state?.subagents?.length ?? 0) > 0) {
+            void connectEvents(session.id);
+          }
         }
-        if (agentState?.state) {
-          if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
-          if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
-          if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
-          if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
-          if (agentState.state.extensionStatuses !== undefined) setExtensionStatuses(agentState.state.extensionStatuses ?? []);
-          if (agentState.state.extensionWidgets !== undefined) setExtensionWidgets(agentState.state.extensionWidgets ?? []);
-          if (agentState.state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(agentState.state.queuedMessages));
+        const state = agentState?.state;
+        if (state) {
+          if (state.isCompacting !== undefined) setIsCompacting(state.isCompacting);
+          if (state.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+          if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
+          if (state.thinkingLevel !== undefined) setThinkingLevel((state.thinkingLevel as ThinkingLevelOption) ?? "auto");
+          if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
+          if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
+          if (state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(state.queuedMessages));
+          if (state.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, state.subagents ?? []));
         }
       });
     }
@@ -1949,7 +2071,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, modelRoles, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, sessionStats,
-    slashCommands, slashCommandsLoading, queuedMessages,
+    slashCommands, slashCommandsLoading, queuedMessages, subagents,
     notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
