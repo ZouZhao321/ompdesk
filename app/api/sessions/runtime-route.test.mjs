@@ -29,7 +29,7 @@ test("session reads use the live SessionManager before requiring a JSONL path", 
     const pathLookup = source.indexOf("resolveSessionPath(id)");
     assert.ok(liveLookup >= 0);
     assert.ok(pathLookup > liveLookup);
-    assert.match(source, /liveRpc\?\.inner\.sessionManager \?\? SessionManager\.open/);
+    assert.match(source, /liveRpc\?\.inner\.sessionManager \?\? (?:await )?SessionManager\.open/);
   }
 });
 
@@ -42,7 +42,7 @@ test("live agent state is available before the session file is persisted", () =>
 });
 
 test("live detail and state routes work without a persisted JSONL file", async (t) => {
-  const previousRegistry = globalThis.__piSessions;
+  const previousRegistry = globalThis.__ompSessions;
   const id = "live-route-test";
   const timestamp = "2026-08-12T01:02:03.000Z";
   const entry = {
@@ -60,7 +60,7 @@ test("live detail and state routes work without a persisted JSONL file", async (
     getSessionName: () => undefined,
     getSessionFile: () => `/tmp/pi-web-live-route-not-persisted-${process.pid}.jsonl`,
   };
-  globalThis.__piSessions = new Map([[id, {
+  globalThis.__ompSessions = new Map([[id, {
     isAlive: () => true,
     isRunning: () => true,
     inner: { sessionManager },
@@ -70,16 +70,16 @@ test("live detail and state routes work without a persisted JSONL file", async (
     send: async () => ({ isStreaming: true }),
   }]]);
   t.after(() => {
-    globalThis.__piSessions = previousRegistry;
+    globalThis.__ompSessions = previousRegistry;
   });
 
   const routeContext = { params: Promise.resolve({ id }) };
   const detailResponse = await getSessionDetail(
-    new Request(`http://localhost/api/sessions/${id}`),
+    new Request(`http://localhost/api/sessions/${id}`, { headers: { host: "localhost" } }),
     routeContext,
   );
   const stateResponse = await getSessionState(
-    new Request(`http://localhost/api/sessions/${id}/state`),
+    new Request(`http://localhost/api/sessions/${id}/state`, { headers: { host: "localhost" } }),
     routeContext,
   );
   const detail = await detailResponse.json();
