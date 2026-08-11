@@ -557,6 +557,7 @@ export function AppShell() {
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
+  const showSubagentPanel = !isMobile && selectedSession !== null && subagents.length > 0;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
@@ -1448,12 +1449,8 @@ export function AppShell() {
         </div>
 
         {/* Chat content */}
-        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          <SubagentPanel
-            sessionId={selectedSession?.id ?? null}
-            cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
-            subagents={subagents}
-          />
+        <div className="chat-content-layout">
+          <div className="chat-session-column">
           {showChat ? (
             <ChatWindow
               key={sessionKey}
@@ -1513,6 +1510,16 @@ export function AppShell() {
               </div>
             )
           ) : null}
+          </div>
+          {showSubagentPanel && (
+            <div className="subagent-column">
+              <SubagentPanel
+                sessionId={selectedSession?.id ?? null}
+                cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
+                subagents={subagents}
+              />
+            </div>
+          )}
         </div>
       </div>
 

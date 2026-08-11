@@ -294,21 +294,15 @@ export function SubagentPanel({ sessionId, cwd, subagents }: { sessionId: string
       className="subagent-panel"
       aria-label={t("subagents.title")}
       style={{
-        position: "absolute",
-        top: 12,
-        right: 12,
-        zIndex: 20,
         display: "flex",
+        flex: "1 1 auto",
         flexDirection: "column",
-        width: "min(360px, calc(100% - 24px))",
-        maxHeight: "calc(100% - 24px)",
+        width: "100%",
+        height: "100%",
+        minWidth: 0,
         minHeight: 0,
         overflow: "hidden",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        background: "color-mix(in srgb, var(--bg-panel) 96%, transparent)",
-        boxShadow: "0 16px 42px rgba(0,0,0,0.20)",
-        backdropFilter: "blur(14px)",
+        background: "var(--bg-panel)",
       }}
     >
       {selected ? (
