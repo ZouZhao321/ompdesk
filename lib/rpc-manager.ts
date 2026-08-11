@@ -12,6 +12,11 @@ import { BUILTIN_SLASH_COMMAND_DEFS } from "@oh-my-pi/pi-coding-agent/slash-comm
 import { executeAcpBuiltinSlashCommand, type AcpBuiltinSlashCommandResult } from "@oh-my-pi/pi-coding-agent/slash-commands/acp-builtins";
 import { discoverCustomToolPaths } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
 import { initializeExtensions } from "@oh-my-pi/pi-coding-agent/modes/runtime-init";
+import { readPlanFile } from "@oh-my-pi/pi-coding-agent/plan-mode/plan-files";
+import {
+  readRpcSubagentTranscript,
+  RpcSubagentRegistry,
+} from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-subagents";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@oh-my-pi/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, realpathSync, writeFileSync } from "fs";
@@ -26,7 +31,12 @@ import { getOmpRuntime, getSettingsForCwd } from "./omp-runtime";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import type { SlashCommandInfo } from "./omp-types";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./omp-types";
-import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem } from "./types";
+import type {
+  ExtensionAskDialogResult,
+  ExtensionUiRequest,
+  ExtensionUiResponse,
+  ExtensionWidgetItem,
+} from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
 
 // ============================================================================
@@ -221,9 +231,20 @@ export class AgentSessionWrapper {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
+  private readonly subagents: RpcSubagentRegistry;
   private _alive = true;
 
-  constructor(public readonly inner: AgentSessionLike) {}
+  constructor(
+    public readonly inner: AgentSessionLike,
+    eventBus: ConstructorParameters<typeof RpcSubagentRegistry>[0],
+  ) {
+    this.subagents = new RpcSubagentRegistry(eventBus, (frame) => {
+      this.emit(frame as unknown as AgentEvent);
+      this.resetIdleTimer();
+      notifyRunningChange();
+    });
+    this.subagents.setSubscriptionLevel("progress");
+  }
 
   get sessionId(): string {
     return this.inner.sessionId;
@@ -242,10 +263,21 @@ export class AgentSessionWrapper {
   }
 
   isRunning(): boolean {
-    return this._alive && (this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning);
+    return this._alive && (
+      this.promptRunning
+      || this.inner.isStreaming
+      || this.inner.isCompacting
+      || this.inner.isBashRunning
+      || this.subagents.getSubagents().length > 0
+    );
+  }
+  bindToolUiContext(setter: (uiContext: ExtensionUiContextLike, hasUI: boolean) => void): void {
+    setter(this.createExtensionUiContext(), true);
   }
 
+
   start(): void {
+    this.syncPlanModeFromSession();
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       if (event.type === "agent_end") {
         invalidateSessionListCache();
@@ -351,6 +383,109 @@ export class AgentSessionWrapper {
       this.inner.agent.state.systemPrompt = [];
     }
   }
+  private syncPlanModeFromSession(): void {
+    let state = this.inner.getPlanModeState?.();
+    if (!state) {
+      const entries = this.inner.sessionManager.getEntries() as Array<{
+        type?: string;
+        mode?: string;
+        data?: Record<string, unknown>;
+      }>;
+      let persistedMode: (typeof entries)[number] | undefined;
+      for (let index = entries.length - 1; index >= 0; index -= 1) {
+        if (entries[index]?.type !== "mode_change") continue;
+        persistedMode = entries[index];
+        break;
+      }
+      const planFilePath = persistedMode?.data?.planFilePath;
+      if (persistedMode?.mode === "plan" && typeof planFilePath === "string" && planFilePath.length > 0) {
+        state = {
+          enabled: true,
+          planFilePath,
+          workflow: persistedMode.data?.workflow === "sequential" ? "sequential" : "parallel",
+          reentry: true,
+        };
+        this.inner.setPlanModeState?.(state);
+      }
+    }
+
+    if (state?.enabled) {
+      this.inner.setPlanProposalHandler?.((title) => this.handlePlanProposal(title));
+    }
+  }
+
+  private async handlePlanProposal(title: string): Promise<{
+    content: Array<{ type: "text"; text: string }>;
+    details?: unknown;
+  }> {
+    const state = this.inner.getPlanModeState?.();
+    if (!state?.enabled || !this.inner.preparePlanForReview) {
+      throw new Error("Plan mode is not active.");
+    }
+
+    const review = await this.inner.preparePlanForReview(title);
+    const planFilePath = review.details?.planFilePath;
+    const resolvedTitle = review.details?.title;
+    if (!planFilePath || !resolvedTitle) {
+      throw new Error("The proposed plan could not be resolved.");
+    }
+
+    const planContent = await readPlanFile(planFilePath, {
+      cwd: this.cwd,
+      localProtocolOptions: {
+        getArtifactsDir: () => this.inner.sessionManager.getArtifactsDir(),
+        getSessionId: () => this.inner.sessionManager.getSessionId(),
+      },
+    });
+    if (!planContent?.trim()) {
+      throw new Error(`Plan file not found at ${planFilePath}`);
+    }
+
+    const responseValue = await this.requestExtensionUi(
+      { method: "plan_review", title: resolvedTitle, planFilePath, planContent },
+      JSON.stringify({ action: "refine" }),
+      (response) => "value" in response ? response.value : JSON.stringify({ action: "refine" }),
+    );
+    let choice: { action?: unknown; feedback?: unknown } = {};
+    try {
+      choice = JSON.parse(responseValue) as { action?: unknown; feedback?: unknown };
+    } catch {
+      // Treat malformed or stale browser responses as a request to keep planning.
+    }
+
+    const details = { planFilePath, title: resolvedTitle, planExists: true };
+    if (choice.action === "approve") {
+      this.inner.setPlanReferencePath?.(planFilePath);
+      this.inner.setPlanProposalHandler?.(null);
+      this.inner.setPlanModeState?.(undefined);
+      this.inner.sessionManager.appendModeChange("none");
+      return {
+        content: [{
+          type: "text",
+          text: `Plan approved at ${planFilePath}. Plan mode exited; proceed with the implementation.`,
+        }],
+        details,
+      };
+    }
+
+    if (state.planFilePath !== planFilePath) {
+      this.inner.setPlanModeState?.({ ...state, planFilePath });
+      this.inner.sessionManager.appendModeChange("plan", { planFilePath });
+    }
+    const feedback = typeof choice.feedback === "string" ? choice.feedback.trim() : "";
+    return {
+      content: [{
+        type: "text",
+        text: [
+          "Plan refinement requested.",
+          feedback ? `User feedback:\n${feedback}` : "",
+          `Update the plan file, then write ${resolvedTitle} to xd://propose again when ready.`,
+        ].filter(Boolean).join("\n\n"),
+      }],
+      details,
+    };
+  }
+
 
   private emit(event: AgentEvent): void {
     for (const l of this.listeners) l(event);
@@ -406,6 +541,9 @@ export class AgentSessionWrapper {
     this.resetIdleTimer();
     const type = command.type as string;
     if (this.shouldWaitForExtensions(type)) await this.waitForExtensionsBound();
+    if (type === "prompt" || type === "steer" || type === "follow_up") {
+      this.syncPlanModeFromSession();
+    }
 
     if (type === "prompt" || type === "steer" || type === "follow_up") {
       const imageError = validateAgentImages(command.images);
@@ -475,8 +613,22 @@ export class AgentSessionWrapper {
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           extensionStatuses: this.getExtensionStatuses(),
           extensionWidgets: this.getExtensionWidgets(),
+          subagents: this.subagents.getSubagents(),
         };
       }
+      case "get_subagents":
+        return { subagents: this.subagents.getSubagents() };
+
+      case "get_subagent_messages": {
+        const selector = command as {
+          subagentId?: string;
+          sessionFile?: string;
+          fromByte?: number;
+        };
+        const transcriptFile = this.subagents.resolveSessionFile(selector);
+        return readRpcSubagentTranscript(transcriptFile, selector.fromByte);
+      }
+
 
       case "set_model": {
         const { provider, modelId, role } = command as { provider: string; modelId: string; role?: string };
@@ -739,6 +891,7 @@ export class AgentSessionWrapper {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.inner.isBashRunning) this.inner.abortBash();
     this.unsubscribe?.();
+    this.subagents.dispose();
     for (const pending of this.pendingUiResponses.values()) pending.cancel();
     for (const id of Array.from(this.activeCustomUis.keys())) this.closeCustomUi(id, undefined);
     this.pendingUiResponses.clear();
@@ -969,6 +1122,21 @@ export class AgentSessionWrapper {
 
   private createExtensionUiContext(): ExtensionUiContextLike {
     return {
+      timeoutStartsOnPresentation: false,
+      askDialog: (questions, opts) => this.requestExtensionUi(
+        { method: "ask", questions, ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
+        undefined,
+        (response) => {
+          if (!("value" in response)) return undefined;
+          try {
+            return JSON.parse(response.value) as ExtensionAskDialogResult;
+          } catch {
+            return undefined;
+          }
+        },
+        opts?.timeout,
+        opts?.signal,
+      ),
       select: (title, options, opts) => this.requestExtensionUi(
         { method: "select", title, options, ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
         undefined,
@@ -1281,12 +1449,13 @@ export async function startRpcSession(
           ...(defaultRole ? { defaultModel: defaultRole } : {}),
           ...(thinkingLevel ? { thinkingLevel } : {}),
         });
-      const { session: inner } = await createAgentSession({
+      const { session: inner, eventBus, setToolUIContext } = await createAgentSession({
         cwd: sessionCwd,
         agentDir,
         settings,
         sessionManager,
         modelRegistry,
+        hasUI: true,
         ...(initial.model ? { model: initial.model } : {}),
         ...(initial.thinkingLevel ? { thinkingLevel: initial.thinkingLevel } : {}),
         ...(initial.scopedModels.length > 0 ? { scopedModels: initial.scopedModels } : {}),
@@ -1319,7 +1488,10 @@ export async function startRpcSession(
         await session.setActiveToolsByName(withExtensionTools(session, toolNames));
       }
 
-      const wrapper = new AgentSessionWrapper(session);
+      const wrapper = new AgentSessionWrapper(session, eventBus);
+      wrapper.bindToolUiContext(
+        setToolUIContext as unknown as (uiContext: ExtensionUiContextLike, hasUI: boolean) => void,
+      );
       // When all tools are disabled, clear the system prompt entirely.
       // omp's buildSystemPrompt always produces a non-empty prompt even with no
       // tools; keep this forced after extension discovery and reloads as well.

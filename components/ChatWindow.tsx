@@ -1,11 +1,23 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
+import type {
+  AgentMessage,
+  AssistantContentBlock,
+  AssistantMessage,
+  BashExecutionMessage,
+  CustomMessage,
+  ExtensionUiRequest,
+  SessionInfo,
+  SessionTreeNode,
+  SubagentSnapshot,
+  ToolResultMessage,
+} from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView } from "./MessageView";
+import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
@@ -38,6 +50,7 @@ interface Props {
   onSessionStatsPanelOpen?: () => void;
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
+  onSubagentsChange?: (subagents: SubagentSnapshot[]) => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -171,7 +184,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onSubagentsChange, onOpenFile }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
   const isMobile = useIsMobile();
@@ -202,7 +215,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, modelRoles, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
-    slashCommands, slashCommandsLoading, queuedMessages,
+    slashCommands, slashCommandsLoading, queuedMessages, subagents,
     notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection,
     agentPhase,
@@ -303,6 +316,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     onContextUsageChange?.(contextUsageRef.current);
   }, [ctxKey, onContextUsageChange]);
   useEffect(() => () => { onContextUsageChange?.(null); }, [onContextUsageChange]);
+  useEffect(() => {
+    onSubagentsChange?.(subagents);
+  }, [onSubagentsChange, subagents]);
+  useEffect(() => () => { onSubagentsChange?.([]); }, [onSubagentsChange]);
+
 
   const onDrop = useCallback((files: File[]) => {
     if (sessionBusy) return;
@@ -844,7 +862,10 @@ function NoticeShelf({ notices, floating = false, align = "left" }: { notices: N
   );
 }
 
-type ExtensionDialogRequest = Extract<ExtensionUiRequest, { method: "select" | "confirm" | "input" | "editor" }>;
+type ExtensionDialogRequest = Extract<
+  ExtensionUiRequest,
+  { method: "select" | "confirm" | "input" | "editor" | "ask" | "plan_review" }
+>;
 
 function ExtensionDialog({
   request,
@@ -855,9 +876,26 @@ function ExtensionDialog({
 }) {
   const { t } = useI18n();
   const [value, setValue] = useState(request.method === "editor" ? request.prefill ?? "" : "");
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, number[]>>({});
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
+  const [planFeedback, setPlanFeedback] = useState("");
 
   useEffect(() => {
     setValue(request.method === "editor" ? request.prefill ?? "" : "");
+    setPlanFeedback("");
+    setCustomAnswers({});
+    if (request.method !== "ask") {
+      setSelectedOptions({});
+      return;
+    }
+    const recommended: Record<string, number[]> = {};
+    for (const question of request.questions) {
+      recommended[question.id] = question.recommended !== undefined
+        && question.options[question.recommended] !== undefined
+        ? [question.recommended]
+        : [];
+    }
+    setSelectedOptions(recommended);
   }, [request]);
 
   const submitValue = () => {
@@ -867,6 +905,363 @@ function ExtensionDialog({
       onRespond(request, { value });
     }
   };
+  if (request.method === "ask") {
+    const canSubmit = request.questions.every((question) =>
+      (selectedOptions[question.id]?.length ?? 0) > 0
+      || (customAnswers[question.id]?.trim().length ?? 0) > 0);
+    const toggleOption = (questionId: string, optionIndex: number, multi: boolean) => {
+      setSelectedOptions((current) => {
+        const selected = current[questionId] ?? [];
+        const next = multi
+          ? selected.includes(optionIndex)
+            ? selected.filter((index) => index !== optionIndex)
+            : [...selected, optionIndex]
+          : [optionIndex];
+        return { ...current, [questionId]: next };
+      });
+    };
+    const submitAnswers = () => {
+      if (!canSubmit) return;
+      onRespond(request, {
+        value: JSON.stringify({
+          kind: "submit",
+          results: request.questions.map((question) => {
+            const customInput = customAnswers[question.id]?.trim();
+            return {
+              id: question.id,
+              question: question.question,
+              options: question.options.map((option) => option.label),
+              multi: question.multi ?? false,
+              selectedOptions: (selectedOptions[question.id] ?? [])
+                .map((index) => question.options[index]?.label)
+                .filter((option): option is string => option !== undefined),
+              ...(customInput ? { customInput } : {}),
+            };
+          }),
+        }),
+      });
+    };
+
+    return (
+      <div
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onRespond(request, { cancelled: true });
+        }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 90,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+          background: "color-mix(in srgb, #000 26%, transparent)",
+          backdropFilter: "blur(2px)",
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("chat.agentQuestion")}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            width: "min(720px, 100%)",
+            maxHeight: "min(780px, calc(100dvh - 32px))",
+            overflow: "hidden",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            background: "var(--bg)",
+            boxShadow: "0 24px 80px rgba(0,0,0,0.32)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+            <span
+              aria-hidden="true"
+              style={{
+                display: "grid",
+                placeItems: "center",
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                background: "color-mix(in srgb, var(--accent) 12%, var(--bg-panel))",
+                color: "var(--accent)",
+                fontSize: 13,
+                fontWeight: 750,
+              }}
+            >
+              ?
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 680 }}>{t("chat.agentQuestion")}</div>
+              <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11 }}>{t("chat.agentQuestionHint")}</div>
+            </div>
+          </div>
+
+          <div style={{ overflowY: "auto", padding: 16 }}>
+            <div style={{ display: "grid", gap: 14 }}>
+              {request.questions.map((question, questionIndex) => {
+                const selected = selectedOptions[question.id] ?? [];
+                return (
+                  <section
+                    key={question.id}
+                    style={{
+                      padding: 14,
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      background: "var(--bg-panel)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                      {question.header && (
+                        <span style={{ color: "var(--accent)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                          {question.header}
+                        </span>
+                      )}
+                      {request.questions.length > 1 && (
+                        <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10, fontVariantNumeric: "tabular-nums" }}>
+                          {questionIndex + 1}/{request.questions.length}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ marginBottom: 10, color: "var(--text)", fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>
+                      {question.question}
+                    </div>
+                    <div
+                      role={question.multi ? "group" : "radiogroup"}
+                      aria-label={question.question}
+                      style={{ display: "grid", gap: 7 }}
+                    >
+                      {question.options.map((option, optionIndex) => {
+                        const checked = selected.includes(optionIndex);
+                        const recommended = question.recommended === optionIndex;
+                        return (
+                          <button
+                            key={`${question.id}:${optionIndex}`}
+                            type="button"
+                            role={question.multi ? "checkbox" : "radio"}
+                            aria-checked={checked}
+                            onClick={() => toggleOption(question.id, optionIndex, question.multi ?? false)}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "18px minmax(0, 1fr) auto",
+                              alignItems: "start",
+                              gap: 9,
+                              width: "100%",
+                              padding: "9px 10px",
+                              border: `1px solid ${checked ? "color-mix(in srgb, var(--accent) 55%, var(--border))" : "var(--border)"}`,
+                              borderRadius: 7,
+                              background: checked ? "color-mix(in srgb, var(--accent) 8%, var(--bg))" : "var(--bg)",
+                              color: "var(--text)",
+                              cursor: "pointer",
+                              textAlign: "left",
+                            }}
+                          >
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                display: "grid",
+                                placeItems: "center",
+                                width: 16,
+                                height: 16,
+                                marginTop: 1,
+                                border: `1px solid ${checked ? "var(--accent)" : "var(--text-dim)"}`,
+                                borderRadius: question.multi ? 4 : "50%",
+                                background: checked ? "var(--accent)" : "transparent",
+                                color: "#fff",
+                                fontSize: 10,
+                                lineHeight: 1,
+                              }}
+                            >
+                              {checked && (question.multi ? (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <polyline points="2 5.2 4.1 7.2 8 2.8" />
+                                </svg>
+                              ) : (
+                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor" }} />
+                              ))}
+                            </span>
+                            <span style={{ minWidth: 0 }}>
+                              <span style={{ display: "block", fontSize: 12.5, fontWeight: checked ? 650 : 500 }}>{option.label}</span>
+                              {option.description && (
+                                <span style={{ display: "block", marginTop: 3, color: "var(--text-muted)", fontSize: 11, lineHeight: 1.45 }}>
+                                  {option.description}
+                                </span>
+                              )}
+                              {checked && option.preview && (
+                                <span style={{ display: "block", marginTop: 8, padding: "7px 8px", borderLeft: "2px solid var(--accent)", background: "var(--bg-subtle)", color: "var(--text-muted)", fontSize: 11, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                                  {option.preview}
+                                </span>
+                              )}
+                            </span>
+                            {recommended && (
+                              <span style={{ color: "var(--accent)", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                                {t("chat.recommended")}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input
+                      value={customAnswers[question.id] ?? ""}
+                      onChange={(event) => setCustomAnswers((current) => ({ ...current, [question.id]: event.target.value }))}
+                      onKeyDown={(event) => {
+                        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitAnswers();
+                      }}
+                      placeholder={t("chat.customAnswer")}
+                      aria-label={t("chat.customAnswer")}
+                      style={{
+                        width: "100%",
+                        height: 34,
+                        marginTop: 9,
+                        padding: "0 10px",
+                        border: "1px solid var(--border)",
+                        borderRadius: 7,
+                        outline: "none",
+                        background: "var(--bg)",
+                        color: "var(--text)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                      }}
+                    />
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+            <button
+              type="button"
+              onClick={() => onRespond(request, { cancelled: true })}
+              style={{ padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text-muted)", cursor: "pointer" }}
+            >
+              {t("chat.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onRespond(request, { value: JSON.stringify({ kind: "chat" }) })}
+              style={{ padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: "pointer" }}
+            >
+              {t("chat.chatAboutThis")}
+            </button>
+            <button
+              type="button"
+              disabled={!canSubmit}
+              onClick={submitAnswers}
+              style={{
+                padding: "7px 12px",
+                border: "1px solid var(--accent)",
+                borderRadius: 6,
+                background: "var(--accent)",
+                color: "#fff",
+                cursor: canSubmit ? "pointer" : "not-allowed",
+                opacity: canSubmit ? 1 : 0.45,
+                fontWeight: 650,
+              }}
+            >
+              {t("chat.submitAnswer")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (request.method === "plan_review") {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 90,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+          background: "color-mix(in srgb, #000 30%, transparent)",
+          backdropFilter: "blur(2px)",
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`plan-review-${request.id}`}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            width: "min(820px, 100%)",
+            height: "min(820px, calc(100dvh - 32px))",
+            overflow: "hidden",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            background: "var(--bg)",
+            boxShadow: "0 24px 80px rgba(0,0,0,0.34)",
+          }}
+        >
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ color: "var(--accent)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {t("chat.planApproval")}
+            </div>
+            <div id={`plan-review-${request.id}`} style={{ marginTop: 4, color: "var(--text)", fontSize: 15, fontWeight: 680 }}>
+              {request.title}
+            </div>
+            <div style={{ marginTop: 5, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 10, overflowWrap: "anywhere" }}>
+              {request.planFilePath}
+            </div>
+          </div>
+
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "18px 20px" }}>
+            <MarkdownBody>{request.planContent}</MarkdownBody>
+          </div>
+
+          <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+            <textarea
+              value={planFeedback}
+              onChange={(event) => setPlanFeedback(event.target.value)}
+              placeholder={t("chat.planFeedback")}
+              aria-label={t("chat.planFeedback")}
+              style={{
+                width: "100%",
+                minHeight: 64,
+                maxHeight: 150,
+                padding: "9px 10px",
+                border: "1px solid var(--border)",
+                borderRadius: 7,
+                outline: "none",
+                resize: "vertical",
+                background: "var(--bg)",
+                color: "var(--text)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                lineHeight: 1.5,
+              }}
+            />
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8, marginTop: 9 }}>
+              <button
+                type="button"
+                onClick={() => onRespond(request, {
+                  value: JSON.stringify({ action: "refine", feedback: planFeedback.trim() }),
+                })}
+                style={{ padding: "7px 11px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: "pointer" }}
+              >
+                {t("chat.refinePlan")}
+              </button>
+              <button
+                type="button"
+                onClick={() => onRespond(request, { value: JSON.stringify({ action: "approve" }) })}
+                style={{ padding: "7px 12px", border: "1px solid var(--accent)", borderRadius: 6, background: "var(--accent)", color: "#fff", cursor: "pointer", fontWeight: 650 }}
+              >
+                {t("chat.approvePlan")}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div

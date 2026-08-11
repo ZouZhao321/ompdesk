@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
-import type { SessionInfo } from "@/lib/types";
+import type { AgentMessage, SessionInfo, SubagentSnapshot, ToolResultMessage } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
+import { normalizeToolCalls } from "@/lib/normalize";
+import { sendAgentCommand } from "@/lib/agent-client";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { OmpWordmark } from "./OmpWordmark";
+import { MessageView } from "./MessageView";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 declare global {
   interface Window {
@@ -76,6 +80,7 @@ function ToolbarIconButton({
 
 interface Props {
   selectedSessionId: string | null;
+  subagents?: SubagentSnapshot[];
   optimisticSession?: SessionInfo | null;
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
   onNewSession?: (sessionId: string, cwd: string) => void;
@@ -404,8 +409,356 @@ function PiWebTitle() {
     </button>
   );
 }
+type SubagentTranscriptEntry = {
+  id: string;
+  message: AgentMessage;
+};
 
-export function SessionSidebar({ selectedSessionId, optimisticSession, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions }: Props) {
+type SubagentTranscriptResult = {
+  fromByte: number;
+  nextByte: number;
+  reset: boolean;
+  entries: Array<{ id?: string; type?: string; message?: AgentMessage }>;
+};
+
+function formatSubagentDuration(durationMs = 0): string {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds.toString().padStart(2, "0")}s` : `${seconds}s`;
+}
+
+function SubagentRail({
+  subagents,
+  selectedSubagentId,
+  onSelect,
+}: {
+  subagents: SubagentSnapshot[];
+  selectedSubagentId: string | null;
+  onSelect: (subagent: SubagentSnapshot) => void;
+}) {
+  const { t } = useI18n();
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (subagents.length === 0) return null;
+  return (
+    <section style={{ flexShrink: 0, borderBottom: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+      <button
+        type="button"
+        onClick={() => setCollapsed((current) => !current)}
+        aria-expanded={!collapsed}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          width: "100%",
+          height: 34,
+          padding: "0 10px 0 12px",
+          border: "none",
+          background: "transparent",
+          color: "var(--text-muted)",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <svg
+          width="9"
+          height="9"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ transform: collapsed ? "none" : "rotate(90deg)", transition: "transform 0.15s" }}
+        >
+          <polyline points="3 2 7 5 3 8" />
+        </svg>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>
+          {t("subagents.title")}
+        </span>
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor", boxShadow: "0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent)" }} />
+          {subagents.length}
+        </span>
+      </button>
+      {!collapsed && (
+        <div role="list" aria-label={t("subagents.running")} style={{ maxHeight: 214, overflowY: "auto", padding: "0 6px 7px" }}>
+          {subagents.map((subagent) => {
+            const selected = selectedSubagentId === subagent.id;
+            const progress = subagent.progress;
+            const activity = progress?.retryState
+              ? t("subagents.retrying", { attempt: progress.retryState.attempt, max: progress.retryState.maxAttempts })
+              : progress?.currentTool
+                ? t("subagents.usingTool", { tool: progress.currentTool })
+                : progress?.lastIntent || t("subagents.running");
+            return (
+              <button
+                key={subagent.id}
+                type="button"
+                role="listitem"
+                onClick={() => onSelect(subagent)}
+                title={subagent.task ?? subagent.assignment ?? subagent.description ?? subagent.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "18px minmax(0, 1fr) auto",
+                  columnGap: 7,
+                  rowGap: 2,
+                  alignItems: "center",
+                  width: "100%",
+                  minHeight: 48,
+                  padding: "6px 7px",
+                  border: selected ? "1px solid color-mix(in srgb, var(--accent) 38%, var(--border))" : "1px solid transparent",
+                  borderRadius: 6,
+                  background: selected ? "color-mix(in srgb, var(--accent) 7%, var(--bg-hover))" : "transparent",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <span style={{ gridRow: "1 / span 2", display: "grid", placeItems: "center", width: 18, height: 18, color: "var(--accent)" }}>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.8" strokeDasharray="22 13">
+                      <animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.9s" repeatCount="indefinite" />
+                    </circle>
+                  </svg>
+                </span>
+                <span style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: 650 }}>
+                    {subagent.id}
+                  </span>
+                  <span style={{ padding: "1px 4px", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", fontSize: 8.5, lineHeight: 1.3 }}>
+                    {subagent.agent}
+                  </span>
+                </span>
+                <span style={{ color: "var(--text-dim)", fontSize: 9.5, fontVariantNumeric: "tabular-nums" }}>
+                  {formatSubagentDuration(progress?.durationMs)}
+                </span>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: progress?.retryState ? "var(--warning)" : "var(--text-muted)", fontSize: 10 }}>
+                  {activity}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="3 2 7 5 3 8" />
+                </svg>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SubagentDetailPanel({
+  sessionId,
+  cwd,
+  subagent,
+  active,
+  onClose,
+}: {
+  sessionId: string;
+  cwd?: string;
+  subagent: SubagentSnapshot;
+  active: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const isMobile = useIsMobile();
+  const [entries, setEntries] = useState<SubagentTranscriptEntry[]>([]);
+  const [loadingTranscript, setLoadingTranscript] = useState(true);
+  const [transcriptError, setTranscriptError] = useState<string | null>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const followTailRef = useRef(true);
+
+  useEffect(() => {
+    let disposed = false;
+    let inFlight = false;
+    let nextByte = 0;
+    setEntries([]);
+    setLoadingTranscript(true);
+    setTranscriptError(null);
+    followTailRef.current = true;
+
+    const loadTranscript = async () => {
+      if (inFlight || disposed) return;
+      inFlight = true;
+      try {
+        const result = await sendAgentCommand<SubagentTranscriptResult>(sessionId, {
+          type: "get_subagent_messages",
+          subagentId: subagent.id,
+          fromByte: nextByte,
+        });
+        if (disposed) return;
+        const chunk = result.entries.flatMap((entry, index) =>
+          entry.type === "message" && entry.message
+            ? [{
+                id: entry.id ?? `${result.fromByte}:${index}`,
+                message: normalizeToolCalls(entry.message),
+              }]
+            : []);
+        setEntries((current) => result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk]);
+        nextByte = result.nextByte;
+        setTranscriptError(null);
+      } catch (error) {
+        if (!disposed) setTranscriptError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (!disposed) setLoadingTranscript(false);
+        inFlight = false;
+      }
+    };
+
+    void loadTranscript();
+    const interval = active ? setInterval(() => void loadTranscript(), 1000) : undefined;
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+    };
+  }, [active, sessionId, subagent.id]);
+
+  useEffect(() => {
+    if (!followTailRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      const transcript = transcriptRef.current;
+      if (transcript) transcript.scrollTop = transcript.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [entries.length]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const toolResults = new Map<string, ToolResultMessage>();
+  for (const entry of entries) {
+    if (entry.message.role === "toolResult") {
+      const result = entry.message as ToolResultMessage;
+      toolResults.set(result.toolCallId, result);
+    }
+  }
+  const progress = subagent.progress;
+  const statusColor = progress?.retryState
+    ? "var(--warning)"
+    : active
+      ? "var(--accent)"
+      : subagent.status === "failed"
+        ? "var(--danger)"
+        : "var(--success)";
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={t("subagents.closeDetails")}
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, zIndex: 439, border: 0, background: "rgba(0,0,0,0.12)", cursor: "default" }}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("subagents.details")}
+        style={{
+          position: "fixed",
+          zIndex: 440,
+          top: isMobile ? 8 : "calc(env(safe-area-inset-top) + 48px)",
+          bottom: isMobile ? 8 : 12,
+          left: isMobile ? 8 : "calc(var(--sidebar-width, 300px) + 12px)",
+          right: isMobile ? 8 : "auto",
+          display: "flex",
+          flexDirection: "column",
+          width: isMobile ? "auto" : "min(680px, calc(100vw - var(--sidebar-width, 300px) - 24px))",
+          minWidth: 0,
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          background: "var(--bg)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.30)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "13px 14px", borderBottom: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+          <span style={{ width: 8, height: 8, marginTop: 5, borderRadius: "50%", background: statusColor, boxShadow: `0 0 0 3px color-mix(in srgb, ${statusColor} 12%, transparent)`, flexShrink: 0 }} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text)", fontSize: 13, fontWeight: 700 }}>
+                {subagent.id}
+              </span>
+              <span style={{ padding: "1px 5px", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", fontSize: 9 }}>
+                {subagent.agent}
+              </span>
+            </div>
+            <div style={{ marginTop: 4, color: "var(--text-muted)", fontSize: 11, lineHeight: 1.45 }}>
+              {subagent.task ?? subagent.assignment ?? subagent.description ?? t("subagents.noTask")}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            title={t("subagents.closeDetails")}
+            style={{ display: "grid", placeItems: "center", width: 26, height: 26, padding: 0, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+              <line x1="2" y1="2" x2="10" y2="10" />
+              <line x1="10" y1="2" x2="2" y2="10" />
+            </svg>
+          </button>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 14px", padding: "8px 14px", borderBottom: "1px solid var(--border)", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 9.5, fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ color: statusColor }}>{active ? t("subagents.running") : t("subagents.finished")}</span>
+          <span>{formatSubagentDuration(progress?.durationMs)}</span>
+          <span>{t("subagents.tools", { count: progress?.toolCount ?? 0 })}</span>
+          <span>{t("subagents.tokens", { count: progress?.tokens ?? 0 })}</span>
+          {progress?.resolvedModel && <span>{progress.resolvedModel}</span>}
+          {progress?.currentTool && <span style={{ color: "var(--text-muted)" }}>{t("subagents.usingTool", { tool: progress.currentTool })}</span>}
+        </div>
+
+        <div
+          ref={transcriptRef}
+          onScroll={(event) => {
+            const element = event.currentTarget;
+            followTailRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+          }}
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 24px" }}
+        >
+          {entries.length > 0 ? entries.map((entry, index) => (
+            <MessageView
+              key={entry.id}
+              message={entry.message}
+              toolResults={toolResults}
+              cwd={cwd}
+              showTimestamp
+              prevTimestamp={entries[index - 1]?.message.timestamp}
+            />
+          )) : (
+            <div style={{ padding: "28px 12px", color: "var(--text-muted)", fontSize: 11, lineHeight: 1.6, textAlign: "center" }}>
+              {loadingTranscript
+                ? t("subagents.loadingTranscript")
+                : progress?.recentOutput?.length
+                  ? (
+                      <pre style={{ margin: 0, textAlign: "left", whiteSpace: "pre-wrap", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                        {progress.recentOutput.join("\n")}
+                      </pre>
+                    )
+                  : t("subagents.noTranscript")}
+            </div>
+          )}
+          {transcriptError && (
+            <div role="status" style={{ marginTop: 8, padding: "8px 10px", border: "1px solid color-mix(in srgb, var(--warning) 35%, var(--border))", borderRadius: 6, color: "var(--warning)", fontSize: 10, overflowWrap: "anywhere" }}>
+              {t("subagents.transcriptUnavailable")}
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+
+export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSession, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const sessionsForDisplay = optimisticSession && !allSessions.some((session) => session.id === optimisticSession.id)
@@ -413,6 +766,8 @@ export function SessionSidebar({ selectedSessionId, optimisticSession, onSelectS
     : allSessions;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSubagent, setSelectedSubagent] = useState<SubagentSnapshot | null>(null);
+  useEffect(() => setSelectedSubagent(null), [selectedSessionId]);
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState("");
@@ -872,6 +1227,11 @@ export function SessionSidebar({ selectedSessionId, optimisticSession, onSelectS
     ? (worktreeState?.worktrees ?? []).filter((worktree) =>
         (worktree.branch ?? displayCwd(worktree.path, homeDir)).toLowerCase().includes(wtFilter.trim().toLowerCase()))
     : (worktreeState?.worktrees ?? []);
+  const activeDetailSubagent = selectedSubagent
+    ? subagents.find((subagent) => subagent.id === selectedSubagent.id)
+    : undefined;
+  const detailSubagent = activeDetailSubagent ?? selectedSubagent;
+
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -886,6 +1246,16 @@ export function SessionSidebar({ selectedSessionId, optimisticSession, onSelectS
           onSelect={(path) => void commitCustomPath(path)}
         />
       )}
+      {detailSubagent && selectedSessionId && (
+        <SubagentDetailPanel
+          sessionId={selectedSessionId}
+          cwd={selectedCwdProp ?? selectedCwd ?? undefined}
+          subagent={detailSubagent}
+          active={activeDetailSubagent !== undefined}
+          onClose={() => setSelectedSubagent(null)}
+        />
+      )}
+
 
       <div
         style={{
@@ -977,6 +1347,12 @@ export function SessionSidebar({ selectedSessionId, optimisticSession, onSelectS
         </div>
 
       </div>
+      <SubagentRail
+        subagents={subagents}
+        selectedSubagentId={selectedSubagent?.id ?? null}
+        onSelect={setSelectedSubagent}
+      />
+
 
       <div
         style={{

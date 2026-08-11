@@ -31,7 +31,7 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
-import type { SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { SessionInfo, SessionTreeNode, SubagentSnapshot } from "@/lib/types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/omp-types";
@@ -166,6 +166,7 @@ export function AppShell() {
 
   // Session stats (tokens + cost) — populated by ChatWindow, displayed in top bar
   const [sessionStats, setSessionStats] = useState<SessionStatsInfo | null>(null);
+  const [subagents, setSubagents] = useState<SubagentSnapshot[]>([]);
   const [autoNameStatus, setAutoNameStatus] = useState<AutoNameStatus>({ kind: "idle" });
   const autoNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSessionIdRef = useRef<string | null>(selectedSession?.id ?? null);
@@ -623,6 +624,7 @@ export function AppShell() {
     <>
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
+        subagents={subagents}
         optimisticSession={selectedSession}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
@@ -1462,6 +1464,7 @@ export function AppShell() {
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
+              onSubagentsChange={setSubagents}
               onOpenFile={handleOpenLinkedFile}
             />
           ) : initialCwdStatus === "validating" ? (

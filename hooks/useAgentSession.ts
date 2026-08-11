@@ -9,6 +9,7 @@ import type {
   ExtensionWidgetItem,
   SessionInfo,
   SessionTreeNode,
+  SubagentSnapshot,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
@@ -81,6 +82,7 @@ type AgentStateResponse = {
   extensionStatuses?: ExtensionStatusItem[];
   extensionWidgets?: ExtensionWidgetItem[];
   queuedMessages?: { steering?: string[]; followUp?: string[] } | null;
+  subagents?: SubagentSnapshot[];
 };
 
 export interface QueuedMessages {
@@ -92,7 +94,10 @@ function normalizeQueuedMessages(q?: { steering?: string[]; followUp?: string[] 
   return { steering: q?.steering ?? [], followUp: q?.followUp ?? [] };
 }
 
-type ExtensionUiDialogRequest = Extract<ExtensionUiRequest, { method: "select" | "confirm" | "input" | "editor" }>;
+type ExtensionUiDialogRequest = Extract<
+  ExtensionUiRequest,
+  { method: "select" | "confirm" | "input" | "editor" | "ask" | "plan_review" }
+>;
 type ExtensionUiCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
 export type NoticeType = "info" | "success" | "warning" | "error";
 
@@ -373,6 +378,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [extensionStatuses, setExtensionStatuses] = useState<ExtensionStatusItem[]>([]);
   const [extensionWidgets, setExtensionWidgets] = useState<ExtensionWidgetItem[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({ steering: [], followUp: [] });
+  const [subagents, setSubagents] = useState<SubagentSnapshot[]>([]);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const eventSourceSessionIdRef = useRef<string | null>(null);
@@ -494,8 +500,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (liveState.extensionStatuses !== undefined) setExtensionStatuses(liveState.extensionStatuses ?? []);
           if (liveState.extensionWidgets !== undefined) setExtensionWidgets(liveState.extensionWidgets ?? []);
           if (liveState.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(liveState.queuedMessages));
+          if (liveState.subagents !== undefined) setSubagents(liveState.subagents ?? []);
         } else if (!agentState.running) {
           setQueuedMessages({ steering: [], followUp: [] });
+          setSubagents([]);
         }
         return agentState;
       } catch (e) {
@@ -789,6 +797,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "confirm":
       case "input":
       case "editor":
+      case "ask":
+      case "plan_review":
         setExtensionDialog(request);
         break;
       case "notify": {
@@ -874,6 +884,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         ) return;
 
         const state = data.state;
+        setSubagents(state?.subagents ?? []);
         const promptActive = Boolean(data.running && state && (state.isStreaming || state.isPromptRunning));
         if (promptActive) {
           eventStreamGraceActiveRef.current = false;
@@ -891,6 +902,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), PROMPT_SETTLE_POLL_MS);
           return;
         }
+        if (data.running && (state?.subagents?.length ?? 0) > 0) {
+          eventStreamGraceTimerRef.current = setTimeout(
+            () => void checkServerIdle(),
+            CONTEXT_USAGE_REFRESH_MS,
+          );
+          return;
+        }
+
 
         eventStreamGraceActiveRef.current = false;
         eventStreamGraceTimerRef.current = null;
@@ -1006,6 +1025,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setIsCompacting(state?.isCompacting ?? false);
       setQueuedMessages(normalizeQueuedMessages(state?.queuedMessages));
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+      setSubagents(state?.subagents ?? []);
       const busy = data.running && state
         && (state.isStreaming || state.isPromptRunning || state.isCompacting);
       if (busy || !agentRunningRef.current) return;
@@ -1107,6 +1127,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
+              if (d.state?.subagents !== undefined) setSubagents(d.state.subagents ?? []);
               // Aborted turns can leave messages queued in pi (delivered with the
               // next turn); dead wrapper (no state) means the queue is gone.
               setQueuedMessages(normalizeQueuedMessages(d.state?.queuedMessages));
@@ -1225,6 +1246,72 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (tools.length === 0) return { kind: "waiting_model" };
           return { kind: "running_tools", tools };
         });
+        break;
+      }
+      case "subagent_lifecycle": {
+        const payload = event.payload as {
+          id?: string;
+          index?: number;
+          agent?: string;
+          agentSource?: SubagentSnapshot["agentSource"];
+          description?: string;
+          status?: "started" | "completed" | "failed" | "aborted";
+          sessionFile?: string;
+          parentToolCallId?: string;
+        } | undefined;
+        if (!payload?.id) break;
+        if (payload.status !== "started") {
+          setSubagents((previous) => previous.filter((subagent) => subagent.id !== payload.id));
+          break;
+        }
+        const started: SubagentSnapshot = {
+          id: payload.id,
+          index: payload.index ?? 0,
+          agent: payload.agent ?? payload.id,
+          agentSource: payload.agentSource ?? "bundled",
+          description: payload.description,
+          status: "running",
+          sessionFile: payload.sessionFile,
+          parentToolCallId: payload.parentToolCallId,
+          lastUpdate: Date.now(),
+        };
+        setSubagents((previous) => [
+          ...previous.filter((subagent) => subagent.id !== started.id),
+          started,
+        ].sort((left, right) => left.index - right.index || left.id.localeCompare(right.id)));
+        break;
+      }
+      case "subagent_progress": {
+        const payload = event.payload as {
+          index?: number;
+          agent?: string;
+          agentSource?: SubagentSnapshot["agentSource"];
+          task?: string;
+          assignment?: string;
+          sessionFile?: string;
+          parentToolCallId?: string;
+          progress?: SubagentSnapshot["progress"];
+        } | undefined;
+        if (!payload?.progress) break;
+        const progress = payload.progress;
+        const snapshot: SubagentSnapshot = {
+          id: progress.id,
+          index: payload.index ?? progress.index,
+          agent: payload.agent ?? progress.agent,
+          agentSource: payload.agentSource ?? "bundled",
+          description: progress.description,
+          status: progress.status,
+          task: payload.task ?? progress.task,
+          assignment: payload.assignment ?? progress.assignment,
+          sessionFile: payload.sessionFile,
+          parentToolCallId: payload.parentToolCallId,
+          lastUpdate: Date.now(),
+          progress,
+        };
+        setSubagents((previous) => [
+          ...previous.filter((subagent) => subagent.id !== snapshot.id),
+          snapshot,
+        ].sort((left, right) => left.index - right.index || left.id.localeCompare(right.id)));
         break;
       }
       case "queue_update":
@@ -1833,6 +1920,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             setBashRunning(true);
             void waitForBashSettlement(session.id);
           }
+          if ((agentState.state?.subagents?.length ?? 0) > 0) {
+            void connectEvents(session.id);
+          }
         }
         if (agentState?.state) {
           if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
@@ -1842,6 +1932,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (agentState.state.extensionStatuses !== undefined) setExtensionStatuses(agentState.state.extensionStatuses ?? []);
           if (agentState.state.extensionWidgets !== undefined) setExtensionWidgets(agentState.state.extensionWidgets ?? []);
           if (agentState.state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(agentState.state.queuedMessages));
+          if (agentState.state.subagents !== undefined) setSubagents(agentState.state.subagents ?? []);
         }
       });
     }
@@ -1949,7 +2040,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, modelRoles, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, sessionStats,
-    slashCommands, slashCommandsLoading, queuedMessages,
+    slashCommands, slashCommandsLoading, queuedMessages, subagents,
     notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
