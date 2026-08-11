@@ -586,6 +586,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       modified: new Date().toISOString(),
       messageCount,
       firstMessage,
+      transient: true,
     });
   }, [isNew, newSessionCwd, onSessionCreated]);
 
