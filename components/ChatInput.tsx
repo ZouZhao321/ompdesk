@@ -17,6 +17,7 @@ import {
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import { PRESET_DEFAULT, PRESET_FULL } from "@/lib/tool-presets";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -85,6 +86,8 @@ export interface ChatInputHandle {
 
 const TOOL_PRESETS = ["off", "default", "full"] as const;
 const TOOL_PRESET_MAP: Record<"off" | "default" | "full", "none" | "default" | "full"> = { off: "none", default: "default", full: "full" };
+const DEFAULT_TOOL_LABEL = PRESET_DEFAULT.join(" · ");
+const FULL_TOOL_ADDITIONS = PRESET_FULL.filter((name) => !PRESET_DEFAULT.includes(name)).join(" · ");
 const COMPOSITION_END_ENTER_GRACE_MS = 100;
 const MODEL_FILTER_THRESHOLD = 8;
 const MODEL_OPTION_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -2304,7 +2307,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "default") === preset;
-                       const desc = lvl === "off" ? t("chat.noTools") : lvl === "default" ? t("chat.builtInTools", { count: 4 }) : t("chat.allBuiltInTools");
+                      const desc = lvl === "off"
+                        ? t("chat.noTools")
+                        : lvl === "default"
+                          ? t("chat.builtInTools", { tools: DEFAULT_TOOL_LABEL })
+                          : t("chat.allBuiltInTools", {
+                            tools: `${DEFAULT_TOOL_LABEL} + ${FULL_TOOL_ADDITIONS}`,
+                          });
                       return (
                         <button
                           key={lvl}

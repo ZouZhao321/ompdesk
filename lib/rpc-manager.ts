@@ -28,6 +28,7 @@ import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
 import { untrustedProjectSessionOptions } from "./project-trust";
 import { readDefaultModelRole } from "./model-roles";
 import { getOmpRuntime, getSettingsForCwd } from "./omp-runtime";
+import { PRESET_FULL } from "./tool-presets";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import type { SlashCommandInfo } from "./omp-types";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./omp-types";
@@ -105,7 +106,9 @@ export interface RpcSessionStartOptions {
   thinkingLevel?: ThinkingLevel;
 }
 
-const CODING_TOOL_NAMES = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+const CODING_TOOL_NAMES: Record<string, true> = Object.fromEntries(
+  PRESET_FULL.map((name) => [name, true]),
+);
 
 // Extensions require a complete Theme, while the web UI applies its own styling.
 class PlainTextTheme extends Theme {
@@ -140,10 +143,9 @@ const CUSTOM_UI_KEYBINDINGS = new TuiKeybindingsManager(TUI_KEYBINDINGS);
 function withExtensionTools(session: AgentSessionLike, toolNames: string[]): string[] {
   if (toolNames.length === 0) return [];
 
-  const codingToolNames = new Set(CODING_TOOL_NAMES);
   const extensionToolNames = session
     .getAllToolNames()
-    .filter((name) => !codingToolNames.has(name));
+    .filter((name) => CODING_TOOL_NAMES[name] !== true);
 
   return [...new Set([...toolNames, ...extensionToolNames])];
 }
@@ -1503,6 +1505,7 @@ export async function startRpcSession(
     const finishStartingSession = trackStartingSession(sessionCwd);
 
     try {
+      const runtime = await getOmpRuntime();
       const settings = await getSettingsForCwd(sessionCwd);
 
       // Determine which tools to pass based on requested toolNames.
@@ -1528,7 +1531,7 @@ export async function startRpcSession(
       ]);
       const untrusted = untrustedProjectSessionOptions(sessionCwd, agentDir, { extensionPaths, customToolPaths });
 
-      const { modelRegistry } = await getOmpRuntime();
+      const { modelRegistry } = runtime;
       const scope = await resolveVisibleModels(modelRegistry, settings.get("enabledModels"), settings);
       const defaultRole = readDefaultModelRole(settings);
       const hasExistingMessages = sessionManager.buildSessionContext().messages.length > 0;
@@ -1554,7 +1557,7 @@ export async function startRpcSession(
       });
 
       const persistedPreferences = await persistExplicitStartupPreferences(
-        settings,
+        runtime.settings,
         {
           ...(initialModel ? { model: initialModel } : {}),
           ...(thinkingLevel ? { thinkingLevel } : {}),

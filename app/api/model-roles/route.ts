@@ -65,12 +65,19 @@ export async function PUT(req: Request) {
     const scope: ModelRoleScope = body.scope === "project" ? "project" : "global";
     const selector = typeof body.selector === "string" ? body.selector.trim() : undefined;
 
-    const { modelRegistry } = await getOmpRuntime();
-    const settings = await getSettingsForCwd(result.cwd);
-    writeModelRole(settings, role, selector || undefined, scope);
-    await settings.flush();
+    const runtime = await getOmpRuntime();
+    const settingsToWrite = scope === "global"
+      ? runtime.settings
+      : await getSettingsForCwd(result.cwd);
+    writeModelRole(settingsToWrite, role, selector || undefined, scope);
+    await settingsToWrite.flush();
     invalidateModelsCache();
 
+    // Global roles are written through the canonical process-wide Settings
+    // instance; re-scope after the flush so project overrides are reflected in
+    // the response and in the next modal load.
+    const settings = await getSettingsForCwd(result.cwd);
+    const { modelRegistry } = runtime;
     const { visible } = await resolveVisibleModels(modelRegistry, settings.get("enabledModels"), settings);
     return NextResponse.json({ roles: listModelRoles(settings, [...visible]) });
   } catch (error) {
