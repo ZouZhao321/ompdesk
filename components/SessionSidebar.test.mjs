@@ -24,3 +24,7 @@ test("polls running sessions only while the tab is visible", () => {
   assert.match(source, /document\.visibilityState !== "visible"/);
   assert.match(source, /document\.addEventListener\("visibilitychange", onVisibilityChange\)/);
 });
+
+test("keeps subagents out of the left session sidebar", () => {
+  assert.doesNotMatch(source, /SubagentRail|SubagentPanel|subagents/);
+});

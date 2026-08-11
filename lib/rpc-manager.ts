@@ -36,6 +36,7 @@ import type {
   ExtensionUiRequest,
   ExtensionUiResponse,
   ExtensionWidgetItem,
+  SubagentSnapshot,
 } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
 
@@ -95,6 +96,8 @@ const IDLE_RESET_EVENT_TYPES = new Set([
   "auto_compaction_end",
   "compaction_end",
 ]);
+
+const MAX_SUBAGENT_HISTORY = 128;
 
 export interface RpcSessionStartOptions {
   toolNames?: string[];
@@ -232,6 +235,9 @@ export class AgentSessionWrapper {
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
   private readonly subagents: RpcSubagentRegistry;
+  // The SDK registry removes terminal entries after emitting their lifecycle frame.
+  // Keep a bounded per-session copy so state requests can still expose history.
+  private readonly subagentHistory = new Map<string, SubagentSnapshot>();
   private _alive = true;
 
   constructor(
@@ -239,11 +245,94 @@ export class AgentSessionWrapper {
     eventBus: ConstructorParameters<typeof RpcSubagentRegistry>[0],
   ) {
     this.subagents = new RpcSubagentRegistry(eventBus, (frame) => {
-      this.emit(frame as unknown as AgentEvent);
+      const event = frame as unknown as AgentEvent;
+      this.rememberSubagentFrame(event);
+      this.emit(event);
       this.resetIdleTimer();
       notifyRunningChange();
     });
     this.subagents.setSubscriptionLevel("progress");
+  }
+
+  private rememberSubagentSnapshot(snapshot: SubagentSnapshot): void {
+    this.subagentHistory.set(snapshot.id, snapshot);
+    if (this.subagentHistory.size <= MAX_SUBAGENT_HISTORY) return;
+    const removable = [...this.subagentHistory.values()]
+      .filter((entry) => entry.status !== "pending" && entry.status !== "running")
+      .sort((left, right) => left.lastUpdate - right.lastUpdate);
+    while (this.subagentHistory.size > MAX_SUBAGENT_HISTORY && removable.length > 0) {
+      const oldest = removable.shift();
+      if (oldest) this.subagentHistory.delete(oldest.id);
+    }
+  }
+
+  private rememberSubagentFrame(event: AgentEvent): void {
+    if (event.type === "subagent_progress") {
+      const payload = event.payload as { progress?: { id?: string } } | undefined;
+      const id = payload?.progress?.id;
+      if (!id) return;
+      const live = this.subagents.getSubagents().find((entry) => entry.id === id);
+      if (live) this.rememberSubagentSnapshot(live as unknown as SubagentSnapshot);
+      return;
+    }
+    if (event.type !== "subagent_lifecycle") return;
+    const payload = event.payload as {
+      id?: string;
+      index?: number;
+      agent?: string;
+      agentSource?: "bundled" | "user" | "project";
+      description?: string;
+      status?: "started" | "completed" | "failed" | "aborted";
+      sessionFile?: string;
+      parentToolCallId?: string;
+    } | undefined;
+    if (!payload?.id || !payload.status) return;
+    const live = this.subagents.getSubagents().find((entry) => entry.id === payload.id);
+    if (payload.status === "started") {
+      if (live) this.rememberSubagentSnapshot(live as unknown as SubagentSnapshot);
+      return;
+    }
+    const previous = (live as unknown as SubagentSnapshot | undefined) ?? this.subagentHistory.get(payload.id);
+    const terminalStatus: SubagentSnapshot["status"] = payload.status === "failed"
+      ? "failed"
+      : payload.status === "aborted"
+        ? "aborted"
+        : "completed";
+    this.rememberSubagentSnapshot({
+      id: payload.id,
+      index: payload.index ?? previous?.index ?? 0,
+      agent: payload.agent ?? previous?.agent ?? payload.id,
+      agentSource: payload.agentSource ?? previous?.agentSource ?? "bundled",
+      description: payload.description ?? previous?.description,
+      status: terminalStatus,
+      task: previous?.task,
+      assignment: previous?.assignment,
+      sessionFile: payload.sessionFile ?? previous?.sessionFile,
+      lastUpdate: Date.now(),
+      parentToolCallId: payload.parentToolCallId ?? previous?.parentToolCallId,
+      progress: previous?.progress
+        ? { ...previous.progress, status: terminalStatus }
+        : undefined,
+    });
+  }
+
+  private getSubagentSnapshots(): SubagentSnapshot[] {
+    for (const live of this.subagents.getSubagents()) {
+      const snapshot = live as unknown as SubagentSnapshot;
+      this.rememberSubagentSnapshot(snapshot);
+    }
+    const snapshots = new Map(this.subagentHistory);
+    for (const live of this.subagents.getSubagents()) {
+      const snapshot = live as unknown as SubagentSnapshot;
+      snapshots.set(snapshot.id, snapshot);
+    }
+    return [...snapshots.values()].sort((left, right) => {
+      const leftActive = left.status === "pending" || left.status === "running";
+      const rightActive = right.status === "pending" || right.status === "running";
+      if (leftActive !== rightActive) return leftActive ? -1 : 1;
+      if (leftActive) return left.index - right.index || left.id.localeCompare(right.id);
+      return right.lastUpdate - left.lastUpdate || left.id.localeCompare(right.id);
+    });
   }
 
   get sessionId(): string {
@@ -613,11 +702,11 @@ export class AgentSessionWrapper {
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           extensionStatuses: this.getExtensionStatuses(),
           extensionWidgets: this.getExtensionWidgets(),
-          subagents: this.subagents.getSubagents(),
+          subagents: this.getSubagentSnapshots(),
         };
       }
       case "get_subagents":
-        return { subagents: this.subagents.getSubagents() };
+        return { subagents: this.getSubagentSnapshots() };
 
       case "get_subagent_messages": {
         const selector = command as {
@@ -892,6 +981,7 @@ export class AgentSessionWrapper {
     if (this.inner.isBashRunning) this.inner.abortBash();
     this.unsubscribe?.();
     this.subagents.dispose();
+    this.subagentHistory.clear();
     for (const pending of this.pendingUiResponses.values()) pending.cancel();
     for (const id of Array.from(this.activeCustomUis.keys())) this.closeCustomUi(id, undefined);
     this.pendingUiResponses.clear();

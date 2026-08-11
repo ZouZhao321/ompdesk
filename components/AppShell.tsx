@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
+import { SubagentPanel } from "./SubagentPanel";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
@@ -624,7 +625,6 @@ export function AppShell() {
     <>
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
-        subagents={subagents}
         optimisticSession={selectedSession}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
@@ -1449,6 +1449,11 @@ export function AppShell() {
 
         {/* Chat content */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+          <SubagentPanel
+            sessionId={selectedSession?.id ?? null}
+            cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
+            subagents={subagents}
+          />
           {showChat ? (
             <ChatWindow
               key={sessionKey}

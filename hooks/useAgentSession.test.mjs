@@ -73,3 +73,10 @@ test("plays the enabled sound once for each extension dialog", () => {
   assert.match(chatWindowSource, /soundedExtensionDialogIdRef\.current = extensionDialog\.id/);
   assert.match(chatWindowSource, /playDoneSoundRef\.current\(\)/);
 });
+
+test("keeps completed subagents in the session history", () => {
+  assert.match(source, /function mergeSubagentSnapshots/);
+  assert.match(source, /const finished: SubagentSnapshot/);
+  assert.match(source, /progress: previous\?\.progress \? \{ \.\.\.previous\.progress, status: terminalStatus \}/);
+  assert.doesNotMatch(source, /payload\.status !== "started"\) \{\s*setSubagents\(\(previous\) => previous\.filter/);
+});
