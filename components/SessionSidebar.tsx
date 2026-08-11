@@ -119,6 +119,39 @@ const UNREAD_SESSIONS_STORAGE_KEY = "omp-web:unread-session-ids";
 const RUNNING_SESSIONS_POLL_MS = 2500;
 const PROJECT_SESSION_LIMIT = 5;
 const COLLAPSED_PROJECTS_STORAGE_KEY = "omp-web:collapsed-projects";
+const REMOVED_PROJECTS_STORAGE_KEY = "omp-web:removed-projects";
+
+function normalizeProjectKey(project: string): string {
+  const normalized = project.replace(/\\/g, "/");
+  return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+}
+
+function loadRemovedProjects(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(REMOVED_PROJECTS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? new Set(parsed.filter((project): project is string => typeof project === "string").map(normalizeProjectKey))
+      : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveRemovedProjects(projects: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (projects.size === 0) window.localStorage.removeItem(REMOVED_PROJECTS_STORAGE_KEY);
+    else window.localStorage.setItem(REMOVED_PROJECTS_STORAGE_KEY, JSON.stringify([...projects]));
+  } catch {
+    // Ignore storage quota and privacy-mode errors.
+  }
+}
+
+
+
 
 function loadUnreadSessionIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -774,6 +807,8 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
+  const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
+  const [removedProjects, setRemovedProjects] = useState<Set<string>>(() => new Set());
   const [wtFilter, setWtFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathError, setCustomPathError] = useState<string | null>(null);
@@ -806,6 +841,7 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
   useEffect(() => {
     setCollapsedProjects(loadCollapsedProjects());
+    setRemovedProjects(loadRemovedProjects());
   }, []);
 
 
@@ -1036,10 +1072,11 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
         // Session not found — notify parent so it can show the placeholder
         onInitialRestoreDone?.();
       }
-      const projects = getRecentProjects(allSessions);
+      const projects = getRecentProjects(allSessions)
+        .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
       if (projects.length > 0) setSelectedCwd(projects[0]);
     }
-  }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
+  }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone, removedProjects]);
 
   const commitCustomPath = useCallback(async (candidate: string) => {
     const path = candidate.trim();
@@ -1058,7 +1095,16 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
         setCustomPathError(data.error ?? `HTTP ${res.status}`);
         return;
       }
-      setSelectedCwd(data.cwd ?? path);
+      const selectedPath = data.cwd ?? path;
+      setRemovedProjects((current) => {
+        const key = normalizeProjectKey(selectedPath);
+        if (!current.has(key)) return current;
+        const next = new Set(current);
+        next.delete(key);
+        saveRemovedProjects(next);
+        return next;
+      });
+      setSelectedCwd(selectedPath);
       setCustomPathOpen(false);
     } catch (error) {
       setCustomPathError(error instanceof Error ? error.message : String(error));
@@ -1138,10 +1184,11 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
     }
   }, [worktreeState, wtBusy, selectedCwd]);
 
-  // Close the worktree menu on outside click.
+  // Close the project actions menu on outside click.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (wtDropdownRef.current && !wtDropdownRef.current.contains(e.target as Node)) {
+        setProjectMenuOpen(null);
         setWtDropdownOpen(false);
         setWtNewOpen(false);
         setWtNewBranch("");
@@ -1186,8 +1233,31 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
   }, []);
 
   const selectedProject = projectRootFor(selectedCwd);
-  const projectPaths = getRecentProjects(sessionsForDisplay);
-  if (selectedProject && !projectPaths.includes(selectedProject)) projectPaths.unshift(selectedProject);
+  const projectPaths = getRecentProjects(sessionsForDisplay)
+    .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
+  if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !projectPaths.includes(selectedProject)) {
+    projectPaths.unshift(selectedProject);
+  }
+  const handleRemoveProject = (project: string) => {
+    const key = normalizeProjectKey(project);
+    setRemovedProjects((current) => {
+      if (current.has(key)) return current;
+      const next = new Set(current);
+      next.add(key);
+      saveRemovedProjects(next);
+      return next;
+    });
+    setProjectMenuOpen(null);
+    setWtDropdownOpen(false);
+    setWtNewOpen(false);
+    setWtNewBranch("");
+    setWtError(null);
+    setWtConfirmRemove(null);
+    setWtFilter("");
+    if (selectedProject && normalizeProjectKey(selectedProject) === key) {
+      setSelectedCwd(null);
+    }
+  };
 
   const sessionsByProject = new Map<string, SessionInfo[]>();
   for (const session of sessionsForDisplay) {
@@ -1470,9 +1540,9 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
           return (
             <section key={project} style={{ marginBottom: isCollapsed ? 3 : 9 }}>
               <div
-                ref={isSelectedProject ? wtDropdownRef : undefined}
+                ref={projectMenuOpen === project ? wtDropdownRef : undefined}
                 onMouseEnter={() => setHoveredProject(project)}
-                onMouseLeave={() => setHoveredProject((current) => current === project && !wtDropdownOpen ? null : current)}
+                onMouseLeave={() => setHoveredProject((current) => current === project && projectMenuOpen !== project ? null : current)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -1582,13 +1652,21 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
                     <line x1="1.5" y1="6" x2="10.5" y2="6" />
                   </svg>
                 </button>
-                {isSelectedProject && showWorktreeSwitcher && worktreeState && (
+                {(
                   <div style={{ position: "static", flexShrink: 0 }}>
                     <button
                       type="button"
-                      onClick={() => setWtDropdownOpen((open) => !open)}
-                      title={currentWt ? t("sidebar.switchWorktreeTitle", { path: currentWt.path }) : t("sidebar.switchWorktree")}
-                      aria-label={t("sidebar.switchWorktree")}
+                      onClick={() => {
+                        const nextOpen = projectMenuOpen === project ? null : project;
+                        setProjectMenuOpen(nextOpen);
+                        setWtDropdownOpen(false);
+                        setWtNewOpen(false);
+                        setWtError(null);
+                        if (!isSelectedProject) setSelectedCwd(project);
+                      }}
+                      title={t("sidebar.projectActions")}
+                      aria-label={t("sidebar.projectActions")}
+                      aria-expanded={projectMenuOpen === project}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -1599,38 +1677,86 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
                         padding: 0,
                         border: "none",
                         borderRadius: 5,
-                        background: wtDropdownOpen ? "var(--bg-selected)" : "transparent",
-                        color: currentWt && !currentWt.isMain ? "var(--accent)" : "var(--text-dim)",
+                        background: projectMenuOpen === project ? "var(--bg-selected)" : "transparent",
+                        color: isSelectedProject && currentWt && !currentWt.isMain ? "var(--accent)" : "var(--text-dim)",
                         cursor: "pointer",
-                        opacity: hoveredProject === project || wtDropdownOpen ? 1 : 0,
-                        pointerEvents: hoveredProject === project || wtDropdownOpen ? "auto" : "none",
+                        opacity: hoveredProject === project || projectMenuOpen === project ? 1 : 0,
+                        pointerEvents: hoveredProject === project || projectMenuOpen === project ? "auto" : "none",
                         transition: "opacity 0.12s, background 0.12s, color 0.12s",
                       }}
                       onFocus={() => setHoveredProject(project)}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <line x1="6" y1="3" x2="6" y2="15" />
-                        <circle cx="18" cy="6" r="3" />
-                        <circle cx="6" cy="18" r="3" />
-                        <path d="M18 9a9 9 0 0 1-9 9" />
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+                        <circle cx="3" cy="7" r="1.1" />
+                        <circle cx="7" cy="7" r="1.1" />
+                        <circle cx="11" cy="7" r="1.1" />
                       </svg>
                     </button>
-              <AnimatedDropdown
+                    <AnimatedDropdown
+                      open={projectMenuOpen === project}
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 4px)",
+                        right: 3,
+                        width: "min(260px, calc(100vw - 24px))",
+                        zIndex: 110,
+                        background: "var(--bg)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        boxShadow: "0 6px 20px rgba(0,0,0,0.14)",
+                        boxSizing: "border-box",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {showWorktreeSwitcher && worktreeState && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setWtDropdownOpen((open) => !open)}
+                            title={currentWt ? t("sidebar.switchWorktreeTitle", { path: currentWt.path }) : t("sidebar.switchWorktree")}
+                            aria-label={t("sidebar.worktrees")}
+                            aria-expanded={wtDropdownOpen}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              width: "100%",
+                              minHeight: 34,
+                              padding: "0 10px",
+                              border: "none",
+                              borderBottom: wtDropdownOpen ? "1px solid var(--border)" : "none",
+                              background: wtDropdownOpen ? "var(--bg-selected)" : "transparent",
+                              color: "var(--text-muted)",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              fontSize: 11,
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <line x1="6" y1="3" x2="6" y2="15" />
+                              <circle cx="18" cy="6" r="3" />
+                              <circle cx="6" cy="18" r="3" />
+                              <path d="M18 9a9 9 0 0 1-9 9" />
+                            </svg>
+                            <span style={{ flex: 1 }}>{t("sidebar.worktrees")}</span>
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="4 2.5 8 6 4 9.5" />
+                            </svg>
+                          </button>
+                          <AnimatedDropdown
                 open={wtDropdownOpen}
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 4px)",
-                  left: 0,
-                  right: 0,
-                  width: "auto",
-                  zIndex: 100,
-                  background: "var(--bg)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  boxShadow: "0 6px 20px rgba(0,0,0,0.10)",
-                  boxSizing: "border-box",
-                  overflow: "hidden",
-                }}
+                            style={{
+                              position: "static",
+                              width: "auto",
+                              zIndex: 100,
+                              background: "var(--bg)",
+                              border: "none",
+                              borderTop: "1px solid var(--border)",
+                              borderRadius: 0,
+                              boxShadow: "none",
+                              boxSizing: "border-box",
+                              overflow: "hidden",
+                            }}
               >
                   {showWtFilter && (
                     <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
@@ -1869,6 +1995,43 @@ export function SessionSidebar({ selectedSessionId, subagents = [], optimisticSe
                     </div>
                   )}
               </AnimatedDropdown>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProject(project)}
+                          title={t("sidebar.removeProjectTitle")}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            width: "100%",
+                            minHeight: 34,
+                            padding: "0 10px",
+                            border: "none",
+                            borderTop: "1px solid var(--border)",
+                            background: "transparent",
+                            color: "var(--danger)",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            fontSize: 11,
+                          }}
+                          onMouseEnter={(event) => {
+                            event.currentTarget.style.background = "color-mix(in srgb, var(--danger) 10%, transparent)";
+                          }}
+                          onMouseLeave={(event) => {
+                            event.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6M14 11v6" />
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                          </svg>
+                          {t("sidebar.removeProject")}
+                        </button>
+                      </AnimatedDropdown>
                   </div>
                 )}
               </div>

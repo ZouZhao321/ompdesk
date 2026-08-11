@@ -81,7 +81,13 @@ if (!loopbackHostnames.has(hostname)) {
 const child = spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", hostname], {
   cwd: pkgDir,
   stdio: ["inherit", "pipe", "inherit"],
-  env: { ...process.env, OMP_WEB_HOSTNAME: hostname },
+  env: {
+    ...process.env,
+    OMP_WEB_HOSTNAME: hostname,
+    // Preserve the directory from which `omp-web` was launched so relative
+    // project paths in the browser resolve against the user's shell cwd.
+    OMP_WEB_LAUNCH_CWD: process.cwd(),
+  },
 });
 
 child.on("error", (error) => {
