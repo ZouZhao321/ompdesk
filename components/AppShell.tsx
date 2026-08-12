@@ -282,7 +282,7 @@ export function AppShell() {
 
   const initialSessionId = initialNavigation.sessionId;
   const [activeCwd, setActiveCwd] = useState<string | null>(null);
-  const { isDark } = useTheme({
+  useTheme({
     cwd: selectedSession?.cwd ?? newSessionCwd ?? activeCwd,
     syncWithOmp: true,
   });
@@ -1503,6 +1503,10 @@ export function AppShell() {
                     const extraTokenRows = [
                        ...(sessionStats.cost > 0 ? [[translate("session.cost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
                        ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.tokens !== null ? formatCompact(ctx.tokens) : "?"} / ${formatCompact(ctx.contextWindow)}${ctx.percent !== null ? ` · ${ctx.percent.toFixed(1)}%` : ""}`]] : []),
+                       // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
+                       ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 && sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0
+                         ? [[translate("session.cacheHitRate"), `${(sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input) * 100).toFixed(1)}%`]]
+                         : []),
                     ];
                     const section = (
                       title: string,

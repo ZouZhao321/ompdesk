@@ -2,7 +2,6 @@ import {
   SessionManager,
   buildSessionContext as ompBuildSessionContext,
   getAgentDir,
-  listAllSessions as ompListAllSessions,
 } from "@oh-my-pi/pi-coding-agent";
 import type { AgentMessage as OmpAgentMessage } from "@oh-my-pi/pi-agent-core";
 import { calculatePromptTokens, estimateTokens, hasContextTokenUsage } from "@oh-my-pi/pi-agent-core/compaction";
@@ -47,7 +46,8 @@ export function mergeSessionLists(
 }
 
 async function loadAllSessions(): Promise<SessionInfo[]> {
-  const ompSessions: OmpSessionInfo[] = await ompListAllSessions();
+  // Property access (not a bound import) so tests can stub SessionManager.listAll.
+  const ompSessions: OmpSessionInfo[] = await SessionManager.listAll();
   const pathToId = new Map<string, string>();
   for (const s of ompSessions) pathToId.set(sessionPathKey(s.path), s.id);
 
