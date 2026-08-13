@@ -13,7 +13,7 @@ import type {
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
-import { sendAgentCommand } from "@/lib/agent-client";
+import { isPromptRejectedError, sendAgentCommand } from "@/lib/agent-client";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { ContextUsage, SessionStatsInfo, SlashCommandInfo } from "@/lib/omp-types";
 import type { ModelRoleAssignment } from "@/lib/api-types";
@@ -319,6 +319,7 @@ export interface ChatInputHandle {
   insertIfEmpty: (content: string) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
+  restoreSubmission: (text: string, images?: Array<{ data: string; mimeType: string }>, targetDraftKey?: string) => void;
 }
 
 export interface AttachedImage {
@@ -1462,32 +1463,36 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
     } catch (e) {
       console.error("Failed to send message:", e);
-      // A failed prompt POST is ambiguous: the server may have accepted it
-      // before the response connection was lost. Keep SSE alive until the
-      // server confirms idle so a real run cannot continue unseen.
-      if (promptRequestStarted && sentSessionId) {
+      const definitivelyRejected = !promptRequestStarted || isPromptRejectedError(e);
+      // A transport/proxy failure after dispatch is ambiguous: the server may
+      // have accepted the prompt before the response was lost. Keep SSE alive
+      // until server state confirms the run is idle.
+      if (!definitivelyRejected && sentSessionId) {
         void waitForPromptSettlement(sentSessionId, promptRunId);
         return;
       }
       rpcPromptPendingRef.current = false;
       agentRunningRef.current = false;
       closeEvents();
-      if (e instanceof EventStreamConnectionError) {
-        const optimisticKey = optimisticUserMessageKeyRef.current;
-        if (optimisticKey) {
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            return last?.role === "user" && userMessageKey(last) === optimisticKey
-              ? prev.slice(0, -1)
-              : prev;
-          });
-        }
-        addNotice({ type: "error", message: e.message });
-        // The prompt never reached the agent, so restore the user's text into
-        // the input instead of losing it. Mirrors the shell-command recovery in
-        // executeBash; insertIfEmpty avoids clobbering anything typed since.
-        if (message) opts.chatInputRef?.current?.insertIfEmpty(message);
+      const optimisticKey = optimisticUserMessageKeyRef.current;
+      if (optimisticKey) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          return last?.role === "user" && userMessageKey(last) === optimisticKey
+            ? prev.slice(0, -1)
+            : prev;
+        });
       }
+      addNotice({ type: "error", message: e instanceof Error ? e.message : String(e) });
+      // The prompt never reached the agent, so restore the user's text (and
+      // any attached images) into the input instead of losing it. Mirrors the
+      // shell-command recovery in executeBash; restoreSubmission avoids
+      // clobbering anything typed since.
+      opts.chatInputRef?.current?.restoreSubmission?.(
+        message,
+        images?.map(({ data, mimeType }) => ({ data, mimeType })),
+        session?.id ?? sentSessionId ?? undefined,
+      );
       optimisticUserMessageKeyRef.current = null;
       setAgentRunning(false);
       setAgentPhase(null);
