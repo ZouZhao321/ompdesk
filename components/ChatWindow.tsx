@@ -19,14 +19,12 @@ import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantB
 import { MessageView } from "./MessageView";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
-import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
 import { OmpWordmark } from "./OmpWordmark";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
-import { useIsMobile } from "@/hooks/useIsMobile";
 import type { SessionStatsInfo } from "@/lib/omp-types";
 import {
   captureScrollDistance,
@@ -66,9 +64,7 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
   return null;
 }
 
-const CHAT_MINIMAP_WIDTH = 36;
 const CHAT_COLUMN_PADDING = 16;
-const CHAT_INPUT_RIGHT_PADDING = CHAT_COLUMN_PADDING + CHAT_MINIMAP_WIDTH;
 
 function hasFinalAssistantAnswer(message: AgentMessage): boolean {
   if (message.role !== "assistant") return false;
@@ -187,7 +183,6 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onSubagentsChange, onOpenFile }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
-  const isMobile = useIsMobile();
 
   // Wrap onAgentEnd to play the completion sound. This is more reliable than
   // wrapping handleAgentEventRef because useAgentSession overwrites that ref
@@ -329,7 +324,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
-  const visibleMessages = messages.filter((m) => m.role === "user" || m.role === "assistant");
   const inputHistory = useMemo(() => {
     const seen = new Set<string>();
     const history: string[] = [];
@@ -342,10 +336,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     }
     return history.reverse();
   }, [messages]);
-  const messageRefs = useMessageRefs(visibleMessages.length);
-  const revealHistoryForMinimap = useCallback(() => {
-    setVisibleCount((current) => Math.max(current, messages.length * 2));
-  }, [messages.length]);
 
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
@@ -517,7 +507,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             position: "absolute",
             top: 12,
             left: 0,
-            right: isMobile ? 0 : CHAT_MINIMAP_WIDTH,
+            right: 0,
             zIndex: 40,
             padding: `0 ${CHAT_COLUMN_PADDING}px`,
             pointerEvents: "none",
@@ -547,26 +537,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 if (isGroupAnchor(messages[i])) { lastAnchorIdx = i; break; }
               }
 
-              const visibleRefIndexByMessage = new Map<number, number>();
-              let refIdx = 0;
-              messages.forEach((msg, idx) => {
-                if (msg.role === "user" || msg.role === "assistant") {
-                  visibleRefIndexByMessage.set(idx, refIdx++);
-                }
-              });
-
-              const attachVisibleRef = (_idx: number, refIndex: number) => (el: HTMLDivElement | null) => {
-                messageRefs.current[refIndex] = el;
-              };
-
-              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean } = {}): ReactNode => {
+              const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 const prevAssistantEntryId =
                   msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
                     ? entryIds[idx - 1]
                     : undefined;
-                const isVisible = msg.role === "user" || msg.role === "assistant";
-                const currentRefIdx = visibleRefIndexByMessage.get(idx);
                 const keyPrefix = options.keyPrefix ?? "message";
                 let showTimestamp = false;
                 if (msg.role === "assistant") {
@@ -582,7 +558,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                   }
                 }
                 if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
-                const view = (
+                return (
                   <MessageView
                     key={`${keyPrefix}-view-${idx}`}
                     message={msg}
@@ -600,12 +576,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
                     sessionId={session?.id ?? sessionIdRef.current ?? undefined}
                   />
-                );
-                if (!isVisible || options.attachRef === false || currentRefIdx === undefined) return view;
-                return (
-                  <div key={`${keyPrefix}-${idx}`} ref={attachVisibleRef(idx, currentRefIdx)}>
-                    {view}
-                  </div>
                 );
               };
 
@@ -659,25 +629,18 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
                 const processCount = visibleProcessIndices.length + (finalProcessMessage ? 1 : 0);
                 if (processCount > 0) {
-                  const processRefIdx = visibleProcessIndices
-                    .map((processIdx) => visibleRefIndexByMessage.get(processIdx))
-                    .find((value): value is number => typeof value === "number")
-                    ?? (finalAnswerMessage ? undefined : visibleRefIndexByMessage.get(finalAssistantIdx));
                   const processGroup = (
                     <ProcessDetailsGroup
                        messageCount={processCount}
                        t={t}
                       toolCallCount={countToolCalls(messages, visibleProcessIndices) + countToolCallBlocks(finalSplit.processBlocks)}
                     >
-                      {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }))}
-                      {finalProcessMessage && renderMessage(finalAssistantIdx, { attachRef: false, keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false })}
+                      {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { keyPrefix: "process" }))}
+                      {finalProcessMessage && renderMessage(finalAssistantIdx, { keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false })}
                     </ProcessDetailsGroup>
                   );
                   rendered.push(
-                    <div
-                      key={`process-group-${userIdx}-${finalAssistantIdx}`}
-                      ref={processRefIdx === undefined ? undefined : (el) => { messageRefs.current[processRefIdx] = el; }}
-                    >
+                    <div key={`process-group-${userIdx}-${finalAssistantIdx}`}>
                       {processGroup}
                     </div>,
                   );
@@ -736,22 +699,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </div>
           </div>
         </div>
-        {isMobile ? null : (
-          <ChatMinimap
-            messages={messages}
-            streamingMessage={streamState.streamingMessage}
-            scrollContainer={scrollContainerRef}
-            messageRefs={messageRefs}
-            onRevealHistory={revealHistoryForMinimap}
-          />
-        )}
       </div>
 
       <div className="relative">
         <div
           style={{
             padding: `0 ${CHAT_COLUMN_PADDING}px`,
-            paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING,
           }}
         >
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
