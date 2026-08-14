@@ -43,7 +43,13 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
+    "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
+    "desktop:build": "bun scripts/stage-desktop.mjs && bun scripts/build-desktop.mjs",
+    "desktop:dev": "tauri dev",
+    "desktop:fetch-bun": "bun scripts/fetch-bun.mjs",
+    "desktop:signer": "tauri signer",
+    "desktop:sync-version": "bun scripts/sync-version.mjs",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@oh-my-pi/pi-agent-core": "~17.3.3",
@@ -63,6 +69,7 @@
   "devDependencies": {
     "@lobehub/icons": "^5.16.0",
     "@tailwindcss/postcss": "^4.3.3",
+    "@tauri-apps/cli": "^2",
     "@types/bun": "^1.3.14",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.5",

@@ -22,6 +22,9 @@ try {
 const OMP_SDK_REQUEST = /^@oh-my-pi\//;
 
 const nextConfig: NextConfig = {
+  // Desktop builds (scripts/stage-desktop.mjs) redirect the production build
+  // into src-tauri/server/.next so packaging never touches the dev `.next/`.
+  distDir: process.env.OMP_WEB_DIST_DIR || ".next",
   serverExternalPackages: [
     "undici",
     "@oh-my-pi/pi-coding-agent",
