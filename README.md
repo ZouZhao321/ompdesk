@@ -236,8 +236,15 @@ bun scripts/build-updater-json.mjs <tag>  # (re)generates latest.json for a rele
 `desktop:build` stages the server payload into `src-tauri/server/` (gitignored):
 a production `next` build via `OMP_WEB_DIST_DIR` (the dev `.next/` is never
 touched), production-only dependencies, and the Bun runtime(s) for the host
-platform (macOS bundles both architectures for the universal app). The bundle
-stays lean: no devDependencies, no webpack cache, no foreign Bun binaries.
+platform. The CI stage step passes `--universal`, which also bundles both
+macOS architectures' native runtimes (SWC + pi-natives) for the universal
+app. The bundle stays lean: no devDependencies, no webpack cache, no optional
+dependencies (onnxruntime/transformers.js for local embeddings — the
+platform's native runtimes are kept: `next start` and the SDK's workspace
+tree load them eagerly, and a missing SWC would otherwise trigger a
+package-manager download that fails in a GUI app), no client-only stats UI —
+while keeping the agent's PDF and browser tools (mupdf, puppeteer-core).
+Payload ~700MB, dmg ~250MB.
 
 Pushing a `v*` tag triggers `.github/workflows/publish-desktop.yml`: it builds
 macOS (universal) and Windows bundles, uploads them to a GitHub release with

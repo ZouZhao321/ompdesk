@@ -6,7 +6,8 @@
 // already running via beforeDevCommand and the webview loads devUrl.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::io::{Read, Write};
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -19,6 +20,30 @@ use tauri::{AppHandle, Manager, Url};
 const WINDOW_LABEL: &str = "main";
 const HOST: &str = "127.0.0.1";
 const NEXT_ENTRY: &str = "node_modules/next/dist/bin/next";
+
+/// Appends a line to the desktop log in the temp dir and mirrors it to
+/// stderr. GUI-launched apps have no terminal, so stderr alone is
+/// unreachable; the file makes the sidecar observable.
+fn desktop_log(line: &str) {
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(std::env::temp_dir().join("omp-desktop.log"))
+    {
+        let _ = writeln!(file, "{line}");
+    }
+    eprintln!("{line}");
+}
+
+/// Spawns a reader that forwards a child stream line-by-line to the log.
+fn drain_to_log<R: Read + Send + 'static>(stream: R) {
+    thread::spawn(move || {
+        let reader = BufReader::new(stream);
+        for line in reader.lines().map_while(Result::ok) {
+            desktop_log(&format!("[server] {line}"));
+        }
+    });
+}
 
 /// Name of the bundled Bun runtime for the compiled target. Both macOS
 /// binaries are always bundled (universal app), so the architecture selects
@@ -64,9 +89,28 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // Track the webview URL — ground truth for "stuck on the
+            // placeholder" vs "server page loaded" vs "load failed".
+            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+                thread::spawn(move || {
+                    let mut last: Option<String> = None;
+                    loop {
+                        let current = window.url().map(|url| url.to_string());
+                        let current = match current {
+                            Ok(url) => url,
+                            Err(_) => String::from("<unavailable>"),
+                        };
+                        if last.as_deref() != Some(current.as_str()) {
+                            last = Some(current.clone());
+                            desktop_log(&format!("[webview] url: {current}"));
+                        }
+                        thread::sleep(Duration::from_millis(500));
+                    }
+                });
+            }
             if !tauri::is_dev() {
                 if let Err(error) = start_server(app) {
-                    eprintln!("[omp-desktop] failed to start the bundled server: {error}");
+                    desktop_log(&format!("[omp-desktop] failed to start the bundled server: {error}"));
                     app.handle().exit(1);
                 }
             }
@@ -119,21 +163,34 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
         .stderr(Stdio::piped());
     make_process_group(&mut command);
 
-    let child = command
+    let mut child = command
         .spawn()
         .map_err(|error| format!("failed to spawn bundled Bun ({}): {error}", bun.display()))?;
+
+    // Drain the server's stdout/stderr into the desktop log; the pipes would
+    // otherwise fill up and block the child.
+    if let Some(stream) = child.stdout.take() {
+        drain_to_log(stream);
+    }
+    if let Some(stream) = child.stderr.take() {
+        drain_to_log(stream);
+    }
+
     app.manage(ServerChild(Mutex::new(Some(child))));
 
     let handle = app.handle().clone();
     thread::spawn(move || match wait_until_ready(port) {
-        Ok(()) => navigate_main(&handle, port),
+        Ok(()) => {
+            desktop_log(&format!("[omp-desktop] server ready on http://{HOST}:{port}/"));
+            navigate_main(&handle, port);
+        }
         Err(error) => {
-            eprintln!("[omp-desktop] bundled server failed to become ready: {error}");
+            desktop_log(&format!("[omp-desktop] bundled server failed to become ready: {error}"));
             handle.exit(1);
         }
     });
 
-    eprintln!("[omp-desktop] omp-web server starting on http://{HOST}:{port}/");
+    desktop_log(&format!("[omp-desktop] omp-web server starting on http://{HOST}:{port}/"));
     Ok(())
 }
 
@@ -197,7 +254,7 @@ fn navigate_main(handle: &AppHandle, port: u16) {
     let url = match Url::parse(&format!("http://{HOST}:{port}/")) {
         Ok(url) => url,
         Err(error) => {
-            eprintln!("[omp-desktop] invalid server URL: {error}");
+            desktop_log(&format!("[omp-desktop] invalid server URL: {error}"));
             handle.exit(1);
             return;
         }
@@ -205,12 +262,12 @@ fn navigate_main(handle: &AppHandle, port: u16) {
     match handle.get_webview_window(WINDOW_LABEL) {
         Some(window) => {
             if let Err(error) = window.navigate(url) {
-                eprintln!("[omp-desktop] failed to navigate to the omp-web server: {error}");
+                desktop_log(&format!("[omp-desktop] failed to navigate to the omp-web server: {error}"));
                 handle.exit(1);
             }
         }
         None => {
-            eprintln!("[omp-desktop] main window not found");
+            desktop_log("[omp-desktop] main window not found");
             handle.exit(1);
         }
     }

@@ -46,7 +46,7 @@ jobs:
         run: bun run desktop:sync-version
 
       - name: Build and stage the server payload
-        run: bun scripts/stage-desktop.mjs
+        run: bun scripts/stage-desktop.mjs --universal
 
       - name: Install Rust targets for the universal macOS build
         if: matrix.platform == 'macos-latest'
