@@ -22,9 +22,13 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: "--bundles app,dmg --target universal-apple-darwin"
+            # app target only: the dmg styling step (AppleScript/Finder)
+            # hangs on headless CI runners; the updater uses the .app.tar.gz
+            args: "--bundles app --target universal-apple-darwin"
+            fetch: "darwin-aarch64 darwin-x64"
           - platform: windows-latest
             args: "--bundles nsis"
+            fetch: "windows-x64"
     steps:
       - name: Check out tag
         uses: actions/checkout@v4
@@ -40,7 +44,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Fetch bun binaries for the desktop app
-        run: bun run desktop:fetch-bun
+        run: bun run desktop:fetch-bun -- ${{ matrix.fetch }}
 
       - name: Sync desktop versions with package.json
         run: bun run desktop:sync-version

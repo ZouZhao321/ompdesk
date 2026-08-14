@@ -42,17 +42,17 @@ const release = JSON.parse(run("gh", ["release", "view", tag, "--json", "assets,
 const version = tag.replace(/^v/, "");
 const assets = release.assets.filter((a) => !a.name.endsWith(".sig"));
 
-// One platform key per updater target. The same universal dmg is served to
-// both macOS architectures.
+// One platform key per updater target. The same universal .app.tar.gz is
+// served to both macOS architectures; the NSIS setup exe serves Windows.
 const platformFor = (asset) => {
-  if (asset.name.endsWith(".dmg")) return ["darwin-aarch64", "darwin-x86_64"];
+  if (asset.name.endsWith(".app.tar.gz")) return ["darwin-aarch64", "darwin-x86_64"];
   if (asset.name.endsWith(".exe") && /setup/i.test(asset.name)) return ["windows-x86_64"];
   return [];
 };
 
 const candidates = assets.flatMap((a) => platformFor(a).map((p) => [p, a]));
 if (candidates.length === 0) {
-  console.error(`no updater artifacts (dmg / *-setup.exe) found in release ${tag}`);
+  console.error(`no updater artifacts (.app.tar.gz / *-setup.exe) found in release ${tag}`);
   process.exit(1);
 }
 

@@ -18,7 +18,7 @@
  * targets are skipped unless --force is passed.
  */
 
-import { chmodSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -89,7 +89,10 @@ async function fetchTriple(triple, version) {
     }
 
     mkdirSync(RESOURCES_DIR, { recursive: true });
-    renameSync(inner, target);
+    // copy, not rename: on Windows CI the temp dir and the repo can live on
+    // different drives, and renameSync fails with EXDEV across devices
+    cpSync(inner, target, { force: true });
+    rmSync(inner, { force: true });
     if (!isWindows) chmodSync(target, 0o755);
 
     console.log(`[fetch-bun] installed ${target}`);
