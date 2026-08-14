@@ -7,6 +7,7 @@ import { SearchableSelect } from "./SearchableSelect";
 import { useI18n } from "@/hooks/useI18n";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
 import type { DiscoveredModel } from "@/lib/model-discovery";
+import { openExternal } from "@/lib/open-external";
 import {
   serializeHeaderRows,
   setCompatBool,
@@ -1220,7 +1221,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       };
       if (data.type === "auth") {
         setLoginState({ phase: "auth", url: data.url!, instructions: data.instructions ?? null, token: data.token! });
-        window.open(data.url!, "_blank", "noopener,noreferrer");
+        openExternal(data.url!);
       } else if (data.type === "device_code") {
         setLoginState({
           phase: "device_code",
@@ -1229,7 +1230,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           intervalSeconds: data.intervalSeconds ?? null,
           expiresInSeconds: data.expiresInSeconds ?? null,
         });
-        window.open(data.verificationUri!, "_blank", "noopener,noreferrer");
+        openExternal(data.verificationUri!);
       } else if (data.type === "prompt_request") {
         setLoginState({ phase: "prompt", message: data.message!, placeholder: data.placeholder ?? null, token: data.token! });
       } else if (data.type === "select_request") {
