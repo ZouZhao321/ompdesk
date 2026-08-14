@@ -82,6 +82,7 @@ type AgentStateResponse = {
   isPromptRunning?: boolean;
   isBashRunning?: boolean;
   isCompacting?: boolean;
+  isHandoffRunning?: boolean;
   extensionStatuses?: ExtensionStatusItem[];
   extensionWidgets?: ExtensionWidgetItem[];
   queuedMessages?: { steering?: string[]; followUp?: string[] } | null;
@@ -310,6 +311,7 @@ function userMessageKey(message: Partial<AgentMessage>): string {
     images: content.map(imageSignature).filter(Boolean),
   });
 }
+
 
 function readCompactResult(result: unknown, reason: string): CompactResultInfo | null {
   if (!result || typeof result !== "object") return null;
@@ -912,7 +914,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
         const state = data.state;
         setSubagents((current) => mergeSubagentSnapshots(current, state?.subagents ?? []));
-        const promptActive = Boolean(data.running && state && (state.isStreaming || state.isPromptRunning));
+        const promptActive = Boolean(
+          data.running
+          && state
+          && (state.isStreaming || state.isPromptRunning || state.isHandoffRunning)
+        );
         if (promptActive) {
           eventStreamGraceActiveRef.current = false;
           eventStreamGraceTimerRef.current = null;
@@ -1054,7 +1060,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
       setSubagents((current) => mergeSubagentSnapshots(current, state?.subagents ?? []));
       const busy = data.running && state
-        && (state.isStreaming || state.isPromptRunning || state.isCompacting);
+        && (state.isStreaming || state.isPromptRunning || state.isCompacting || state.isHandoffRunning);
       if (busy || !agentRunningRef.current) return;
       if (state) {
         if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
@@ -1559,22 +1565,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
-  const handleFork = useCallback(async (entryId: string) => {
-    if (bashRunningRef.current) return;
+  /**
+   * Fork a new session from an explicit transcript entry, or from the latest
+   * persisted user entry when invoked through `/fork`.
+   */
+  const handleFork = useCallback(async (
+    entryId?: string,
+  ): Promise<{ forked: boolean; error?: string }> => {
+    if (bashRunningRef.current) return { forked: false, error: "Cannot fork while a shell command is running" };
     const sid = sessionIdRef.current;
-    if (!sid) return;
-    setForkingEntryId(entryId);
+    if (!sid) return { forked: false, error: "No active session to fork" };
+    setForkingEntryId(entryId ?? null);
     try {
       const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(sid, {
         type: "fork",
-        entryId,
+        ...(entryId ? { entryId } : {}),
       });
       const { cancelled, newSessionId } = result ?? {};
       if (!cancelled && newSessionId) {
         onSessionForked?.(newSessionId);
+        return { forked: true };
       }
+      return { forked: false, error: "Fork was cancelled" };
     } catch (e) {
       console.error("Fork failed:", e);
+      return { forked: false, error: e instanceof Error ? e.message : String(e) };
     } finally {
       setForkingEntryId(null);
     }
@@ -1800,6 +1815,46 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           return complete({ handled: true, message: "Copied last assistant message" });
         }
 
+        case "fork": {
+          if (!sid) return complete({ handled: true, error: "No active session to fork" });
+          const result = await handleFork();
+          if (!result.forked) {
+            return complete({ handled: true, error: result.error ?? "Fork failed" });
+          }
+          return complete({ handled: true, message: "Forked a new session" });
+        }
+
+        case "handoff": {
+          if (!sid) return complete({ handled: true, error: "No active session" });
+          if (agentRunningRef.current || bashRunningRef.current) {
+            return complete({ handled: true, error: "Cannot hand off while the session is busy" });
+          }
+          // Handoff generation is a long oneshot LLM call; keep the composer
+          // busy through it with the existing agent-running state so a prompt
+          // cannot race the session transition.
+          agentRunningRef.current = true;
+          setAgentRunning(true);
+          setAgentPhase({ kind: "running_command" });
+          try {
+            await ensureEventsConnected(sid);
+            const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(sid, {
+              type: "handoff",
+              ...(args ? { customInstructions: args } : {}),
+            });
+            const { cancelled, newSessionId } = result ?? {};
+            if (cancelled || !newSessionId) {
+              return complete({ handled: true, error: "Handoff cancelled" });
+            }
+            onSessionForked?.(newSessionId);
+            return complete({ handled: true, message: "Started new session with handoff context" });
+          } finally {
+            agentRunningRef.current = false;
+            setAgentRunning(false);
+            setAgentPhase(null);
+            if (sessionIdRef.current === sid) scheduleEventStreamClose(sid);
+          }
+        }
+
         default: {
           if (!sid) return complete({ handled: true, error: "No active session" });
           const result = await sendAgentCommand<{
@@ -1823,7 +1878,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (commandName === "compact") setIsCompacting(false);
     }
-  }, [addNotice, appendCommandOutput, ensureNewSession, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onSessionStatsPanelOpen]);
+  }, [addNotice, appendCommandOutput, ensureEventsConnected, ensureNewSession, handleFork, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, onSessionForked, promoteNewSession, onSessionStatsPanelOpen, scheduleEventStreamClose]);
 
   // Queued (undelivered) messages live in the queue panel only; the chat gets
   // the real user message when pi delivers it (user message_end event). An
@@ -1970,7 +2025,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       loadSession(session.id, true, true).then((agentState) => {
         if (agentState?.running) {
           loadTools(session.id);
-          if (agentState.state?.isStreaming || agentState.state?.isPromptRunning) {
+          if (
+            agentState.state?.isStreaming
+            || agentState.state?.isPromptRunning
+            || agentState.state?.isHandoffRunning
+          ) {
             sdkAgentActiveRef.current = Boolean(agentState.state.isStreaming);
             rpcPromptPendingRef.current = Boolean(agentState.state.isPromptRunning);
             agentRunningRef.current = true;

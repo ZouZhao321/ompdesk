@@ -178,6 +178,13 @@ export interface AgentSessionLike {
   resolveRoleModel(role: string): ModelLike | undefined;
   navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<NavigateTreeResult>;
   branch(entryId: string): Promise<{ cancelled: boolean }>;
+  /**
+   * Generate a handoff document with a oneshot LLM call, then start a new
+   * session carrying it. The session is mutated in place: after a successful
+   * handoff, `sessionId`/`sessionFile` point at the replacement session.
+   * Resolves to `undefined` when the handoff is cancelled.
+   */
+  handoff(customInstructions?: string): Promise<{ document: string; savedPath?: string } | undefined>;
   setThinkingLevel(level: string | undefined, persist?: boolean): void;
   compact(customInstructions?: string): Promise<unknown>;
   getSessionStats(): Omit<SessionStatsInfo, "sessionName">;

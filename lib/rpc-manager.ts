@@ -102,6 +102,37 @@ const IDLE_RESET_EVENT_TYPES = new Set([
 
 const MAX_SUBAGENT_HISTORY = 128;
 
+const HANDOFF_ALLOWED_COMMAND_TYPES: Record<string, true> = {
+  abort: true,
+  extension_ui_input: true,
+  extension_ui_response: true,
+  get_commands: true,
+  get_last_assistant_text: true,
+  get_session_stats: true,
+  get_state: true,
+  get_subagent_messages: true,
+  get_subagents: true,
+  get_tools: true,
+};
+
+type ForkBranchEntry = {
+  id?: string;
+  type?: string;
+  message?: { role?: string };
+};
+
+export function resolveForkEntryId(
+  entries: readonly ForkBranchEntry[],
+  requestedEntryId?: unknown,
+): string | undefined {
+  if (typeof requestedEntryId === "string" && requestedEntryId.length > 0) return requestedEntryId;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry?.type === "message" && entry.message?.role === "user" && entry.id) return entry.id;
+  }
+  return undefined;
+}
+
 export interface RpcSessionStartOptions {
   toolNames?: string[];
   initialModel?: { provider: string; modelId: string };
@@ -173,17 +204,28 @@ function appendSlashCommand(
   commands.push({ ...command, name });
 }
 
+/** Browser-native builtins with no shared SDK handler; advertised with their canonical registry metadata. */
+const BROWSER_NATIVE_SLASH_COMMANDS = ["fork", "handoff"] as const;
+
 /**
  * Keep the browser palette aligned with omp's own command registry and
- * discovery pipeline. The SDK's ACP list intentionally omits TUI-only
- * commands; the web palette still exposes their canonical metadata because
- * they are part of omp's user-facing slash-command surface.
+ * discovery pipeline. Shared text/ACP builtins and every discovered
+ * extension/custom/MCP/file/skill command come from the SDK discovery;
+ * browser-native /fork and /handoff are added explicitly from the canonical
+ * builtin registry because they have no shared SDK handler yet.
  */
 export async function getAvailableSlashCommands(session: AgentSessionLike): Promise<SlashCommandInfo[]> {
   const commands: SlashCommandInfo[] = [];
   const seenNames = new Set<string>();
 
-  for (const builtin of BUILTIN_SLASH_COMMAND_DEFS) {
+  const discovered = await buildAvailableSlashCommands(session as unknown as AvailableCommandsSession);
+  for (const command of discovered) {
+    appendSlashCommand(commands, seenNames, command);
+  }
+
+  for (const name of BROWSER_NATIVE_SLASH_COMMANDS) {
+    const builtin = BUILTIN_SLASH_COMMAND_DEFS.find((def) => def.name === name);
+    if (!builtin) continue;
     const hint = builtin.inlineHint;
     appendSlashCommand(commands, seenNames, {
       name: builtin.name,
@@ -193,14 +235,6 @@ export async function getAvailableSlashCommands(session: AgentSessionLike): Prom
       ...(hint ? { input: { hint } } : {}),
       ...(builtin.subcommands ? { subcommands: builtin.subcommands } : {}),
     });
-  }
-
-  const discovered = await buildAvailableSlashCommands(session as unknown as AvailableCommandsSession);
-  for (const command of discovered) {
-    // Builtins were taken from the complete registry above, including
-    // commands without an ACP/text-mode handler such as /plan and /handoff.
-    if (command.source === "builtin") continue;
-    appendSlashCommand(commands, seenNames, command);
   }
 
   // Prompt templates are a separate SDK resource from custom commands and
@@ -230,6 +264,9 @@ export class AgentSessionWrapper {
   private extensionStatuses = new Map<string, string>();
   private extensionWidgets = new Map<string, ExtensionWidgetItem>();
   private promptRunning = false;
+  // Set while the handoff RPC is in flight so state polls and the running-set
+  // stay honest during the long oneshot generation + session transition.
+  private handoffRunning = false;
   private extensionsBound = false;
   private extensionBindingPromise: Promise<void> | null = null;
   private extensionBindingError: unknown = null;
@@ -358,6 +395,7 @@ export class AgentSessionWrapper {
   isRunning(): boolean {
     return this._alive && (
       this.promptRunning
+      || this.handoffRunning
       || this.inner.isStreaming
       || this.inner.isCompacting
       || this.inner.isBashRunning
@@ -459,7 +497,12 @@ export class AgentSessionWrapper {
   }
 
   private shouldWaitForExtensions(type: string): boolean {
-    return type === "prompt" || type === "steer" || type === "follow_up" || type === "get_commands" || type === "execute_slash_command";
+    return type === "prompt"
+      || type === "steer"
+      || type === "follow_up"
+      || type === "handoff"
+      || type === "get_commands"
+      || type === "execute_slash_command";
   }
 
   private async withFinalRunningNotification<T>(operation: () => Promise<T>): Promise<T> {
@@ -468,6 +511,19 @@ export class AgentSessionWrapper {
     } finally {
       this.resetIdleTimer();
       notifyRunningChange();
+    }
+  }
+
+  private async shutdownAfterCommittedTransition(kind: "fork" | "handoff", newSessionId: string): Promise<void> {
+    try {
+      await this.shutdown();
+    } catch (error) {
+      // The replacement session is already persisted. Cleanup failures must
+      // not hide its id from the browser and strand the committed transition.
+      console.error(
+        `[omp-web] ${kind} created session ${newSessionId}, but wrapper shutdown failed:`,
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 
@@ -634,6 +690,9 @@ export class AgentSessionWrapper {
     this.resetIdleTimer();
     const type = command.type as string;
     if (this.shouldWaitForExtensions(type)) await this.waitForExtensionsBound();
+    if (this.handoffRunning && HANDOFF_ALLOWED_COMMAND_TYPES[type] !== true) {
+      throw new Error("Cannot modify the session while a handoff is in progress");
+    }
     if (type === "prompt" || type === "steer" || type === "follow_up") {
       this.syncPlanModeFromSession();
     }
@@ -690,6 +749,7 @@ export class AgentSessionWrapper {
           isPromptRunning: this.promptRunning,
           isBashRunning: this.inner.isBashRunning,
           isCompacting: this.inner.isCompacting,
+          isHandoffRunning: this.handoffRunning,
           autoCompactionEnabled: this.inner.autoCompactionEnabled,
           autoRetryEnabled: this.inner.autoRetryEnabled,
           model: model ? { id: model.id, provider: model.provider } : undefined,
@@ -754,8 +814,12 @@ export class AgentSessionWrapper {
         if (this.inner.isBashRunning) {
           throw new Error("Cannot fork while a shell command is running");
         }
-        const entryId = command.entryId as string;
         const sessionManager = this.inner.sessionManager;
+        const entryId = resolveForkEntryId(
+          sessionManager.getBranch() as ForkBranchEntry[],
+          command.entryId,
+        );
+        if (!entryId) throw new Error("No user message to fork from yet");
         const currentSessionFile = this.inner.sessionFile;
 
         if (!currentSessionFile) return { cancelled: true };
@@ -783,8 +847,36 @@ export class AgentSessionWrapper {
         const newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
         cacheSessionPath(newSessionId, newSessionFile);
         invalidateSessionListCache();
-        await this.shutdown();
+        await this.shutdownAfterCommittedTransition("fork", newSessionId);
         return { cancelled: false, newSessionId };
+      }
+
+      case "handoff": {
+        // Handoff resets the agent and mints a replacement session, so it must
+        // not run while a prompt is streaming or any other work owns the session.
+        if (this.handoffRunning || this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning) {
+          throw new Error("Cannot hand off while the session is busy");
+        }
+        const customInstructions = command.customInstructions as string | undefined;
+        this.handoffRunning = true;
+        notifyRunningChange();
+        try {
+          // No result means the handoff was cancelled; the session is untouched.
+          const result = await this.inner.handoff(customInstructions);
+          if (!result) return { cancelled: true };
+          // The SDK mutates the session in place — capture the replacement ids
+          // before tearing the wrapper down so the old registry key cannot
+          // point at the transitioned session.
+          const newSessionId = this.inner.sessionId;
+          const newSessionFile = this.inner.sessionFile;
+          if (newSessionId && newSessionFile) cacheSessionPath(newSessionId, newSessionFile);
+          invalidateSessionListCache();
+          await this.shutdownAfterCommittedTransition("handoff", newSessionId);
+          return { cancelled: false, newSessionId };
+        } finally {
+          this.handoffRunning = false;
+          notifyRunningChange();
+        }
       }
 
       case "navigate_tree": {

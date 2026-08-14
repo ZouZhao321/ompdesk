@@ -108,3 +108,101 @@ test("routes blocking extension requests through deduplicated browser attention 
   assert.match(attentionSource, /tag: `pi-extension-ui:\$\{request\.id\}`/);
   assert.match(appShellSource, /onAttentionNeeded=\{handleAttentionNeeded\}/);
 });
+
+
+test("/fork is consumed locally and surfaces server resolution errors", () => {
+  const forkCaseSource = source.slice(
+    source.indexOf('case "fork":'),
+    source.indexOf("default: {", source.indexOf('case "fork":')),
+  );
+
+  assert.match(source, /case "fork": \{/);
+  assert.match(forkCaseSource, /const result = await handleFork\(\);/);
+  assert.doesNotMatch(forkCaseSource, /messages|entryIds|newestUserEntryId/);
+  assert.match(forkCaseSource, /complete\(\{ handled: true, error: result\.error \?\? "Fork failed" \}\)/);
+  assert.match(forkCaseSource, /complete\(\{ handled: true, message: "Forked a new session" \}\)/);
+  // Every branch returns handled, so /fork never reaches the SDK fallback that
+  // forwards the message as an LLM prompt — the case ends in a handled return
+  // and yields to the next explicit case, not the default bridge.
+  assert.doesNotMatch(forkCaseSource, /execute_slash_command/);
+  assert.doesNotMatch(forkCaseSource, /type: "prompt"/);
+  assert.match(source, /case "fork":[\s\S]*?return complete\(\{ handled: true, message: "Forked a new session" \}\);\s*\}\s*case "handoff": \{/);
+});
+
+test("fork navigation selects the new session id from the RPC result", () => {
+  const forkSource = source.slice(
+    source.indexOf("const handleFork = useCallback"),
+    source.indexOf("const handleNavigate = useCallback"),
+  );
+
+  assert.match(forkSource, /const handleFork = useCallback\(async \([\s\S]*?entryId\?: string,[\s\S]*?Promise<\{ forked: boolean; error\?: string \}>/);
+  assert.match(forkSource, /type: "fork"/);
+  assert.match(forkSource, /\.\.\.\(entryId \? \{ entryId \} : \{\}\)/);
+  assert.match(forkSource, /const \{ cancelled, newSessionId \} = result \?\? \{\};/);
+  assert.match(forkSource, /if \(!cancelled && newSessionId\) \{/);
+  assert.match(forkSource, /onSessionForked\?\.\(newSessionId\);\s*\n\s*return \{ forked: true \};/);
+  assert.match(forkSource, /error: e instanceof Error \? e\.message : String\(e\)/);
+  assert.match(forkSource, /setForkingEntryId\(null\)/);
+});
+
+test("/handoff forwards the focus text verbatim and keeps the UI busy", () => {
+  const handoffCaseSource = source.slice(
+    source.indexOf('case "handoff":'),
+    source.indexOf("default: {", source.indexOf('case "handoff":')),
+  );
+
+  assert.match(source, /case "handoff": \{/);
+  // The text after /handoff is forwarded exactly as the handoff focus.
+  assert.match(handoffCaseSource, /type: "handoff"/);
+  assert.match(handoffCaseSource, /\.\.\.\(args \? \{ customInstructions: args \} : \{\}\)/);
+  // The long oneshot generation keeps the composer busy through existing
+  // agent-running state, with no new state machine.
+  assert.match(handoffCaseSource, /if \(agentRunningRef\.current \|\| bashRunningRef\.current\)/);
+  assert.match(handoffCaseSource, /Cannot hand off while the session is busy/);
+  assert.match(handoffCaseSource, /agentRunningRef\.current = true/);
+  assert.match(handoffCaseSource, /setAgentRunning\(true\)/);
+  assert.match(handoffCaseSource, /agentRunningRef\.current = false/);
+  assert.match(handoffCaseSource, /setAgentRunning\(false\)/);
+  // Cancellation resolves locally as an error; /handoff never falls through to
+  // the SDK command bridge or an LLM prompt.
+  assert.match(handoffCaseSource, /const \{ cancelled, newSessionId \} = result \?\? \{\};/);
+  assert.match(handoffCaseSource, /if \(cancelled \|\| !newSessionId\)/);
+  assert.match(handoffCaseSource, /complete\(\{ handled: true, error: "Handoff cancelled" \}\)/);
+  assert.doesNotMatch(handoffCaseSource, /execute_slash_command/);
+  assert.doesNotMatch(handoffCaseSource, /type: "prompt"/);
+  const connectIndex = handoffCaseSource.indexOf("await ensureEventsConnected(sid)");
+  const dispatchIndex = handoffCaseSource.indexOf('type: "handoff"');
+  assert.ok(connectIndex >= 0);
+  assert.ok(dispatchIndex > connectIndex);
+  assert.match(handoffCaseSource, /scheduleEventStreamClose\(sid\)/);
+});
+
+test("/handoff navigates to the new session on success", () => {
+  const handoffCaseSource = source.slice(
+    source.indexOf('case "handoff":'),
+    source.indexOf("default: {", source.indexOf('case "handoff":')),
+  );
+
+  assert.match(
+    handoffCaseSource,
+    /sendAgentCommand<\{ cancelled\?: boolean; newSessionId\?: string \}>[\s\S]*?type: "handoff"/,
+  );
+  // Success selects the new session id; every branch returns handled so the
+  // command never reaches the SDK fallback — the busy state is torn down in a
+  // finally block and the case yields to the default bridge with a return.
+  assert.match(handoffCaseSource, /onSessionForked\?\.\(newSessionId\)/);
+  assert.match(handoffCaseSource, /complete\(\{ handled: true, message: "Started new session with handoff context" \}\)/);
+  assert.match(source, /case "handoff":[\s\S]*?return complete\(\{ handled: true, message: "Started new session with handoff context" \}\);\s*\}\s*finally \{[\s\S]*?\}\s*\}\s*default: \{/);
+});
+
+test("rehydrates handoff as busy without misreporting compaction", () => {
+  assert.match(source, /isHandoffRunning\?: boolean/);
+  assert.match(
+    source,
+    /state\.isStreaming \|\| state\.isPromptRunning \|\| state\.isCompacting \|\| state\.isHandoffRunning/,
+  );
+  assert.match(
+    source,
+    /agentState\.state\?\.isStreaming[\s\S]*?agentState\.state\?\.isPromptRunning[\s\S]*?agentState\.state\?\.isHandoffRunning/,
+  );
+});
