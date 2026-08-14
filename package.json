@@ -44,7 +44,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
-    "desktop:build": "tauri build",
+    "desktop:build": "bun scripts/stage-desktop.mjs && bun scripts/build-desktop.mjs",
     "desktop:dev": "tauri dev",
     "desktop:fetch-bun": "bun scripts/fetch-bun.mjs",
     "desktop:signer": "tauri signer",

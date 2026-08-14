@@ -226,11 +226,18 @@ Requires a Rust toolchain in addition to Bun. Useful commands (all defined in
 
 ```bash
 bun run desktop:dev          # tauri dev — runs `bun run dev` and opens the webview
-bun run desktop:build        # tauri build — bundles the app for the host platform
+bun run desktop:build        # stages the payload (build + production deps) and bundles
 bun run desktop:fetch-bun    # downloads pinned Bun binaries into src-tauri/resources/
 bun run desktop:sync-version # aligns src-tauri/ versions with package.json
+bun scripts/stage-desktop.mjs --skip-build  # re-stage without rebuilding next
 bun scripts/build-updater-json.mjs <tag>  # (re)generates latest.json for a release
 ```
+
+`desktop:build` stages the server payload into `src-tauri/server/` (gitignored):
+a production `next` build via `OMP_WEB_DIST_DIR` (the dev `.next/` is never
+touched), production-only dependencies, and the Bun runtime(s) for the host
+platform (macOS bundles both architectures for the universal app). The bundle
+stays lean: no devDependencies, no webpack cache, no foreign Bun binaries.
 
 Pushing a `v*` tag triggers `.github/workflows/publish-desktop.yml`: it builds
 macOS (universal) and Windows bundles, uploads them to a GitHub release with

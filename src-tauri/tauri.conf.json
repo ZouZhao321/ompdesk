@@ -6,7 +6,6 @@
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://127.0.0.1:30141",
-    "beforeBuildCommand": "bun run build",
     "frontendDist": "./dist"
   },
   "app": {
@@ -33,15 +32,12 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../node_modules": "node_modules",
-      "../.next": ".next",
-      "../bin": "bin",
-      "../public": "public",
-      "../next.config.ts": "next.config.ts",
-      "../package.json": "package.json",
-      "resources/bun-darwin-aarch64": "bun-darwin-aarch64",
-      "resources/bun-darwin-x64": "bun-darwin-x64",
-      "resources/bun-windows-x64.exe": "bun-windows-x64.exe"
+      "./server/node_modules": "node_modules",
+      "./server/.next": ".next",
+      "./server/bin": "bin",
+      "./server/public": "public",
+      "./server/next.config.ts": "next.config.ts",
+      "./server/package.json": "package.json"
     }
   },
   "plugins": {
