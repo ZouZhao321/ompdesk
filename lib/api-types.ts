@@ -194,3 +194,12 @@ export interface OmpWebUpdateResponse {
   install: OmpWebInstallPlan;
   checkedAt: string;
 }
+
+/**
+ * State of omp-web's password lock, as served by `GET /api/web-access`.
+ *
+ * Re-exported from the credential store so the settings panel and the store
+ * cannot drift; the import is type-only, so nothing from `bin/` reaches the
+ * browser bundle.
+ */
+export type { WebAuthStatus as WebAccessStatus } from "@/bin/web-auth-store.js";

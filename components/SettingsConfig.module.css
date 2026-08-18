@@ -340,6 +340,13 @@
 .readOnlyNotice { margin: -5px 0 10px; color: var(--text-dim); font: 10px var(--font-mono); }
 .jsonEditor:read-only, .textInput:read-only { background: var(--bg-subtle); color: var(--text-muted); cursor: default; }
 .editorActions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.linkButton {
+  display: inline-flex; align-items: center; height: 33px; padding: 0 13px;
+  border: 1px solid var(--border); border-radius: 7px;
+  color: var(--text); text-decoration: none; font: 700 11px var(--font-mono);
+}
+.linkButton:hover { background: var(--bg-hover); }
+
 .primaryButton, .dangerButton { height: 33px; padding: 0 13px; border: 0; border-radius: 7px; background: var(--accent); color: var(--bg); cursor: pointer; font: 700 11px var(--font-mono); }
 .dangerButton { border: 1px solid var(--border); background: transparent; color: var(--danger); }
 .primaryButton:disabled { cursor: wait; opacity: .5; }
