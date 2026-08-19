@@ -16,6 +16,12 @@ function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
       port:      { type: "string", short: "p" },
       hostname:  { type: "string", short: "H" },
       "no-open": { type: "boolean" },
+      // Turns the password lock on for this run and every later one, asking for
+      // a password on the terminal when none has been set yet.
+      authenticated: { type: "boolean" },
+      // Recovery from the machine itself: replaces the stored password without
+      // needing the old one.
+      "reset-password": { type: "boolean" },
     },
     strict: false,
   });
@@ -24,6 +30,8 @@ function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
     port: cliArgs.port ?? env.PORT ?? "30141",
     hostname: cliArgs.hostname ?? env.OMP_WEB_HOSTNAME ?? "127.0.0.1",
     openBrowser: !cliArgs["no-open"] && !isEnabled(env.OMP_WEB_NO_OPEN),
+    authenticated: Boolean(cliArgs.authenticated) || isEnabled(env.OMP_WEB_AUTHENTICATED),
+    resetPassword: Boolean(cliArgs["reset-password"]),
   };
 }
 

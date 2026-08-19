@@ -69,18 +69,31 @@ omp-web --port 8080              # custom port
 omp-web --hostname 0.0.0.0       # expose on a trusted network
 omp-web -p 8080 -H 0.0.0.0       # combine options
 omp-web --no-open                # do not open the browser automatically
+omp-web --authenticated          # require a password (asks for one if none is set)
+omp-web --reset-password         # set a new password when the old one is lost
 
 PORT=8080 omp-web                 # environment variable is also supported
 OMP_WEB_HOSTNAME=0.0.0.0 omp-web  # explicit network exposure
 OMP_WEB_ALLOWED_HOSTS=omp.internal omp-web  # allow an exact proxy/custom hostname
-OMP_WEB_PASSWORD='a-long-random-password' omp-web  # require Basic Auth (username: omp)
+OMP_WEB_AUTHENTICATED=1 omp-web   # same as --authenticated
+OMP_WEB_PASSWORD='a-long-random-password' omp-web  # override the stored password
 OMP_WEB_NO_OPEN=1 omp-web         # useful when running as a background service
 ```
 
-Set `OMP_WEB_PASSWORD` to protect the web interface and every API endpoint with HTTP Basic Auth. The username is always `omp`. Leaving the variable unset or empty disables authentication.
+## Password access
+
+A password locks the web interface and every API endpoint behind HTTP Basic Auth, with the fixed username `omp`. Turn it on wherever suits you:
+
+- **Settings → Access** in the browser, to set the password and switch the lock on or off.
+- **`omp-web --authenticated`**, which turns it on for this run and every later one, and asks for a password on the terminal if none has been set yet.
+- **`OMP_WEB_PASSWORD`**, which overrides the stored credential for as long as it is set.
+
+The password is stored as a `scrypt` hash in `~/.omp/agent/omp-web-auth.json` (mode `0600`) — never in plaintext, and never recoverable from the file. Forgotten it? Run `omp-web --reset-password` on the server, or open `/recover` and enter the one-time code omp-web prints on its own console.
 
 omp-web can invoke a high-privilege agent. Basic Auth does not encrypt the password in transit, so do not expose plain HTTP to the internet. Use HTTPS through a trusted reverse proxy or a trusted VPN for remote access.
 API requests accept loopback names, IP literals, the selected bind hostname, and exact comma-separated names in `OMP_WEB_ALLOWED_HOSTS`. Configure that variable when a trusted reverse proxy uses a different external hostname.
+
+Full details, including the recovery threat model: [docs/authentication.md](./docs/authentication.md).
 
 ## Model roles
 
