@@ -28,6 +28,12 @@ into the system prompt, not modules the loader imports, and gating them would
 break ordinary projects for no gain in execution safety. They remain a prompt-
 injection surface, exactly as they are in the CLI.
 
+That explicitly includes a project's `SYSTEM.md` and `APPEND_SYSTEM.md`
+(`lib/session-system-prompt.ts`): omp-web resolves them for a browser session
+the way `omp` resolves them for a terminal one, trusted project or not. Gating
+them would also be a boundary in name only — a project carrying nothing but
+`.omp/APPEND_SYSTEM.md` never requires trust in the first place.
+
 A project with none of the above never sees a prompt: `requiresTrust` is false
 and the session loads on omp's normal path.
 
