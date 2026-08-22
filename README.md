@@ -177,6 +177,7 @@ Requests to loopback addresses are never proxied, so a local provider (Ollama, L
 - **Data directory**: omp-web reads `~/.omp/agent/sessions` by default. Set `PI_CODING_AGENT_DIR` to point at another omp agent directory (omp kept the variable name).
 - **Session files**: files are stored as `~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`.
 - **Provider config**: the Models panel reads and writes `models.yml` in the omp agent directory. Credentials live in omp's `agent.db`, shared with the CLI. A header value that names an environment variable (bare name, no `$`) is substituted at request time.
+- **Custom system prompts**: `SYSTEM.md` and `APPEND_SYSTEM.md` are picked up for browser sessions exactly as `omp` picks them up in a terminal — the project's `.omp/` (or `.claude/`, `.codex/`, `.gemini/`) first, then `~/.omp/agent/` — resolved against the session's own working directory.
 - **Project trust**: opening a repository in a browser tab must not run its code, so omp-web gates a project's `.omp/extensions`, `.omp/hooks`, `.omp/tools` and `.mcp.json` behind an explicit trust decision. Skills and rules are data and load either way. See [Project trust](./docs/project-trust.md).
 - **File access**: file browsing and preview are scoped to the selected project directory and working directories that appear in sessions.
 - **Git worktrees**: see [Worktrees in omp-web](./docs/worktrees.md) for when the switcher appears, how new worktrees are created, and what removal does.
