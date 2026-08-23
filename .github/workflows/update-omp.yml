@@ -40,7 +40,10 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.x"
+          # Must satisfy engines.bun (>=1.3.14): the omp SDK is published as
+          # TypeScript importing `bun:` builtins, so verifying the bump on an
+          # older Bun proves nothing about the release this repo actually ships.
+          bun-version: "1.3.14"
 
       - name: Read latest upstream release
         id: release
@@ -77,6 +80,7 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Wait for the matching npm package
+        id: npm
         if: steps.manifest.outputs.changed == 'true'
         env:
           OMP_VERSION: ${{ steps.release.outputs.version }}
@@ -85,16 +89,33 @@ jobs:
           for attempt in {1..10}; do
             published="$(npm view "@oh-my-pi/pi-coding-agent@${OMP_VERSION}" version --silent 2>/dev/null || true)"
             if [[ "$published" == "$OMP_VERSION" ]]; then
+              echo "published=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "@oh-my-pi/pi-coding-agent@$OMP_VERSION is not on npm yet (attempt $attempt/10)"
             sleep 30
           done
-          echo "The upstream release exists but its npm package is not available yet." >&2
-          exit 1
+          # Upstream routinely tags minutes before the npm publish lands. The
+          # hourly schedule is the retry, so a miss here is a "come back later",
+          # not a failure worth reddening every run until someone notices.
+          echo "published=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::omp $OMP_VERSION is tagged upstream but not on npm yet; the next scheduled run will retry."
+
+      - name: Decide whether to prepare the update
+        id: plan
+        shell: bash
+        env:
+          CHANGED: ${{ steps.manifest.outputs.changed }}
+          PUBLISHED: ${{ steps.npm.outputs.published }}
+        run: |
+          if [[ "$CHANGED" == "true" && "$PUBLISHED" == "true" ]]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Update omp dependency ranges
-        if: steps.manifest.outputs.changed == 'true'
+        if: steps.plan.outputs.proceed == 'true'
         env:
           OMP_VERSION: ${{ steps.release.outputs.version }}
         run: |
@@ -115,9 +136,12 @@ jobs:
           fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);
           NODE
 
-      - name: Bump omp-web patch version
+      - name: Bump the omp-web version
         id: package
-        if: steps.manifest.outputs.changed == 'true'
+        if: steps.plan.outputs.proceed == 'true'
+        env:
+          OMP_VERSION: ${{ steps.release.outputs.version }}
+          OMP_PREVIOUS: ${{ steps.manifest.outputs.current }}
         run: |
           node <<'NODE'
           const fs = require('node:fs');
@@ -126,30 +150,68 @@ jobs:
           if (!match) {
             throw new Error(`Unexpected omp-web version: ${packageJson.version}`);
           }
-          const nextVersion = `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+          const [major, minor, patch] = match.slice(1).map(Number);
+          // omp-web serves omp's own SDK in-process, so a new omp major moves
+          // the surface under omp-web's users too. That earns a minor bump; a
+          // routine refresh within the same major stays a patch.
+          const ompMajor = (version) => /^(\d+)\./.exec(version || '')?.[1];
+          const nextMajor = ompMajor(process.env.OMP_VERSION);
+          const previousMajor = ompMajor(process.env.OMP_PREVIOUS);
+          if (!nextMajor) throw new Error(`Unexpected omp version: ${process.env.OMP_VERSION}`);
+          const nextVersion = nextMajor === previousMajor
+            ? `${major}.${minor}.${patch + 1}`
+            : `${major}.${minor + 1}.0`;
           packageJson.version = nextVersion;
           fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${nextVersion}\n`);
           NODE
 
-
       - name: Refresh Bun lockfile
-        if: steps.manifest.outputs.changed == 'true'
+        if: steps.plan.outputs.proceed == 'true'
         run: bun install --lockfile-only
 
+      # A breaking upstream release is the normal reason this fails, and that is
+      # exactly when the update is most worth surfacing. Record the outcome
+      # instead of aborting, so the run still opens a PR carrying the bump.
       - name: Verify the updated dependency graph
-        if: steps.manifest.outputs.changed == 'true'
+        id: verify
+        if: steps.plan.outputs.proceed == 'true'
+        continue-on-error: true
         run: |
           bun install --frozen-lockfile
           bun run typecheck
+          bun test
+
+      - name: Report the verification outcome
+        id: report
+        if: steps.plan.outputs.proceed == 'true'
+        shell: bash
+        env:
+          OMP_VERSION: ${{ steps.release.outputs.version }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          if [[ "$VERIFY_OUTCOME" == "success" ]]; then
+            note="The workflow refreshed \`bun.lock\`, then ran \`bun run typecheck\` and \`bun test\` against the new SDK. Both passed."
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          else
+            note=":warning: \`bun run typecheck\` or \`bun test\` failed against omp \`$OMP_VERSION\`, so this PR is a **draft**: the release needs source changes in omp-web before it can merge. The failing output is in [the workflow run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          fi
+          {
+            echo "note<<EOF"
+            echo "$note"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "$note" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Open or update the dependency PR
-        if: steps.manifest.outputs.changed == 'true'
+        if: steps.plan.outputs.proceed == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ github.token }}
           branch: automation/omp-${{ steps.release.outputs.version }}
           delete-branch: true
+          draft: ${{ steps.report.outputs.draft }}
           commit-message: "chore: update omp to v${{ steps.release.outputs.version }}"
           title: "chore: update omp to v${{ steps.release.outputs.version }}"
           body: |
@@ -159,10 +221,10 @@ jobs:
 
             When merged, this PR will release `omp-web@${{ steps.package.outputs.version }}` with a note for `oh-my-pi v${{ steps.release.outputs.version }}`.
 
-            The workflow refreshed `bun.lock` and ran `bun run typecheck` before opening this PR.
+            ${{ steps.report.outputs.note }}
 
   release:
-    name: Release omp-web patch
+    name: Release omp-web
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.merged == true &&
