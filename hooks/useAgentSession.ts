@@ -1831,22 +1831,24 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           }
           // Handoff generation is a long oneshot LLM call; keep the composer
           // busy through it with the existing agent-running state so a prompt
-          // cannot race the session transition.
+          // cannot race the compaction entry it commits.
           agentRunningRef.current = true;
           setAgentRunning(true);
           setAgentPhase({ kind: "running_command" });
           try {
             await ensureEventsConnected(sid);
-            const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(sid, {
+            const result = await sendAgentCommand<{ cancelled?: boolean }>(sid, {
               type: "handoff",
               ...(args ? { customInstructions: args } : {}),
             });
-            const { cancelled, newSessionId } = result ?? {};
-            if (cancelled || !newSessionId) {
+            if (!result || result.cancelled) {
               return complete({ handled: true, error: "Handoff cancelled" });
             }
-            onSessionForked?.(newSessionId);
-            return complete({ handled: true, message: "Started new session with handoff context" });
+            // omp 18 hands off in place, so the session keeps its id and gains
+            // a handoff compaction entry: reload this transcript rather than
+            // navigating to a replacement session.
+            if (await loadSession(sid, true)) promoteNewSession();
+            return complete({ handled: true, message: "Context handed off and compacted in place" });
           } finally {
             agentRunningRef.current = false;
             setAgentRunning(false);
@@ -1878,7 +1880,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (commandName === "compact") setIsCompacting(false);
     }
-  }, [addNotice, appendCommandOutput, ensureEventsConnected, ensureNewSession, handleFork, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, onSessionForked, promoteNewSession, onSessionStatsPanelOpen, scheduleEventStreamClose]);
+  }, [addNotice, appendCommandOutput, ensureEventsConnected, ensureNewSession, handleFork, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onSessionStatsPanelOpen, scheduleEventStreamClose]);
 
   // Queued (undelivered) messages live in the queue panel only; the chat gets
   // the real user message when pi delivers it (user message_end event). An
