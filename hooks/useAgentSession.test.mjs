@@ -165,8 +165,7 @@ test("/handoff forwards the focus text verbatim and keeps the UI busy", () => {
   assert.match(handoffCaseSource, /setAgentRunning\(false\)/);
   // Cancellation resolves locally as an error; /handoff never falls through to
   // the SDK command bridge or an LLM prompt.
-  assert.match(handoffCaseSource, /const \{ cancelled, newSessionId \} = result \?\? \{\};/);
-  assert.match(handoffCaseSource, /if \(cancelled \|\| !newSessionId\)/);
+  assert.match(handoffCaseSource, /if \(!result \|\| result\.cancelled\)/);
   assert.match(handoffCaseSource, /complete\(\{ handled: true, error: "Handoff cancelled" \}\)/);
   assert.doesNotMatch(handoffCaseSource, /execute_slash_command/);
   assert.doesNotMatch(handoffCaseSource, /type: "prompt"/);
@@ -177,7 +176,7 @@ test("/handoff forwards the focus text verbatim and keeps the UI busy", () => {
   assert.match(handoffCaseSource, /scheduleEventStreamClose\(sid\)/);
 });
 
-test("/handoff navigates to the new session on success", () => {
+test("/handoff reloads the same session after an in-place compaction", () => {
   const handoffCaseSource = source.slice(
     source.indexOf('case "handoff":'),
     source.indexOf("default: {", source.indexOf('case "handoff":')),
@@ -185,14 +184,18 @@ test("/handoff navigates to the new session on success", () => {
 
   assert.match(
     handoffCaseSource,
-    /sendAgentCommand<\{ cancelled\?: boolean; newSessionId\?: string \}>[\s\S]*?type: "handoff"/,
+    /sendAgentCommand<\{ cancelled\?: boolean \}>[\s\S]*?type: "handoff"/,
   );
-  // Success selects the new session id; every branch returns handled so the
-  // command never reaches the SDK fallback — the busy state is torn down in a
-  // finally block and the case yields to the default bridge with a return.
-  assert.match(handoffCaseSource, /onSessionForked\?\.\(newSessionId\)/);
-  assert.match(handoffCaseSource, /complete\(\{ handled: true, message: "Started new session with handoff context" \}\)/);
-  assert.match(source, /case "handoff":[\s\S]*?return complete\(\{ handled: true, message: "Started new session with handoff context" \}\);\s*\}\s*finally \{[\s\S]*?\}\s*\}\s*default: \{/);
+  // omp 18 hands off in place: the session id never changes, so success
+  // reloads this transcript instead of navigating to a replacement session.
+  assert.doesNotMatch(handoffCaseSource, /newSessionId/);
+  assert.doesNotMatch(handoffCaseSource, /onSessionForked/);
+  assert.match(handoffCaseSource, /if \(await loadSession\(sid, true\)\) promoteNewSession\(\);/);
+  // Every branch returns handled so the command never reaches the SDK
+  // fallback — the busy state is torn down in a finally block and the case
+  // yields to the default bridge with a return.
+  assert.match(handoffCaseSource, /complete\(\{ handled: true, message: "Context handed off and compacted in place" \}\)/);
+  assert.match(source, /case "handoff":[\s\S]*?return complete\(\{ handled: true, message: "Context handed off and compacted in place" \}\);\s*\}\s*finally \{[\s\S]*?\}\s*\}\s*default: \{/);
 });
 
 test("rehydrates handoff as busy without misreporting compaction", () => {
