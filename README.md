@@ -80,6 +80,20 @@ OMP_WEB_PASSWORD='a-long-random-password' omp-web  # override the stored passwor
 OMP_WEB_NO_OPEN=1 omp-web         # useful when running as a background service
 ```
 
+## Docker
+
+A `Dockerfile` builds omp-web from source and runs it under Bun in the
+container. It still needs the omp home the CLI writes, so mount it:
+
+```bash
+OMP_WEB_PASSWORD='a-long-random-password' \
+OMP_UID=$(id -u) OMP_GID=$(id -g) docker compose up --build
+```
+
+That publishes <http://127.0.0.1:30141> with the password lock on, sharing
+`$HOME/.omp` with the container so terminal sessions continue in the browser.
+Volume layout, UID/GID matching and reverse-proxy notes: [docs/docker.md](./docs/docker.md).
+
 ## Password access
 
 A password locks the web interface and every API endpoint behind HTTP Basic Auth, with the fixed username `omp`. Turn it on wherever suits you:
