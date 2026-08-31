@@ -114,7 +114,7 @@ test("routes blocking extension requests through deduplicated browser attention 
 test("/fork is consumed locally and surfaces server resolution errors", () => {
   const forkCaseSource = source.slice(
     source.indexOf('case "fork":'),
-    source.indexOf("default: {", source.indexOf('case "fork":')),
+    source.indexOf('case "goal":', source.indexOf('case "fork":')),
   );
 
   assert.match(source, /case "fork": \{/);
@@ -127,7 +127,7 @@ test("/fork is consumed locally and surfaces server resolution errors", () => {
   // and yields to the next explicit case, not the default bridge.
   assert.doesNotMatch(forkCaseSource, /execute_slash_command/);
   assert.doesNotMatch(forkCaseSource, /type: "prompt"/);
-  assert.match(source, /case "fork":[\s\S]*?return complete\(\{ handled: true, message: "Forked a new session" \}\);\s*\}\s*case "handoff": \{/);
+  assert.match(source, /case "fork":[\s\S]*?return complete\(\{ handled: true, message: "Forked a new session" \}\);\s*\}\s*case "goal": \{/);
 });
 
 test("fork navigation selects the new session id from the RPC result", () => {

@@ -17,7 +17,7 @@ import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
 import { isPromptRejectedError, sendAgentCommand } from "@/lib/agent-client";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
-import type { ContextUsage, SessionStatsInfo, SlashCommandInfo } from "@/lib/omp-types";
+import type { ContextUsage, GoalStatusInfo, SessionStatsInfo, SlashCommandInfo } from "@/lib/omp-types";
 import type { ModelRoleAssignment } from "@/lib/api-types";
 
 export interface SessionData {
@@ -87,7 +87,15 @@ type AgentStateResponse = {
   extensionWidgets?: ExtensionWidgetItem[];
   queuedMessages?: { steering?: string[]; followUp?: string[] } | null;
   subagents?: SubagentSnapshot[];
+  goal?: GoalStatusInfo | null;
 };
+
+interface GoalCommandResponse {
+  message?: string;
+  error?: string;
+  prompt?: string;
+  status?: GoalStatusInfo | null;
+}
 
 export interface QueuedMessages {
   steering: string[];
@@ -420,6 +428,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const initialScrollDoneRef = useRef(false);
   const completionScrollAllowedRef = useRef(true);
   const [autoFollowPaused, setAutoFollowPaused] = useState(false);
+  const [goalStatus, setGoalStatus] = useState<GoalStatusInfo | null>(null);
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
@@ -1164,12 +1173,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
               if (d.state?.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, d.state?.subagents ?? []));
+              if (d.state?.goal !== undefined) setGoalStatus(d.state.goal ?? null);
               // Aborted turns can leave messages queued in pi (delivered with the
               // next turn); dead wrapper (no state) means the queue is gone.
               setQueuedMessages(normalizeQueuedMessages(d.state?.queuedMessages));
             })
             .catch(() => {});
         }
+        break;
+      case "goal_status":
+        setGoalStatus((event.status as GoalStatusInfo | null | undefined) ?? null);
         break;
       case "agent_settled": {
         const agentWasActive = sdkAgentActiveRef.current;
@@ -1827,6 +1840,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           return complete({ handled: true, message: "Forked a new session" });
         }
 
+        case "goal": {
+          if (!sid) return complete({ handled: true, error: "No active session" });
+          const result = await sendAgentCommand<GoalCommandResponse>(sid, { type: "goal", args });
+          setGoalStatus(result?.status ?? null);
+          if (result?.error) return complete({ handled: true, error: result.error });
+          // `/goal show` output belongs in the transcript, not a toast that
+          // disappears before it can be read.
+          if (result?.message && result.message.includes("\n")) {
+            appendCommandOutput(result.message);
+            if (result.prompt) return { handled: true, prompt: result.prompt };
+            return { handled: true };
+          }
+          if (result?.prompt) {
+            if (result.message) addNotice({ type: "success", message: result.message });
+            return { handled: true, prompt: result.prompt };
+          }
+          return complete({ handled: true, message: result?.message ?? "Command completed" });
+        }
+
         case "handoff": {
           if (!sid) return complete({ handled: true, error: "No active session" });
           if (agentRunningRef.current || bashRunningRef.current) {
@@ -2085,6 +2117,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
           if (state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(state.queuedMessages));
           if (state.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, state.subagents ?? []));
+          if (state.goal !== undefined) setGoalStatus(state.goal ?? null);
         }
       });
     }
@@ -2198,6 +2231,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentPhase,
     isNew,
     autoFollowPaused, resumeAutoFollow,
+    goalStatus,
     // Refs
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
     // Actions

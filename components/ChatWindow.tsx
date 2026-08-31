@@ -27,8 +27,9 @@ import { OmpWordmark } from "./OmpWordmark";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
 import { useSyncedDisplaySettings } from "@/hooks/useDisplaySettings";
+import { formatTokenCount } from "@/lib/format-tokens";
 import { useDragDrop } from "@/hooks/useDragDrop";
-import type { SessionStatsInfo } from "@/lib/omp-types";
+import type { GoalStatusInfo, SessionStatsInfo } from "@/lib/omp-types";
 import {
   captureScrollDistance,
   getNextVisibleCount,
@@ -225,6 +226,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     agentPhase,
     isNew,
     autoFollowPaused, resumeAutoFollow,
+    goalStatus,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange, handleRoleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
@@ -777,6 +779,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
           }}
         >
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
+            <GoalBar goal={goalStatus} t={t} />
             <ExtensionWidgets widgets={belowEditorWidgets} />
           </div>
         </div>
@@ -785,6 +788,47 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
       </div>
       </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Goal mode runs a continuation loop between turns, so the operator needs to
+ * see that it is on and how much budget is left without asking for it.
+ */
+function GoalBar({ goal, t }: { goal: GoalStatusInfo | null; t: (key: string, params?: Record<string, string | number>) => string }) {
+  if (!goal) return null;
+  const paused = !goal.enabled;
+  const budget = goal.tokenBudget !== undefined
+    ? t("chat.goalBudgetLeft", { left: formatTokenCount(Math.max(0, goal.tokenBudget - goal.tokensUsed)) })
+    : t("chat.goalTokensUsed", { used: formatTokenCount(goal.tokensUsed) });
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 8,
+        padding: "5px 10px",
+        border: "1px solid var(--border)",
+        borderRadius: 7,
+        background: "var(--bg-panel)",
+        color: "var(--text-muted)",
+        fontSize: 11,
+        fontFamily: "var(--font-mono)",
+        opacity: paused ? 0.7 : 1,
+      }}
+    >
+      <span style={{ color: paused ? "var(--text-dim)" : "var(--accent)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>
+        {t("chat.goalLabel")}
+      </span>
+      <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text)" }}>
+        {goal.objective}
+      </span>
+      <span style={{ flexShrink: 0, color: "var(--text-dim)" }}>
+        {paused ? t("chat.goalPaused") : goal.status}
+      </span>
+      <span style={{ flexShrink: 0, color: "var(--text-dim)" }}>{budget}</span>
     </div>
   );
 }
