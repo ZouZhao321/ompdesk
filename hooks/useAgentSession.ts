@@ -419,9 +419,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   const initialScrollDoneRef = useRef(false);
   const completionScrollAllowedRef = useRef(true);
+  const [autoFollowPaused, setAutoFollowPaused] = useState(false);
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
+  // Forward reference: handleSend/executeBash are declared above setAutoFollow.
+  const setAutoFollowRef = useRef<(following: boolean) => void>(() => {});
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const ensuringNewSessionRef = useRef<Promise<string | null> | null>(null);
@@ -1437,7 +1440,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentRunning(true);
     setAgentPhase(isSlashCommandPrompt ? { kind: "running_command" } : { kind: "waiting_model" });
     dispatch({ type: "start" });
-    completionScrollAllowedRef.current = true;
+    setAutoFollowRef.current(true);
 
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
     let sentSessionId: string | null = null;
@@ -1522,7 +1525,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (agentRunningRef.current || bashRunningRef.current) return;
     const inputText = `${excludeFromContext ? "!!" : "!"}${command}`;
     bashRunningRef.current = true;
-    completionScrollAllowedRef.current = true;
+    setAutoFollowRef.current(true);
     setPendingBash({ command, excludeFromContext });
     setBashRunning(true);
     try {
@@ -1991,11 +1994,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [setToolPresetState]);
 
+  // Single writer for the follow flag so the ref (read by the scroll effects)
+  // and the state (read by the jump-to-bottom button) never drift apart.
+  const setAutoFollow = useCallback((following: boolean) => {
+    completionScrollAllowedRef.current = following;
+    setAutoFollowPaused((paused) => (paused === !following ? paused : !following));
+  }, []);
+  setAutoFollowRef.current = setAutoFollow;
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
 
+  const resumeAutoFollow = useCallback(() => {
+    // Clear any lingering intent window so the smooth scroll we are about to
+    // start is not mistaken for the user scrolling away again.
+    userScrollIntentUntilRef.current = 0;
+    setAutoFollow(true);
+    scrollToBottom("smooth");
+  }, [scrollToBottom, setAutoFollow]);
 
   const markUserScrollIntent = useCallback((event: Event) => {
     if (event instanceof KeyboardEvent) {
@@ -2007,18 +2025,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleScrollPositionChange = useCallback(() => {
     if (!agentRunningRef.current && !bashRunningRef.current) return;
-    if (Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
     const container = scrollContainerRef.current;
     if (!container) return;
+    // The auto-follow effect refreshes the programmatic-scroll window on every
+    // streaming chunk, so during a stream it is always open. Honour a scroll
+    // the user actually drove (wheel/touch/pointer/keys) regardless of it,
+    // otherwise following could never be paused mid-turn.
+    const userDriven = Date.now() <= userScrollIntentUntilRef.current;
+    if (!userDriven && Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     if (distanceFromBottom <= AUTO_FOLLOW_BOTTOM_THRESHOLD_PX) {
-      completionScrollAllowedRef.current = true;
+      setAutoFollow(true);
       return;
     }
-    if (Date.now() <= userScrollIntentUntilRef.current) {
-      completionScrollAllowedRef.current = false;
+    if (userDriven) {
+      setAutoFollow(false);
     }
-  }, []);
+  }, [setAutoFollow]);
 
   // Load session on mount
   useEffect(() => {
@@ -2174,6 +2197,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
     isNew,
+    autoFollowPaused, resumeAutoFollow,
     // Refs
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
     // Actions
