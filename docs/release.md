@@ -2,8 +2,8 @@
 
 This repo publishes two artifacts for each release:
 
-- npm package: `omp-web`
-- GitHub Release: `ddallabenetta/omp-web`
+- npm package: `ompdesk`
+- GitHub Release: `ZouZhao321/ompdesk`
 
 Use this checklist from a clean `main` checkout.
 
@@ -14,10 +14,10 @@ Pushing a version tag matching `v*` starts
 
 1. Checks that the tag version matches `package.json`.
 2. Installs dependencies with Bun and runs the production build.
-3. Publishes `omp-web` to npm with provenance.
+3. Publishes `ompdesk` to npm with provenance.
 
 Before the first release, configure npm trusted publishing for
-`ddallabenetta/omp-web`:
+`ZouZhao321/ompdesk`:
 
 - workflow file: `.github/workflows/publish-npm.yml`
 - GitHub environment: `npm`
@@ -27,24 +27,6 @@ The npm package must be configured to trust this repository and workflow, and
 the repository's `npm` environment must permit the release job to run. No npm
 token is stored in GitHub Actions.
 
-
-## Automated omp dependency releases
-
-`.github/workflows/update-omp.yml` checks the latest stable `oh-my-pi` release
-and opens a dependency PR when the runtime packages change. The PR also bumps
-the `omp-web` version: a patch for a refresh within the same `oh-my-pi` major,
-a minor when the major changes (omp-web serves omp's own SDK in-process, so a
-new major moves that surface under its users too). After that PR is merged, the
-workflow creates the matching `v<version>` GitHub tag and release, with the
-updated `oh-my-pi` version in the release notes, then dispatches the npm publish
-workflow for that tag.
-
-The workflow verifies the bump with `bun run typecheck` and `bun test` before
-opening the PR, but a failure there does not fail the run: a breaking upstream
-release is exactly when the update most needs to be seen, so the PR is opened as
-a **draft** carrying the failure instead. Take the draft, make omp-web compatible
-on that branch, then mark it ready. A release tagged upstream but not yet on npm
-is likewise not a failure — the hourly schedule retries it.
 
 ## 1. Preflight
 
@@ -61,7 +43,7 @@ Expected:
 
 - `git status` is clean, or only contains changes you intentionally plan to release.
 - GitHub is authenticated as an account that can push and create releases.
-- npm is authenticated as an account that can publish `omp-web`.
+- npm is authenticated as an account that can publish `ompdesk`.
 
 ## 2. Publish to npm
 
@@ -79,11 +61,11 @@ Notes:
 
 - This bumps `package.json` and `package-lock.json`.
 - It intentionally runs a production build. Do not run `next build` during normal development; release work is the exception.
-- If `npm view omp-web version` briefly shows the previous version, check the exact version instead:
+- If `npm view ompdesk version` briefly shows the previous version, check the exact version instead:
 
 ```bash
-npm view omp-web@<version> version --registry https://registry.npmjs.org/
-npm view omp-web versions --json --registry https://registry.npmjs.org/
+npm view ompdesk@<version> version --registry https://registry.npmjs.org/
+npm view ompdesk versions --json --registry https://registry.npmjs.org/
 ```
 
 ## 3. Commit the Version Bump
@@ -107,7 +89,7 @@ Confirm the tag does not already exist before creating it when unsure:
 
 ```bash
 git ls-remote --tags origin v<version>
-gh release view v<version> --repo ddallabenetta/omp-web
+gh release view v<version> --repo ZouZhao321/ompdesk
 ```
 
 ## 5. Generate Release Notes from Commits
@@ -143,7 +125,7 @@ Suggested structure:
 
 ### 内部调整
 
-- 发布 npm 包 `omp-web@<version>`。
+- 发布 npm 包 `ompdesk@<version>`。
 
 ## English
 
@@ -163,7 +145,7 @@ Prepared from commits in `v<previous>..v<version>`.
 
 ### Internal
 
-- Published npm package `omp-web@<version>`.
+- Published npm package `ompdesk@<version>`.
 ```
 
 ## 6. Create or Update the GitHub Release
@@ -172,7 +154,7 @@ Create a new release:
 
 ```bash
 gh release create v<version> \
-  --repo ddallabenetta/omp-web \
+  --repo ZouZhao321/ompdesk \
   --verify-tag \
   --title "v<version>" \
   --notes-file release-notes.md
@@ -182,14 +164,14 @@ If the release already exists and only the notes need updating:
 
 ```bash
 gh release edit v<version> \
-  --repo ddallabenetta/omp-web \
+  --repo ZouZhao321/ompdesk \
   --notes-file release-notes.md
 ```
 
 You can avoid a temporary file by passing notes through stdin:
 
 ```bash
-gh release edit v<version> --repo ddallabenetta/omp-web --notes-file - <<'EOF'
+gh release edit v<version> --repo ZouZhao321/ompdesk --notes-file - <<'EOF'
 ## 中文
 
 ...
@@ -203,8 +185,8 @@ EOF
 ## 7. Final Verification
 
 ```bash
-gh release view v<version> --repo ddallabenetta/omp-web
-npm view omp-web@<version> version --registry https://registry.npmjs.org/
+gh release view v<version> --repo ZouZhao321/ompdesk
+npm view ompdesk@<version> version --registry https://registry.npmjs.org/
 git status --short --branch
 git log --oneline --decorate -3
 ```

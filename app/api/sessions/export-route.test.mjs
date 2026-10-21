@@ -18,7 +18,7 @@ function exportFixture(t) {
     "__ompPathToSessionIdCache", "__ompSessionListCache",
   ];
   const previousState = stateKeys.map((key) => [key, globalThis[key]]);
-  const dir = mkdtempSync(join(tmpdir(), "omp-web-export-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "ompdesk-export-test-"));
   const a = "export-history-a";
   const b = "export-current-b";
   const runtimeId = "runtime:export-r";

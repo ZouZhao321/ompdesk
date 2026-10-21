@@ -4,9 +4,9 @@ import "katex/dist/katex.min.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "omp-web",
-  description: "Web view for the omp (oh-my-pi) coding agent",
-  applicationName: "omp-web",
+  title: "ompdesk",
+  description: "Browser workspace for the omp (oh-my-pi) coding agent",
+  applicationName: "ompdesk",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "omp-web",
+    title: "ompdesk",
   },
   formatDetection: {
     telephone: false,

@@ -797,7 +797,7 @@ export function AppShell() {
 
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
-  const windowTitle = activeCwdName ? `${activeCwdName} - omp-web` : "omp-web";
+  const windowTitle = activeCwdName ? `${activeCwdName} - ompdesk` : "ompdesk";
 
   useEffect(() => {
     const syncWindowTitle = () => {

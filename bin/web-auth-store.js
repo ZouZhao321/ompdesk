@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Credential store for omp-web's password lock.
+ * Credential store for ompdesk's password lock.
  *
  * The password protects a server that can run a high-privilege agent, so it is
  * never written to disk in a recoverable form: the file keeps a `scrypt` digest
@@ -9,7 +9,7 @@
  * the digest. Recovery codes are stored the same way.
  *
  * This module lives in `bin/` rather than `lib/` on purpose. Both halves of
- * omp-web need it — the launcher (`bin/omp-web.js`, plain Node CommonJS, before
+ * ompdesk need it — the launcher (`bin/ompdesk.js`, plain Node CommonJS, before
  * Bun is even resolved) and the server (`proxy.ts` and the `/api/web-access`
  * routes) — and only `bin/` is part of the published npm `files` list. It
  * therefore stays dependency-free CommonJS that both runtimes can load.
@@ -18,17 +18,20 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } = require("node:crypto");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } = require("node:fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { homedir } = require("node:os");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { basename, dirname, join, resolve } = require("node:path");
 
-/** Basic Auth username omp-web accepts. The password is the only secret. */
+/** Basic Auth username ompdesk accepts. The password is the only secret. */
 const WEB_AUTH_USERNAME = "omp";
 
 /** Credential filename, kept next to the agent configuration. */
-const WEB_AUTH_FILENAME = "omp-web-auth.json";
+const WEB_AUTH_FILENAME = "ompdesk-auth.json";
+
+/** 旧版文件名。凭据沿用原文件，避免改名后锁静默失效。 */
+const LEGACY_WEB_AUTH_FILENAME = "omp-web-auth.json";
 
 /** Current on-disk schema version. */
 const WEB_AUTH_VERSION = 1;
@@ -86,9 +89,11 @@ function normalizeProfileName(profile) {
 
 /** Absolute path of the credential file. `OMP_WEB_AUTH_FILE` overrides the location entirely. */
 function resolveWebAuthFile(env = process.env) {
-  return env.OMP_WEB_AUTH_FILE
-    ? resolve(env.OMP_WEB_AUTH_FILE)
-    : join(resolveAgentDir(env), WEB_AUTH_FILENAME);
+  if (env.OMP_WEB_AUTH_FILE) return resolve(env.OMP_WEB_AUTH_FILE);
+  const agentDir = resolveAgentDir(env);
+  const current = join(agentDir, WEB_AUTH_FILENAME);
+  const legacy = join(agentDir, LEGACY_WEB_AUTH_FILENAME);
+  return !existsSync(current) && existsSync(legacy) ? legacy : current;
 }
 
 /** Reject passwords that cannot protect anything. Returns an error message, or null when acceptable. */
@@ -229,13 +234,13 @@ function writeWebAuthConfig(config, file = resolveWebAuthFile()) {
  * mutation that dropped a credential it could not parse would unlock the
  * server. `setWebPassword` is the deliberate exception (`replaceUnreadable`):
  * it writes a complete config, so nothing is lost, and it is the escape hatch
- * `omp-web --reset-password` needs when the file has been corrupted.
+ * `ompdesk --reset-password` needs when the file has been corrupted.
  */
 function currentConfig(file, { replaceUnreadable = false } = {}) {
   const state = readWebAuthState(file);
   if (state.status === "unreadable") {
     if (replaceUnreadable) return { version: WEB_AUTH_VERSION };
-    throw new Error(`The omp-web credential file at ${file} could not be read. Run \`omp-web --reset-password\` to replace it.`);
+    throw new Error(`The ompdesk credential file at ${file} could not be read. Run \`ompdesk --reset-password\` to replace it.`);
   }
   return state.config ?? { version: WEB_AUTH_VERSION };
 }

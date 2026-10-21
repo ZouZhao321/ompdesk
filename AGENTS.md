@@ -1,4 +1,4 @@
-# omp-web - Development Notes
+# ompdesk - Development Notes
 
 ## Quick Start
 
@@ -18,7 +18,7 @@ into `src-tauri/server/.next` through `OMP_WEB_DIST_DIR` and never touches the d
 
 `@oh-my-pi/pi-*` is published as **TypeScript sources** and imports `bun:sqlite`,
 so Node cannot load it at all (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`).
-The server half of omp-web therefore only runs on Bun; `bin/omp-web.js` finds a
+The server half of ompdesk therefore only runs on Bun; `bin/ompdesk.js` finds a
 Bun binary and re-executes `next start` through it.
 
 Two consequences worth remembering:
@@ -158,7 +158,7 @@ hooks/
 
 ### One runtime, many requests (`lib/omp-runtime.ts`)
 omp's CLI builds `Settings` + `AuthStorage` + `ModelRegistry` once per process.
-omp-web does the same and caches them on `globalThis`; a second `AuthStorage`
+ompdesk does the same and caches them on `globalThis`; a second `AuthStorage`
 would open a second SQLite handle on `~/.omp/agent/agent.db` and split
 `credential_disabled` events. Per-project settings come from
 `settings.cloneForCwd(cwd)`, never from a second `Settings.init()`.
@@ -214,15 +214,15 @@ The `enabledModels` setting uses omp's `--models` syntax: globs against
 `provider/modelId` or a bare `modelId`, fuzzy matching for non-glob patterns, and
 an optional `:thinkingLevel` suffix. Never compare those patterns as literal
 strings — `lib/model-scope.ts` delegates to the SDK's `resolveModelScope()` so
-omp-web and the TUI agree on the visible model list, and falls back to all
+ompdesk and the TUI agree on the visible model list, and falls back to all
 available models when patterns resolve to nothing. Diagnostics are produced by
 re-resolving each pattern alone, because omp's resolver drops unmatched patterns
 silently.
 
-### Project trust is omp-web's own
+### Project trust is ompdesk's own
 omp has no trust store — it runs a repository's extensions because you ran it
 there. A browser tab is not that decision, so `lib/project-trust.ts` keeps a
-store in `~/.omp/agent/omp-web-trusted-projects.json` and, for an untrusted
+store in `~/.omp/agent/ompdesk-trusted-projects.json` and, for an untrusted
 project, filters project-local entries out of omp's discovered extension and
 custom-tool paths and disables MCP. Skills and rules are data and always load.
 See `docs/project-trust.md`.
@@ -269,7 +269,7 @@ Newer omp emits `compaction_start` / `compaction_end`; older versions emitted `a
 - `/api/skills/install` shells through `npx skills add ... --agent claude-code`. The `skills` CLI has no `omp` agent, and its `pi` agent writes `~/.pi/agent/skills`, which omp does **not** read; the Claude layout is discovered by default.
 
 ### Auth and model config
-- Credentials live in omp's SQLite `agent.db` via `AuthStorage`, not in `auth.json`. Writes go through `authStorage.set()` / `remove()` / `logout()` so the CLI and omp-web share one store and one lock.
+- Credentials live in omp's SQLite `agent.db` via `AuthStorage`, not in `auth.json`. Writes go through `authStorage.set()` / `remove()` / `logout()` so the CLI and ompdesk share one store and one lock.
 - Provider listing is capability-driven: `lib/provider-listing-runtime.ts` folds the catalog (`@oh-my-pi/pi-catalog`), the OAuth registry (`@oh-my-pi/pi-ai/oauth`) and stored credential types into the flat shape `lib/provider-listing.ts` expects, so a dual-auth provider appears exactly once. An OAuth login whose `storeCredentialsAs` differs from its id is keyed by the id the catalog uses.
 - OAuth flows are streamed by `GET /api/auth/login/[provider]` through `authStorage.login()`; `onAuth`/`onPrompt`/`onManualCodeInput` become browser input requests with short-lived tokens stored in `globalThis.__ompLoginCallbacks`.
 - API-key status endpoints must never return the raw key.
@@ -284,7 +284,7 @@ npm `files` list, so `lib/` cannot hold it. `bin/web-auth-store.d.ts` is what th
 TypeScript half type-checks against — keep the two in sync.
 
 - The password is stored **only** as a scrypt digest in
-  `<agentDir>/omp-web-auth.json` (`0600`, atomic replace). Nothing can read it
+  `<agentDir>/ompdesk-auth.json` (`0600`, atomic replace). Nothing can read it
   back, which is why `/recover` and `--reset-password` exist.
 - `proxy.ts` runs on Next.js 16's Node.js runtime (proxy always does), so
   `node:fs` and `node:crypto` are available there. Do **not** import the omp SDK
@@ -357,7 +357,7 @@ font from a CDN at build or at runtime.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **omp-web** (2786 symbols, 7305 relationships, 233 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ompdesk** (2786 symbols, 7305 relationships, 233 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -380,10 +380,10 @@ This project is indexed by GitNexus as **omp-web** (2786 symbols, 7305 relations
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/omp-web/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/omp-web/clusters` | All functional areas |
-| `gitnexus://repo/omp-web/processes` | All execution flows |
-| `gitnexus://repo/omp-web/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/ompdesk/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/ompdesk/clusters` | All functional areas |
+| `gitnexus://repo/ompdesk/processes` | All execution flows |
+| `gitnexus://repo/ompdesk/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

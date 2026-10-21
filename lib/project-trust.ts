@@ -4,21 +4,24 @@ import { writePrivateFileAtomicSync } from "./atomic-file";
 import type { ProjectTrustStatus } from "./api-types";
 
 /**
- * Project trust for omp-web.
+ * Project trust for ompdesk.
  *
  * The `omp` CLI executes a repository's `.omp/extensions`, `.omp/hooks`,
  * `.omp/tools` and `.mcp.json` because the user deliberately ran it inside that
- * repository. omp-web reaches the same code from a browser tab: merely opening
+ * repository. ompdesk reaches the same code from a browser tab: merely opening
  * a project in the sidebar would otherwise run repository-controlled code on
  * the machine hosting the server.
  *
- * omp has no trust store of its own, so omp-web keeps one and gates the
+ * omp has no trust store of its own, so ompdesk keeps one and gates the
  * *code-bearing* project resources behind it. Trust decisions live next to the
- * agent config so they survive restarts and are shared by every omp-web
+ * agent config so they survive restarts and are shared by every ompdesk
  * instance pointed at the same agent directory.
  */
 
-const TRUST_FILE = "omp-web-trusted-projects.json";
+const TRUST_FILE = "ompdesk-trusted-projects.json";
+
+/** 旧版文件名，读取时兼容，写入始终使用 TRUST_FILE。 */
+const LEGACY_TRUST_FILE = "omp-web-trusted-projects.json";
 
 /**
  * Project-relative directories whose contents omp imports and executes.
@@ -55,16 +58,20 @@ function canonicalProjectKey(cwd: string): string {
 }
 
 function readTrustedProjects(agentDir: string): Record<string, boolean> {
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(trustFilePath(agentDir), "utf8"));
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed as Record<string, unknown>)
-        .filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
-    );
-  } catch {
-    return {};
+  for (const file of [trustFilePath(agentDir), join(agentDir, LEGACY_TRUST_FILE)]) {
+    if (!existsSync(file)) continue;
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+      return Object.fromEntries(
+        Object.entries(parsed as Record<string, unknown>)
+          .filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+      );
+    } catch {
+      return {};
+    }
   }
+  return {};
 }
 
 function writeTrustedProjects(agentDir: string, trusted: Record<string, boolean>): void {
@@ -138,7 +145,7 @@ export interface DiscoveredProjectCode<TTool extends DiscoveredToolPath> {
  *
  * Returns `undefined` when the project has nothing that requires trust, or when
  * the user already trusted it — both leave omp on its normal load path so
- * omp-web sessions behave exactly like `omp` in a terminal.
+ * ompdesk sessions behave exactly like `omp` in a terminal.
  *
  * The caller supplies the discovered paths (omp's own `discoverSessionExtensionPaths`
  * / `discoverCustomToolPaths` results) so user-level extensions keep working:

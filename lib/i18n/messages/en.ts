@@ -1,6 +1,6 @@
 import type { LocalePlugin } from "../types";
 
-/** omp-web 内置英语语言包。 */
+/** ompdesk 内置英语语言包。 */
 export const enLocale: LocalePlugin = {
   id: "en",
   label: "English",
@@ -11,17 +11,17 @@ export const enLocale: LocalePlugin = {
     "common.skills": "Skills",
     "common.plugins": "Plugins",
     "common.settings": "Settings",
-    "updates.available": "omp-web update available",
-    "updates.availableTitle": "omp-web {version} is available",
-    "updates.dialogEyebrow": "omp-web release",
-    "updates.dialogTitle": "New omp-web version",
-    "updates.current": "Installed omp-web {version}",
+    "updates.available": "ompdesk update available",
+    "updates.availableTitle": "ompdesk {version} is available",
+    "updates.dialogEyebrow": "ompdesk release",
+    "updates.dialogTitle": "New ompdesk version",
+    "updates.current": "Installed ompdesk {version}",
     "updates.changelog": "Changelog",
     "updates.viewRelease": "View release",
     "updates.install": "Install update",
     "updates.installing": "Installing…",
-    "updates.installed": "omp-web {version} installed. Restart omp-web to finish.",
-    "updates.manual": "Run one of these commands to update omp-web:",
+    "updates.installed": "ompdesk {version} installed. Restart ompdesk to finish.",
+    "updates.manual": "Run one of these commands to update ompdesk:",
     "updates.copyCommand": "Copy command",
     "updates.commandCopied": "Command copied",
     "updates.copyFailed": "Unable to copy the command",
@@ -272,7 +272,7 @@ export const enLocale: LocalePlugin = {
     "chat.modelRoles": "Roles",
     "chat.allModels": "All models",
     "roles.title": "Model roles",
-    "roles.description": "omp routes work by role, not by one current model. Assign a model to each role and both omp-web and the omp CLI use it.",
+    "roles.description": "omp routes work by role, not by one current model. Assign a model to each role and both ompdesk and the omp CLI use it.",
     "roles.scope": "Save to",
     "roles.scopeGlobal": "Global",
     "roles.scopeProject": "This project",

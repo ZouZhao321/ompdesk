@@ -74,7 +74,7 @@ export function isValidBasicAuthorization(
 /**
  * Authorize one request against whichever credential is in force — the
  * `OMP_WEB_PASSWORD` environment variable, or the hashed credential written by
- * the settings panel and `omp-web --authenticated`.
+ * the settings panel and `ompdesk --authenticated`.
  */
 export function authorizeWebRequest(
   authorization: string | null,

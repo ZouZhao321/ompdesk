@@ -1,15 +1,15 @@
-# Project trust in omp-web
+# Project trust in ompdesk
 
-## Why omp-web has a trust gate and `omp` does not
+## Why ompdesk has a trust gate and `omp` does not
 
 The `omp` CLI loads a repository's `.omp/extensions`, `.omp/hooks`, `.omp/tools`
 and `.mcp.json` as a matter of course. That is safe by construction: you ran
 `omp` inside that repository, which is itself the decision to execute it.
 
-omp-web reaches the same code from a browser tab. Clicking a project in the
+ompdesk reaches the same code from a browser tab. Clicking a project in the
 sidebar — or having a session for it restored on page load — would otherwise
 import and run repository-controlled code on the machine hosting the server,
-without anything that reads as consent. So omp-web keeps a trust store that omp
+without anything that reads as consent. So ompdesk keeps a trust store that omp
 itself has no need for.
 
 ## What requires trust
@@ -29,7 +29,7 @@ break ordinary projects for no gain in execution safety. They remain a prompt-
 injection surface, exactly as they are in the CLI.
 
 That explicitly includes a project's `SYSTEM.md` and `APPEND_SYSTEM.md`
-(`lib/session-system-prompt.ts`): omp-web resolves them for a browser session
+(`lib/session-system-prompt.ts`): ompdesk resolves them for a browser session
 the way `omp` resolves them for a terminal one, trusted project or not. Gating
 them would also be a boundary in name only — a project carrying nothing but
 `.omp/APPEND_SYSTEM.md` never requires trust in the first place.
@@ -39,7 +39,7 @@ and the session loads on omp's normal path.
 
 ## What the gate actually does
 
-When a project needs trust and has not been trusted, omp-web still runs omp's
+When a project needs trust and has not been trusted, ompdesk still runs omp's
 own discovery, then removes the project-local entries from the result before
 handing it to `createAgentSession`:
 
@@ -55,18 +55,18 @@ untrusted project is a *narrowed* session, not a crippled one.
 
 ## Where the decision is stored
 
-`~/.omp/agent/omp-web-trusted-projects.json`, keyed by the project's real path
+`~/.omp/agent/ompdesk-trusted-projects.json`, keyed by the project's real path
 (symlinks resolved). It is written `0600` through the same atomic-replace helper
 used for credentials. Deleting an entry revokes trust; deleting the file revokes
 everything.
 
-Trust is granted from the dialog omp-web shows when you open such a project, and
+Trust is granted from the dialog ompdesk shows when you open such a project, and
 takes effect immediately: granting it invalidates the model cache and destroys
 any running session for that working directory so the next one starts with the
 project's resources loaded.
 
 ## Relationship to the CLI
 
-The store is omp-web's own. Trusting a project in the browser does not change
+The store is ompdesk's own. Trusting a project in the browser does not change
 what `omp` does in a terminal — the CLI already loads everything — and running
 `omp` in a project does not mark it trusted for the browser.

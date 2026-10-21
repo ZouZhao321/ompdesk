@@ -3,9 +3,9 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "omp-web",
-    short_name: "omp-web",
-    description: "Local web view for the omp (oh-my-pi) coding agent",
+    name: "ompdesk",
+    short_name: "ompdesk",
+    description: "Local workspace for the omp (oh-my-pi) coding agent",
     start_url: "/",
     scope: "/",
     display: "standalone",

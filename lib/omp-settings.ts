@@ -1,6 +1,6 @@
 // omp 18.2 replaced the path-keyed `settings.get("a.b")` / `settings-schema`
 // surface with a registry of typed `Setting` handles (`config/registry`).
-// omp-web addresses settings by their dotted path — the browser sends paths,
+// ompdesk addresses settings by their dotted path — the browser sends paths,
 // and the settings panel is generated from the schema — so this module is the
 // single place that turns a path into a handle. Importing `all-settings`
 // registers every domain, exactly as omp's own settings panel does.

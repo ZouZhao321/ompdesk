@@ -118,11 +118,11 @@ interface WorktreeState {
   worktrees: WorktreeEntry[];
 }
 
-const UNREAD_SESSIONS_STORAGE_KEY = "omp-web:unread-session-ids";
+const UNREAD_SESSIONS_STORAGE_KEY = "ompdesk:unread-session-ids";
 const RUNNING_SESSIONS_POLL_MS = 2500;
 const PROJECT_SESSION_LIMIT = 5;
-const COLLAPSED_PROJECTS_STORAGE_KEY = "omp-web:collapsed-projects";
-const REMOVED_PROJECTS_STORAGE_KEY = "omp-web:removed-projects";
+const COLLAPSED_PROJECTS_STORAGE_KEY = "ompdesk:collapsed-projects";
+const REMOVED_PROJECTS_STORAGE_KEY = "ompdesk:removed-projects";
 
 function normalizeProjectKey(project: string): string {
   const normalized = project.replace(/\\/g, "/");
@@ -231,7 +231,7 @@ function displayCwd(cwd: string, homeDir?: string): string {
 
 /**
  * Path label that ellipsizes on the LEFT, keeping the (most relevant) trailing
- * segments visible: "…orkspace/omp-web". Shows as much of the path as fits
+ * segments visible: "…orkspace/ompdesk". Shows as much of the path as fits
  * instead of a fixed number of segments. The rtl container moves the ellipsis
  * to the left edge; the inner plaintext bidi isolation keeps the path itself
  * rendered strictly left-to-right (no punctuation reordering).

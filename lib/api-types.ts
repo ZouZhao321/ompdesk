@@ -196,7 +196,7 @@ export interface OmpWebUpdateResponse {
 }
 
 /**
- * State of omp-web's password lock, as served by `GET /api/web-access`.
+ * State of ompdesk's password lock, as served by `GET /api/web-access`.
  *
  * Re-exported from the credential store so the settings panel and the store
  * cannot drift; the import is type-only, so nothing from `bin/` reaches the

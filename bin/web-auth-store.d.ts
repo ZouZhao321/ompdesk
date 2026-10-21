@@ -3,7 +3,7 @@
  *
  * The store itself is plain CommonJS because the launcher loads it before Bun
  * is resolved (see the module header); this declaration is what the TypeScript
- * half of omp-web — `proxy.ts`, `lib/web-auth.ts`, `/api/web-access` — reads.
+ * half of ompdesk — `proxy.ts`, `lib/web-auth.ts`, `/api/web-access` — reads.
  */
 
 export type WebAuthSource = "environment" | "stored" | "none";
@@ -30,7 +30,7 @@ export interface WebAuthStatus {
   managedByEnvironment: boolean;
   /** The credential file exists but could not be parsed. */
   unreadable: boolean;
-  /** Basic Auth username omp-web accepts. */
+  /** Basic Auth username ompdesk accepts. */
   username: string;
   updatedAt: string | null;
   file: string;
