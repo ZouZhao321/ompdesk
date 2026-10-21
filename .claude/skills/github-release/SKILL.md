@@ -1,11 +1,11 @@
 ---
 name: github-release
-description: "Use when the user asks to prepare, create, publish, or update a GitHub release for omp-web, especially a versioned tag release. Generate the release body with the v0.1.7 format: commit-range preamble plus Added, Improved, and Internal sections."
+description: "Use when the user asks to prepare, create, publish, or update a GitHub release for ompdesk, especially a versioned tag release. Generate the release body with the v0.1.7 format: commit-range preamble plus Added, Improved, and Internal sections."
 ---
 
 # GitHub Release
 
-Use this skill for releases of `ddallabenetta/omp-web`.
+Use this skill for releases of `ZouZhao321/ompdesk`.
 
 ## Release-body contract
 
@@ -36,7 +36,7 @@ Rules:
 - Derive every bullet from the commit subject/body and, when necessary, its diff. Never describe an unverified change.
 - Use only non-empty sections. Keep the template's section order: `Added`, `Improved`, `Internal`.
 - Put bug fixes and user-facing refinements under `Improved` unless the user explicitly requests another heading. Do not add unrelated headings by habit.
-- Mention the package bump in `Internal` when that commit is part of the release range, for example `Bumped the package to \`omp-web@<version>\`.`.
+- Mention the package bump in `Internal` when that commit is part of the release range, for example `Bumped the package to \`ompdesk@<version>\`.`.
 - Keep the prose concise, past-tense, and user-facing. Preserve relevant backticks around commands, package names, selectors, and configuration keys.
 - Do not add an `Assets` section: GitHub supplies source archives and displays them separately.
 
@@ -90,7 +90,7 @@ Before creating the release, check whether the tag or GitHub release already exi
 
 ```bash
 git ls-remote --tags origin v<version>
-gh release view v<version> --repo ddallabenetta/omp-web
+gh release view v<version> --repo ZouZhao321/ompdesk
 ```
 
 Do not replace a published release unless the user explicitly asks to update its notes.
@@ -101,18 +101,18 @@ Write the generated body to a temporary notes file outside the repository, revie
 
 ```bash
 gh release create v<version> \
-  --repo ddallabenetta/omp-web \
+  --repo ZouZhao321/ompdesk \
   --verify-tag \
   --title "v<version>" \
-  --notes-file /tmp/omp-web-release-notes.md
+  --notes-file /tmp/ompdesk-release-notes.md
 ```
 
 Never use `--generate-notes`; it would bypass the required format. If the release already exists and the user explicitly requested a notes update:
 
 ```bash
 gh release edit v<version> \
-  --repo ddallabenetta/omp-web \
-  --notes-file /tmp/omp-web-release-notes.md
+  --repo ZouZhao321/ompdesk \
+  --notes-file /tmp/ompdesk-release-notes.md
 ```
 
 If the tag does not exist, stop before `gh release create`: a release must point to the intended tagged commit. When the user asked for the complete tag-and-release flow, create and push the annotated tag only after version and commit checks pass, then use `--verify-tag`.
@@ -123,7 +123,7 @@ Confirm the published metadata and body, then check for unintended local changes
 
 ```bash
 gh release view v<version> \
-  --repo ddallabenetta/omp-web \
+  --repo ZouZhao321/ompdesk \
   --json name,tagName,isDraft,isPrerelease,body,url
 git status --short --branch
 ```

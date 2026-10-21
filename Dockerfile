@@ -1,4 +1,4 @@
-# omp-web serves its API on Bun, not Node: the omp SDK (`@oh-my-pi/pi-*`) is
+# ompdesk serves its API on Bun, not Node: the omp SDK (`@oh-my-pi/pi-*`) is
 # published as TypeScript sources that import `bun:` builtins, so both stages
 # start from the Bun release that package.json's `engines.bun` floor requires.
 ARG BUN_VERSION=1.3.14
@@ -77,5 +77,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD bun --eval 'const r = await fetch(`http://127.0.0.1:${process.env.PORT ?? 30141}/`); process.exit(r.status < 500 ? 0 : 1)'
 
 # The published CLI, so the container honours the same flags and environment
-# variables as a local `omp-web` — including `--authenticated`.
-ENTRYPOINT ["bun", "/app/bin/omp-web.js"]
+# variables as a local `ompdesk` — including `--authenticated`.
+ENTRYPOINT ["bun", "/app/bin/ompdesk.js"]

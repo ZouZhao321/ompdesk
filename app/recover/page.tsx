@@ -8,7 +8,7 @@ import styles from "./recover.module.css";
  * Password recovery, reachable without credentials.
  *
  * The page cannot let anyone in on its own. Asking for a code makes the server
- * print one on its own console — the terminal omp-web is running in — so
+ * print one on its own console — the terminal ompdesk is running in — so
  * completing the flow proves the person driving it can see that machine. See
  * `app/api/web-access/recovery/route.ts`.
  */
@@ -79,26 +79,26 @@ export default function RecoverPage() {
   return (
     <main className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.eyebrow}>omp-web</div>
+        <div className={styles.eyebrow}>ompdesk</div>
         <h1 className={styles.title}>Recover access</h1>
 
         {stage === "done" ? (
           <>
             <p className={styles.lead}>
-              The password was changed and password access is on. Open omp-web and sign in with the
+              The password was changed and password access is on. Open ompdesk and sign in with the
               username <code>omp</code> and your new password.
             </p>
-            <Link className={styles.primary} href="/">Back to omp-web</Link>
+            <Link className={styles.primary} href="/">Back to ompdesk</Link>
           </>
         ) : (
           <>
             <p className={styles.lead}>
-              omp-web stores your password as a hash and cannot read it back. To set a new one, it prints a one-time
-              recovery code <strong>on its own console</strong> — the terminal running omp-web. Read the code there
+              ompdesk stores your password as a hash and cannot read it back. To set a new one, it prints a one-time
+              recovery code <strong>on its own console</strong> — the terminal running ompdesk. Read the code there
               and enter it below.
             </p>
             <p className={styles.aside}>
-              No terminal at hand? Run <code>omp-web --reset-password</code> on that machine instead.
+              No terminal at hand? Run <code>ompdesk --reset-password</code> on that machine instead.
             </p>
 
             <button type="button" className={styles.secondary} disabled={busy} onClick={() => void requestCode()}>

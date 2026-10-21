@@ -212,7 +212,7 @@ function appendSlashCommand(
 /**
  * Browser-native builtins with no shared SDK handler; advertised with their
  * canonical registry metadata. `/goal` is a mode command omp implements as a
- * TUI-only handler, so it never reaches ACP discovery; omp-web drives the same
+ * TUI-only handler, so it never reaches ACP discovery; ompdesk drives the same
  * GoalRuntime itself (lib/goal-mode.ts) and advertises it here.
  */
 export const BROWSER_NATIVE_SLASH_COMMANDS = ["fork", "goal"] as const;
@@ -436,7 +436,7 @@ export class AgentSessionWrapper {
     this.syncPlanModeFromSession();
     void this.goalMode.restore().catch((error) => {
       console.error(
-        "[omp-web] failed to restore goal mode:",
+        "[ompdesk] failed to restore goal mode:",
         error instanceof Error ? error.message : error,
       );
     });
@@ -452,7 +452,7 @@ export class AgentSessionWrapper {
       if (RUNNING_STATE_EVENT_TYPES.has(event.type)) notifyRunningChange();
       void this.goalMode.handleSessionEvent(event).catch((error) => {
         console.error(
-          "[omp-web] goal mode failed to handle a session event:",
+          "[ompdesk] goal mode failed to handle a session event:",
           error instanceof Error ? error.message : error,
         );
       });
@@ -468,7 +468,7 @@ export class AgentSessionWrapper {
 
   beginExtensionBinding(options: ExtensionBindingOptions = {}): void {
     void this.ensureExtensionsBound(options).catch((err) => {
-      console.error("[omp-web] failed to dispatch session_start to extensions:", err instanceof Error ? err.message : err);
+      console.error("[ompdesk] failed to dispatch session_start to extensions:", err instanceof Error ? err.message : err);
     });
   }
 
@@ -488,7 +488,7 @@ export class AgentSessionWrapper {
     this.extensionBindingPromise = (async () => {
       if (!this._alive) return;
       // omp wires extensions the same way for every non-interactive host; reuse
-      // its shared initializer so omp-web sessions expose exactly the action set
+      // its shared initializer so ompdesk sessions expose exactly the action set
       // `omp --mode rpc` does, then layer our browser-backed UI context on top.
       await initializeExtensions(this.inner as never, {
         uiContext: this.createExtensionUiContext() as never,
@@ -509,12 +509,12 @@ export class AgentSessionWrapper {
           id: randomUUID(),
           method: "notify",
           notifyType: "warning",
-          message: "Extension requested shutdown, but shutdown is not supported in omp-web.",
+          message: "Extension requested shutdown, but shutdown is not supported in ompdesk.",
         } as ExtensionUiRequest as AgentEvent),
       });
       this.extensionsBound = true;
       this.applyForcedEmptySystemPrompt();
-      console.log(`[omp-web] session_start dispatched to extensions for session ${this.inner.sessionId}`);
+      console.log(`[ompdesk] session_start dispatched to extensions for session ${this.inner.sessionId}`);
     })().catch((err) => {
       this.extensionBindingError = err;
       throw err;
@@ -562,7 +562,7 @@ export class AgentSessionWrapper {
       // The forked session is already persisted. Cleanup failures must not
       // hide its id from the browser and strand the committed transition.
       console.error(
-        `[omp-web] fork created session ${newSessionId}, but wrapper shutdown failed:`,
+        `[ompdesk] fork created session ${newSessionId}, but wrapper shutdown failed:`,
         error instanceof Error ? error.message : error,
       );
     }
@@ -1562,7 +1562,7 @@ export class AgentSessionWrapper {
       get theme() { return PLAIN_TEXT_THEME; },
       getAllThemes: () => [],
       getTheme: () => undefined,
-      setTheme: () => ({ success: false, error: "Theme switching is not supported in omp-web extension UI yet" }),
+      setTheme: () => ({ success: false, error: "Theme switching is not supported in ompdesk extension UI yet" }),
       getToolsExpanded: () => false,
       setToolsExpanded: () => {},
     };
@@ -1846,7 +1846,7 @@ export async function startRpcSession(
         // Otherwise DO NOT pass a builtin-only allow-list: passing CODING_TOOL_NAMES
         // set allowedToolNames to coding builtins only, which filtered every
         // extension/package-provided tool (e.g. subagents, web access) out of the
-        // tool registry — so they were unavailable in omp-web sessions even though the
+        // tool registry — so they were unavailable in ompdesk sessions even though the
         // `omp` CLI keeps them. Leaving the allow-list unset lets the SDK register all
         // tools (and activate extension tools); we narrow the ACTIVE set below.
         toolsOption = toolNames.length === 0 ? [] : undefined;
@@ -1915,7 +1915,7 @@ export async function startRpcSession(
 
       // If specific tool names were requested (non-empty), set the active tools to the
       // requested builtin coding tools PLUS all extension/package tools, so installed
-      // extensions stay usable in omp-web just like in the `omp` CLI.
+      // extensions stay usable in ompdesk just like in the `omp` CLI.
       if (toolNames && toolNames.length > 0) {
         await session.setActiveToolsByName(withExtensionTools(session, toolNames));
       }

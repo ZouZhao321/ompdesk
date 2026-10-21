@@ -6,7 +6,7 @@
 # OMP_UID/OMP_GID rather than UID/GID because UID is readonly in bash and
 # cannot be set inline.
 services:
-  omp-web:
+  ompdesk:
     build:
       context: .
       args:
@@ -14,8 +14,8 @@ services:
         # owns ~/.omp and the checkouts under OMP_WEB_WORKSPACE.
         UID: ${OMP_UID:-1000}
         GID: ${OMP_GID:-1000}
-    image: omp-web:local
-    # Loopback only. omp-web can run a high-privilege agent, so read
+    image: ompdesk:local
+    # Loopback only. ompdesk can run a high-privilege agent, so read
     # docs/docker.md before publishing this on 0.0.0.0.
     ports:
       - "127.0.0.1:${OMP_WEB_PORT:-30141}:30141"
@@ -26,7 +26,7 @@ services:
       # The same directory the omp CLI writes: sessions, config and model roles
       # are shared with the terminal.
       - ${OMP_HOME:-${HOME}/.omp}:/home/omp/.omp
-      # The projects omp-web may open. Narrow this to the tree you want the
+      # The projects ompdesk may open. Narrow this to the tree you want the
       # agent to reach.
       - ${OMP_WEB_WORKSPACE:-.}:/workspace
     restart: unless-stopped

@@ -8,8 +8,8 @@ import type {
   OmpWebUpdateResponse,
 } from "@/lib/api-types";
 
-export const OMP_WEB_GITHUB_RELEASE_API_URL = "https://api.github.com/repos/ddallabenetta/omp-web/releases/latest";
-export const OMP_WEB_NPM_LATEST_URL = "https://registry.npmjs.org/omp-web/latest";
+export const OMP_WEB_GITHUB_RELEASE_API_URL = "https://api.github.com/repos/ZouZhao321/ompdesk/releases/latest";
+export const OMP_WEB_NPM_LATEST_URL = "https://registry.npmjs.org/ompdesk/latest";
 
 const RELEASE_CACHE_SECONDS = 60 * 60;
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -116,14 +116,14 @@ function isNewerVersion(latest: string | null, current: string | null): boolean 
 
 function releaseFromPayload(payload: GitHubReleasePayload): OmpWebReleaseInfo {
   const version = canonicalVersion(payload.tag_name);
-  if (!version) throw new Error("The omp-web release did not contain a valid version tag");
+  if (!version) throw new Error("The ompdesk release did not contain a valid version tag");
 
   const tagName = typeof payload.tag_name === "string" && payload.tag_name.trim()
     ? payload.tag_name.trim()
     : `v${version}`;
-  const htmlUrl = typeof payload.html_url === "string" && payload.html_url.startsWith("https://github.com/ddallabenetta/omp-web/")
+  const htmlUrl = typeof payload.html_url === "string" && payload.html_url.startsWith("https://github.com/ZouZhao321/ompdesk/")
     ? payload.html_url
-    : `https://github.com/ddallabenetta/omp-web/releases/tag/${encodeURIComponent(tagName)}`;
+    : `https://github.com/ZouZhao321/ompdesk/releases/tag/${encodeURIComponent(tagName)}`;
   const body = typeof payload.body === "string" ? payload.body.slice(0, MAX_CHANGELOG_LENGTH) : "";
 
   return {
@@ -143,7 +143,7 @@ function releaseFromPackage(version: string): OmpWebReleaseInfo {
     tagName,
     name: tagName,
     body: "",
-    htmlUrl: `https://github.com/ddallabenetta/omp-web/releases/tag/${encodeURIComponent(tagName)}`,
+    htmlUrl: `https://github.com/ZouZhao321/ompdesk/releases/tag/${encodeURIComponent(tagName)}`,
     publishedAt: null,
   };
 }
@@ -160,7 +160,7 @@ async function fetchJson(url: string, fetcher: Fetcher): Promise<unknown> {
     const response = await fetcher(url, {
       headers: {
         Accept: "application/json",
-        "User-Agent": "omp-web-update-check",
+        "User-Agent": "ompdesk-update-check",
       },
       signal: controller.signal,
       // Next.js caches this server-side request so every browser tab does not
@@ -184,12 +184,12 @@ function selectManager(env: NodeJS.ProcessEnv, runtime: "bun" | "node"): UpdateM
 function commandForManager(manager: UpdateManager): { executable: string; args: string[]; command: string } {
   if (manager === "npm") {
     const executable = process.platform === "win32" ? "npm.cmd" : "npm";
-    const args = ["install", "--global", "omp-web@latest", "--no-audit", "--no-fund"];
-    return { executable, args, command: "npm install --global omp-web@latest" };
+    const args = ["install", "--global", "ompdesk@latest", "--no-audit", "--no-fund"];
+    return { executable, args, command: "npm install --global ompdesk@latest" };
   }
   const executable = process.platform === "win32" ? "bun.exe" : "bun";
-  const args = ["add", "--global", "omp-web@latest"];
-  return { executable, args, command: "bun add --global omp-web@latest" };
+  const args = ["add", "--global", "ompdesk@latest"];
+  return { executable, args, command: "bun add --global ompdesk@latest" };
 }
 
 export function buildInstallPlan({
@@ -234,7 +234,7 @@ export async function getOmpWebUpdateStatus(options: UpdateStatusOptions = {}): 
 
   const packagePayload = await fetchJson(OMP_WEB_NPM_LATEST_URL, fetcher) as NpmPackagePayload;
   const latestPackage = publishedPackageFromPayload(packagePayload);
-  if (!latestPackage) throw new Error("The npm registry did not return a valid omp-web version");
+  if (!latestPackage) throw new Error("The npm registry did not return a valid ompdesk version");
 
   let latestRelease = releaseFromPackage(latestPackage.version);
   try {

@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **omp-web** (2786 symbols, 7305 relationships, 233 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ompdesk** (2786 symbols, 7305 relationships, 233 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -24,10 +24,10 @@ This project is indexed by GitNexus as **omp-web** (2786 symbols, 7305 relations
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/omp-web/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/omp-web/clusters` | All functional areas |
-| `gitnexus://repo/omp-web/processes` | All execution flows |
-| `gitnexus://repo/omp-web/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/ompdesk/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/ompdesk/clusters` | All functional areas |
+| `gitnexus://repo/ompdesk/processes` | All execution flows |
+| `gitnexus://repo/ompdesk/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

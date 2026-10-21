@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "omp-desktop",
+  "productName": "ompdesk",
   "version": "0.2.10",
-  "identifier": "com.ddallabenetta.omp-desktop",
+  "identifier": "com.zouzhao.ompdesk",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://127.0.0.1:30141",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "omp-desktop",
+        "title": "ompdesk",
         "width": 1280,
         "height": 800,
         "url": "index.html"
@@ -44,7 +44,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRFQUUzNDI5MDdGNjUxRjIKUldUeVVmWUhLVFN1VHNRdUdORm1wZjZlZUIxaWlFSDd6T3l6b20yRnJ4U1BVempBbWdxVTZXdFgK",
       "endpoints": [
-        "https://github.com/ddallabenetta/omp-web/releases/latest/download/latest.json"
+        "https://github.com/ZouZhao321/ompdesk/releases/latest/download/latest.json"
       ]
     }
   }

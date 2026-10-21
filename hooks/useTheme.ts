@@ -39,7 +39,7 @@ function readStoredPreference(): ThemePreference {
   try {
     const value = localStorage.getItem(STORAGE_KEY);
     if (value === "light" || value === "dark" || value === "auto") return value;
-    // Legacy omp-web key: a stored mode keeps meaning as that preference so
+    // Legacy `omp-theme` key: a stored mode keeps meaning as that preference so
     // existing dark-mode users do not silently flip to auto on upgrade.
     const legacy = localStorage.getItem(THEME_MODE_KEY);
     if (legacy === "light" || legacy === "dark") return legacy;

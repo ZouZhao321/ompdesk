@@ -7,7 +7,7 @@ import styles from "./SettingsConfig.module.css";
 /**
  * The password lock, from the settings dialog.
  *
- * omp-web can drive a high-privilege agent, so the panel is deliberately blunt
+ * ompdesk can drive a high-privilege agent, so the panel is deliberately blunt
  * about what the lock does and does not protect: it authenticates, it does not
  * encrypt, and the password itself is never readable back — which is why the
  * recovery paths are spelled out here rather than left to the documentation.
@@ -119,12 +119,12 @@ export function AccessConfig() {
         <p className={styles.contentDescription}>
           A password locks the web interface and every API endpoint behind HTTP Basic Auth, with the fixed
           username <code>{status.username}</code>. It is stored as a scrypt hash in <code>{status.file}</code> —
-          omp-web never keeps the password itself, which is why forgetting it means recovering rather than reading it back.
+          ompdesk never keeps the password itself, which is why forgetting it means recovering rather than reading it back.
         </p>
         {readOnly && (
           <div className={styles.readOnlyNotice}>
             Read-only · <code>OMP_WEB_PASSWORD</code> is set and overrides the stored credential. Unset it and restart
-            omp-web to manage the password here.
+            ompdesk to manage the password here.
           </div>
         )}
         {notice && (
@@ -222,8 +222,8 @@ export function AccessConfig() {
             <div>
               <div className={styles.settingLabel}>Recovery</div>
               <div className={styles.settingDescription}>
-                Run <code>omp-web --reset-password</code> on this machine to set a new one, or open <code>/recover</code> in
-                the browser: omp-web prints a one-time code on its own console, and entering that code sets a new password.
+                Run <code>ompdesk --reset-password</code> on this machine to set a new one, or open <code>/recover</code> in
+                the browser: ompdesk prints a one-time code on its own console, and entering that code sets a new password.
                 Both paths require access to the machine running the server — nothing can hand the password back.
               </div>
             </div>
@@ -236,7 +236,7 @@ export function AccessConfig() {
               <div className={styles.settingLabel}>Basic Auth is not encryption</div>
               <div className={styles.settingDescription}>
                 The password crosses the network in a reversible encoding. Over plain HTTP on an untrusted network it can be
-                read in transit, so put omp-web behind HTTPS or a trusted VPN before exposing it beyond loopback.
+                read in transit, so put ompdesk behind HTTPS or a trusted VPN before exposing it beyond loopback.
               </div>
             </div>
             <div className={styles.settingControl} />

@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="./docs/hero.png" alt="omp-web — Browser workspace for omp" width="100%">
+  <img src="./docs/hero.png" alt="ompdesk — Browser workspace for omp" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/omp-web"><img src="https://img.shields.io/npm/v/omp-web?style=flat&colorA=222222&colorB=CB3837" alt="npm version"></a>
-  <a href="https://github.com/ddallabenetta/omp-web/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ddallabenetta/omp-web?style=flat&colorA=222222&colorB=58A6FF" alt="License"></a>
+  <a href="https://www.npmjs.com/package/ompdesk"><img src="https://img.shields.io/npm/v/ompdesk?style=flat&colorA=222222&colorB=CB3837" alt="npm version"></a>
+  <a href="https://github.com/ZouZhao321/ompdesk/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZouZhao321/ompdesk?style=flat&colorA=222222&colorB=58A6FF" alt="License"></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&colorA=222222&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f472b6?style=flat&colorA=222222" alt="Bun"></a>
 </p>
@@ -14,14 +14,14 @@
 </p>
 
 
-The web view for [omp (oh-my-pi)](https://github.com/can1357/oh-my-pi). omp-web reads the sessions the `omp` CLI already writes and gives you a browser workspace for session browsing, real-time chat, model roles, provider configuration, skill management, and project file preview.
+The browser workspace for [omp (oh-my-pi)](https://github.com/can1357/oh-my-pi). ompdesk reads the sessions the `omp` CLI already writes and gives you a browser workspace for session browsing, real-time chat, model roles, provider configuration, skill management, and project file preview.
 
-It is not a separate agent: omp-web runs omp's own SDK in-process, against the same `~/.omp/agent` directory, so a session started in the terminal continues in the browser and back again.
+It is not a separate agent: ompdesk runs omp's own SDK in-process, against the same `~/.omp/agent` directory, so a session started in the terminal continues in the browser and back again.
 
 
 ## Quick Start
 
-omp-web serves its API on **Bun**, because that is what the omp SDK requires (it is published as TypeScript sources and imports `bun:` builtins). Install Bun 1.3.14 or newer:
+ompdesk serves its API on **Bun**, because that is what the omp SDK requires (it is published as TypeScript sources and imports `bun:` builtins). Install Bun 1.3.14 or newer:
 
 ```bash
 curl -fsSL https://bun.sh/install | bash        # macOS / Linux
@@ -31,58 +31,58 @@ powershell -c "irm bun.sh/install.ps1 | iex"    # Windows
 **Run without installing:**
 
 ```bash
-bunx omp-web@latest
+bunx ompdesk@latest
 ```
 
-On Windows, if `bunx` fails before startup with `EPERM: Operation not permitted (NtSetInformationFile())` while moving a package to the Bun cache, the failure is in Bun's Windows cache rename, not in omp-web. Update Bun and retry with a fresh cache:
+On Windows, if `bunx` fails before startup with `EPERM: Operation not permitted (NtSetInformationFile())` while moving a package to the Bun cache, the failure is in Bun's Windows cache rename, not in ompdesk. Update Bun and retry with a fresh cache:
 
 ```powershell
 bun upgrade
 bun pm cache rm
-$env:BUN_INSTALL_CACHE_DIR = "$env:LOCALAPPDATA\omp-web-bun-cache"
+$env:BUN_INSTALL_CACHE_DIR = "$env:LOCALAPPDATA\ompdesk-bun-cache"
 New-Item -ItemType Directory -Force $env:BUN_INSTALL_CACHE_DIR | Out-Null
-bunx omp-web@latest
+bunx ompdesk@latest
 ```
 
-If an antivirus or endpoint-security process still holds the extracted directory open, use npm for dependency installation; the `omp-web` launcher still starts the server through Bun:
+If an antivirus or endpoint-security process still holds the extracted directory open, use npm for dependency installation; the `ompdesk` launcher still starts the server through Bun:
 
 ```powershell
-npm install -g omp-web@latest
-omp-web
+npm install -g ompdesk@latest
+ompdesk
 ```
 
 **Or install globally:**
 
 ```bash
-bun add -g omp-web    # or: npm install -g omp-web
-omp-web
+bun add -g ompdesk    # or: npm install -g ompdesk
+ompdesk
 ```
 
 Then open [http://127.0.0.1:30141](http://127.0.0.1:30141). The CLI opens the browser automatically once the server is ready, and listens on `127.0.0.1` by default.
 
-The `omp-web` entrypoint itself runs under Node or Bun; it locates Bun and re-executes the server there. Point it at a specific build with `OMP_WEB_BUN=/path/to/bun`.
+The `ompdesk` entrypoint itself runs under Node or Bun; it locates Bun and re-executes the server there. Point it at a specific build with `OMP_WEB_BUN=/path/to/bun`.
 
 **Options:**
 
 ```bash
-omp-web --port 8080              # custom port
-omp-web --hostname 0.0.0.0       # expose on a trusted network
-omp-web -p 8080 -H 0.0.0.0       # combine options
-omp-web --no-open                # do not open the browser automatically
-omp-web --authenticated          # require a password (asks for one if none is set)
-omp-web --reset-password         # set a new password when the old one is lost
+ompdesk --port 8080              # custom port
+ompdesk --hostname 0.0.0.0       # expose on a trusted network
+ompdesk -p 8080 -H 0.0.0.0       # combine options
+ompdesk --no-open                # do not open the browser automatically
+ompdesk --authenticated          # require a password (asks for one if none is set)
+ompdesk --reset-password         # set a new password when the old one is lost
 
-PORT=8080 omp-web                 # environment variable is also supported
-OMP_WEB_HOSTNAME=0.0.0.0 omp-web  # explicit network exposure
-OMP_WEB_ALLOWED_HOSTS=omp.internal omp-web  # allow an exact proxy/custom hostname
-OMP_WEB_AUTHENTICATED=1 omp-web   # same as --authenticated
-OMP_WEB_PASSWORD='a-long-random-password' omp-web  # override the stored password
-OMP_WEB_NO_OPEN=1 omp-web         # useful when running as a background service
+PORT=8080 ompdesk                 # environment variable is also supported
+OMP_WEB_HOSTNAME=0.0.0.0 ompdesk  # explicit network exposure
+OMP_WEB_ALLOWED_HOSTS=omp.internal ompdesk  # allow an exact proxy/custom hostname
+OMP_WEB_AUTHENTICATED=1 ompdesk   # same as --authenticated
+OMP_WEB_PASSWORD='a-long-random-password' ompdesk  # override the stored password
+OMP_WEB_NO_OPEN=1 ompdesk         # useful when running as a background service
 ```
 
 ## Docker
 
-A `Dockerfile` builds omp-web from source and runs it under Bun in the
+A `Dockerfile` builds ompdesk from source and runs it under Bun in the
 container. It still needs the omp home the CLI writes, so mount it:
 
 ```bash
@@ -99,19 +99,19 @@ Volume layout, UID/GID matching and reverse-proxy notes: [docs/docker.md](./docs
 A password locks the web interface and every API endpoint behind HTTP Basic Auth, with the fixed username `omp`. Turn it on wherever suits you:
 
 - **Settings → Access** in the browser, to set the password and switch the lock on or off.
-- **`omp-web --authenticated`**, which turns it on for this run and every later one, and asks for a password on the terminal if none has been set yet.
+- **`ompdesk --authenticated`**, which turns it on for this run and every later one, and asks for a password on the terminal if none has been set yet.
 - **`OMP_WEB_PASSWORD`**, which overrides the stored credential for as long as it is set.
 
-The password is stored as a `scrypt` hash in `~/.omp/agent/omp-web-auth.json` (mode `0600`) — never in plaintext, and never recoverable from the file. Forgotten it? Run `omp-web --reset-password` on the server, or open `/recover` and enter the one-time code omp-web prints on its own console.
+The password is stored as a `scrypt` hash in `~/.omp/agent/ompdesk-auth.json` (mode `0600`) — never in plaintext, and never recoverable from the file. Forgotten it? Run `ompdesk --reset-password` on the server, or open `/recover` and enter the one-time code ompdesk prints on its own console.
 
-omp-web can invoke a high-privilege agent. Basic Auth does not encrypt the password in transit, so do not expose plain HTTP to the internet. Use HTTPS through a trusted reverse proxy or a trusted VPN for remote access.
+ompdesk can invoke a high-privilege agent. Basic Auth does not encrypt the password in transit, so do not expose plain HTTP to the internet. Use HTTPS through a trusted reverse proxy or a trusted VPN for remote access.
 API requests accept loopback names, IP literals, the selected bind hostname, and exact comma-separated names in `OMP_WEB_ALLOWED_HOSTS`. Configure that variable when a trusted reverse proxy uses a different external hostname.
 
 Full details, including the recovery threat model: [docs/authentication.md](./docs/authentication.md).
 
 ## Model roles
 
-omp does not have "the" model — it has a model per **scope of work**, and omp-web exposes the same roles the TUI's `/model` selector and `Ctrl+P` cycle use:
+omp does not have "the" model — it has a model per **scope of work**, and ompdesk exposes the same roles the TUI's `/model` selector and `Ctrl+P` cycle use:
 
 | Role | What it runs |
 | --- | --- |
@@ -129,20 +129,20 @@ Two places surface them:
 - **The model picker in the chat bar** lists the configured roles above the flat model list. Picking one switches the session onto that role's model *and records the role*, exactly like `/model` does, so the transcript and omp's retry fallbacks agree on which role is driving.
 - **Models → Model roles** assigns a model to each role. Writes go to `modelRoles` in `~/.omp/agent/config.yml` (or `.omp/config.yml` when you pick **This project**), which is the same record the CLI reads — an assignment made in the browser is what your next terminal session starts with.
 
-Session titles follow the same routing: omp-web asks omp to name a session, and omp resolves that through the `tiny` → `commit` → `smol` chain rather than the session's primary model.
+Session titles follow the same routing: ompdesk asks omp to name a session, and omp resolves that through the `tiny` → `commit` → `smol` chain rather than the session's primary model.
 
 The reasoning selector supports **Auto**, which lets omp select effort for each turn. The selector keeps Auto selected across reloads and shows the resolved effort separately, for example `auto (high)`. Selecting Auto explicitly also carries that preference into a new session.
 
 ## HTTP Proxy
 
-omp-web reads the standard `HTTP_PROXY` and `HTTPS_PROXY` environment variables for server-side model and API requests. Bun reads them once at process start, so set them before launching:
+ompdesk reads the standard `HTTP_PROXY` and `HTTPS_PROXY` environment variables for server-side model and API requests. Bun reads them once at process start, so set them before launching:
 
 On macOS or Linux:
 
 ```bash
 HTTP_PROXY=http://127.0.0.1:7890 \
 HTTPS_PROXY=http://127.0.0.1:7890 \
-bunx omp-web@latest
+bunx ompdesk@latest
 ```
 
 On Windows PowerShell:
@@ -150,7 +150,7 @@ On Windows PowerShell:
 ```powershell
 $env:HTTP_PROXY = "http://127.0.0.1:7890"
 $env:HTTPS_PROXY = "http://127.0.0.1:7890"
-bunx omp-web@latest
+bunx ompdesk@latest
 ```
 
 Requests to loopback addresses are never proxied, so a local provider (Ollama, LM Studio, llama.cpp) keeps working with a proxy configured. Note that Bun does **not** currently honour `NO_PROXY` for other hosts.
@@ -180,23 +180,23 @@ Requests to loopback addresses are never proxied, so a local provider (Ollama, L
 
 ![Chat pane next to a rendered Markdown file preview](./docs/screenshots/03-file-preview.png)
 
-**Model roles, configured once, used everywhere** — assign a model per role (`default`, `smol`, `plan`, `commit`, …); both omp-web and the omp CLI read the same `models.yml`.
+**Model roles, configured once, used everywhere** — assign a model per role (`default`, `smol`, `plan`, `commit`, …); both ompdesk and the omp CLI read the same `models.yml`.
 
 ![Settings panel showing model role assignments](./docs/screenshots/04-settings.png)
 
-**Full omp theme support** — omp-web reads omp's own dark/light palette mappings from `~/.omp/agent/config.yml` and applies them live, so the web view matches the terminal.
+**Full omp theme support** — ompdesk reads omp's own dark/light palette mappings from `~/.omp/agent/config.yml` and applies them live, so the web view matches the terminal.
 
 ![Theme settings showing omp's dark and light palette mapping](./docs/screenshots/05-themes.png)
 
 ## Notes
 
-- **Data directory**: omp-web reads `~/.omp/agent/sessions` by default. Set `PI_CODING_AGENT_DIR` to point at another omp agent directory (omp kept the variable name).
+- **Data directory**: ompdesk reads `~/.omp/agent/sessions` by default. Set `PI_CODING_AGENT_DIR` to point at another omp agent directory (omp kept the variable name).
 - **Session files**: files are stored as `~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`.
 - **Provider config**: the Models panel reads and writes `models.yml` in the omp agent directory. Credentials live in omp's `agent.db`, shared with the CLI. A header value that names an environment variable (bare name, no `$`) is substituted at request time.
 - **Custom system prompts**: `SYSTEM.md` and `APPEND_SYSTEM.md` are picked up for browser sessions exactly as `omp` picks them up in a terminal — the project's `.omp/` (or `.claude/`, `.codex/`, `.gemini/`) first, then `~/.omp/agent/` — resolved against the session's own working directory.
-- **Project trust**: opening a repository in a browser tab must not run its code, so omp-web gates a project's `.omp/extensions`, `.omp/hooks`, `.omp/tools` and `.mcp.json` behind an explicit trust decision. Skills and rules are data and load either way. See [Project trust](./docs/project-trust.md).
+- **Project trust**: opening a repository in a browser tab must not run its code, so ompdesk gates a project's `.omp/extensions`, `.omp/hooks`, `.omp/tools` and `.mcp.json` behind an explicit trust decision. Skills and rules are data and load either way. See [Project trust](./docs/project-trust.md).
 - **File access**: file browsing and preview are scoped to the selected project directory and working directories that appear in sessions.
-- **Git worktrees**: see [Worktrees in omp-web](./docs/worktrees.md) for when the switcher appears, how new worktrees are created, and what removal does.
+- **Git worktrees**: see [Worktrees in ompdesk](./docs/worktrees.md) for when the switcher appears, how new worktrees are created, and what removal does.
 - **Forks vs in-session branches**: Fork creates a new `.jsonl` file. "Edit from here" creates another branch inside the same session file.
 - **Skills**: the skill installer shells out to `npx skills add --agent claude-code`, which writes the `.claude/skills` layout omp discovers by default.
 - **Internationalization**: see [Internationalization](./docs/i18n.md) for using translations and adding languages or UI text.
@@ -280,9 +280,9 @@ Pushing a `v*` tag triggers `.github/workflows/publish-desktop.yml`: it builds
 macOS (universal) and Windows bundles, uploads them to a GitHub release with
 Ed25519 signatures, and generates the updater manifest (`latest.json`). The
 updater fetches
-`https://github.com/ddallabenetta/omp-web/releases/latest/download/latest.json`.
+`https://github.com/ZouZhao321/ompdesk/releases/latest/download/latest.json`.
 To enable that, configure two repository secrets — `TAURI_SIGNING_PRIVATE_KEY`
-(contents of `~/.omp/omp-web/omp-desktop-signing.key`, generated by
+(contents of `~/.omp/ompdesk/omp-desktop-signing.key`, generated by
 `bun run desktop:signer generate`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 macOS builds are unsigned: the first launch needs right-click → Open (Gatekeeper),
 subsequent auto-updates are written by the app itself.
@@ -337,7 +337,7 @@ hooks/
   useDragDrop.ts      # image drag/drop
   useTheme.ts         # theme switching
 bin/
-  omp-web.js          # CLI entrypoint; re-executes the server under Bun
+  ompdesk.js          # CLI entrypoint; re-executes the server under Bun
   runtime.js          # Node/Bun version checks and Bun discovery
 instrumentation.ts    # initializes the server HTTP dispatcher
 ```

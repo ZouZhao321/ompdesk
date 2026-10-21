@@ -1,6 +1,6 @@
-// omp-desktop: Tauri v2 desktop shell for omp-web.
+// omp-desktop: Tauri v2 desktop shell for ompdesk.
 //
-// In release builds the bundled Bun runtime starts the omp-web Next.js server
+// In release builds the bundled Bun runtime starts the ompdesk Next.js server
 // as a sidecar on a free loopback port, then the main window navigates to
 // http://127.0.0.1:<port>. In dev mode (`bun run tauri dev`) the server is
 // already running via beforeDevCommand and the webview loads devUrl.
@@ -193,7 +193,7 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
         }
     });
 
-    desktop_log(&format!("[omp-desktop] omp-web server starting on http://{HOST}:{port}/"));
+    desktop_log(&format!("[omp-desktop] ompdesk server starting on http://{HOST}:{port}/"));
     Ok(())
 }
 
@@ -265,7 +265,7 @@ fn navigate_main(handle: &AppHandle, port: u16) {
     match handle.get_webview_window(WINDOW_LABEL) {
         Some(window) => {
             if let Err(error) = window.navigate(url) {
-                desktop_log(&format!("[omp-desktop] failed to navigate to the omp-web server: {error}"));
+                desktop_log(&format!("[omp-desktop] failed to navigate to the ompdesk server: {error}"));
                 handle.exit(1);
             }
         }

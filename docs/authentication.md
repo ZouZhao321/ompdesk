@@ -1,8 +1,8 @@
 # Password access
 
-omp-web drives a coding agent that reads and writes files, runs shell commands,
+ompdesk drives a coding agent that reads and writes files, runs shell commands,
 and spends provider credits. Anything that can reach the port can do all of
-that. On loopback that is exactly the intent; the moment omp-web listens on a
+that. On loopback that is exactly the intent; the moment ompdesk listens on a
 LAN address or sits behind a tunnel, it needs a lock.
 
 The lock is HTTP Basic Auth over every page and every API route. The username is
@@ -19,24 +19,24 @@ password, and removes the password entirely.
 **From the command line.**
 
 ```bash
-omp-web --authenticated
+ompdesk --authenticated
 ```
 
 Turns password access on for this run and for every later one. If no password
-has ever been set, omp-web asks for one on the terminal before the server
+has ever been set, ompdesk asks for one on the terminal before the server
 starts, so a run that was told to be locked can never come up unlocked. If a
 password is already stored, the flag just switches the lock back on.
 
 `OMP_WEB_AUTHENTICATED=1` does the same thing from the environment.
 
-Non-interactive launches — systemd, Docker, `omp-web &` — cannot answer a
+Non-interactive launches — systemd, Docker, `ompdesk &` — cannot answer a
 prompt, so `--authenticated` fails there with a message instead of hanging. Set
 the password once interactively, or use the environment variable below.
 
 **From the environment.**
 
 ```bash
-OMP_WEB_PASSWORD='a-long-random-password' omp-web
+OMP_WEB_PASSWORD='a-long-random-password' ompdesk
 ```
 
 The variable overrides the stored credential completely: while it is set, the
@@ -45,7 +45,7 @@ or empty hands control back to the stored credential.
 
 ## How the password is stored
 
-In `<agentDir>/omp-web-auth.json` — normally `~/.omp/agent/omp-web-auth.json` —
+In `<agentDir>/ompdesk-auth.json` — normally `~/.omp/agent/ompdesk-auth.json` —
 created with mode `0600` and replaced atomically. The file holds a `scrypt`
 digest, the random salt that produced it, and the cost parameters. **The
 password itself is never written anywhere.**
@@ -55,7 +55,7 @@ nothing on the machine can turn the file back into the password.
 
 `OMP_WEB_AUTH_FILE` overrides the location. Set it if you have migrated omp's
 state to XDG directories, or if you want the credential somewhere else entirely;
-`bin/omp-web.js` resolves the path once and passes it to the server, so the two
+`bin/ompdesk.js` resolves the path once and passes it to the server, so the two
 halves can never disagree.
 
 Verification is timing-safe. Because `proxy.ts` checks credentials on every
@@ -63,7 +63,7 @@ request and scrypt is deliberately slow, successful verifications are cached in
 memory for five minutes, keyed by the digest that accepted them — changing or
 clearing the password invalidates the cache immediately.
 
-If the credential file exists but cannot be parsed while the lock is on, omp-web
+If the credential file exists but cannot be parsed while the lock is on, ompdesk
 answers `503` to everything rather than assuming it should unlock. Use
 `--reset-password` to get out of that state.
 
@@ -75,7 +75,7 @@ old password back.
 **From a shell on that machine:**
 
 ```bash
-omp-web --reset-password
+ompdesk --reset-password
 ```
 
 Asks for a new password, stores it, and starts the server.
@@ -85,7 +85,7 @@ server — a tmux pane, a service log, a Docker `logs` stream:
 
 1. Open `/recover`. The page is reachable without credentials; it is the only
    thing that is.
-2. Ask for a recovery code. omp-web prints it **on its own console** — the
+2. Ask for a recovery code. ompdesk prints it **on its own console** — the
    terminal running the server — and never returns it over HTTP.
 3. Type the code and a new password into the page.
 
@@ -103,7 +103,7 @@ Basic Auth authenticates; it does not encrypt. The password crosses the network
 in a reversible encoding, so on plain HTTP over an untrusted path it can be read
 in transit — and a password read in transit is a password lost.
 
-Put omp-web behind HTTPS through a trusted reverse proxy, or inside a trusted
+Put ompdesk behind HTTPS through a trusted reverse proxy, or inside a trusted
 VPN, before exposing it beyond loopback. The password stops a port scanner. It
 does not stop someone reading the wire.
 
