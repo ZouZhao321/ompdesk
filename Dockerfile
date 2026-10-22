@@ -53,14 +53,14 @@ COPY --from=build --chown=omp:omp /app/public ./public
 COPY --from=build --chown=omp:omp /app/bin ./bin
 COPY --from=build --chown=omp:omp /app/next.config.ts /app/package.json ./
 
-# OMP_WEB_HOSTNAME binds every interface because a container is only reachable
+# OMPDESK_HOSTNAME binds every interface because a container is only reachable
 # from outside when it does; publish the port to 127.0.0.1 on the host to keep
-# it local. OMP_WEB_NO_OPEN because there is no browser in here to open.
+# it local. OMPDESK_NO_OPEN because there is no browser in here to open.
 ENV HOME=/home/omp \
     NODE_ENV=production \
     PORT=30141 \
-    OMP_WEB_HOSTNAME=0.0.0.0 \
-    OMP_WEB_NO_OPEN=1
+    OMPDESK_HOSTNAME=0.0.0.0 \
+    OMPDESK_NO_OPEN=1
 
 # `~/.omp/agent` is the directory the omp CLI writes: mount the host's copy here
 # and a terminal session continues in the browser. `/workspace` is the default
@@ -69,7 +69,7 @@ VOLUME ["/home/omp/.omp"]
 EXPOSE 30141
 
 USER omp
-# Not /app: the launcher records its own cwd as OMP_WEB_LAUNCH_CWD so relative
+# Not /app: the launcher records its own cwd as OMPDESK_LAUNCH_CWD so relative
 # project paths in the browser resolve against it.
 WORKDIR /workspace
 

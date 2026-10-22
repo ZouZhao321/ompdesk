@@ -26,7 +26,7 @@ export interface WebAuthStatus {
   /** Whether a usable digest exists in the credential file. */
   stored: boolean;
   source: WebAuthSource;
-  /** `OMP_WEB_PASSWORD` is set and overrides the stored credential. */
+  /** `OMPDESK_PASSWORD` is set and overrides the stored credential. */
   managedByEnvironment: boolean;
   /** The credential file exists but could not be parsed. */
   unreadable: boolean;
@@ -38,7 +38,7 @@ export interface WebAuthStatus {
 
 /**
  * `open` — no credentials required. `environment` / `stored` — credentials
- * required, from `OMP_WEB_PASSWORD` or the credential file. `unavailable` —
+ * required, from `OMPDESK_PASSWORD` or the credential file. `unavailable` —
  * the credential is unusable and every request must be refused.
  */
 export type WebAuthPolicy =

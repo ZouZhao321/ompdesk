@@ -26,7 +26,7 @@ export async function resolveModelDiscoveryAuth(
   try {
     tempDir = mkdtempSync(join(tmpdir(), "ompdesk-model-discovery-"));
     const modelsPath = join(tempDir, "models.json");
-    const discoveryModelId = "__omp_web_model_discovery__";
+    const discoveryModelId = "__ompdesk_model_discovery__";
     // omp rejects a custom-model provider without a key unless it declares
     // `auth: "none"`. Header-only providers (a gateway authenticated through an
     // `$ENV_VAR` header) are exactly that case, so say so explicitly.

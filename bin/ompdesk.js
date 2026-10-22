@@ -86,7 +86,7 @@ function requireTerminal(flag) {
   if (isInteractive()) return;
   throw new Error([
     `${flag} has to ask for a password, but ompdesk is not attached to a terminal.`,
-    "Run ompdesk once interactively to set the password, or pass OMP_WEB_PASSWORD in the environment.",
+    "Run ompdesk once interactively to set the password, or pass OMPDESK_PASSWORD in the environment.",
   ].join("\n"));
 }
 
@@ -110,7 +110,7 @@ async function configurePasswordAccess() {
   if (resetPassword) {
     if (status.managedByEnvironment) {
       console.warn(
-        "Warning: OMP_WEB_PASSWORD is set and takes precedence over the stored password. Unset it for this reset to have any effect.",
+        "Warning: OMPDESK_PASSWORD is set and takes precedence over the stored password. Unset it for this reset to have any effect.",
       );
     }
     requireTerminal("--reset-password");
@@ -121,7 +121,7 @@ async function configurePasswordAccess() {
   if (!authenticated) return;
 
   if (status.managedByEnvironment) {
-    console.log("Password access is already required: OMP_WEB_PASSWORD is set.");
+    console.log("Password access is already required: OMPDESK_PASSWORD is set.");
     return;
   }
   if (status.stored) {
@@ -160,11 +160,11 @@ function startServer() {
     stdio: ["inherit", "pipe", "inherit"],
     env: {
       ...withLoopbackNoProxy(process.env),
-      OMP_WEB_HOSTNAME: hostname,
-      OMP_WEB_AUTH_FILE: webAuthFile,
+      OMPDESK_HOSTNAME: hostname,
+      OMPDESK_AUTH_FILE: webAuthFile,
       // Preserve the directory from which `ompdesk` was launched so relative
       // project paths in the browser resolve against the user's shell cwd.
-      OMP_WEB_LAUNCH_CWD: process.cwd(),
+      OMPDESK_LAUNCH_CWD: process.cwd(),
     },
   });
 

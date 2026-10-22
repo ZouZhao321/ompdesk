@@ -19,7 +19,7 @@ the container has to be run:
 ## Quick start
 
 ```bash
-OMP_WEB_PASSWORD='a-long-random-password' \
+OMPDESK_PASSWORD='a-long-random-password' \
 OMP_UID=$(id -u) OMP_GID=$(id -g) docker compose up --build
 ```
 
@@ -28,7 +28,7 @@ password.
 
 `docker-compose.yml` mounts `$HOME/.omp` and the current directory, publishes
 the port on loopback only, and builds the image for the UID/GID you pass.
-Override the rest with `OMP_HOME`, `OMP_WEB_WORKSPACE`, `OMP_WEB_PORT`, or put
+Override the rest with `OMP_HOME`, `OMPDESK_WORKSPACE`, `OMPDESK_PORT`, or put
 any of these in a `.env` file next to the compose file.
 
 The IDs are `OMP_UID`/`OMP_GID` rather than `UID`/`GID` because `UID` is
@@ -44,8 +44,8 @@ docker run --rm \
   -p 127.0.0.1:30141:30141 \
   -v "$HOME/.omp:/home/omp/.omp" \
   -v "$HOME/code:/workspace" \
-  -e OMP_WEB_AUTHENTICATED=1 \
-  -e OMP_WEB_PASSWORD='a-long-random-password' \
+  -e OMPDESK_AUTHENTICATED=1 \
+  -e OMPDESK_PASSWORD='a-long-random-password' \
   ompdesk
 ```
 
@@ -74,19 +74,19 @@ defaults are fine there.
 
 ## Environment
 
-The image presets `OMP_WEB_HOSTNAME=0.0.0.0` (a container is only reachable
-when it binds every interface) and `OMP_WEB_NO_OPEN=1` (no browser in here to
+The image presets `OMPDESK_HOSTNAME=0.0.0.0` (a container is only reachable
+when it binds every interface) and `OMPDESK_NO_OPEN=1` (no browser in here to
 open). Everything else behaves as documented in the README:
 
 | Variable | Use |
 | --- | --- |
 | `PORT` | Port inside the container. Publish it with `-p`. |
-| `OMP_WEB_AUTHENTICATED` | Require the password lock. |
-| `OMP_WEB_PASSWORD` | The password, overriding any stored hash. |
-| `OMP_WEB_ALLOWED_HOSTS` | Exact external hostname, when a reverse proxy fronts the container. |
+| `OMPDESK_AUTHENTICATED` | Require the password lock. |
+| `OMPDESK_PASSWORD` | The password, overriding any stored hash. |
+| `OMPDESK_ALLOWED_HOSTS` | Exact external hostname, when a reverse proxy fronts the container. |
 
 `--authenticated` on its own asks for a password on the terminal, which a
-detached container has none of. Pass `OMP_WEB_PASSWORD` instead, or set the
+detached container has none of. Pass `OMPDESK_PASSWORD` instead, or set the
 password once in **Settings → Access** and let it persist in the mounted
 `~/.omp/agent/ompdesk-auth.json`.
 
@@ -97,7 +97,7 @@ host — the `-p 127.0.0.1:30141:30141` above keeps it local. Before widening
 that:
 
 - Turn the password on. Basic Auth does not encrypt the password in transit, so
-  terminate HTTPS at a trusted reverse proxy and set `OMP_WEB_ALLOWED_HOSTS` to
+  terminate HTTPS at a trusted reverse proxy and set `OMPDESK_ALLOWED_HOSTS` to
   the hostname that proxy uses.
 - Remember that the agent runs with the container's access to the mounts you
   gave it. Mount the narrowest project tree that is useful.

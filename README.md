@@ -60,7 +60,7 @@ ompdesk
 
 Then open [http://127.0.0.1:30141](http://127.0.0.1:30141). The CLI opens the browser automatically once the server is ready, and listens on `127.0.0.1` by default.
 
-The `ompdesk` entrypoint itself runs under Node or Bun; it locates Bun and re-executes the server there. Point it at a specific build with `OMP_WEB_BUN=/path/to/bun`.
+The `ompdesk` entrypoint itself runs under Node or Bun; it locates Bun and re-executes the server there. Point it at a specific build with `OMPDESK_BUN=/path/to/bun`.
 
 **Options:**
 
@@ -73,11 +73,11 @@ ompdesk --authenticated          # require a password (asks for one if none is s
 ompdesk --reset-password         # set a new password when the old one is lost
 
 PORT=8080 ompdesk                 # environment variable is also supported
-OMP_WEB_HOSTNAME=0.0.0.0 ompdesk  # explicit network exposure
-OMP_WEB_ALLOWED_HOSTS=omp.internal ompdesk  # allow an exact proxy/custom hostname
-OMP_WEB_AUTHENTICATED=1 ompdesk   # same as --authenticated
-OMP_WEB_PASSWORD='a-long-random-password' ompdesk  # override the stored password
-OMP_WEB_NO_OPEN=1 ompdesk         # useful when running as a background service
+OMPDESK_HOSTNAME=0.0.0.0 ompdesk  # explicit network exposure
+OMPDESK_ALLOWED_HOSTS=omp.internal ompdesk  # allow an exact proxy/custom hostname
+OMPDESK_AUTHENTICATED=1 ompdesk   # same as --authenticated
+OMPDESK_PASSWORD='a-long-random-password' ompdesk  # override the stored password
+OMPDESK_NO_OPEN=1 ompdesk         # useful when running as a background service
 ```
 
 ## Docker
@@ -86,7 +86,7 @@ A `Dockerfile` builds ompdesk from source and runs it under Bun in the
 container. It still needs the omp home the CLI writes, so mount it:
 
 ```bash
-OMP_WEB_PASSWORD='a-long-random-password' \
+OMPDESK_PASSWORD='a-long-random-password' \
 OMP_UID=$(id -u) OMP_GID=$(id -g) docker compose up --build
 ```
 
@@ -100,12 +100,12 @@ A password locks the web interface and every API endpoint behind HTTP Basic Auth
 
 - **Settings → Access** in the browser, to set the password and switch the lock on or off.
 - **`ompdesk --authenticated`**, which turns it on for this run and every later one, and asks for a password on the terminal if none has been set yet.
-- **`OMP_WEB_PASSWORD`**, which overrides the stored credential for as long as it is set.
+- **`OMPDESK_PASSWORD`**, which overrides the stored credential for as long as it is set.
 
 The password is stored as a `scrypt` hash in `~/.omp/agent/ompdesk-auth.json` (mode `0600`) — never in plaintext, and never recoverable from the file. Forgotten it? Run `ompdesk --reset-password` on the server, or open `/recover` and enter the one-time code ompdesk prints on its own console.
 
 ompdesk can invoke a high-privilege agent. Basic Auth does not encrypt the password in transit, so do not expose plain HTTP to the internet. Use HTTPS through a trusted reverse proxy or a trusted VPN for remote access.
-API requests accept loopback names, IP literals, the selected bind hostname, and exact comma-separated names in `OMP_WEB_ALLOWED_HOSTS`. Configure that variable when a trusted reverse proxy uses a different external hostname.
+API requests accept loopback names, IP literals, the selected bind hostname, and exact comma-separated names in `OMPDESK_ALLOWED_HOSTS`. Configure that variable when a trusted reverse proxy uses a different external hostname.
 
 Full details, including the recovery threat model: [docs/authentication.md](./docs/authentication.md).
 
@@ -264,7 +264,7 @@ bun scripts/build-updater-json.mjs <tag>  # (re)generates latest.json for a rele
 ```
 
 `desktop:build` stages the server payload into `src-tauri/server/` (gitignored):
-a production `next` build via `OMP_WEB_DIST_DIR` (the dev `.next/` is never
+a production `next` build via `OMPDESK_DIST_DIR` (the dev `.next/` is never
 touched), production-only dependencies, and the Bun runtime(s) for the host
 platform. The CI stage step passes `--universal`, which also bundles both
 macOS architectures' native runtimes (SWC + pi-natives) for the universal

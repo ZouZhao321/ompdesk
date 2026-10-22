@@ -71,7 +71,7 @@ const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
  * launcher cannot load it, and `proxy.ts` must not pull the SDK into its bundle.
  * This mirrors omp's default layout: an explicit `PI_CODING_AGENT_DIR` wins,
  * otherwise `~/.omp/agent` with `PI_CONFIG_DIR` and the active profile applied.
- * Anything more exotic (an XDG migration) is addressed with `OMP_WEB_AUTH_FILE`.
+ * Anything more exotic (an XDG migration) is addressed with `OMPDESK_AUTH_FILE`.
  */
 function resolveAgentDir(env = process.env) {
   if (env.PI_CODING_AGENT_DIR) return resolve(env.PI_CODING_AGENT_DIR);
@@ -87,9 +87,9 @@ function normalizeProfileName(profile) {
   return PROFILE_NAME_RE.test(normalized) && !normalized.endsWith(".") ? normalized : undefined;
 }
 
-/** Absolute path of the credential file. `OMP_WEB_AUTH_FILE` overrides the location entirely. */
+/** Absolute path of the credential file. `OMPDESK_AUTH_FILE` overrides the location entirely. */
 function resolveWebAuthFile(env = process.env) {
-  if (env.OMP_WEB_AUTH_FILE) return resolve(env.OMP_WEB_AUTH_FILE);
+  if (env.OMPDESK_AUTH_FILE) return resolve(env.OMPDESK_AUTH_FILE);
   const agentDir = resolveAgentDir(env);
   const current = join(agentDir, WEB_AUTH_FILENAME);
   const legacy = join(agentDir, LEGACY_WEB_AUTH_FILENAME);
@@ -246,7 +246,7 @@ function currentConfig(file, { replaceUnreadable = false } = {}) {
 }
 
 function environmentPassword(env = process.env) {
-  const password = env.OMP_WEB_PASSWORD;
+  const password = env.OMPDESK_PASSWORD;
   return typeof password === "string" && password.length > 0 ? password : null;
 }
 
