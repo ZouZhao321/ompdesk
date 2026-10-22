@@ -17,12 +17,14 @@ import type {
 } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
+import { buildRewindEntries } from "@/lib/rewind";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks, type DisplayOptions } from "@/lib/message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { MessageView } from "./MessageView";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
+import { RewindDialog } from "./RewindDialog";
 import { OmpWordmark } from "./OmpWordmark";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
@@ -216,11 +218,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   }, [chatInputRef]);
 
   const {
-    loading, error, messages, entryIds, streamState,
+    data, activeLeafId, loading, error, messages, entryIds, streamState,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, modelRoles, toolPreset, thinkingLevel,
     effectiveThinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, modelSwitching, sessionStats,
+    rewindOpen, closeRewindPanel, handleRewind,
     slashCommands, slashCommandsLoading, queuedMessages, subagents,
     notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection,
@@ -239,6 +242,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
   });
   const sessionBusy = agentRunning || bashRunning;
+  const rewindEntries = useMemo(
+    () => buildRewindEntries(data?.tree ?? [], activeLeafId),
+    [data, activeLeafId],
+  );
   // omp's render-affecting settings (hideThinkingBlock). Synced here once for
   // the whole transcript; MessageView reads the shared store directly.
   const { hideThinkingBlock } = useSyncedDisplaySettings(newSessionCwd ?? session?.cwd ?? null);
@@ -498,6 +505,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
         <ExtensionCustomPanel
           request={extensionCustomUi}
           onInput={sendExtensionCustomInput}
+        />
+      )}
+
+      {rewindOpen && (
+        <RewindDialog
+          entries={rewindEntries}
+          onSelect={handleRewind}
+          onClose={closeRewindPanel}
         />
       )}
 

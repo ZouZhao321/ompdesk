@@ -215,7 +215,7 @@ function appendSlashCommand(
  * TUI-only handler, so it never reaches ACP discovery; ompdesk drives the same
  * GoalRuntime itself (lib/goal-mode.ts) and advertises it here.
  */
-export const BROWSER_NATIVE_SLASH_COMMANDS = ["fork", "goal"] as const;
+export const BROWSER_NATIVE_SLASH_COMMANDS = ["fork", "goal", "branch"] as const;
 
 /**
  * Registry metadata that does not describe the browser handler. omp 18.10 gave
@@ -999,7 +999,13 @@ export class AgentSessionWrapper {
           throw new Error("Cannot navigate while a shell command is running");
         }
         const result = await this.inner.navigateTree(command.targetId as string, {});
-        return { cancelled: result.cancelled };
+        // The SDK rewinds past the target user message and returns the draft it
+        // pulled out of the editor; the composer restores it verbatim.
+        return {
+          cancelled: result.cancelled,
+          ...(result.editorText ? { editorText: result.editorText } : {}),
+          ...(result.editorImages?.length ? { editorImages: result.editorImages } : {}),
+        };
       }
 
       case "set_thinking_level": {
