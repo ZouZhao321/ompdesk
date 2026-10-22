@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { RewindEntry, RewindEntryKind } from "@/lib/rewind";
 
@@ -21,14 +21,56 @@ export function RewindDialog({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // The composer keeps focus after `/rewind`, so the picker claims it
+  // explicitly; otherwise typing and Enter would still reach the hidden
+  // textarea and could send a prompt.
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        // Stop here so the global Esc shortcut cannot abort the session behind
+        // the open picker.
+        event.preventDefault();
+        event.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const buttons = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button"));
+      if (buttons.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      const active = document.activeElement;
+      // Focus outside the buttons (the container or the page behind it) re-enters
+      // the picker instead of escaping the modal.
+      if (!(active instanceof HTMLButtonElement) || !dialog.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+        return;
+      }
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <div
@@ -48,9 +90,11 @@ export function RewindDialog({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="rewind-title"
+        tabIndex={-1}
         style={{
           width: 560,
           maxWidth: "100%",
@@ -62,6 +106,7 @@ export function RewindDialog({
           background: "var(--bg-panel)",
           boxShadow: "0 12px 36px rgba(0,0,0,0.24)",
           overflow: "hidden",
+          outline: "none",
         }}
       >
         <div style={{ padding: "16px 18px 10px" }}>

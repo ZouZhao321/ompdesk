@@ -246,6 +246,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     () => buildRewindEntries(messages, entryIds),
     [messages, entryIds],
   );
+  // The picker hands focus back to the composer both when it is dismissed and
+  // once a rewind lands, so the restored draft is ready to edit.
+  const closeRewind = useCallback(() => {
+    closeRewindPanel();
+    chatInputRef?.current?.focus();
+  }, [closeRewindPanel, chatInputRef]);
+  const selectRewindEntry = useCallback(async (entryId: string) => {
+    await handleRewind(entryId);
+    chatInputRef?.current?.focus();
+  }, [handleRewind, chatInputRef]);
   // omp's render-affecting settings (hideThinkingBlock). Synced here once for
   // the whole transcript; MessageView reads the shared store directly.
   const { hideThinkingBlock } = useSyncedDisplaySettings(newSessionCwd ?? session?.cwd ?? null);
@@ -511,8 +521,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
       {rewindOpen && (
         <RewindDialog
           entries={rewindEntries}
-          onSelect={handleRewind}
-          onClose={closeRewindPanel}
+          onSelect={selectRewindEntry}
+          onClose={closeRewind}
         />
       )}
 
