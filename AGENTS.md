@@ -1,5 +1,25 @@
 # ompdesk - Development Notes
 
+## Git workflow
+
+Every change goes through a dedicated worktree and a pull request. Direct
+commits on `main` are not allowed.
+
+1. Confirm `.worktrees/` is ignored: `git check-ignore -q .worktrees/` must exit
+   `0`. If it does not, add the entry to `.gitignore` first.
+2. From the repository root, create a branch and its worktree together:
+   `git worktree add .worktrees/<type>/<name> -b <type>/<name>`.
+3. Do all edits, commits, and pushes inside that worktree. The main checkout
+   stays on `main` and stays clean.
+4. Open a PR against `main` with `gh pr create`. Opening and pushing to a PR is
+   allowed without asking; merging it needs explicit user approval.
+5. Remove the worktree and branch only after the PR is merged and the user
+   approves the cleanup.
+
+Commit titles follow `type(scope): 中文描述`, where `type` is one of `feat`,
+`fix`, `refactor`, `test`, `docs`, `chore`, `perf`. Keep each commit to one
+logical change.
+
 ## Quick Start
 
 ```bash
