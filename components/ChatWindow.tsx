@@ -253,8 +253,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     chatInputRef?.current?.focus();
   }, [closeRewindPanel, chatInputRef]);
   const selectRewindEntry = useCallback(async (entryId: string) => {
-    await handleRewind(entryId);
-    chatInputRef?.current?.focus();
+    // A failed busy check leaves the picker open; moving focus then would send
+    // typing into the composer hidden behind it.
+    if (await handleRewind(entryId)) chatInputRef?.current?.focus();
   }, [handleRewind, chatInputRef]);
   // omp's render-affecting settings (hideThinkingBlock). Synced here once for
   // the whole transcript; MessageView reads the shared store directly.
