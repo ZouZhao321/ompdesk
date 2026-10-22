@@ -999,12 +999,15 @@ export class AgentSessionWrapper {
           throw new Error("Cannot navigate while a shell command is running");
         }
         const result = await this.inner.navigateTree(command.targetId as string, {});
+        // The SDK hands back pi-ai ImageContent blocks; the wire contract only
+        // carries the bytes and the mime type the composer needs.
+        const editorImages = result.editorImages?.map(({ data, mimeType }) => ({ data, mimeType }));
         // The SDK rewinds past the target user message and returns the draft it
         // pulled out of the editor; the composer restores it verbatim.
         return {
           cancelled: result.cancelled,
           ...(result.editorText ? { editorText: result.editorText } : {}),
-          ...(result.editorImages?.length ? { editorImages: result.editorImages } : {}),
+          ...(editorImages?.length ? { editorImages } : {}),
         };
       }
 

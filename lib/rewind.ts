@@ -16,16 +16,6 @@ export type RewindPlan =
   | { handled: true; action: "openRewind" };
 
 /**
- * 判断斜杠命令名是否触发回退选点。
- * @param name 不含斜杠的命令名
- * @returns 命令名（去空白、忽略大小写）为 branch 或 rewind 时为 true
- */
-export function isRewindCommand(name: string): boolean {
-  const command = name.trim().toLowerCase();
-  return command === "branch" || command === "rewind";
-}
-
-/**
  * 根据会话忙碌状态决定 /rewind 与 /branch 的处理结果。
  * @param state 当前 agent 与 shell 的运行状态
  * @returns 忙碌时返回错误；否则要求打开回退选点

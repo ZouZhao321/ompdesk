@@ -340,6 +340,7 @@ function readCompactResult(result: unknown, reason: string): CompactResultInfo |
 }
 
 export interface ChatInputHandle {
+  focus: () => void;
   insertText: (text: string) => void;
   insertIfEmpty: (content: string) => void;
   prependText: (text: string) => void;
@@ -407,6 +408,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const [rewindOpen, setRewindOpen] = useState(false);
+  const rewindInFlightRef = useRef(false);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [modelSwitching, setModelSwitching] = useState(false);
@@ -2153,6 +2155,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleRewind = useCallback(async (entryId: string) => {
+    // The picker stays clickable until React re-renders, so a double click
+    // would otherwise fire two tree moves and restore the draft twice.
+    if (rewindInFlightRef.current) return;
+
     const plan = planRewindCommand({
       agentRunning: agentRunningRef.current,
       bashRunning: bashRunningRef.current,
@@ -2169,6 +2175,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return;
     }
 
+    rewindInFlightRef.current = true;
+    // Close before the round trip so the picker cannot take another selection.
+    setRewindOpen(false);
     try {
       const result = await sendAgentCommand<{
         cancelled?: boolean;
@@ -2177,17 +2186,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }>(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef);
       if (!result || result.cancelled) {
         addNotice({ type: "info", message: "Rewind cancelled" });
-        setRewindOpen(false);
         return;
       }
       // Rewind is an SDK-side tree move: the SDK pulls out the editor draft of
       // the message it rewound past, so reload the transcript and hand that
       // draft back to the composer.
-      setRewindOpen(false);
       await loadSession(sessionIdRef.current ?? sid);
       opts.chatInputRef?.current?.restoreSubmission(result.editorText ?? "", result.editorImages);
     } catch (e) {
       addNotice({ type: "error", message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      rewindInFlightRef.current = false;
     }
   }, [addNotice, loadSession, opts.chatInputRef]);
 
