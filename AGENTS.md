@@ -5,15 +5,27 @@
 Every change goes through a dedicated worktree and a pull request. Direct
 commits on `main` are not allowed.
 
-1. Confirm `.worktrees/` is ignored: `git check-ignore -q .worktrees/` must exit
-   `0`. If it does not, add the entry to `.gitignore` first.
-2. From the repository root, create a branch and its worktree together:
-   `git worktree add .worktrees/<type>/<name> -b <type>/<name>`.
-3. Do all edits, commits, and pushes inside that worktree. The main checkout
+1. Detect existing isolation before creating anything. Compare
+   `git rev-parse --path-format=absolute --git-dir` with `--git-common-dir`:
+   different paths mean the checkout is already a linked worktree, so work in
+   place and skip creation. A submodule (`git rev-parse
+   --show-superproject-working-tree` prints a path) counts as a normal
+   checkout.
+2. In a normal checkout, confirm `.worktrees/` is ignored:
+   `git check-ignore -q .worktrees/` must exit `0`. If it does not, add
+   `.worktrees/` to `.gitignore`, commit that change, then create the worktree.
+3. From the repository root, create the branch and worktree together:
+   `git worktree add .worktrees/<branch> -b <branch>`. Branch names are
+   `type/description`, with `type` from `feat`, `fix`, `refactor`, `test`,
+   `docs`, `chore`, `perf`. The checkout lands at `<repo>/.worktrees/<branch>`
+   and that directory is the default location for every task.
+4. Run `bun install` if dependencies are missing, then `bun test` to confirm
+   the baseline is clean before editing.
+5. Do all edits, commits, and pushes inside that worktree. The main checkout
    stays on `main` and stays clean.
-4. Open a PR against `main` with `gh pr create`. Opening and pushing to a PR is
+6. Open a PR against `main` with `gh pr create`. Opening and pushing to a PR is
    allowed without asking; merging it needs explicit user approval.
-5. Remove the worktree and branch only after the PR is merged and the user
+7. Remove the worktree and branch only after the PR is merged and the user
    approves the cleanup.
 
 Commit titles follow `type(scope): 中文描述`, where `type` is one of `feat`,
