@@ -2154,10 +2154,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setRewindOpen(false);
   }, []);
 
-  const handleRewind = useCallback(async (entryId: string) => {
+  // Resolves to whether the picker is closed, so the caller only moves focus
+  // once nothing is left for the picker to receive.
+  const handleRewind = useCallback(async (entryId: string): Promise<boolean> => {
     // The picker stays clickable until React re-renders, so a double click
     // would otherwise fire two tree moves and restore the draft twice.
-    if (rewindInFlightRef.current) return;
+    if (rewindInFlightRef.current) {
+      setRewindOpen(false);
+      addNotice({ type: "info", message: "Rewind is already in progress" });
+      return true;
+    }
 
     const plan = planRewindCommand({
       agentRunning: agentRunningRef.current,
@@ -2165,14 +2171,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     });
     if ("error" in plan) {
       addNotice({ type: "error", message: plan.error });
-      return;
+      return false;
     }
 
     const sid = sessionIdRef.current;
     if (!sid) {
       addNotice({ type: "error", message: "No active session to rewind" });
       setRewindOpen(false);
-      return;
+      return true;
     }
 
     rewindInFlightRef.current = true;
@@ -2186,7 +2192,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }>(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef);
       if (!result || result.cancelled) {
         addNotice({ type: "info", message: "Rewind cancelled" });
-        return;
+        return true;
       }
       // Rewind is an SDK-side tree move: the SDK pulls out the editor draft of
       // the message it rewound past, so reload the transcript and hand that
@@ -2198,6 +2204,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       rewindInFlightRef.current = false;
     }
+    return true;
   }, [addNotice, loadSession, opts.chatInputRef]);
 
   // Queued (undelivered) messages live in the queue panel only; the chat gets
