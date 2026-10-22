@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   const status = getWebAuthStatus();
   if (status.managedByEnvironment) {
     return NextResponse.json({
-      error: "Password access comes from the OMP_WEB_PASSWORD environment variable, which ompdesk cannot reset."
+      error: "Password access comes from the OMPDESK_PASSWORD environment variable, which ompdesk cannot reset."
         + " Change the variable on the server and restart it.",
     }, { status: 409 });
   }

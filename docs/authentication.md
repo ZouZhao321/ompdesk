@@ -27,7 +27,7 @@ has ever been set, ompdesk asks for one on the terminal before the server
 starts, so a run that was told to be locked can never come up unlocked. If a
 password is already stored, the flag just switches the lock back on.
 
-`OMP_WEB_AUTHENTICATED=1` does the same thing from the environment.
+`OMPDESK_AUTHENTICATED=1` does the same thing from the environment.
 
 Non-interactive launches — systemd, Docker, `ompdesk &` — cannot answer a
 prompt, so `--authenticated` fails there with a message instead of hanging. Set
@@ -36,7 +36,7 @@ the password once interactively, or use the environment variable below.
 **From the environment.**
 
 ```bash
-OMP_WEB_PASSWORD='a-long-random-password' ompdesk
+OMPDESK_PASSWORD='a-long-random-password' ompdesk
 ```
 
 The variable overrides the stored credential completely: while it is set, the
@@ -53,7 +53,7 @@ password itself is never written anywhere.**
 That is the whole reason recovery exists rather than a "show password" button:
 nothing on the machine can turn the file back into the password.
 
-`OMP_WEB_AUTH_FILE` overrides the location. Set it if you have migrated omp's
+`OMPDESK_AUTH_FILE` overrides the location. Set it if you have migrated omp's
 state to XDG directories, or if you want the credential somewhere else entirely;
 `bin/ompdesk.js` resolves the path once and passes it to the server, so the two
 halves can never disagree.
@@ -109,5 +109,5 @@ does not stop someone reading the wire.
 
 Separately from the password, API requests are accepted only for loopback names,
 IP literals, the bind hostname, and the exact names listed in
-`OMP_WEB_ALLOWED_HOSTS`; cross-site browser requests are rejected outright.
+`OMPDESK_ALLOWED_HOSTS`; cross-site browser requests are rejected outright.
 Those checks run before authentication and apply to `/recover` too.

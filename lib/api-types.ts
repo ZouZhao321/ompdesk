@@ -152,7 +152,7 @@ export interface ModelRoleAssignment {
   /** Resolver complaint, e.g. a selector that matches nothing available. */
   warning?: string;
 }
-export interface OmpWebReleaseInfo {
+export interface OmpdeskReleaseInfo {
   version: string;
   tagName: string;
   name: string;
@@ -161,37 +161,37 @@ export interface OmpWebReleaseInfo {
   publishedAt: string | null;
 }
 
-export interface OmpWebPackageInfo {
+export interface OmpdeskPackageInfo {
   version: string;
 }
 
-export type OmpWebInstallPlanReason =
+export type OmpdeskInstallPlanReason =
   | "disabled"
   | "latest-package-unavailable"
   | "current-version-unknown";
 
-export interface OmpWebInstallPlan {
+export interface OmpdeskInstallPlan {
   canInstall: boolean;
   manager: "bun" | "npm";
   command: string;
   alternateCommand: string;
   packageVersion?: string;
-  reason?: OmpWebInstallPlanReason;
+  reason?: OmpdeskInstallPlanReason;
   restartRequired: boolean;
 }
 
-export type OmpWebUpdateAvailability =
+export type OmpdeskUpdateAvailability =
   | "up-to-date"
   | "installable"
   | "manual";
 
-export interface OmpWebUpdateResponse {
+export interface OmpdeskUpdateResponse {
   currentAppVersion: string;
-  latestRelease: OmpWebReleaseInfo;
-  latestPackage: OmpWebPackageInfo | null;
+  latestRelease: OmpdeskReleaseInfo;
+  latestPackage: OmpdeskPackageInfo | null;
   updateAvailable: boolean;
-  availability: OmpWebUpdateAvailability;
-  install: OmpWebInstallPlan;
+  availability: OmpdeskUpdateAvailability;
+  install: OmpdeskInstallPlan;
   checkedAt: string;
 }
 
