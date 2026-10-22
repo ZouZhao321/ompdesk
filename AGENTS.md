@@ -354,6 +354,14 @@ theme) and `light` — so the browser and the TUI read as one product.
 `--font-mono` is a system stack on purpose: a local-first tool must not fetch a
 font from a CDN at build or at runtime.
 
+## Agent entry points
+
+`AGENTS.md` is the only maintained source for project instructions.
+`CLAUDE.md` contains an `@AGENTS.md` import and nothing else, so Claude Code
+reads the same text. Keep new content here, and reindex with
+`node .gitnexus/run.cjs analyze --index-only` so the generated blocks are not
+written back into `CLAUDE.md`.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
