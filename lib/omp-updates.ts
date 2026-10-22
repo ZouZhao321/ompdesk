@@ -228,7 +228,7 @@ export function buildInstallPlan({
   };
 }
 
-export async function getOmpdeskUpdateStatus(options: UpdateStatusOptions = {}): Promise<OmpdeskUpdateResponse> {
+export async function getUpdateStatus(options: UpdateStatusOptions = {}): Promise<OmpdeskUpdateResponse> {
   const fetcher = options.fetcher ?? fetch;
   const currentAppVersion = canonicalVersion(options.currentAppVersion ?? process.env.NEXT_PUBLIC_APP_VERSION) ?? "unknown";
 
@@ -270,7 +270,7 @@ export async function getOmpdeskUpdateStatus(options: UpdateStatusOptions = {}):
   };
 }
 
-export async function installOmpdeskUpdate({ manager }: InstallOptions): Promise<OmpdeskUpdateInstallResult> {
+export async function installUpdate({ manager }: InstallOptions): Promise<OmpdeskUpdateInstallResult> {
   const command = commandForManager(manager);
   const result = await execFileAsync(command.executable, command.args, {
     timeout: UPDATE_TIMEOUT_MS,

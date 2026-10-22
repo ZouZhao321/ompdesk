@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
-import { getOmpdeskUpdateStatus, installOmpdeskUpdate } from "@/lib/omp-updates";
+import { getUpdateStatus, installUpdate } from "@/lib/omp-updates";
 import { redactNpxOutput } from "@/lib/npx";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const status = await getOmpdeskUpdateStatus();
+    const status = await getUpdateStatus();
     return NextResponse.json(status, {
       headers: { "Cache-Control": "private, no-store" },
     });
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const status = await getOmpdeskUpdateStatus();
+    const status = await getUpdateStatus();
     if (!status.install.canInstall) {
       return NextResponse.json(
         {
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await installOmpdeskUpdate({ manager: status.install.manager });
+    const result = await installUpdate({ manager: status.install.manager });
     return NextResponse.json({
       success: true,
       output: result.output,
