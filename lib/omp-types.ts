@@ -8,6 +8,7 @@ import type {
 import type { GoalModeState } from "@oh-my-pi/pi-coding-agent/goals/state";
 import type { Goal } from "@oh-my-pi/pi-tui/tools/goal";
 import type { ExtensionAskDialogQuestion, ExtensionAskDialogResult } from "./types";
+import type { ChatDraftImage } from "./draft-store";
 
 
 export interface ContextUsage {
@@ -41,6 +42,7 @@ export interface ToolInfo {
 
 export interface NavigateTreeResult {
   editorText?: string;
+  editorImages?: ChatDraftImage[];
   cancelled: boolean;
   aborted?: boolean;
 }

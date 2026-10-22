@@ -151,12 +151,14 @@ type SlashCommandPaletteItem = SlashCommandInfo | LocalBuiltinSlashCommand;
 
 type SlashCommandSource = SlashCommandPaletteItem["source"];
 
-const BUILTIN_SLASH_COMMANDS: LocalBuiltinSlashCommand[] = [
+export const BUILTIN_SLASH_COMMANDS: LocalBuiltinSlashCommand[] = [
   { name: "compact", descriptionKey: "chat.commandCompact", source: "builtin" },
   { name: "reload", descriptionKey: "chat.commandReload", source: "builtin" },
   { name: "name", descriptionKey: "chat.commandName", source: "builtin" },
   { name: "session", descriptionKey: "chat.commandSession", source: "builtin" },
   { name: "copy", descriptionKey: "chat.commandCopy", source: "builtin" },
+  { name: "branch", descriptionKey: "chat.commandRewind", source: "builtin" },
+  { name: "rewind", descriptionKey: "chat.commandRewind", source: "builtin" },
 ];
 
 const SLASH_SOURCES: SlashCommandSource[] = ["builtin", "extension", "custom", "mcp_prompt", "prompt", "file", "skill"];
