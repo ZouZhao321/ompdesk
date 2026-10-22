@@ -218,7 +218,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   }, [chatInputRef]);
 
   const {
-    data, activeLeafId, loading, error, messages, entryIds, streamState,
+    loading, error, messages, entryIds, streamState,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, modelRoles, toolPreset, thinkingLevel,
     effectiveThinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
@@ -243,8 +243,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   });
   const sessionBusy = agentRunning || bashRunning;
   const rewindEntries = useMemo(
-    () => buildRewindEntries(data?.tree ?? [], activeLeafId),
-    [data, activeLeafId],
+    () => buildRewindEntries(messages, entryIds),
+    [messages, entryIds],
   );
   // omp's render-affecting settings (hideThinkingBlock). Synced here once for
   // the whole transcript; MessageView reads the shared store directly.

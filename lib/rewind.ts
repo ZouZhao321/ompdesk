@@ -1,4 +1,4 @@
-import type { SessionTreeNode } from "./types";
+import type { AgentMessage } from "./types";
 import type { ChatDraftImage } from "./draft-store";
 import { isBase64ImageWithinLimits } from "./image-attachments";
 
@@ -35,15 +35,6 @@ export function planRewindCommand(state: { agentRunning: boolean; bashRunning: b
     return { handled: true, error: "Cannot rewind while the session is busy" };
   }
   return { handled: true, action: "openRewind" };
-}
-
-function findPath(nodes: SessionTreeNode[], targetId: string): SessionTreeNode[] | null {
-  for (const node of nodes) {
-    if (node.entry.id === targetId) return [node];
-    const childPath = findPath(node.children ?? [], targetId);
-    if (childPath) return [node, ...childPath];
-  }
-  return null;
 }
 
 function toKind(role: unknown): RewindEntryKind {
@@ -96,25 +87,23 @@ function readImages(content: unknown): ChatDraftImage[] {
 }
 
 /**
- * 构建当前分支（root → active leaf）上的可选点列表。
- * @param tree 会话树
- * @param activeLeafId 当前活动叶子 entry id
- * @returns 按 root-to-leaf 顺序的消息条目；叶子缺失或未知时为空
+ * 构建当前分支正文上的可选点列表。
+ * @param messages 当前活动分支的消息正文
+ * @param entryIds 与消息按下标一一对应的会话 entry id
+ * @returns 按消息顺序的条目；缺少 entry id 的消息跳过
  */
-export function buildRewindEntries(tree: SessionTreeNode[], activeLeafId: string | null): RewindEntry[] {
-  if (!activeLeafId) return [];
-  const path = findPath(tree, activeLeafId);
-  if (!path) return [];
-
+export function buildRewindEntries(messages: AgentMessage[], entryIds: readonly string[]): RewindEntry[] {
   const entries: RewindEntry[] = [];
-  for (const node of path) {
-    const { entry } = node;
-    if (entry.type !== "message") continue;
-    const kind = toKind(entry.message.role);
-    // Bash execution entries carry no content blocks; everything else does.
-    const content = "content" in entry.message ? entry.message.content : "";
+  const count = Math.min(messages.length, entryIds.length);
+  for (let index = 0; index < count; index += 1) {
+    const entryId = entryIds[index];
+    if (!entryId) continue;
+    const message = messages[index];
+    const kind = toKind(message.role);
+    // Bash 执行消息没有 content 字段；其余消息都带有内容块。
+    const content = "content" in message ? message.content : "";
     entries.push({
-      entryId: entry.id,
+      entryId,
       kind,
       text: readText(content),
       images: kind === "user" ? readImages(content) : [],
