@@ -9,7 +9,7 @@ Use this skill for releases of `ZouZhao321/ompdesk`.
 
 ## Release-body contract
 
-The release body follows the published [v0.1.7 template](https://github.com/ddallabenetta/omp-web/releases/tag/v0.1.7):
+The release body follows the published `v0.1.7` template:
 
 ```markdown
 Prepared from commits in `v<previous>..v<version>`.

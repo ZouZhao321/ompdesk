@@ -2,14 +2,14 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getSafeNpxEnv, redactNpxOutput } from "@/lib/npx";
 import type {
-  OmpWebInstallPlan,
-  OmpWebPackageInfo,
-  OmpWebReleaseInfo,
-  OmpWebUpdateResponse,
+  OmpdeskInstallPlan,
+  OmpdeskPackageInfo,
+  OmpdeskReleaseInfo,
+  OmpdeskUpdateResponse,
 } from "@/lib/api-types";
 
-export const OMP_WEB_GITHUB_RELEASE_API_URL = "https://api.github.com/repos/ZouZhao321/ompdesk/releases/latest";
-export const OMP_WEB_NPM_LATEST_URL = "https://registry.npmjs.org/ompdesk/latest";
+export const OMPDESK_GITHUB_RELEASE_API_URL = "https://api.github.com/repos/ZouZhao321/ompdesk/releases/latest";
+export const OMPDESK_NPM_LATEST_URL = "https://registry.npmjs.org/ompdesk/latest";
 
 const RELEASE_CACHE_SECONDS = 60 * 60;
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -18,7 +18,7 @@ const MAX_CHANGELOG_LENGTH = 40_000;
 const execFileAsync = promisify(execFile);
 
 type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
-type UpdateManager = OmpWebInstallPlan["manager"];
+type UpdateManager = OmpdeskInstallPlan["manager"];
 
 interface ParsedVersion {
   major: number;
@@ -50,7 +50,7 @@ interface InstallOptions {
   manager: UpdateManager;
 }
 
-export interface OmpWebUpdateInstallResult {
+export interface OmpdeskUpdateInstallResult {
   output: string;
 }
 
@@ -114,7 +114,7 @@ function isNewerVersion(latest: string | null, current: string | null): boolean 
   return Boolean(latest && current && compareVersions(latest, current) > 0);
 }
 
-function releaseFromPayload(payload: GitHubReleasePayload): OmpWebReleaseInfo {
+function releaseFromPayload(payload: GitHubReleasePayload): OmpdeskReleaseInfo {
   const version = canonicalVersion(payload.tag_name);
   if (!version) throw new Error("The ompdesk release did not contain a valid version tag");
 
@@ -136,7 +136,7 @@ function releaseFromPayload(payload: GitHubReleasePayload): OmpWebReleaseInfo {
   };
 }
 
-function releaseFromPackage(version: string): OmpWebReleaseInfo {
+function releaseFromPackage(version: string): OmpdeskReleaseInfo {
   const tagName = `v${version}`;
   return {
     version,
@@ -148,7 +148,7 @@ function releaseFromPackage(version: string): OmpWebReleaseInfo {
   };
 }
 
-function publishedPackageFromPayload(payload: NpmPackagePayload): OmpWebPackageInfo | null {
+function publishedPackageFromPayload(payload: NpmPackagePayload): OmpdeskPackageInfo | null {
   const version = canonicalVersion(payload.version);
   return version ? { version } : null;
 }
@@ -175,8 +175,8 @@ async function fetchJson(url: string, fetcher: Fetcher): Promise<unknown> {
 }
 
 function selectManager(env: NodeJS.ProcessEnv, runtime: "bun" | "node"): UpdateManager {
-  if (env.OMP_WEB_UPDATE_MANAGER === "npm") return "npm";
-  if (env.OMP_WEB_UPDATE_MANAGER === "bun") return "bun";
+  if (env.OMPDESK_UPDATE_MANAGER === "npm") return "npm";
+  if (env.OMPDESK_UPDATE_MANAGER === "bun") return "bun";
   if (env.npm_config_user_agent?.toLowerCase().includes("npm")) return "npm";
   return runtime === "node" ? "npm" : "bun";
 }
@@ -199,10 +199,10 @@ export function buildInstallPlan({
   runtime = "bun",
 }: {
   currentAppVersion: string | null;
-  latestPackage: OmpWebPackageInfo | null;
+  latestPackage: OmpdeskPackageInfo | null;
   env?: NodeJS.ProcessEnv;
   runtime?: "bun" | "node";
-}): OmpWebInstallPlan {
+}): OmpdeskInstallPlan {
   const manager = selectManager(env, runtime);
   const command = commandForManager(manager);
   const alternate = commandForManager(manager === "bun" ? "npm" : "bun");
@@ -210,10 +210,10 @@ export function buildInstallPlan({
     latestPackage
     && isNewerVersion(latestPackage.version, currentAppVersion),
   );
-  const canInstall = updateAvailable && env.OMP_WEB_DISABLE_SELF_UPDATE !== "1";
+  const canInstall = updateAvailable && env.OMPDESK_DISABLE_SELF_UPDATE !== "1";
 
-  let reason: OmpWebInstallPlan["reason"];
-  if (env.OMP_WEB_DISABLE_SELF_UPDATE === "1") reason = "disabled";
+  let reason: OmpdeskInstallPlan["reason"];
+  if (env.OMPDESK_DISABLE_SELF_UPDATE === "1") reason = "disabled";
   else if (!latestPackage) reason = "latest-package-unavailable";
   else if (!currentAppVersion) reason = "current-version-unknown";
 
@@ -228,17 +228,17 @@ export function buildInstallPlan({
   };
 }
 
-export async function getOmpWebUpdateStatus(options: UpdateStatusOptions = {}): Promise<OmpWebUpdateResponse> {
+export async function getUpdateStatus(options: UpdateStatusOptions = {}): Promise<OmpdeskUpdateResponse> {
   const fetcher = options.fetcher ?? fetch;
   const currentAppVersion = canonicalVersion(options.currentAppVersion ?? process.env.NEXT_PUBLIC_APP_VERSION) ?? "unknown";
 
-  const packagePayload = await fetchJson(OMP_WEB_NPM_LATEST_URL, fetcher) as NpmPackagePayload;
+  const packagePayload = await fetchJson(OMPDESK_NPM_LATEST_URL, fetcher) as NpmPackagePayload;
   const latestPackage = publishedPackageFromPayload(packagePayload);
   if (!latestPackage) throw new Error("The npm registry did not return a valid ompdesk version");
 
   let latestRelease = releaseFromPackage(latestPackage.version);
   try {
-    const releasePayload = await fetchJson(OMP_WEB_GITHUB_RELEASE_API_URL, fetcher) as GitHubReleasePayload;
+    const releasePayload = await fetchJson(OMPDESK_GITHUB_RELEASE_API_URL, fetcher) as GitHubReleasePayload;
     const candidate = releaseFromPayload(releasePayload);
     if (compareVersions(candidate.version, latestPackage.version) === 0) latestRelease = candidate;
   } catch {
@@ -253,7 +253,7 @@ export async function getOmpWebUpdateStatus(options: UpdateStatusOptions = {}): 
     runtime: options.runtime,
   });
   const updateAvailable = isNewerVersion(latestPackage.version, currentAppVersion);
-  const availability: OmpWebUpdateResponse["availability"] = !updateAvailable
+  const availability: OmpdeskUpdateResponse["availability"] = !updateAvailable
     ? "up-to-date"
     : install.canInstall
       ? "installable"
@@ -270,7 +270,7 @@ export async function getOmpWebUpdateStatus(options: UpdateStatusOptions = {}): 
   };
 }
 
-export async function installOmpWebUpdate({ manager }: InstallOptions): Promise<OmpWebUpdateInstallResult> {
+export async function installUpdate({ manager }: InstallOptions): Promise<OmpdeskUpdateInstallResult> {
   const command = commandForManager(manager);
   const result = await execFileAsync(command.executable, command.args, {
     timeout: UPDATE_TIMEOUT_MS,
