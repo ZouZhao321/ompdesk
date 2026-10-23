@@ -1,12 +1,10 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 "use strict";
 
 const {
   getMissingBunMessage,
   getUnsupportedBunVersionMessage,
-  getUnsupportedNodeVersionMessage,
   isBunVersionSupported,
-  isNodeVersionSupported,
   resolveBunPath,
   withLoopbackNoProxy,
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -14,11 +12,6 @@ const {
 
 if (process.versions.bun && !isBunVersionSupported(process.versions.bun)) {
   console.error(getUnsupportedBunVersionMessage(process.versions.bun));
-  process.exit(1);
-}
-
-if (!process.versions.bun && !isNodeVersionSupported(process.versions.node)) {
-  console.error(getUnsupportedNodeVersionMessage(process.versions.node));
   process.exit(1);
 }
 
@@ -152,9 +145,9 @@ function warnAboutExposure() {
 function startServer() {
   warnAboutExposure();
 
-  // `--bun` forces Bun's own runtime for next's CLI entry (it would otherwise
-  // hand shebang'd scripts to node). The omp SDK ships TypeScript sources and
-  // `bun:` builtins, so the API routes only resolve under Bun.
+  // The launcher itself runs on Bun, and `--bun` keeps next's CLI entry on the
+  // same runtime instead of handing its shebang to node. The omp SDK ships
+  // TypeScript sources and `bun:` builtins, so the API routes only resolve here.
   const child = spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", hostname], {
     cwd: pkgDir,
     stdio: ["inherit", "pipe", "inherit"],
