@@ -162,7 +162,7 @@ Requests to loopback addresses are never proxied, so a local provider (Ollama, L
 - **Try different directions safely**: continue from an earlier message or fork a session into a separate route.
 - **Work across branches**: switch Git worktrees from the sidebar so new sessions and the Explorer follow the checkout you choose.
 - **Chat beside the project**: browse files on the left and preview source, docs, images, audio, and PDFs on the right while the agent works.
-- **See session state clearly**: context usage, cost, compaction state, and system prompt details are visible from the top bar.
+- **See session state clearly**: context usage, cost, and compaction state are visible from the top bar.
 - **Configure less from the terminal**: manage providers, logins/API keys, model tests, plugins, and skill switches from the web UI.
 - **Use the interface in your language**: switch between the supported UI languages from the top bar.
 

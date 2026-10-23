@@ -82,7 +82,6 @@ type AgentStateResponse = {
   sessionId?: string;
   model?: { provider: string; id: string };
   contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
-  systemPrompt?: string;
   thinkingLevel?: string;
   configuredThinkingLevel?: string;
   isStreaming?: boolean;
@@ -179,7 +178,6 @@ export interface UseAgentSessionOptions {
   modelsRefreshKey?: number;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
-  onSystemPromptChange?: (prompt: string | null) => void;
   onSessionStatsPanelOpen?: () => void;
   setToolPreset?: (preset: "none" | "default" | "full") => void;
 }
@@ -373,7 +371,7 @@ type SlashCommandsResponse = {
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     session, newSessionCwd, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
-    modelsRefreshKey, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
+    modelsRefreshKey, onBranchDataChange, onSessionStatsPanelOpen,
   } = opts;
 
   const isNew = session === null && newSessionCwd !== null;
@@ -402,7 +400,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [effectiveThinkingLevel, setEffectiveThinkingLevel] = useState<string | undefined>();
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
-  const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
@@ -641,7 +638,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (!agentState.running && liveState?.sessionId) runtimeIdRef.current = null;
         if (liveState) {
           if (liveState.contextUsage !== undefined) setContextUsage(liveState.contextUsage ?? null);
-          if (liveState.systemPrompt !== undefined) setSystemPrompt(liveState.systemPrompt ?? null);
           if (liveState.thinkingLevel !== undefined) {
             setThinkingLevel((liveState.configuredThinkingLevel ?? liveState.thinkingLevel) as ThinkingLevelOption);
             setEffectiveThinkingLevel(liveState.thinkingLevel);
@@ -1273,7 +1269,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         && (state.isStreaming || state.isPromptRunning || state.isCompacting || state.isHandoffRunning);
       if (busy || !agentRunningRef.current) return;
       if (state) {
-        if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
         if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
         if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
       }
@@ -1381,7 +1376,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             .then((d: { state?: AgentStateResponse }) => {
               if (followRuntimeState(d.state, sid, requestedRuntimeId)) return;
               if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
-              if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
               if (d.state?.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, d.state?.subagents ?? []));
@@ -2342,7 +2336,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (state) {
           if (state.isCompacting !== undefined) setIsCompacting(state.isCompacting);
           if (state.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
-          if (state.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
           if (state.thinkingLevel !== undefined) {
             setThinkingLevel((state.configuredThinkingLevel ?? state.thinkingLevel) as ThinkingLevelOption);
             setEffectiveThinkingLevel(state.thinkingLevel);
@@ -2362,10 +2355,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    onSystemPromptChange?.(systemPrompt);
-  }, [systemPrompt, onSystemPromptChange]);
 
   useEffect(() => {
     if (!onBranchDataChange) return;
@@ -2458,7 +2447,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     data, loading, error, activeLeafId, messages, entryIds, streamState,
     agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, modelRoles, newSessionModel, toolPreset, thinkingLevel,
     effectiveThinkingLevel,
-    retryInfo, contextUsage, systemPrompt, forkingEntryId,
+    retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, modelSwitching, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages, subagents,
     notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
