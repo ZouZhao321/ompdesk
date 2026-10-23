@@ -267,7 +267,7 @@ test("shows context occupancy and warning state", () => {
   assert.match(html, /78%/);
   assert.match(html, /Context window is getting full/);
 });
-test("keeps the context indicator visible before usage is available", () => {
+test("hides the context indicator before usage is available", () => {
   const html = renderToStaticMarkup(
     React.createElement(
       I18nProvider,
@@ -280,7 +280,6 @@ test("keeps the context indicator visible before usage is available", () => {
     ),
   );
 
-  assert.match(html, /role="status"/);
-  assert.match(html, /data-context-available="false"/);
-  assert.match(html, /\? \/ \?/);
+  assert.doesNotMatch(html, /data-context-available/);
+  assert.doesNotMatch(html, /\? \/ \?/);
 });
