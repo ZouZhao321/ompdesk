@@ -215,7 +215,7 @@ function appendSlashCommand(
  * TUI-only handler, so it never reaches ACP discovery; ompdesk drives the same
  * GoalRuntime itself (lib/goal-mode.ts) and advertises it here.
  */
-export const BROWSER_NATIVE_SLASH_COMMANDS = ["fork", "goal", "branch"] as const;
+export const BROWSER_NATIVE_SLASH_COMMANDS = ["fork", "goal"] as const;
 
 /**
  * Registry metadata that does not describe the browser handler. omp 18.10 gave

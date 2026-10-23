@@ -8,12 +8,15 @@ const jiti = createJiti(import.meta.url, {
 });
 const { BUILTIN_SLASH_COMMANDS } = await jiti.import("./ChatInput.tsx");
 
-test("registers /branch and /rewind as local builtin slash commands", () => {
+test("registers /rewind as the only local rewind command", () => {
   assert.ok(Array.isArray(BUILTIN_SLASH_COMMANDS), "BUILTIN_SLASH_COMMANDS must be an exported array");
 
-  for (const name of ["branch", "rewind"]) {
-    const matches = BUILTIN_SLASH_COMMANDS.filter((command) => command.name === name);
-    assert.equal(matches.length, 1, `${name} must be registered exactly once`);
-    assert.equal(matches[0].descriptionKey, "chat.commandRewind");
-  }
+  const matches = BUILTIN_SLASH_COMMANDS.filter((command) => command.name === "rewind");
+  assert.equal(matches.length, 1, "rewind must be registered exactly once");
+  assert.equal(matches[0].descriptionKey, "chat.commandRewind");
+  assert.equal(
+    BUILTIN_SLASH_COMMANDS.some((command) => command.name === "branch"),
+    false,
+    "/branch is an alias of /rewind and must not be registered separately",
+  );
 });

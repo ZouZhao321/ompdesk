@@ -158,7 +158,6 @@ export const BUILTIN_SLASH_COMMANDS: LocalBuiltinSlashCommand[] = [
   { name: "name", descriptionKey: "chat.commandName", source: "builtin" },
   { name: "session", descriptionKey: "chat.commandSession", source: "builtin" },
   { name: "copy", descriptionKey: "chat.commandCopy", source: "builtin" },
-  { name: "branch", descriptionKey: "chat.commandRewind", source: "builtin" },
   { name: "rewind", descriptionKey: "chat.commandRewind", source: "builtin" },
 ];
 
