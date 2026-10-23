@@ -2306,7 +2306,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               flex: 1,
               minWidth: 0,
               display: "flex",
-              justifyContent: "center",
+              justifyContent: "flex-start",
             }}>
               <ContextUsageMeter usage={contextUsage} t={t} />
             </div>
