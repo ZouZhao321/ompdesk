@@ -2301,7 +2301,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
           </div>
 
-          {!isMobile && (contextUsage?.tokens ?? 0) > 0 && (
+          {!isMobile && (
             <div style={{
               flex: 1,
               minWidth: 0,
@@ -2736,7 +2736,7 @@ function getContextPercent(usage: ContextUsage): number | null {
   return null;
 }
 
-function ContextUsageMeter({
+export function ContextUsageMeter({
   usage,
   t,
 }: {
@@ -2750,6 +2750,7 @@ function ContextUsageMeter({
     ? Math.max(0, usage.tokens)
     : null;
   const percent = usage ? getContextPercent(usage) : null;
+  if (tokens === null || tokens <= 0) return null;
   const level = percent !== null && percent >= CONTEXT_CRITICAL_PERCENT
     ? "critical"
     : percent !== null && percent >= CONTEXT_WARNING_PERCENT
