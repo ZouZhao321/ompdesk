@@ -2301,7 +2301,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
           </div>
 
-          {!isMobile && (
+          {!isMobile && (contextUsage?.tokens ?? 0) > 0 && (
             <div style={{
               flex: 1,
               minWidth: 0,
