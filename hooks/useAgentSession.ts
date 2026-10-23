@@ -2078,8 +2078,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           return complete({ handled: true, message: result?.message ?? "Command completed" });
         }
 
-        case "rewind":
-        case "branch": {
+        case "rewind": {
           const plan = planRewindCommand({
             agentRunning: agentRunningRef.current,
             bashRunning: bashRunningRef.current,

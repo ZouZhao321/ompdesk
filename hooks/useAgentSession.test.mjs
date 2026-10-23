@@ -254,7 +254,7 @@ test("renders the transcript with omp's hideThinkingBlock setting", () => {
   assert.match(chatWindowSource, /findFinalAssistantIndex\(messages, userIdx, endIdx, displayOptions\)/);
 });
 
-test("/branch and /rewind delegate to planRewindCommand and reuse its result", () => {
+test("/rewind delegates to planRewindCommand and reuses its result", () => {
   const dispatchSource = source.slice(
     source.indexOf("const handleBuiltinSlashCommand = useCallback"),
     source.indexOf("const handleSteer = useCallback"),
@@ -262,28 +262,16 @@ test("/branch and /rewind delegate to planRewindCommand and reuse its result", (
 
   assert.match(source, /import \{[^}]*\bplanRewindCommand\b[^}]*\} from "@\/lib\/rewind"/);
 
-  const branchIndex = dispatchSource.indexOf('case "branch":');
   const rewindIndex = dispatchSource.indexOf('case "rewind":');
-  assert.ok(branchIndex >= 0, "/branch must have a dispatch case");
   assert.ok(rewindIndex >= 0, "/rewind must have a dispatch case");
 
-  const regionStart = Math.min(branchIndex, rewindIndex);
-  const laterEnd = Math.max(
-    branchIndex + 'case "branch":'.length,
-    rewindIndex + 'case "rewind":'.length,
-  );
-  const nextCase = dispatchSource.indexOf('case "', laterEnd);
-  const defaultCase = dispatchSource.indexOf("default:", laterEnd);
+  const nextCase = dispatchSource.indexOf('case "', rewindIndex + 'case "rewind":'.length);
+  const defaultCase = dispatchSource.indexOf("default:", rewindIndex);
   const regionEnd = [nextCase, defaultCase]
     .filter((index) => index >= 0)
     .sort((left, right) => left - right)[0] ?? dispatchSource.length;
-  const rewindRegion = dispatchSource.slice(regionStart, regionEnd);
+  const rewindRegion = dispatchSource.slice(rewindIndex, regionEnd);
 
-  assert.match(
-    rewindRegion,
-    /case "branch":\s*case "rewind":|case "rewind":\s*case "branch":/,
-    "/branch and /rewind must share one dispatch branch",
-  );
   assert.match(rewindRegion, /planRewindCommand\(\{/);
   assert.match(rewindRegion, /agentRunning:\s*agentRunningRef\.current/);
   assert.match(rewindRegion, /bashRunning:\s*bashRunningRef\.current/);
@@ -292,5 +280,6 @@ test("/branch and /rewind delegate to planRewindCommand and reuse its result", (
     /return\s+(?:complete\()?[A-Za-z_$][\w$]*(?:\))?\s*;/,
     "the dispatch must return the plan result unchanged",
   );
+  assert.doesNotMatch(dispatchSource, /case "branch":/);
   assert.doesNotMatch(dispatchSource, /Cannot rewind while the session is busy/);
 });
