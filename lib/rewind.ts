@@ -24,6 +24,25 @@ export function planRewindCommand(state: { agentRunning: boolean; bashRunning: b
   return { handled: true, action: "openRewind" };
 }
 
+/**
+ * 把 `branch` 归一为 `rewind`：`/branch` 是 `/rewind` 的别名，命令面板只注册 `/rewind`。
+ * @param name 斜杠命令名（不含前导斜杠）
+ * @returns 归一后的命令名；其余命令原样返回
+ */
+export function normalizeRewindCommand(name: string): string {
+  return name === "branch" ? "rewind" : name;
+}
+
+/**
+ * 判断整条输入是否就是 `/rewind` 或 `/branch`（允许尾部空白）。
+ * 带参数时仍交给模型侧解释，避免吞掉用户真正想发出去的内容。
+ * @param message 输入框中的原始文本
+ * @returns 属于回退命令时为 true
+ */
+export function isRewindInput(message: string): boolean {
+  return /^\/(?:rewind|branch)\s*$/.test(message);
+}
+
 function readText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";

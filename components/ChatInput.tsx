@@ -23,6 +23,7 @@ import {
   buildEntriesFromFiles, buildAtInsertText, extractAtQuery, filterFileEntries,
   type AtQueryMatch, type FileIndexEntry,
 } from "@/lib/file-fuzzy";
+import { isRewindInput } from "@/lib/rewind";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { formatTokenCount } from "@/lib/format-tokens";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -1005,6 +1006,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (!msg && !attachedImages.length) return;
     if (attachedImages.length) return;
     onAudioUnlock?.();
+    // 忙碌时 `/rewind` 与 `/branch` 必须走内建分发拿到忙态提示，不能被当成 steer/follow-up 发给模型。
+    if (isRewindInput(msg)) {
+      clearInput();
+      void onBuiltinCommand?.(msg);
+      return;
+    }
     const streamingBehavior = mode === "steer" ? "steer" : "followUp";
     if (msg.startsWith("/") && onPromptWithStreamingBehavior) {
       clearInput();
@@ -1017,7 +1024,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     } else if (mode === "followup" && onFollowUp) {
       onFollowUp(msg, attachedImages.length ? attachedImages : undefined);
     }
-  }, [value, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock]);
+  }, [value, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock, onBuiltinCommand]);
 
   const getNextSlashIndex = useCallback((direction: "up" | "down" | "left" | "right") => {
     const lastIndex = displayedSlashCommands.length - 1;
