@@ -16,7 +16,7 @@ import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
-import { planRewindCommand } from "@/lib/rewind";
+import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
 import type { ChatDraftImage } from "@/lib/draft-store";
 import { rememberSessionContinuation, clearSessionContinuation } from "@/lib/workspace-memory";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
@@ -1982,6 +1982,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!match) return { handled: false };
 
     const [, commandName, rawArgs = ""] = match;
+    const normalizedCommandName = normalizeRewindCommand(commandName);
     const args = rawArgs.trim();
     const sid = sessionIdRef.current ?? await ensureNewSession();
     const complete = (result: BuiltinSlashCommandResult): BuiltinSlashCommandResult => {
@@ -1995,7 +1996,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
 
     try {
-      switch (commandName) {
+      switch (normalizedCommandName) {
         case "compact": {
           if (!sid || isCompacting) return complete({ handled: true, error: "No active session to compact" });
           setIsCompacting(true);
