@@ -7,7 +7,6 @@ const { delimiter, join } = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { homedir } = require("os");
 
-const MIN_NODE_VERSION = "22.19.0";
 const MIN_BUN_VERSION = "1.3.14";
 
 function parseVersion(version) {
@@ -26,18 +25,6 @@ function isAtLeast(version, minimum) {
     if (current[index] < floor[index]) return false;
   }
   return true;
-}
-
-function isNodeVersionSupported(version) {
-  return isAtLeast(version, MIN_NODE_VERSION);
-}
-
-function getUnsupportedNodeVersionMessage(version) {
-  return [
-    `ompdesk requires Node.js ${MIN_NODE_VERSION} or newer.`,
-    `Current Node.js version: ${version}.`,
-    "Upgrade Node.js and try again: https://nodejs.org/",
-  ].join("\n");
 }
 
 function getUnsupportedBunVersionMessage(version) {
@@ -126,12 +113,9 @@ function withLoopbackNoProxy(env) {
 
 module.exports = {
   MIN_BUN_VERSION,
-  MIN_NODE_VERSION,
   getMissingBunMessage,
   getUnsupportedBunVersionMessage,
-  getUnsupportedNodeVersionMessage,
   isBunVersionSupported,
-  isNodeVersionSupported,
   resolveBunPath,
   withLoopbackNoProxy,
 };
