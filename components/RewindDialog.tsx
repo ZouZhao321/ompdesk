@@ -2,14 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import type { RewindEntry, RewindEntryKind } from "@/lib/rewind";
-
-const ROLE_LABEL_KEYS: Record<RewindEntryKind, string> = {
-  user: "chat.rewindRoleUser",
-  assistant: "chat.rewindRoleAssistant",
-  tool: "chat.rewindRoleTool",
-  other: "chat.rewindRoleOther",
-};
+import type { RewindEntry } from "@/lib/rewind";
 
 export function RewindDialog({
   entries,
@@ -142,21 +135,6 @@ export function RewindDialog({
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span
-                  style={{
-                    flexShrink: 0,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    border: "1px solid var(--border)",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: 0.4,
-                    textTransform: "uppercase",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  {t(ROLE_LABEL_KEYS[entry.kind])}
-                </span>
                 <span
                   style={{
                     flex: 1,
