@@ -2306,7 +2306,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               flex: 1,
               minWidth: 0,
               display: "flex",
-              justifyContent: "center",
+              justifyContent: "flex-start",
             }}>
               <ContextUsageMeter usage={contextUsage} t={t} />
             </div>
@@ -2720,6 +2720,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
 const CONTEXT_WARNING_PERCENT = 70;
 const CONTEXT_CRITICAL_PERCENT = 90;
+const CONTEXT_RING_RADIUS = 7.2;
+const CONTEXT_RING_CIRCUMFERENCE = 2 * Math.PI * CONTEXT_RING_RADIUS;
 
 function getContextPercent(usage: ContextUsage): number | null {
   if (typeof usage.percent === "number" && Number.isFinite(usage.percent)) return usage.percent;
@@ -2734,7 +2736,7 @@ function getContextPercent(usage: ContextUsage): number | null {
   return null;
 }
 
-function ContextUsageMeter({
+export function ContextUsageMeter({
   usage,
   t,
 }: {
@@ -2748,6 +2750,7 @@ function ContextUsageMeter({
     ? Math.max(0, usage.tokens)
     : null;
   const percent = usage ? getContextPercent(usage) : null;
+  if (tokens === null || tokens <= 0) return null;
   const level = percent !== null && percent >= CONTEXT_CRITICAL_PERCENT
     ? "critical"
     : percent !== null && percent >= CONTEXT_WARNING_PERCENT
@@ -2797,30 +2800,34 @@ function ContextUsageMeter({
       <span style={{ color: "var(--text-dim)", letterSpacing: 0.2 }}>
         {t("chat.contextUsageLabel")}
       </span>
-      <span
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 18 18"
         aria-hidden="true"
-        style={{
-          display: "block",
-          width: 58,
-          height: 4,
-          flex: "0 1 58px",
-          overflow: "hidden",
-          borderRadius: 999,
-          background: "var(--bg-subtle)",
-          boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent)",
-        }}
+        style={{ flex: "0 0 18px", display: "block", transform: "rotate(-90deg)" }}
       >
-        <span
-          style={{
-            display: "block",
-            width: `${progress}%`,
-            height: "100%",
-            borderRadius: "inherit",
-            background: color,
-            transition: "width 0.2s ease, background 0.2s ease",
-          }}
+        <circle
+          cx="9"
+          cy="9"
+          r={CONTEXT_RING_RADIUS}
+          fill="none"
+          stroke="color-mix(in srgb, var(--border) 70%, transparent)"
+          strokeWidth="2.4"
         />
-      </span>
+        <circle
+          cx="9"
+          cy="9"
+          r={CONTEXT_RING_RADIUS}
+          fill="none"
+          stroke={color}
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeDasharray={CONTEXT_RING_CIRCUMFERENCE}
+          strokeDashoffset={CONTEXT_RING_CIRCUMFERENCE * (1 - progress / 100)}
+          style={{ transition: "stroke-dashoffset 0.2s ease, stroke 0.2s ease" }}
+        />
+      </svg>
       {level !== "normal" && (
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M6 1.2 11 10.5H1L6 1.2Z" />
