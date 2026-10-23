@@ -2,11 +2,8 @@ import type { AgentMessage } from "./types";
 import type { ChatDraftImage } from "./draft-store";
 import { isBase64ImageWithinLimits } from "./image-attachments";
 
-export type RewindEntryKind = "user" | "assistant" | "tool" | "other";
-
 export interface RewindEntry {
   entryId: string;
-  kind: RewindEntryKind;
   text: string;
   images: ChatDraftImage[];
 }
@@ -25,13 +22,6 @@ export function planRewindCommand(state: { agentRunning: boolean; bashRunning: b
     return { handled: true, error: "Cannot rewind while the session is busy" };
   }
   return { handled: true, action: "openRewind" };
-}
-
-function toKind(role: unknown): RewindEntryKind {
-  if (role === "user") return "user";
-  if (role === "assistant") return "assistant";
-  if (role === "toolResult") return "tool";
-  return "other";
 }
 
 function readText(content: unknown): string {
@@ -77,27 +67,22 @@ function readImages(content: unknown): ChatDraftImage[] {
 }
 
 /**
- * 构建当前分支正文上的可选点列表。
+ * 构建当前分支上可撤销的目标。
+ * 只暴露最后一条用户消息：更早的消息一旦撤销，会作废它之后已建立的 KV 缓存前缀。
  * @param messages 当前活动分支的消息正文
  * @param entryIds 与消息按下标一一对应的会话 entry id
- * @returns 按消息顺序的条目；缺少 entry id 的消息跳过
+ * @returns 至多一个条目；最后一条用户消息缺少 entry id 时返回空
  */
 export function buildRewindEntries(messages: AgentMessage[], entryIds: readonly string[]): RewindEntry[] {
-  const entries: RewindEntry[] = [];
-  const count = Math.min(messages.length, entryIds.length);
-  for (let index = 0; index < count; index += 1) {
-    const entryId = entryIds[index];
-    if (!entryId) continue;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    const kind = toKind(message.role);
-    // Bash 执行消息没有 content 字段；其余消息都带有内容块。
+    if (message.role !== "user") continue;
+    const entryId = entryIds[index];
+    // 不能退而求其次选更早的用户消息，否则会绕过只撤销一轮的限制。
+    if (!entryId) return [];
+    // Bash 执行消息没有 content 字段；用户消息带有内容块。
     const content = "content" in message ? message.content : "";
-    entries.push({
-      entryId,
-      kind,
-      text: readText(content),
-      images: kind === "user" ? readImages(content) : [],
-    });
+    return [{ entryId, text: readText(content), images: readImages(content) }];
   }
-  return entries;
+  return [];
 }
