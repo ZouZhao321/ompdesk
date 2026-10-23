@@ -1262,23 +1262,11 @@ export function AppShell() {
             </div>
           )}
           {/* Session stats — right-aligned in top bar */}
-          {showChat && (sessionStats || contextUsage) && (() => {
+          {showChat && sessionStats && (() => {
              const tokens = sessionStats?.tokens;
             const c = sessionStats?.cost ?? 0;
             const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
             const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
-
-            let ctxColor = "var(--text-muted)";
-            let ctxStr: string | null = null;
-            if (contextUsage?.contextWindow) {
-              const pct = contextUsage.percent;
-              if (pct !== null && pct > 90) ctxColor = "#ef4444";
-              else if (pct !== null && pct > 70) ctxColor = "rgba(234,179,8,0.95)";
-              const used = contextUsage.tokens !== null ? fmt(contextUsage.tokens) : "?";
-              ctxStr = pct !== null
-                ? `${pct.toFixed(0)}% · ${used}/${fmt(contextUsage.contextWindow)}`
-                : `? · ${used}/${fmt(contextUsage.contextWindow)}`;
-            }
 
             const tooltipParts: string[] = [];
              if (tokens) {
@@ -1287,10 +1275,6 @@ export function AppShell() {
                tooltipParts.push(`cache read: ${tokens.cacheRead.toLocaleString(locale)}`);
                tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString(locale)}`);
               if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
-            }
-            if (contextUsage?.contextWindow) {
-              const pct = contextUsage.percent;
-              tooltipParts.push(`context: ${contextUsage.tokens !== null ? contextUsage.tokens.toLocaleString(locale) : "?"} / ${contextUsage.contextWindow.toLocaleString(locale)} tokens (${pct !== null ? pct.toFixed(1) + "%" : "unknown"})`);
             }
             const tooltip = tooltipParts.join("  |  ");
 
@@ -1350,14 +1334,6 @@ export function AppShell() {
                 {!isMobile && costStr && (
                   <span style={{ display: "flex", alignItems: "center", color: "var(--text)", fontWeight: 500 }}>
                     {costStr}
-                  </span>
-                )}
-                {ctxStr && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4, color: ctxColor }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 9 L1 5 Q1 1 5 1 Q9 1 9 5 L9 9" /><line x1="1" y1="9" x2="9" y2="9" />
-                    </svg>
-                    {ctxStr}
                   </span>
                 )}
               </button>
