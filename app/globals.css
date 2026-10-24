@@ -1583,6 +1583,36 @@ span.linenumber {
     flex-wrap: wrap;
     padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
   }
+  /* 消息区：操作条、工具调用行、流程折叠与文件 chip 的命中区不小于 44×44，
+     文字与图标尺寸保持不变。触屏没有悬停态，消息操作条常驻显示。 */
+  .message-action-reveal {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  .message-action-button,
+  .message-inline-action,
+  .file-chip-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .message-reveal-button,
+  .compaction-file-summary,
+  .tool-call-toggle {
+    min-height: 44px;
+  }
+  .compaction-file-summary {
+    padding-block: 14px;
+  }
+  .tool-call-toggle {
+    width: 100%;
+  }
+  .process-details-toggle {
+    min-width: 44px;
+    min-height: 44px !important;
+  }
   textarea,
   input,
   select {
