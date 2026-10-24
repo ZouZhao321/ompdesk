@@ -1,6 +1,11 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
+import { skillExpansionToCommand } from "@/lib/slash-display";
 
 const MAX_TITLE_LENGTH = 80;
+/** 首条消息作为标题时保留的字符数。 */
+const FALLBACK_TITLE_CHARS = 50;
+/** 没有名称与首条消息时，用会话 id 前若干字符兜底。 */
+const FALLBACK_ID_CHARS = 12;
 
 export interface GeneratedSessionTitle {
   title: string;
@@ -17,14 +22,19 @@ export interface SessionTitleSource {
  * Title shown for a session in the sidebar and the top bar: the stored name,
  * else the first message, else a short id.
  *
- * Callers pass the first message they intend to display; a sidebar row that
- * may hold an SDK-expanded `<skill>` block collapses it with
- * `skillExpansionToCommand` first, so the title matches the rest of the row.
+ * A stored first message may hold an SDK-expanded `<skill>` block; it is
+ * collapsed to the compact command form here so every caller — including the
+ * top bar, which passes the raw session — renders the same title.
  *
  * This module stays free of SDK imports because client components import it.
  */
 export function sessionDisplayTitle({ name, firstMessage, id }: SessionTitleSource): string {
-  return name || firstMessage.slice(0, 50) || id.slice(0, 12);
+  if (name) return name;
+  const displayMessage = (skillExpansionToCommand(firstMessage) ?? firstMessage).trim();
+  if (displayMessage) {
+    return Array.from(displayMessage).slice(0, FALLBACK_TITLE_CHARS).join("");
+  }
+  return Array.from(id).slice(0, FALLBACK_ID_CHARS).join("");
 }
 
 /** Narrows one message content block to a text block. */

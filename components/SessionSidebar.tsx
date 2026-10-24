@@ -6,7 +6,6 @@ import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { countRunningSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
-import { skillExpansionToCommand } from "@/lib/slash-display";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { DirectoryPicker } from "./DirectoryPicker";
@@ -2056,8 +2055,7 @@ function ArchivedSessionsSection({
             </div>
           )}
           {sessions.map((s) => {
-            const firstMessage = skillExpansionToCommand(s.firstMessage) ?? s.firstMessage;
-            const title = sessionDisplayTitle({ name: s.name, firstMessage, id: s.id });
+            const title = sessionDisplayTitle(s);
             return (
               <div
                 key={s.id}
@@ -2322,15 +2320,10 @@ function SessionItem({
     }
   }, [renaming]);
 
-  // A stored first message may be an SDK-expanded <skill> block; collapse it
-  // back to the compact /skill:name args command the user typed before using
-  // it as the auto-name fallback, mirroring MessageView's rendering.
-  const displayFirstMessage = skillExpansionToCommand(session.firstMessage) ?? session.firstMessage;
-  const title = sessionDisplayTitle({
-    name: session.name,
-    firstMessage: displayFirstMessage,
-    id: session.id,
-  });
+  // A stored first message may hold an SDK-expanded <skill> block;
+  // sessionDisplayTitle collapses it to the compact command form, so the
+  // fallback title matches the one the top bar renders.
+  const title = sessionDisplayTitle(session);
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2344,9 +2337,9 @@ function SessionItem({
     const name = renameValue.trim();
     setRenaming(false);
     // No-op when unchanged: the fallback title (first message / id) isn't a
-    // real stored name, so don't persist it as one. (The rename input seeds
-    // from the same collapsed displayFirstMessage, so an untouched rename of
-    // a skill-invoked session stays a no-op instead of persisting raw XML.)
+    // real stored name, so don't persist it as one. The rename input seeds from
+    // the same collapsed title, so an untouched rename of a skill-invoked
+    // session stays a no-op instead of persisting raw XML.
     if (renameValue === title || name === (session.name ?? "")) return;
     try {
       await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
