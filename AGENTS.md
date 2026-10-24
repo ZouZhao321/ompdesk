@@ -131,7 +131,8 @@ lib/
   rpc-manager.ts       AgentSessionWrapper + 注册表 + startRpcSession
   session-reader.ts    会话列表 + 路径缓存 + buildSessionContext 适配器
   session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
-  session-title.ts     omp 标题生成器封装 + 会话显示标题回退
+  session-title.ts     会话显示标题回退与标题文本工具
+  session-title-generator.ts  omp 标题生成器封装（仅服务端）
   tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
   types.ts             共享 TypeScript 类型
   normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
