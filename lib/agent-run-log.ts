@@ -2,15 +2,19 @@ import { randomUUID } from "crypto";
 import { getLogContext, logEvent, type LogLevel } from "./logging";
 
 /**
- * Agent 运行生命周期记录。
+ * Agent 运行、工具与 compaction 生命周期记录。
  *
  * 一次 run 对应一次 prompt：`agent.run.start` 与 `agent.run.end` 携带该次运行
  * 的模型元数据、耗时与 token 汇总；steer、follow_up、abort、fork、compact 的
  * 结果写成 `agent.run.command`。
  *
+ * 工具调用按 toolCallId 记录开始时间，结束时写 `agent.tool.end`，只包含工具名、
+ * 耗时、成败、输出字节数与大小区间。compaction 写成 `agent.compaction.start`
+ * 与 `agent.compaction.end`，包含触发原因、耗时与前后 token。
+ *
  * tracker 消费 SDK 事件序列并返回普通记录对象，因此状态机可以脱离
- * AgentSession 测试。除 `stopReason`、`provider`、`model` 与数值型 `usage`
- * 之外，不读取提示词、模型输出、消息内容与工具参数。
+ * AgentSession 测试。除 `stopReason`、`provider`、`model`、数值型 `usage`
+ * 与工具输出的字节数之外，不读取提示词、模型输出、消息内容、工具参数与工具结果。
  */
 
 /** 与 run 一起记录的命令结果。 */
@@ -32,6 +36,10 @@ export type AgentRunStopReason =
 export const AGENT_RUN_START = "agent.run.start";
 export const AGENT_RUN_END = "agent.run.end";
 export const AGENT_RUN_COMMAND = "agent.run.command";
+export const AGENT_TOOL_END = "agent.tool.end";
+export const AGENT_TOOL_INCOMPLETE = "agent.tool.incomplete";
+export const AGENT_COMPACTION_START = "agent.compaction.start";
+export const AGENT_COMPACTION_END = "agent.compaction.end";
 
 export interface AgentRunRecord {
   level: LogLevel;
@@ -64,6 +72,23 @@ export interface AgentRunEventLike {
   isTerminal?: boolean;
   /** 为 false 时表示 agent 仍在继续自身工作（retry、compaction、提醒）。 */
   yielded?: boolean;
+  /** 工具事件的调用 id；并发工具的计时按它区分。 */
+  toolCallId?: string;
+  toolName?: string;
+  isError?: boolean;
+  /** 工具结果；只读取输出大小，不读取内容。 */
+  result?: unknown;
+  /** compaction 触发原因（threshold、overflow、idle、incomplete）。 */
+  reason?: string;
+  /** compaction 动作（context-full、remote、handoff、shake、snapcompact）。 */
+  action?: string;
+  aborted?: boolean;
+  skipped?: boolean;
+  willRetry?: boolean;
+  errorMessage?: string;
+  /** 部分 SDK 变体把 token 数放在事件顶层而不是 `result` 里。 */
+  tokensBefore?: number;
+  tokensAfter?: number;
 }
 
 export interface AgentRunOutcome {
@@ -85,6 +110,8 @@ export interface AgentRunTrackerOptions {
   /** 单调时钟，单位毫秒。 */
   now?: () => number;
   newRunId?: () => string;
+  /** 当前上下文 token 数；compaction 结束时用作缺失的 tokensAfter。 */
+  contextTokens?: () => number | undefined;
 }
 
 interface TokenTotals {
@@ -113,6 +140,40 @@ interface ActiveRun {
   model?: string;
 }
 
+interface ActiveTool {
+  toolName: string;
+  startedAt: number;
+  sessionId?: string;
+  runId?: string;
+}
+
+interface ActiveCompaction {
+  startedAt: number;
+  sessionId?: string;
+  runId?: string;
+  reason?: string;
+  action?: string;
+}
+
+/** 输出大小区间；只按字节数分档，不保留输出内容。 */
+export type ToolOutputSize = "empty" | "small" | "medium" | "large" | "huge";
+
+const OUTPUT_SIZE_SMALL_MAX = 1_024;
+const OUTPUT_SIZE_MEDIUM_MAX = 16 * 1_024;
+const OUTPUT_SIZE_LARGE_MAX = 256 * 1_024;
+
+/** 缺少结束事件的工具最多列出多少个名字，避免一次异常刷满日志。 */
+const MAX_INCOMPLETE_TOOL_NAMES = 10;
+
+const COMPACTION_START_TYPES: Record<string, true> = {
+  compaction_start: true,
+  auto_compaction_start: true,
+};
+const COMPACTION_END_TYPES: Record<string, true> = {
+  compaction_end: true,
+  auto_compaction_end: true,
+};
+
 function definedFields(fields: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(fields)) {
@@ -123,6 +184,47 @@ function definedFields(fields: Record<string, unknown>): Record<string, unknown>
 
 function readCount(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readText(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/**
+ * 工具输出的字节数：只累加文本与图片数据，`details` 不参与，
+ * 因此展示用的大对象不会进入日志，也不会被测量。
+ */
+function readToolOutputBytes(result: unknown): number | undefined {
+  if (typeof result === "string") return Buffer.byteLength(result, "utf8");
+  const record = readRecord(result);
+  if (!record) return undefined;
+  const content = record.content;
+  if (Array.isArray(content)) {
+    let bytes = 0;
+    for (const block of content) {
+      const item = readRecord(block);
+      if (!item) continue;
+      if (typeof item.text === "string") bytes += Buffer.byteLength(item.text, "utf8");
+      else if (typeof item.data === "string") bytes += Buffer.byteLength(item.data, "utf8");
+    }
+    return bytes;
+  }
+  if (typeof record.output === "string") return Buffer.byteLength(record.output, "utf8");
+  return undefined;
+}
+
+function outputSize(bytes: number): ToolOutputSize {
+  if (bytes === 0) return "empty";
+  if (bytes < OUTPUT_SIZE_SMALL_MAX) return "small";
+  if (bytes < OUTPUT_SIZE_MEDIUM_MAX) return "medium";
+  if (bytes < OUTPUT_SIZE_LARGE_MAX) return "large";
+  return "huge";
 }
 
 function readUsage(value: unknown): TokenTotals | undefined {
@@ -200,12 +302,16 @@ export class AgentRunTracker {
   private readonly now: () => number;
   private readonly newRunId: () => string;
   private readonly sessionIdOf: (() => string | undefined) | undefined;
+  private readonly contextTokensOf: (() => number | undefined) | undefined;
   private active: ActiveRun | undefined;
+  private readonly tools = new Map<string, ActiveTool>();
+  private compaction: ActiveCompaction | undefined;
 
   constructor(options: AgentRunTrackerOptions = {}) {
     this.now = options.now ?? (() => performance.now());
     this.newRunId = options.newRunId ?? (() => randomUUID());
     this.sessionIdOf = options.sessionId;
+    this.contextTokensOf = options.contextTokens;
   }
 
   /** 当前在途 prompt 的 run id；没有在途运行时为 undefined。 */
@@ -248,10 +354,15 @@ export class AgentRunTracker {
   }
 
   /**
-   * 消费一个 SDK 事件。只有轮次边界与真正的 agent 结束有意义，
-   * token 增量、工具执行与消息更新一律忽略。
+   * 消费一个 SDK 事件。工具与 compaction 事件独立于 run 处理，
+   * token 增量与消息更新一律忽略。
    */
   push(event: AgentRunEventLike): AgentRunRecord[] {
+    if (event.type === "tool_execution_start") return this.startTool(event);
+    if (event.type === "tool_execution_end") return this.endTool(event);
+    if (COMPACTION_START_TYPES[event.type]) return this.startCompaction(event);
+    if (COMPACTION_END_TYPES[event.type]) return this.endCompaction(event);
+
     const run = this.active;
     if (!run) return [];
 
@@ -306,6 +417,123 @@ export class AgentRunTracker {
     }];
   }
 
+  private startTool(event: AgentRunEventLike): AgentRunRecord[] {
+    const toolCallId = readText(event.toolCallId);
+    if (!toolCallId || this.tools.has(toolCallId)) return [];
+    this.tools.set(toolCallId, {
+      toolName: readText(event.toolName) ?? "unknown",
+      startedAt: this.now(),
+      sessionId: this.active?.sessionId ?? this.sessionIdOf?.(),
+      runId: this.active?.runId,
+    });
+    return [];
+  }
+
+  private endTool(event: AgentRunEventLike): AgentRunRecord[] {
+    const toolCallId = readText(event.toolCallId);
+    const started = toolCallId ? this.tools.get(toolCallId) : undefined;
+    if (toolCallId) this.tools.delete(toolCallId);
+
+    const outputBytes = readToolOutputBytes(event.result);
+    const isError = event.isError === true;
+    return [{
+      level: isError ? "warn" : "info",
+      message: AGENT_TOOL_END,
+      fields: definedFields({
+        sessionId: started?.sessionId ?? this.active?.sessionId ?? this.sessionIdOf?.(),
+        runId: started?.runId ?? this.active?.runId,
+        toolCallId,
+        toolName: readText(event.toolName) ?? started?.toolName ?? "unknown",
+        durationMs: started ? Math.max(0, Math.round(this.now() - started.startedAt)) : undefined,
+        isError,
+        outputBytes,
+        outputSize: outputBytes === undefined ? undefined : outputSize(outputBytes),
+      }),
+    }];
+  }
+
+  private startCompaction(event: AgentRunEventLike): AgentRunRecord[] {
+    const reason = readText(event.reason);
+    const action = readText(event.action);
+    const sessionId = this.active?.sessionId ?? this.sessionIdOf?.();
+    this.compaction = {
+      startedAt: this.now(),
+      sessionId,
+      runId: this.active?.runId,
+      reason,
+      action,
+    };
+    return [{
+      level: "info",
+      message: AGENT_COMPACTION_START,
+      fields: definedFields({
+        sessionId,
+        runId: this.compaction.runId,
+        reason,
+        action,
+      }),
+    }];
+  }
+
+  private endCompaction(event: AgentRunEventLike): AgentRunRecord[] {
+    const started = this.compaction;
+    this.compaction = undefined;
+
+    const result = readRecord(event.result);
+    const tokensBefore = readCount(event.tokensBefore) ?? readCount(result?.tokensBefore);
+    const aborted = event.aborted === true;
+    const skipped = event.skipped === true;
+    const errorMessage = readText(event.errorMessage);
+    let tokensAfter = readCount(event.tokensAfter) ?? readCount(result?.tokensAfter);
+    if (
+      tokensAfter === undefined &&
+      !aborted &&
+      !skipped &&
+      errorMessage === undefined &&
+      (result !== undefined || tokensBefore !== undefined)
+    ) {
+      // SDK 的 compaction 结果只带 tokensBefore；完成后的上下文大小从会话读取。
+      tokensAfter = this.contextTokensOf?.();
+    }
+
+    return [{
+      level: errorMessage !== undefined ? "error" : aborted || skipped ? "warn" : "info",
+      message: AGENT_COMPACTION_END,
+      fields: definedFields({
+        sessionId: started?.sessionId ?? this.active?.sessionId ?? this.sessionIdOf?.(),
+        runId: started?.runId ?? this.active?.runId,
+        reason: readText(event.reason) ?? started?.reason,
+        action: readText(event.action) ?? started?.action,
+        durationMs: started ? Math.max(0, Math.round(this.now() - started.startedAt)) : undefined,
+        tokensBefore,
+        tokensAfter,
+        aborted: event.aborted === undefined ? undefined : aborted,
+        skipped: event.skipped === undefined ? undefined : skipped,
+        willRetry: event.willRetry,
+        errorMessage,
+      }),
+    }];
+  }
+
+  /** 运行结束时仍没有结束事件的工具：写一条有上限的警告，不伪造成功结果。 */
+  private drainOpenTools(run: ActiveRun): AgentRunRecord[] {
+    if (this.tools.size === 0) return [];
+    const openTools = [...this.tools.values()];
+    this.tools.clear();
+    const toolNames = openTools.slice(0, MAX_INCOMPLETE_TOOL_NAMES).map((tool) => tool.toolName);
+    return [{
+      level: "warn",
+      message: AGENT_TOOL_INCOMPLETE,
+      fields: definedFields({
+        sessionId: run.sessionId,
+        runId: run.runId,
+        count: openTools.length,
+        toolNames,
+        omitted: openTools.length - toolNames.length || undefined,
+      }),
+    }];
+  }
+
   private applySummary(run: ActiveRun, summary: TurnSummary, accumulateUsage: boolean): void {
     if (accumulateUsage && summary.usage) {
       run.tokens ??= { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -325,7 +553,7 @@ export class AgentRunTracker {
     const durationMs = Math.max(0, Math.round(this.now() - run.startedAt));
     const tokens = run.tokens;
 
-    return [{
+    const records: AgentRunRecord[] = [{
       level: endLevel(stopReason),
       message: AGENT_RUN_END,
       fields: definedFields({
@@ -352,6 +580,8 @@ export class AgentRunTracker {
         ...extra,
       }),
     }];
+    records.push(...this.drainOpenTools(run));
+    return records;
   }
 }
 
