@@ -218,7 +218,13 @@ function writeStdoutRecord(event: SdkLogEvent): void {
     const mirror = typeof override === "boolean" ? override : shouldMirrorStdout();
     if (!mirror) return;
     if (LOG_LEVEL_RANK[event.level] > resolveStdoutLevelRank()) return;
-    const line = `${formatStdoutRecord(event)}${STDOUT_EOL}`;
+    // The sink also receives records the SDK writes itself, which never passed
+    // through `logEvent`; sanitize again so credentials cannot reach stdout.
+    const sanitized: SdkLogEvent = {
+      ...event,
+      context: event.context ? sanitizeLogContext(event.context) : undefined,
+    };
+    const line = `${formatStdoutRecord(sanitized)}${STDOUT_EOL}`;
     if (stdoutWriter) stdoutWriter.writeSync(1, line);
     else process.stdout.write(line);
   } catch {
@@ -283,9 +289,11 @@ const MAX_ARRAY_ITEMS = 50;
  */
 const SENSITIVE_SEGMENTS: Record<string, true> = {
   password: true,
+  passwords: true,
   passwd: true,
   passphrase: true,
   secret: true,
+  secrets: true,
   authorization: true,
   cookie: true,
   cookies: true,
@@ -300,6 +308,11 @@ const SENSITIVE_SEGMENTS: Record<string, true> = {
   setcookie: true,
 };
 
+/**
+ * Numeric usage counters: a qualified `token` segment in these names counts
+ * model tokens, not credentials. Compared on the joined lowercase name so the
+ * camelCase and separator spellings agree.
+ */
 const SENSITIVE_PAIRS: Record<string, true> = {
   apikey: true,
   recoverycode: true,
@@ -310,16 +323,15 @@ const SENSITIVE_PAIRS: Record<string, true> = {
   setcookie: true,
 };
 
-/** Exact credential token names, and the qualified forms that carry one. */
-const CREDENTIAL_TOKEN_KEYS: Record<string, true> = {
-  token: true,
-  tokens: true,
-  accesstoken: true,
-  refreshtoken: true,
-  bearertoken: true,
-  authtoken: true,
-  sessiontoken: true,
-  apitoken: true,
+const TOKEN_COUNTER_KEYS: Record<string, true> = {
+  inputtokens: true,
+  outputtokens: true,
+  cachedtokens: true,
+  tokencount: true,
+  tokensbefore: true,
+  tokensafter: true,
+  tokensused: true,
+  inputtokencount: true,
 };
 
 function keySegments(key: string): string[] {
@@ -336,11 +348,14 @@ export function isSensitiveLogKey(key: string): boolean {
   if (segments.some((segment) => SENSITIVE_SEGMENTS[segment])) return true;
 
   const joined = segments.join("");
-  if (CREDENTIAL_TOKEN_KEYS[joined]) return true;
+  if (TOKEN_COUNTER_KEYS[joined]) return false;
+  // Any other name carrying a `token` segment is credential-shaped, including
+  // provider-qualified forms such as `GITHUB_TOKEN` or `oauthToken`.
+  if (segments.includes("token") || segments.includes("tokens")) return true;
 
   for (let index = 0; index < segments.length - 1; index += 1) {
     const pair = `${segments[index]}${segments[index + 1]}`;
-    if (SENSITIVE_PAIRS[pair] || CREDENTIAL_TOKEN_KEYS[pair]) return true;
+    if (SENSITIVE_PAIRS[pair]) return true;
   }
   return false;
 }
@@ -471,20 +486,27 @@ let runtimeUnavailable = false;
 const MAX_PENDING_RECORDS = 1_000;
 
 async function bootstrapRuntime(): Promise<void> {
-  const sdk = await ensureSdkLogger();
-  if (!sdk) {
+  try {
+    const sdk = await ensureSdkLogger();
+    if (!sdk) {
+      runtimeUnavailable = true;
+      pendingRecords.length = 0;
+      return;
+    }
+    registerStdoutSink(sdk);
+    if (transportState[TRANSPORTS_CONFIGURED] !== true) {
+      transportState[STDOUT_MIRROR] = shouldMirrorStdout();
+      sdk.setTransports({ file: true, console: false });
+      transportState[TRANSPORTS_CONFIGURED] = true;
+    }
+    for (const record of pendingRecords.splice(0)) {
+      writeThrough(sdk, record.level, record.message, record.context);
+    }
+  } catch {
+    // A transport that cannot be installed leaves nowhere to write. Drop the
+    // backlog and stop buffering instead of rejecting an unobserved promise.
     runtimeUnavailable = true;
     pendingRecords.length = 0;
-    return;
-  }
-  registerStdoutSink(sdk);
-  if (transportState[TRANSPORTS_CONFIGURED] !== true) {
-    transportState[STDOUT_MIRROR] = shouldMirrorStdout();
-    sdk.setTransports({ file: true, console: false });
-    transportState[TRANSPORTS_CONFIGURED] = true;
-  }
-  for (const record of pendingRecords.splice(0)) {
-    writeThrough(sdk, record.level, record.message, record.context);
   }
 }
 
@@ -497,7 +519,10 @@ function write(level: LogLevel, message: string, context: Record<string, unknown
   if (pendingRecords.length < MAX_PENDING_RECORDS) {
     pendingRecords.push({ level, message, context });
   }
-  runtimeBootstrap ??= bootstrapRuntime();
+  runtimeBootstrap ??= bootstrapRuntime().catch(() => {
+    runtimeUnavailable = true;
+    pendingRecords.length = 0;
+  });
 }
 
 /**
