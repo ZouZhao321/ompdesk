@@ -5,6 +5,7 @@ import { tmpdir } from "os";
 import { basename, dirname, join } from "path";
 import { promisify } from "util";
 import { fileURLToPath, pathToFileURL } from "url";
+import { withRequestLog } from "@/lib/api-request-log";
 import { NextResponse } from "next/server";
 import { isApiRequestAllowed } from "@/lib/request-security";
 import { getRpcSession, getFinalRpcSessionId } from "@/lib/rpc-manager";
@@ -103,7 +104,9 @@ async function exportSession(filePath: string, outputPath: string): Promise<void
   await exportFromFile(filePath, outputPath);
 }
 
-export async function GET(
+export const GET = withRequestLog("/api/sessions/[id]/export", getRouteHandler);
+
+async function getRouteHandler(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {

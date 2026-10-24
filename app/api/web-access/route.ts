@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import {
   clearWebPassword,
   getWebAuthStatus,
@@ -29,7 +30,9 @@ function statusResponse(status: WebAccessStatus) {
   return NextResponse.json(status, { headers: { "Cache-Control": "no-store" } });
 }
 
-export async function GET() {
+export const GET = withRequestLog("/api/web-access", getRouteHandler);
+
+async function getRouteHandler() {
   return statusResponse(getWebAuthStatus());
 }
 

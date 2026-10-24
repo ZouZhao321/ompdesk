@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { resolveSessionPath } from "@/lib/session-reader";
 
-export async function GET(
+export const GET = withRequestLog("/api/sessions/[id]/state", getRouteHandler);
+
+async function getRouteHandler(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
