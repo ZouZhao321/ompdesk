@@ -13,6 +13,12 @@ const REDACTED = "redacted";
 const URL_BASE = "http://ompdesk.invalid";
 const PROTOCOL_PREFIX = /^[a-z][a-z0-9+.-]*:/i;
 const SCHEME_PREFIX = /^[a-z][a-z0-9+.-]*:\/\//i;
+/**
+ * Schemes with no authority, where `@` belongs to the address instead of being
+ * userinfo. Without this list a scheme-less `user:pass@host/path` would look
+ * like an opaque scheme called `user`.
+ */
+const OPAQUE_SCHEME = /^(?:mailto|tel|sms|urn|data|callto|magnet):/i;
 const AUTHORITY_BREAK = /[/?#]/;
 
 /**
@@ -50,6 +56,13 @@ function redactLooseUrl(raw: string): string {
   const beforeQuery = queryIndex === -1 ? withoutFragment : withoutFragment.slice(0, queryIndex);
   const query = queryIndex === -1 ? null : withoutFragment.slice(queryIndex + 1);
 
+  if (OPAQUE_SCHEME.test(beforeQuery)) {
+    // `mailto:`, `tel:` and `urn:` have no authority, so an `@` here is part
+    // of the address rather than userinfo. Keep the opaque value and only
+    // redact the query values.
+    return query === null ? beforeQuery : `${beforeQuery}?${redactQueryValues(query)}`;
+  }
+
   const scheme = SCHEME_PREFIX.exec(beforeQuery);
   const authorityStart = scheme ? scheme[0].length : beforeQuery.startsWith("//") ? 2 : 0;
   const prefix = beforeQuery.slice(0, authorityStart);
@@ -72,7 +85,12 @@ function redactUrl(raw: string): string {
     url.username = "";
     url.password = "";
     url.hash = "";
-    for (const key of [...url.searchParams.keys()]) url.searchParams.set(key, REDACTED);
+    // Rebuild the query instead of `set`-ing each key: `set` collapses a
+    // repeated parameter (`?a=1&a=2`) into one, which loses the recorded URL's
+    // shape. This keeps every key and its order, with only values redacted.
+    url.search = new URLSearchParams(
+      [...url.searchParams].map(([key]) => [key, REDACTED]),
+    ).toString();
     const rendered = url.toString();
     return protocolRelative ? rendered.replace(PROTOCOL_PREFIX, "") : rendered;
   } catch {

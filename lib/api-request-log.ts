@@ -15,7 +15,10 @@ export function resolveSlowRequestMs(env: NodeJS.ProcessEnv = process.env): numb
   const raw = env.OMPDESK_SLOW_REQUEST_MS?.trim();
   if (!raw) return DEFAULT_SLOW_REQUEST_MS;
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : DEFAULT_SLOW_REQUEST_MS;
+  // A positive value below 0.5 would round to 0 and mark every request slow.
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.max(1, Math.round(parsed))
+    : DEFAULT_SLOW_REQUEST_MS;
 }
 
 function completionLevel(status: number): LogLevel {
