@@ -2017,6 +2017,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
              {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
           </div>
         )}
+        {/* Mobile: the space freed by the hidden center meter is reused only
+            while the more-controls panel is open, above the bottom bar. */}
+        {isMobile && controlsMenuOpen && (
+          <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+            <ContextUsageMeter usage={contextUsage} t={t} />
+          </div>
+        )}
         {/* Bottom bar: left | center (context) | right */}
         <div style={{
           marginTop: 8,
