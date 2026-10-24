@@ -1,11 +1,12 @@
-import { getRpcSessionActivityIds, subscribeRunningSessions } from "@/lib/rpc-manager";
+import { getRpcSessionActivitySnapshot, subscribeRunningSessions } from "@/lib/rpc-manager";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/agent/running/events - SSE stream of the currently-running session
-// ids plus the subset blocked on a user answer. Pushes an update whenever any
-// session starts, stops, or begins/ends waiting on the browser, so the sidebar
-// never has to poll.
+// GET /api/agent/running/events - SSE stream carrying the same activity snapshot
+// as the polling route: running session ids, ids waiting on a user answer, and
+// the runtime→session mapping. Pushes an update whenever any session starts,
+// stops, or begins/ends waiting on the browser, so the sidebar never has to
+// poll.
 export async function GET(req: Request) {
   const stream = new ReadableStream({
     start(controller) {
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
 
       // Initial snapshot so the client renders the correct state immediately.
       // (A duplicate frame here is harmless: the client just sets the same set.)
-      encode({ type: "running", ...getRpcSessionActivityIds() });
+      encode({ type: "running", ...getRpcSessionActivitySnapshot() });
 
       // Heartbeat to keep the connection alive through proxies/timeouts.
       const heartbeat = setInterval(() => {

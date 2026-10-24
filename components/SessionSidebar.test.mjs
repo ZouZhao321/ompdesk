@@ -40,6 +40,30 @@ test("includes project activity counts in accessible labels", () => {
   );
 });
 
+test("shows the waiting indicator ahead of the running spinner", () => {
+  assert.match(
+    sessionItemSource,
+    /\{isWaiting \? <WaitingSessionIndicator \/> : isRunning && <RunningSessionIndicator \/>\}/,
+  );
+});
+
+test("labels the inline waiting indicator without a count", () => {
+  const waitingIndicatorSource = source.slice(
+    source.indexOf("function WaitingSessionIndicator()"),
+    source.indexOf("function UnreadSessionIndicator()"),
+  );
+  assert.match(waitingIndicatorSource, /title=\{t\("sidebar\.agentWaitingForInput"\)\}/);
+  assert.match(waitingIndicatorSource, /aria-label=\{t\("sidebar\.agentWaitingForInput"\)\}/);
+});
+
+test("interpolates the project waiting badge label", () => {
+  assert.match(
+    source,
+    /aria-label=\{t\("sidebar\.agentWaitingForInputWithCount", \{ count: activity\.waiting \}\)\}/,
+  );
+  assert.doesNotMatch(source, /aria-label=\{`\$\{t\("sidebar\.agentWaitingForInput"\)\}/);
+});
+
 test("does not persist an unchanged fallback title ending in whitespace", () => {
   assert.match(
     sessionItemSource,

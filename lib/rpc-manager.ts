@@ -1756,15 +1756,21 @@ export async function destroyRpcSessionsForCwd(cwd: string): Promise<number> {
   return sessions.length;
 }
 
-// Include idle wrappers so a run that changes ID and finishes between polls
-// is attributed to its final transcript rather than its historical ID.
+/**
+ * 侧栏活动快照：轮询接口、SSE 推送与会话列表响应共用同一结构，
+ * 保证客户端无论从哪条通道拿到数据都按同一口径渲染。
+ */
 export interface RpcSessionActivity {
   runningSessionIds: string[];
-  /** 运行中但停在阻塞式 UI 请求上、等待用户作答的会话。 */
+  /** 停在阻塞式 UI 请求上等待用户作答的会话；来源与运行集合独立。 */
   waitingSessionIds: string[];
+  /** runtime id 到当前会话 id 的映射，供客户端在会话 ID 变化后对齐同一次运行。 */
+  sessionIdsByRuntimeId: Record<string, string>;
 }
 
-export function getRpcSessionActivitySnapshot() {
+// Include idle wrappers so a run that changes ID and finishes between polls
+// is attributed to its final transcript rather than its historical ID.
+export function getRpcSessionActivitySnapshot(): RpcSessionActivity {
   const runningSessionIds = new Set<string>();
   const waitingSessionIds = new Set<string>();
   const sessionIdsByRuntimeId: Record<string, string> = Object.fromEntries(globalThis.__ompFinalSessionIds ?? []);
@@ -1781,24 +1787,14 @@ export function getRpcSessionActivitySnapshot() {
   };
 }
 
-/** 当前运行中与等待用户作答的会话 id 集合。 */
-export function getRpcSessionActivityIds(): RpcSessionActivity {
-  const runningSessionIds = new Set<string>();
-  const waitingSessionIds = new Set<string>();
-  for (const [sessionId, session] of getRegistry()) {
-    if (session.isRunning()) runningSessionIds.add(session.sessionId || sessionId);
-    if (session.isAwaitingInput()) waitingSessionIds.add(session.sessionId || sessionId);
-  }
-  return { runningSessionIds: [...runningSessionIds], waitingSessionIds: [...waitingSessionIds] };
-}
-
 // ----------------------------------------------------------------------------
 // Running-status broadcaster
 //
-// Pushes the set of running session ids and the subset waiting on a user answer
-// to subscribers whenever either may have changed. This lets the sidebar
-// receive live updates over SSE instead of polling. Listeners live on
-// globalThis so they survive Next.js hot-reload.
+// Pushes the activity snapshot — running ids, ids waiting on a user answer, and
+// the runtime→session mapping — to subscribers whenever anything may have
+// changed. This lets the sidebar receive live updates over SSE instead of
+// polling with the same payload shape. Listeners live on globalThis so they
+// survive Next.js hot-reload.
 // ----------------------------------------------------------------------------
 
 function getRunningListeners(): Set<(activity: RpcSessionActivity) => void> {
@@ -1827,8 +1823,12 @@ export function notifyRunningChange(): void {
     lastRunningSnapshot = "";
     return;
   }
-  const activity = getRpcSessionActivityIds();
-  const snapshot = JSON.stringify([activity.runningSessionIds.slice().sort(), activity.waitingSessionIds.slice().sort()]);
+  const activity = getRpcSessionActivitySnapshot();
+  const snapshot = JSON.stringify([
+    activity.runningSessionIds.slice().sort(),
+    activity.waitingSessionIds.slice().sort(),
+    Object.entries(activity.sessionIdsByRuntimeId).sort(),
+  ]);
   if (snapshot === lastRunningSnapshot) return;
   lastRunningSnapshot = snapshot;
   for (const listener of listeners) {

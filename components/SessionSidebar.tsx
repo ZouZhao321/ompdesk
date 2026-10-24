@@ -8,6 +8,7 @@ import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { countSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { useI18n } from "@/hooks/useI18n";
+import type { TranslationParams } from "@/lib/i18n/types";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { OmpWordmark } from "./OmpWordmark";
@@ -118,6 +119,16 @@ interface WorktreeState {
   isTopLevel: boolean;
   worktrees: WorktreeEntry[];
 }
+
+/** 会话活动快照；字段可选是因为首次渲染时还没有拿到任何数据。 */
+type SessionActivitySnapshot = {
+  runningSessionIds?: string[];
+  waitingSessionIds?: string[];
+  sessionIdsByRuntimeId?: Record<string, string>;
+};
+
+/** 会话列表接口的响应：会话数组加上同一份活动快照。 */
+type SessionsResponse = SessionActivitySnapshot & { sessions: SessionInfo[] };
 
 const UNREAD_SESSIONS_STORAGE_KEY = "ompdesk:unread-session-ids";
 const RUNNING_SESSIONS_POLL_MS = 2500;
@@ -462,7 +473,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
-  const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; running: number } | null>(null);
+  const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; count: number } | null>(null);
   const [removedProjects, setRemovedProjects] = useState<Set<string>>(() => new Set());
   const [wtFilter, setWtFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
@@ -485,11 +496,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [changesCollapsed, setChangesCollapsed] = useState(true);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
-  const [activitySnapshot, setActivitySnapshot] = useState<{
-    runningSessionIds?: string[];
-    waitingSessionIds?: string[];
-    sessionIdsByRuntimeId?: Record<string, string>;
-  }>({});
+  const [activitySnapshot, setActivitySnapshot] = useState<SessionActivitySnapshot>({});
   const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
   // 运行中但停在提问表单上、等待用户作答的会话。
   const waitingSessionIds = useMemo(() => new Set(activitySnapshot.waitingSessionIds ?? []), [activitySnapshot]);
@@ -515,7 +522,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[]; waitingSessionIds?: string[]; sessionIdsByRuntimeId?: Record<string, string> };
+      const data = await res.json() as SessionsResponse;
       listedRuntimeIdsRef.current = data.sessionIdsByRuntimeId ?? {};
       setAllSessions(data.sessions);
       // Treat the fetched running set as an initial fallback only. Once the
@@ -601,7 +608,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           signal: current.signal,
         });
         if (!res.ok) return;
-        const data = await res.json() as { runningSessionIds?: string[]; waitingSessionIds?: string[]; sessionIdsByRuntimeId?: Record<string, string> };
+        const data = await res.json() as SessionActivitySnapshot;
         if (stopped || controller !== current) return;
         runningPollAuthoritativeRef.current = true;
         setActivitySnapshot({
@@ -953,8 +960,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !projectPaths.includes(selectedProject)) {
     projectPaths.unshift(selectedProject);
   }
-  // 每个工作区的运行中会话数只汇总一次，项目行与移除前确认共用这一份快照。
-  const runningByWorkspace = useMemo(
+  // 每个工作区的运行中会话总数只汇总一次，作为「运行或等待」并集计数的基数。
+  const runningTotalByWorkspace = useMemo(
     () => countSessionsByWorkspace(sessionsForDisplay, runningSessionIds),
     [sessionsForDisplay, runningSessionIds],
   );
@@ -962,6 +969,26 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     () => countSessionsByWorkspace(sessionsForDisplay, waitingSessionIds),
     [sessionsForDisplay, waitingSessionIds],
   );
+  // 「正在干活」= 运行集合排除等待集合。两个集合来源独立，等待不一定是运行的
+  // 子集，所以只能用集合差，不能从运行总数里直接减等待数。
+  const activeRunningSessionIds = useMemo(
+    () => new Set([...runningSessionIds].filter((id) => !waitingSessionIds.has(id))),
+    [runningSessionIds, waitingSessionIds],
+  );
+  const activeRunningByWorkspace = useMemo(
+    () => countSessionsByWorkspace(sessionsForDisplay, activeRunningSessionIds),
+    [sessionsForDisplay, activeRunningSessionIds],
+  );
+  // 移除前要确认「运行或等待」的并集：等待集合与运行集合来源独立，
+  // 并集必须补上「等待但未运行」的会话，只看运行总数会漏确认。
+  const busyByWorkspace = useMemo(() => {
+    const busy = new Map(runningTotalByWorkspace);
+    const waitingOnly = new Set([...waitingSessionIds].filter((id) => !runningSessionIds.has(id)));
+    for (const [key, count] of countSessionsByWorkspace(sessionsForDisplay, waitingOnly)) {
+      busy.set(key, (busy.get(key) ?? 0) + count);
+    }
+    return busy;
+  }, [sessionsForDisplay, runningSessionIds, waitingSessionIds, runningTotalByWorkspace]);
 
   // Per-project activity counts for the project rows, keyed by the shared
   // workspace key rule. `running` counts only sessions that are working (the
@@ -973,14 +1000,17 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       if (!key) continue;
       let entry = counts.get(key);
       if (!entry) {
-        const waiting = waitingByWorkspace.get(key) ?? 0;
-        entry = { running: Math.max(0, (runningByWorkspace.get(key) ?? 0) - waiting), waiting, unread: 0 };
+        entry = {
+          running: activeRunningByWorkspace.get(key) ?? 0,
+          waiting: waitingByWorkspace.get(key) ?? 0,
+          unread: 0,
+        };
         counts.set(key, entry);
       }
       if (unreadSessionIds.has(session.id)) entry.unread++;
     }
     return counts;
-  }, [sessionsForDisplay, runningByWorkspace, waitingByWorkspace, unreadSessionIds]);
+  }, [sessionsForDisplay, activeRunningByWorkspace, waitingByWorkspace, unreadSessionIds]);
 
   const executeRemoveProject = (project: string) => {
     const key = normalizeProjectKey(project);
@@ -997,12 +1027,11 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     }
   };
 
-  // 移除前先看运行快照：有会话仍在运行就只弹确认条，不改变任何状态。
+  // 移除前先看活动快照：还有会话在运行或等待回答就只弹确认条，不改变任何状态。
   const requestRemoveProject = (project: string) => {
-    // 等待回答的会话同样在运行，移除前必须一起确认。
-    const running = runningByWorkspace.get(project) ?? 0;
-    if (running > 0) {
-      setRemoveProjectConfirm({ project, running });
+    const count = busyByWorkspace.get(project) ?? 0;
+    if (count > 0) {
+      setRemoveProjectConfirm({ project, count });
       return;
     }
     executeRemoveProject(project);
@@ -1739,7 +1768,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             }}
                           >
                             <span style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.35 }}>
-                              {t("sidebar.removeProjectRunning", { count: removeProjectConfirm.running })}
+                              {t("sidebar.removeProjectRunning", { count: removeProjectConfirm.count })}
                             </span>
                             <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                               <button
@@ -2278,13 +2307,14 @@ function UnreadSessionIndicator() {
 
 /**
  * Compact per-project activity badges for the workspace selector dropdown items:
- * a spinning running icon + count and an unread dot + count. Renders nothing
- * when the project has no activity. Counts share the accent / unread colors of
- * the per-session indicators so the two stay visually consistent.
+ * a spinning running icon + count, a yellow waiting badge + count, and an unread
+ * dot + count. Renders nothing when the project has no activity. Counts share
+ * the accent / warning / unread colors of the per-session indicators so the two
+ * stay visually consistent.
  */
 function showProjectActivity(
   activity: { running: number; waiting: number; unread: number } | undefined,
-  t: (key: string) => string,
+  t: (key: string, params?: TranslationParams) => string,
 ): ReactNode {
   if (!activity || (activity.running === 0 && activity.waiting === 0 && activity.unread === 0)) return null;
   return (
@@ -2307,7 +2337,7 @@ function showProjectActivity(
       {activity.waiting > 0 && (
         <span
           title={t("sidebar.agentWaitingForInput")}
-          aria-label={`${t("sidebar.agentWaitingForInput")} (${activity.waiting})`}
+          aria-label={t("sidebar.agentWaitingForInputWithCount", { count: activity.waiting })}
           style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--warning)", fontSize: 10, fontFamily: "var(--font-mono)" }}
         >
           <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
