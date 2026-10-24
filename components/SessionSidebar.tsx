@@ -2561,6 +2561,7 @@ function SessionItem({
           {/* Collapse toggle — always visible when has children */}
           {hasChildren && (
             <button
+              className="sidebar-project-icon-button"
               onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
               title={collapsed ? t("sidebar.expandForks") : t("sidebar.collapseForks")}
               style={{
