@@ -38,6 +38,16 @@ Lint：`bun run lint`
 例外：`bun run desktop:build`（经 `scripts/stage-desktop.mjs`）是安全的，它通过
 `OMPDESK_DIST_DIR` 构建到 `src-tauri/server/.next`，不会碰开发用的 `.next/`。
 
+## 测试工作区
+
+所有测试都在 `C:\Users\ZouZhao\Desktop\Project\ompdesk-lab` 下进行：把 ompdesk 的
+工作目录切到那里，再开会话、跑界面操作与地图交互。真实项目目录不作为测试数据的
+落点。
+
+- 现有样本会话：`e7f54ac1-7dcb-497a-ae36-30cfdda3a2d3`，rag-eval-lab
+  「GitHub Projects 表格使用说明」的副本，28 轮、519 条消息，含 1 个会话内分支。
+- 该目录的 `AGENTS.md` 记录了复现步骤与预期结果。
+
 ### 全部运行在 Bun 上
 
 `@oh-my-pi/pi-*` 以 **TypeScript 源码**发布并 import `bun:sqlite`，Node 完全无法加载
