@@ -1530,6 +1530,16 @@ span.linenumber {
     min-height: 44px;
     padding: 0 8px !important;
   }
+  /* 抽屉底部与文件区标题行的点按目标，同样保持 44px 命中高度。 */
+  .sidebar-archived-toggle,
+  .sidebar-explorer-toggle,
+  .sidebar-settings-button {
+    min-height: 44px;
+  }
+  .sidebar-toolbar-icon-button {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
   /* 横屏手机也命中本块，抵消 min-width: 769px 桌面规则留下的隐藏与定宽。 */
   .sidebar-overlay-backdrop {
     display: block !important;
