@@ -64,6 +64,26 @@ test("interpolates the project waiting badge label", () => {
   assert.doesNotMatch(source, /aria-label=\{`\$\{t\("sidebar\.agentWaitingForInput"\)\}/);
 });
 
+test("confirms removal of a workspace with running or waiting sessions", () => {
+  assert.match(
+    source,
+    /t\("sidebar\.removeProjectBusy", \{ count: removeProjectConfirm\.count \}\)/,
+  );
+  assert.doesNotMatch(source, /sidebar\.removeProjectRunning/);
+});
+
+const indicatorSource = (startMarker, nextMarker) =>
+  source.slice(source.indexOf(startMarker), source.indexOf(nextMarker));
+
+test("marks activity indicators as images for screen readers", () => {
+  assert.match(indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()"), /role="img"/);
+  assert.match(indicatorSource("function WaitingSessionIndicator()", "function UnreadSessionIndicator()"), /role="img"/);
+  assert.match(indicatorSource("function UnreadSessionIndicator()", "function showProjectActivity("), /role="img"/);
+
+  const projectBadges = indicatorSource("function showProjectActivity(", "function SessionItem(");
+  assert.equal((projectBadges.match(/role="img"/g) ?? []).length, 3);
+});
+
 test("does not persist an unchanged fallback title ending in whitespace", () => {
   assert.match(
     sessionItemSource,

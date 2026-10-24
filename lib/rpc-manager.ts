@@ -42,6 +42,7 @@ import type {
   ExtensionUiRequest,
   ExtensionUiResponse,
   ExtensionWidgetItem,
+  SessionActivitySnapshot,
   SessionInfo,
   SessionMessageEntry,
   SubagentSnapshot,
@@ -431,8 +432,8 @@ export class AgentSessionWrapper {
   /**
    * 是否有阻塞式 UI 请求正在等待浏览器作答。
    *
-   * 等待回答期间 `isRunning()` 仍然为真：prompt 尚未结束，只是停在扩展 UI 上。
-   * 这个标志让界面区分「正在干活」与「卡在用户这里」。
+   * 等待集合与 `isRunning()` 相互独立：等待集合不是运行集合的子集，
+   * 空闲会话也可能挂着阻塞请求。这个标志让界面区分「正在干活」与「卡在用户这里」。
    */
   isAwaitingInput(): boolean {
     return this._alive && this.pendingUiRequests.size > 0;
@@ -1303,8 +1304,10 @@ export class AgentSessionWrapper {
       method: "custom",
       lines,
     } as ExtensionUiRequest as AgentEvent;
+    // 等待状态只在 id 首次进入待答集合时变化；后续每帧渲染不再广播。
+    const becamePending = !this.pendingUiRequests.has(id);
     this.pendingUiRequests.set(id, event);
-    notifyRunningChange();
+    if (becamePending) notifyRunningChange();
     this.emit(event);
   }
 
@@ -1600,7 +1603,7 @@ declare global {
   var __ompFinalSessionIds: Map<string, string> | undefined;
   var __ompStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
   var __ompStartingSessionCwds: Map<string, number> | undefined;
-  var __ompRunningListeners: Set<(activity: RpcSessionActivity) => void> | undefined;
+  var __ompRunningListeners: Set<(activity: SessionActivitySnapshot) => void> | undefined;
 }
 
 function getRegistry(): Map<string, AgentSessionWrapper> {
@@ -1756,21 +1759,9 @@ export async function destroyRpcSessionsForCwd(cwd: string): Promise<number> {
   return sessions.length;
 }
 
-/**
- * 侧栏活动快照：轮询接口、SSE 推送与会话列表响应共用同一结构，
- * 保证客户端无论从哪条通道拿到数据都按同一口径渲染。
- */
-export interface RpcSessionActivity {
-  runningSessionIds: string[];
-  /** 停在阻塞式 UI 请求上等待用户作答的会话；来源与运行集合独立。 */
-  waitingSessionIds: string[];
-  /** runtime id 到当前会话 id 的映射，供客户端在会话 ID 变化后对齐同一次运行。 */
-  sessionIdsByRuntimeId: Record<string, string>;
-}
-
 // Include idle wrappers so a run that changes ID and finishes between polls
 // is attributed to its final transcript rather than its historical ID.
-export function getRpcSessionActivitySnapshot(): RpcSessionActivity {
+export function getRpcSessionActivitySnapshot(): SessionActivitySnapshot {
   const runningSessionIds = new Set<string>();
   const waitingSessionIds = new Set<string>();
   const sessionIdsByRuntimeId: Record<string, string> = Object.fromEntries(globalThis.__ompFinalSessionIds ?? []);
@@ -1797,13 +1788,13 @@ export function getRpcSessionActivitySnapshot(): RpcSessionActivity {
 // survive Next.js hot-reload.
 // ----------------------------------------------------------------------------
 
-function getRunningListeners(): Set<(activity: RpcSessionActivity) => void> {
+function getRunningListeners(): Set<(activity: SessionActivitySnapshot) => void> {
   if (!globalThis.__ompRunningListeners) globalThis.__ompRunningListeners = new Set();
   return globalThis.__ompRunningListeners;
 }
 
 /** Subscribe to running/waiting changes. Returns an unsubscribe function. */
-export function subscribeRunningSessions(listener: (activity: RpcSessionActivity) => void): () => void {
+export function subscribeRunningSessions(listener: (activity: SessionActivitySnapshot) => void): () => void {
   const listeners = getRunningListeners();
   listeners.add(listener);
   return () => { listeners.delete(listener); };
