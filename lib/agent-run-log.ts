@@ -377,9 +377,13 @@ export class AgentRunTracker {
     if (event.type !== "agent_end") return [];
 
     if (run.turns === 0) {
+      // `agent_end` can arrive more than once (retry, compaction, a reminder)
+      // without ending the run. Without `turn_end` records, usage is only
+      // counted on the first arrival; later ones refresh stopReason/provider.
+      const countUsage = run.tokens === undefined;
       for (const message of event.messages ?? []) {
         const summary = readTurnSummary(message);
-        if (summary) this.applySummary(run, summary, true);
+        if (summary) this.applySummary(run, summary, countUsage);
       }
     } else {
       // 最后一轮已经在 turn_end 计过 usage，这里只补 stopReason，避免重复计数。

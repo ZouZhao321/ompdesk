@@ -161,6 +161,14 @@ function formatLocalTimestamp(date: Date): string {
   );
 }
 
+/**
+ * Mirrors the SDK file transport's rule verbatim: a message that looks like a
+ * printf template is paired with positional arguments, not named fields, so its
+ * context is dropped. ompdesk's own records use stable event names and never
+ * hit this branch; SDK-originated records (`util.format` templates) do, and
+ * applying the same rule keeps the stdout mirror field-for-field identical to
+ * the file record instead of showing fields the file lacks.
+ */
 const FORMAT_TOKEN_PATTERN = /%[scdjifoO%]/;
 
 /** Error fields are non-enumerable; unwrap them the way the SDK's file transport does. */
@@ -174,6 +182,8 @@ function jsonReplacer(_key: string, value: unknown): unknown {
 /** Serialize one mirror line with the file record's shape: timestamp, level, pid, message, then context. */
 function formatStdoutRecord(event: SdkLogEvent): string {
   const context = event.context && typeof event.context === "object" ? event.context : undefined;
+  // See FORMAT_TOKEN_PATTERN: a template message's context is printf arguments,
+  // so copying it as named fields would diverge from the file record.
   const metadata = !FORMAT_TOKEN_PATTERN.test(event.message) ? context : undefined;
   const entry: Record<string, unknown> = {
     timestamp: formatLocalTimestamp(event.timestamp),
@@ -324,11 +334,6 @@ const SENSITIVE_PAIRS: Record<string, true> = {
   setcookie: true,
 };
 
-const TOKEN_CREDENTIAL_KEYS: Record<string, true> = {
-  token: true,
-  tokens: true,
-};
-
 function keySegments(key: string): string[] {
   return key
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -337,14 +342,19 @@ function keySegments(key: string): string[] {
     .filter(Boolean);
 }
 
-/** True when a field name denotes material that must never be written. */
+/**
+ * True when a field name denotes material that must never be written.
+ *
+ * A trailing `token` segment marks a credential (`GITHUB_TOKEN`, `idToken`,
+ * `oauthToken`). Plural `tokens` names in this codebase report usage
+ * (`totalTokens`, `inputTokens`, `tokensBefore`), so the plural form is never
+ * treated as a credential — including a bare `tokens` counter.
+ */
 export function isSensitiveLogKey(key: string): boolean {
   const segments = keySegments(key);
   if (segments.some((segment) => SENSITIVE_SEGMENTS[segment])) return true;
 
-  const joined = segments.join("");
-  const last = segments[segments.length - 1];
-  if (last === "token" || TOKEN_CREDENTIAL_KEYS[joined]) return true;
+  if (segments[segments.length - 1] === "token") return true;
 
   for (let index = 0; index < segments.length - 1; index += 1) {
     const pair = `${segments[index]}${segments[index + 1]}`;
