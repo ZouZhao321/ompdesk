@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import {
   getDefault,
   getEnumValues,
@@ -172,9 +173,12 @@ async function getRouteHandler(req: Request) {
 }
 
 export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
+  let target: string | undefined;
   try {
     const body = await req.json() as { path?: string; value?: unknown };
+    target = typeof body.path === "string" ? body.path : undefined;
     if (!body.path || !findSetting(body.path) || !hasUi(body.path as SettingPath)) {
+      auditFailure("settings.write", target, { status: 400, reason: "unknown-setting" });
       return NextResponse.json({ error: "Unknown setting" }, { status: 400 });
     }
     const path = body.path as SettingPath;
@@ -188,8 +192,10 @@ export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
     const { settings } = await getOmpRuntime();
     setSetting(settings, path, value);
     await settings.flush();
+    auditSuccess("settings.write", path);
     return NextResponse.json({ success: true, value: serializableValue(getSetting(settings, path)) });
   } catch (error) {
+    auditFailure("settings.write", target, { status: 400, error });
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
 });

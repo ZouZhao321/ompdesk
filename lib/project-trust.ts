@@ -113,6 +113,14 @@ export function trustProject(cwd: string, agentDir: string): ProjectTrustStatus 
   return { requiresTrust: true, trusted: true };
 }
 
+/** Drop the stored decision for `cwd`; the project falls back to the gated load path. */
+export function untrustProject(cwd: string, agentDir: string): ProjectTrustStatus {
+  const trusted = readTrustedProjects(agentDir);
+  delete trusted[canonicalProjectKey(cwd)];
+  writeTrustedProjects(agentDir, trusted);
+  return getProjectTrustStatus(cwd, agentDir);
+}
+
 /** True when `candidate` lives inside `root` (or is `root` itself). */
 export function isInsideProject(candidate: string, root: string): boolean {
   const rel = relative(resolve(root), resolve(candidate));
