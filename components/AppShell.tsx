@@ -1161,7 +1161,7 @@ export function AppShell() {
              </svg>
            </button>
           )}
-          {!isMobile && showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
+          {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
               type="button"
               onClick={() => {
@@ -1173,9 +1173,12 @@ export function AppShell() {
               style={{
                 display: "flex",
                 alignItems: "center",
+                justifyContent: isMobile ? "center" : undefined,
                 gap: 6,
                 height: "100%",
-                padding: "0 12px",
+                width: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                padding: isMobile ? 0 : "0 12px",
                 background: "none",
                 border: "none",
                 borderRight: "1px solid var(--border)",
@@ -1201,7 +1204,7 @@ export function AppShell() {
                 <path d="M12 8v4" />
                 <path d="M12 16h.01" />
               </svg>
-              <span>{translate("trust.resourcesNotLoaded")}</span>
+              {!isMobile && <span>{translate("trust.resourcesNotLoaded")}</span>}
             </button>
           )}
           {showChat && (
@@ -1767,7 +1770,7 @@ export function AppShell() {
         } as React.CSSProperties}
       >
         {/* Right panel tab bar */}
-        <div style={{
+        <div className="panel-tab-header" style={{
           display: "flex",
           alignItems: "center",
           flexShrink: 0,
