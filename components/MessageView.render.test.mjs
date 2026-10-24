@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
+import { MessageView } from "./MessageView.tsx";
+import { I18nProvider } from "../hooks/useI18n";
 import { renderMessage, visibleText } from "../lib/testing/mock-session-harness.mjs";
 
 const USER_TEXT = "请把这段文字渲染出来";
@@ -44,4 +48,68 @@ test("a normalized tool call renders its name and argument", () => {
   });
   assert.ok(visibleText(html).includes(TOOL_PATH), "tool call argument missing from rendered markup");
   assert.ok(visibleText(html).toLowerCase().includes("read"), "tool name missing from rendered markup");
+});
+
+// 工具结果不是独立消息：MessageView 对 role="toolResult" 返回 null，结果正文只通过
+// toolResults 映射到对应 toolCallId 的 toolCall 下方；这里需要传 props，因此本地渲染。
+function renderWithProps(props) {
+  return renderToStaticMarkup(createElement(I18nProvider, null, createElement(MessageView, props)));
+}
+
+test("tool result body reaches the rendered markup through its tool call", () => {
+  const body = "render-fixture 工具结果正文：磁盘剩余 42 GB";
+  const html = renderWithProps({
+    message: {
+      role: "assistant",
+      model: "mock-model",
+      provider: "mock",
+      content: [
+        { type: "toolCall", toolCallId: "call-result-1", toolName: "bash", input: { command: "df -h /project" } },
+      ],
+    },
+    toolResults: new Map([
+      ["call-result-1", {
+        role: "toolResult",
+        toolCallId: "call-result-1",
+        toolName: "bash",
+        content: [{ type: "text", text: body }],
+      }],
+    ]),
+  });
+  assert.ok(visibleText(html).includes(body), "tool result body missing from visible text");
+});
+
+test("thinking block body reaches the rendered markup", () => {
+  const body = "思考正文：先确认工具结果，再输出最终答复";
+  const html = renderMessage({
+    role: "assistant",
+    content: [{ type: "thinking", thinking: body }],
+    model: "mock-model",
+    provider: "mock",
+  });
+  assert.ok(visibleText(html).includes(body), "thinking body missing from visible text");
+});
+
+test("compaction summary body reaches the rendered markup", () => {
+  const body = "压缩摘要正文：保留最近两轮对话与已修改的文件清单";
+  const html = renderMessage({
+    role: "custom",
+    customType: "compaction",
+    display: true,
+    content: body,
+  });
+  assert.ok(visibleText(html).includes(body), "compaction summary body missing from visible text");
+});
+
+test("assistant error message reaches the rendered markup", () => {
+  const body = "provider 返回 403：当前令牌无权访问该模型";
+  const html = renderMessage({
+    role: "assistant",
+    content: [],
+    model: "mock-model",
+    provider: "mock",
+    stopReason: "error",
+    errorMessage: body,
+  });
+  assert.ok(visibleText(html).includes(body), "error message missing from visible text");
 });
