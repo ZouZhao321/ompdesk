@@ -5,6 +5,7 @@ import type { SessionInfo } from "@/lib/types";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
+import { countRunningSessionsByWorkspace } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { useI18n } from "@/hooks/useI18n";
 import { DirectoryPicker } from "./DirectoryPicker";
@@ -965,8 +966,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   }
 
   // Per-project activity counts (running / unread) for the project rows, keyed
-  // the same way as getRecentProjects (projectRoot ?? cwd). Small data set —
-  // cheap to recompute.
+  // the same way as getRecentProjects (projectRoot ?? cwd). Running counts come
+  // from the shared workspace-activity rule; unread stays local to the sidebar.
   const projectActivity = useMemo(() => {
     const counts = new Map<string, { running: number; unread: number }>();
     for (const session of sessionsForDisplay) {
@@ -974,8 +975,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       if (!key) continue;
       let entry = counts.get(key);
       if (!entry) { entry = { running: 0, unread: 0 }; counts.set(key, entry); }
-      if (runningSessionIds.has(session.id)) entry.running++;
       if (unreadSessionIds.has(session.id)) entry.unread++;
+    }
+    for (const [key, running] of countRunningSessionsByWorkspace(sessionsForDisplay, runningSessionIds)) {
+      let entry = counts.get(key);
+      if (!entry) { entry = { running: 0, unread: 0 }; counts.set(key, entry); }
+      entry.running = running;
     }
     return counts;
   }, [sessionsForDisplay, runningSessionIds, unreadSessionIds]);
