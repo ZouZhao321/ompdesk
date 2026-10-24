@@ -1,9 +1,12 @@
 // omp-desktop: Tauri v2 desktop shell for ompdesk.
 //
 // In release builds the bundled Bun runtime starts the ompdesk Next.js server
-// as a sidecar on a free loopback port, then the main window navigates to
-// http://127.0.0.1:<port>. In dev mode (`bun run tauri dev`) the server is
-// already running via beforeDevCommand and the webview loads devUrl.
+// as a sidecar on the fixed loopback port 30141, then the main window navigates
+// to http://127.0.0.1:30141. If another process already holds the port the
+// shell logs why and exits instead of picking a different one, so a tailnet
+// forward to 30141 keeps working across launches. In dev mode
+// (`bun run tauri dev`) the server is already running via beforeDevCommand and
+// the webview loads devUrl.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs::OpenOptions;
@@ -19,6 +22,11 @@ use tauri::{AppHandle, Manager, Url};
 
 const WINDOW_LABEL: &str = "main";
 const HOST: &str = "127.0.0.1";
+/// Loopback port shared by every launch mode (`bun run dev`, `bun run start`,
+/// the CLI launcher and this shell), so `tailscale serve` forwards stay valid
+/// across restarts. Never fall back to another port: a silent switch would
+/// leave the phone pointed at nothing.
+const SERVER_PORT: u16 = 30141;
 const NEXT_ENTRY: &str = "node_modules/next/dist/bin/next";
 
 /// Appends a line to the desktop log in the temp dir and mirrors it to
@@ -84,6 +92,20 @@ impl ServerChild {
     }
 }
 
+/// Leaves the process with `code` after stopping the sidecar.
+///
+/// `AppHandle::exit(code)` is not usable here: it sets `ControlFlow::Exit`,
+/// which tao turns into exit code 0, so a refused launch would look like a
+/// clean exit to launchers and scripts. `std::process::exit` keeps the code,
+/// and the sidecar is torn down first because process exit skips the
+/// `RunEvent::Exit` cleanup.
+fn fail_exit(handle: &AppHandle, code: i32) -> ! {
+    if let Some(server) = handle.try_state::<ServerChild>() {
+        server.kill();
+    }
+    std::process::exit(code)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -111,7 +133,7 @@ fn main() {
             if !tauri::is_dev() {
                 if let Err(error) = start_server(app) {
                     desktop_log(&format!("[omp-desktop] failed to start the bundled server: {error}"));
-                    app.handle().exit(1);
+                    fail_exit(app.handle(), 1);
                 }
             }
             Ok(())
@@ -131,7 +153,8 @@ fn main() {
 }
 
 fn start_server(app: &mut tauri::App) -> Result<(), String> {
-    let port = free_port().map_err(|error| error.to_string())?;
+    let port = SERVER_PORT;
+    ensure_port_available(port)?;
     let root = server_root(app)?;
 
     let bun = root.join(bun_binary_name());
@@ -189,7 +212,7 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
         }
         Err(error) => {
             desktop_log(&format!("[omp-desktop] bundled server failed to become ready: {error}"));
-            handle.exit(1);
+            fail_exit(&handle, 1);
         }
     });
 
@@ -197,11 +220,20 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
     Ok(())
 }
 
-/// Reserves a free loopback port (the listener is dropped immediately, the
-/// server binds the same port moments later).
-fn free_port() -> std::io::Result<u16> {
-    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))?;
-    Ok(listener.local_addr()?.port())
+/// Fails when the fixed port is already held, with the reason and the fix.
+/// The probe listener is dropped immediately; the sidecar binds the same
+/// loopback address moments later.
+fn ensure_port_available(port: u16) -> Result<(), String> {
+    TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
+        .map(|_| ())
+        .map_err(|error| {
+            format!(
+                "port {port} on {HOST} is already in use ({error}). \
+                 Another ompdesk server may still be running — quit it, or free port {port}, \
+                 and relaunch. ompdesk never switches ports, because phone access and \
+                 `tailscale serve` forward this one."
+            )
+        })
 }
 
 /// Locates the server payload (node_modules, .next, public, the bundled Bun,
@@ -258,20 +290,19 @@ fn navigate_main(handle: &AppHandle, port: u16) {
         Ok(url) => url,
         Err(error) => {
             desktop_log(&format!("[omp-desktop] invalid server URL: {error}"));
-            handle.exit(1);
-            return;
+            fail_exit(handle, 1);
         }
     };
     match handle.get_webview_window(WINDOW_LABEL) {
         Some(window) => {
             if let Err(error) = window.navigate(url) {
                 desktop_log(&format!("[omp-desktop] failed to navigate to the ompdesk server: {error}"));
-                handle.exit(1);
+                fail_exit(handle, 1);
             }
         }
         None => {
             desktop_log("[omp-desktop] main window not found");
-            handle.exit(1);
+            fail_exit(handle, 1);
         }
     }
 }
@@ -337,4 +368,35 @@ fn loopback_no_proxy() -> Option<String> {
         }
     }
     (entries.len() != before).then(|| entries.join(","))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A second bind on a held port must fail loudly instead of falling back to
+    // a different port; the same helper must pass once the holder is gone.
+    #[test]
+    fn occupied_port_is_rejected_then_free_again() {
+        let held = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+            .expect("bind an ephemeral port to stand in for a running server");
+        let port = held.local_addr().expect("ephemeral address").port();
+
+        let error = ensure_port_available(port).expect_err("second bind must fail");
+        assert!(
+            error.contains(&port.to_string()),
+            "error must name the port: {error}"
+        );
+
+        drop(held);
+        ensure_port_available(port).expect("port is free again after the holder is dropped");
+    }
+
+    // The README phone-access steps, tauri.conf.json's devUrl and the CLI
+    // launcher's default all point at this literal; keep the shell's constant
+    // on that port so those instructions stay valid.
+    #[test]
+    fn server_port_is_30141() {
+        assert_eq!(SERVER_PORT, 30141);
+    }
 }

@@ -6,8 +6,9 @@ import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { countRunningSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
-import { skillExpansionToCommand } from "@/lib/slash-display";
+import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { OmpWordmark } from "./OmpWordmark";
@@ -58,6 +59,7 @@ function ToolbarIconButton({
       title={title}
       aria-label={title}
       aria-pressed={ariaPressed}
+      className="sidebar-toolbar-icon-button"
       style={{
         position: "relative",
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -428,6 +430,7 @@ function PiWebTitle() {
   return (
     <button
       onClick={handleClick}
+      className="sidebar-brand-button"
       style={{
         display: "flex",
         alignItems: "center",
@@ -1008,7 +1011,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
     const projectMatches = name.toLowerCase().includes(normalizedProjectFilter);
     const matchingSessions = sessions.filter((session) => {
-      const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+      const title = sessionDisplayTitle(session);
       return title.toLowerCase().includes(normalizedProjectFilter);
     });
     if (!projectMatches && matchingSessions.length === 0) return [];
@@ -1058,6 +1061,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             <button
               onClick={() => handleNewSession()}
               disabled={!selectedCwd}
+              className="sidebar-new-session-button"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                 background: "var(--bg-hover)",
@@ -1094,6 +1098,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             </button>
             <button
               onClick={() => loadSessions(false, true)}
+              className="sidebar-header-icon-button"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "var(--bg-hover)",
@@ -1154,6 +1159,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           onClick={handleCustomPathClick}
           title={t("sidebar.addProject")}
           aria-label={t("sidebar.addProject")}
+          className="sidebar-header-icon-button"
           style={{
             display: "flex",
             alignItems: "center",
@@ -1254,6 +1260,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             <section key={project} style={{ marginBottom: isCollapsed ? 3 : 9 }}>
               <div
                 ref={projectMenuOpen === project ? wtDropdownRef : undefined}
+                className="sidebar-project-row"
                 onMouseEnter={() => setHoveredProject(project)}
                 onMouseLeave={() => setHoveredProject((current) => current === project && projectMenuOpen !== project ? null : current)}
                 style={{
@@ -1267,6 +1274,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               >
                 <button
                   type="button"
+                  className="sidebar-project-icon-button"
                   onClick={() => toggleProjectCollapsed(project)}
                   title={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
                   aria-label={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
@@ -1305,6 +1313,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                   type="button"
                   onClick={() => setSelectedCwd(project)}
                   title={project}
+                  className="sidebar-project-name"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1331,6 +1340,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
                 <button
                   type="button"
+                  className="sidebar-project-icon-button sidebar-project-icon-reveal"
                   onClick={() => handleNewSession(project)}
                   title={t("sidebar.newSessionTitle", { path: project })}
                   aria-label={t("sidebar.newSessionTitle", { path: project })}
@@ -1370,6 +1380,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                   <div style={{ position: "static", flexShrink: 0 }}>
                     <button
                       type="button"
+                      className="sidebar-project-icon-button sidebar-project-icon-reveal"
                       onClick={() => {
                         const nextOpen = projectMenuOpen === project ? null : project;
                         dismissProjectMenu();
@@ -1810,6 +1821,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               {!isCollapsed && showMore && (
                 <button
                   type="button"
+                  className="sidebar-show-more"
                   onClick={() => {
                     setExpandedProjects((current) => {
                       const next = new Set(current);
@@ -1864,6 +1876,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                 saveExplorerOpen(next);
                 return next;
               })}
+              className="sidebar-explorer-toggle"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -2017,6 +2030,7 @@ function ArchivedSessionsSection({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        className="sidebar-archived-toggle"
         style={{
           display: "flex", alignItems: "center", gap: 6,
           width: "100%", padding: "7px 12px",
@@ -2042,11 +2056,11 @@ function ArchivedSessionsSection({
             </div>
           )}
           {sessions.map((s) => {
-            const firstMessage = skillExpansionToCommand(s.firstMessage) ?? s.firstMessage;
-            const title = s.name || firstMessage.slice(0, 50) || s.id.slice(0, 12);
+            const title = sessionDisplayTitle(s);
             return (
               <div
                 key={s.id}
+                className="sidebar-session-row"
                 onClick={() => onSelectSession(s)}
                 style={{
                   height: 40, display: "flex", alignItems: "center",
@@ -2060,6 +2074,7 @@ function ArchivedSessionsSection({
                   {title}
                 </div>
                 <button
+                  className="sidebar-session-restore-button"
                   onClick={(e) => restore(e, s.id)}
                   title={t("sidebar.restore")}
                   style={{
@@ -2291,6 +2306,7 @@ function SessionItem({
   onToggleCollapse?: () => void;
 }) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [hovered, setHovered] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -2307,27 +2323,26 @@ function SessionItem({
     }
   }, [renaming]);
 
-  // A stored first message may be an SDK-expanded <skill> block; collapse it
-  // back to the compact /skill:name args command the user typed before using
-  // it as the auto-name fallback, mirroring MessageView's rendering.
-  const displayFirstMessage = skillExpansionToCommand(session.firstMessage) ?? session.firstMessage;
-  const title = session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12);
+  // A stored first message may hold an SDK-expanded <skill> block;
+  // sessionDisplayTitle collapses it to the compact command form, so the
+  // fallback title matches the one the top bar renders.
+  const title = sessionDisplayTitle(session);
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     // Transient sessions have no file yet, so renaming would fail.
     if (session.transient) return;
-    setRenameValue(session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12));
+    setRenameValue(title);
     setRenaming(true);
-  }, [session.name, session.transient, displayFirstMessage, session.id]);
+  }, [session.transient, title]);
 
   const commitRename = useCallback(async () => {
     const name = renameValue.trim();
     setRenaming(false);
     // No-op when unchanged: the fallback title (first message / id) isn't a
-    // real stored name, so don't persist it as one. (The rename input seeds
-    // from the same collapsed displayFirstMessage, so an untouched rename of
-    // a skill-invoked session stays a no-op instead of persisting raw XML.)
+    // real stored name, so don't persist it as one. The rename input seeds from
+    // the same collapsed title, so an untouched rename of a skill-invoked
+    // session stays a no-op instead of persisting raw XML.
     if (renameValue === title || name === (session.name ?? "")) return;
     try {
       await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
@@ -2407,6 +2422,7 @@ function SessionItem({
 
   return (
     <div
+      className="sidebar-session-row"
       onClick={confirmDelete || renaming ? undefined : onClick}
       onContextMenu={confirmDelete || renaming ? undefined : handleContextMenu}
       onMouseEnter={() => setHovered(true)}
@@ -2541,6 +2557,7 @@ function SessionItem({
           {/* Collapse toggle — always visible when has children */}
           {hasChildren && (
             <button
+              className="sidebar-project-icon-button"
               onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
               title={collapsed ? t("sidebar.expandForks") : t("sidebar.collapseForks")}
               style={{
@@ -2558,10 +2575,11 @@ function SessionItem({
             </button>
           )}
 
-          {/* Action buttons — shown on hover */}
-          {hovered && !session.transient && (
+          {/* Action buttons — hover on desktop, also while selected on touch */}
+          {(hovered || (isMobile && isSelected)) && !session.transient && (
             <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
               <button
+                className="sidebar-session-action-button"
                 onClick={startRename}
                 title={t("sidebar.rename")}
                 style={{
@@ -2588,6 +2606,7 @@ function SessionItem({
                 </svg>
               </button>
               <button
+                className="sidebar-session-action-button"
                 onClick={performArchive}
                 title={t("sidebar.archive")}
                 style={{
@@ -2614,6 +2633,7 @@ function SessionItem({
                 </svg>
               </button>
               <button
+                className="sidebar-session-action-button"
                 onClick={handleDeleteClick}
                 title={t("sidebar.deleteWithShiftClick")}
                 style={{
