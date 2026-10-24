@@ -52,7 +52,11 @@ type AutoNameStatus =
   | { kind: "success" }
   | { kind: "error"; message: string };
 
-const TOP_BAR_ICON_BUTTON_SIZE = 36;
+/** 顶栏尺寸：手机档把高度与按钮命中区放大到 44px，桌面档保持原样。 */
+const TOP_BAR_METRICS = {
+  desktop: { height: 36, iconButton: 36 },
+  mobile: { height: 44, iconButton: 44 },
+} as const;
 const LANGUAGE_MENU_WIDTH = 176;
 
 export function AppShell() {
@@ -64,6 +68,7 @@ export function AppShell() {
     preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
   const isMobile = useIsMobile();
+  const topBar = isMobile ? TOP_BAR_METRICS.mobile : TOP_BAR_METRICS.desktop;
   useViewportHeight();
   // Audio ownership lives here (not in ChatWindow) so the completion tone can
   // also fire for tasks finishing in a non-active workspace whose ChatWindow
@@ -734,6 +739,10 @@ export function AppShell() {
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
+  // 手机档顶栏展示的会话标题，与侧栏会话行的回退顺序一致。
+  const mobileSessionTitle = selectedSession
+    ? selectedSession.name || selectedSession.firstMessage.slice(0, 50) || selectedSession.id.slice(0, 12)
+    : "";
   const showSubagentPanel = !isMobile && selectedSession !== null && subagents.length > 0;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   // While restoring initial session from URL, don't show the placeholder
@@ -903,6 +912,12 @@ export function AppShell() {
         background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 24%, transparent), transparent);
         animation: session-info-light-wash 620ms ease-out both;
       }
+      /* 手机档顶栏的分支入口与图标按钮保持同一命中区。 */
+      .mobile-topbar-branches > div > button {
+        min-width: 44px;
+        justify-content: center;
+        padding: 0;
+      }
       @media (prefers-reduced-motion: reduce) {
         .session-info-popover,
         .session-info-popover::after {
@@ -976,14 +991,14 @@ export function AppShell() {
       {/* Center: chat */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}>
+        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: `calc(${topBar.height}px + env(safe-area-inset-top))`, paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}>
           <button
             onClick={handleSidebarToggle}
              title={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
              aria-label={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+              width: topBar.iconButton, height: topBar.iconButton, padding: 0,
               background: "none", border: "none", borderRight: "1px solid var(--border)",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
@@ -1000,6 +1015,20 @@ export function AppShell() {
               </svg>
             )}
           </button>
+          {isMobile && showChat && (
+            <div
+              title={mobileSessionTitle}
+              style={{
+                display: "flex", alignItems: "center",
+                flex: 1, minWidth: 0, height: "100%", padding: "0 10px",
+                fontSize: 12, color: "var(--text)", overflow: "hidden",
+                whiteSpace: "nowrap", textOverflow: "ellipsis",
+              }}
+            >
+              {mobileSessionTitle}
+            </div>
+          )}
+          {!isMobile && (
           <button
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
@@ -1009,7 +1038,7 @@ export function AppShell() {
             aria-label={translate(themeLabelKey)}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+              width: topBar.iconButton, height: topBar.iconButton, padding: 0,
               background: "none", border: "none", borderRight: "1px solid var(--border)",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
@@ -1036,6 +1065,8 @@ export function AppShell() {
               </svg>
             )}
            </button>
+          )}
+          {!isMobile && (
            <button
              ref={languageBtnRef}
              type="button"
@@ -1047,7 +1078,7 @@ export function AppShell() {
              aria-pressed={activeTopPanel === "language"}
              style={{
                display: "flex", alignItems: "center", justifyContent: "center",
-               width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+               width: topBar.iconButton, height: topBar.iconButton, padding: 0,
                background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
                border: "none", borderRight: "1px solid var(--border)",
                color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
@@ -1077,7 +1108,8 @@ export function AppShell() {
                <path d="M14 18h6" />
              </svg>
            </button>
-          {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
+          )}
+          {!isMobile && showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
               type="button"
               onClick={() => {
@@ -1091,7 +1123,7 @@ export function AppShell() {
                 alignItems: "center",
                 gap: 6,
                 height: "100%",
-                padding: isMobile ? "0 10px" : "0 12px",
+                padding: "0 12px",
                 background: "none",
                 border: "none",
                 borderRight: "1px solid var(--border)",
@@ -1117,11 +1149,12 @@ export function AppShell() {
                 <path d="M12 8v4" />
                 <path d="M12 16h.01" />
               </svg>
-              {!isMobile && <span>{translate("trust.resourcesNotLoaded")}</span>}
+              <span>{translate("trust.resourcesNotLoaded")}</span>
             </button>
           )}
           {showChat && (
-            <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
+            <div className={isMobile ? "mobile-topbar-branches" : undefined} style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
+              {!isMobile && (<>
               <button
                 onClick={handleViewFullHistory}
                 disabled={!selectedSession}
@@ -1173,7 +1206,7 @@ export function AppShell() {
                   <path d="M3 3v5h5" />
                   <path d="M12 7v5l3 2" />
                 </svg>
-                 {!isMobile && <span>{translate("history.label")}</span>}
+                 <span>{translate("history.label")}</span>
               </button>
               {(() => {
                 // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
@@ -1244,10 +1277,11 @@ export function AppShell() {
                         <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
                       </svg>
                     )}
-                    {!isMobile && <span>{label}</span>}
+                    <span>{label}</span>
                   </button>
                 );
               })()}
+              </>)}
               <BranchNavigator
                 tree={branchTree}
                 activeLeafId={branchActiveLeafId}
@@ -1290,6 +1324,7 @@ export function AppShell() {
                   display: "flex", alignItems: "center", gap: 10,
                   paddingLeft: 12,
                   paddingRight: rightPanelOpen ? 12 : 48,
+                  minWidth: isMobile ? topBar.iconButton : undefined,
                   height: "100%",
                   background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
                   border: "none",
