@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
@@ -46,28 +47,38 @@ export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
     return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
   }
 
+  let filePath = "";
+  let disableModelInvocation: unknown;
+  let resolvedFilePath: string | undefined;
   try {
     const body = await req.json() as { filePath?: unknown; disableModelInvocation?: unknown };
-    const filePath = typeof body.filePath === "string" ? body.filePath.trim() : "";
-    const disableModelInvocation = body.disableModelInvocation;
-    if (!filePath) return NextResponse.json({ error: "filePath required" }, { status: 400 });
+    filePath = typeof body.filePath === "string" ? body.filePath.trim() : "";
+    disableModelInvocation = body.disableModelInvocation;
+    if (!filePath) {
+      auditFailure("skill.toggle", undefined, { status: 400, reason: "filePath-required" });
+      return NextResponse.json({ error: "filePath required" }, { status: 400 });
+    }
     if (typeof disableModelInvocation !== "boolean") {
+      auditFailure("skill.toggle", filePath, { status: 400, reason: "invalid-flag" });
       return NextResponse.json({ error: "disableModelInvocation must be boolean" }, { status: 400 });
     }
     if (path.basename(filePath).toLowerCase() !== "skill.md") {
+      auditFailure("skill.toggle", filePath, { status: 400, reason: "not-skill-md" });
       return NextResponse.json({ error: "Only SKILL.md files can be changed" }, { status: 400 });
     }
 
-    let resolvedFilePath: string;
     try {
       resolvedFilePath = realpathSync(filePath);
     } catch {
+      auditFailure("skill.toggle", filePath, { status: 404, reason: "file-not-found" });
       return NextResponse.json({ error: "file not found" }, { status: 404 });
     }
     if (path.basename(resolvedFilePath).toLowerCase() !== "skill.md") {
+      auditFailure("skill.toggle", resolvedFilePath, { status: 400, reason: "not-skill-md" });
       return NextResponse.json({ error: "Only SKILL.md files can be changed" }, { status: 400 });
     }
     if (!statSync(resolvedFilePath).isFile()) {
+      auditFailure("skill.toggle", resolvedFilePath, { status: 400, reason: "not-a-file" });
       return NextResponse.json({ error: "file must be a regular file" }, { status: 400 });
     }
 
@@ -80,6 +91,7 @@ export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
     const globalSkillsDir = path.join(homedir(), ".agents", "skills");
     if (existsSync(globalSkillsDir)) allowedRoots.add(globalSkillsDir);
     if (!isExistingFilePathAllowed(resolvedFilePath, allowedRoots)) {
+      auditFailure("skill.toggle", resolvedFilePath, { status: 403, reason: "access-denied" });
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -103,8 +115,10 @@ export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
     }
 
     writeFileSync(resolvedFilePath, updated, "utf8");
+    auditSuccess("skill.toggle", resolvedFilePath, { disabledModelInvocation: disableModelInvocation });
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    auditFailure("skill.toggle", resolvedFilePath ?? (filePath || undefined), { status: 500, error });
     return NextResponse.json({ error: "Unable to update skill metadata" }, { status: 500 });
   }
 });
