@@ -1,12 +1,14 @@
-import { getRunningRpcSessionIds, subscribeRunningSessions } from "@/lib/rpc-manager";
+import { getRpcSessionActivitySnapshot, subscribeRunningSessions } from "@/lib/rpc-manager";
 import { withRequestLog } from "@/lib/api-request-log";
 import { openSseStream, type SseStreamSession } from "@/lib/sse-lifecycle";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/agent/running/events - SSE stream of the set of currently-running
-// session ids. Pushes an update whenever any session starts or stops working,
-// so the sidebar never has to poll.
+// GET /api/agent/running/events - SSE stream carrying the same activity snapshot
+// as the polling route: running session ids, ids waiting on a user answer, and
+// the runtime→session mapping. Pushes an update whenever any session starts,
+// stops, or begins/ends waiting on the browser, so the sidebar never has to
+// poll.
 // The request wrapper completes when the response headers return; the stream
 // itself logs http.stream.* for as long as the connection stays open.
 export const GET = withRequestLog(
@@ -22,13 +24,13 @@ export const GET = withRequestLog(
           connect: (send, registerCleanup) => {
             // Subscribe BEFORE taking the initial snapshot so no state change can slip
             // through the gap between snapshot and subscription.
-            registerCleanup(subscribeRunningSessions((ids) => {
-              send({ type: "running", runningSessionIds: ids });
+            registerCleanup(subscribeRunningSessions((activity) => {
+              send({ type: "running", ...activity });
             }));
 
             // Initial snapshot so the client renders the correct state immediately.
             // (A duplicate frame here is harmless: the client just sets the same set.)
-            send({ type: "running", runningSessionIds: getRunningRpcSessionIds() });
+            send({ type: "running", ...getRpcSessionActivitySnapshot() });
           },
         });
       },
