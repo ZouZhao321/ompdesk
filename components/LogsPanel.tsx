@@ -138,7 +138,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [active, client, debouncedKeyword, level, selectedFile]);
+  }, [active, client, debouncedKeyword, level, selectedFile, refreshToken]);
 
   useEffect(() => {
     if (!follow || paused) return;
