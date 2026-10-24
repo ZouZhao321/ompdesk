@@ -555,5 +555,6 @@ export const zhCNLocale: LocalePlugin = {
     "map.expandCount": "展开 {count} 轮",
     "map.collapseCount": "收起 {count} 轮",
     "map.turnLabel": "第 {index} 轮：{preview}",
+    "map.openFailed": "无法打开这个会话，请刷新后重试",
   },
 };

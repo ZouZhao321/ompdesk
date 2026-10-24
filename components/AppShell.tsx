@@ -509,11 +509,18 @@ export function AppShell() {
   }, []);
 
   // Open another session from the map (fork descendants live in their own file).
-  const handleOpenSessionById = useCallback(async (sessionId: string) => {
-    const response = await fetch("/api/sessions", { cache: "no-store" });
-    const data = (await response.json().catch(() => null)) as { sessions?: SessionInfo[] } | null;
-    const session = data?.sessions?.find((candidate) => candidate.id === sessionId);
-    if (session) handleSelectSession(session);
+  const handleOpenSessionById = useCallback(async (sessionId: string): Promise<boolean> => {
+    try {
+      const response = await fetch("/api/sessions", { cache: "no-store" });
+      if (!response.ok) return false;
+      const data = (await response.json()) as { sessions?: SessionInfo[] };
+      const session = data.sessions?.find((candidate) => candidate.id === sessionId);
+      if (!session) return false;
+      handleSelectSession(session);
+      return true;
+    } catch {
+      return false;
+    }
   }, [handleSelectSession]);
 
   // Called by ChatWindow when a new session gets its real id from omp
@@ -1652,7 +1659,7 @@ export function AppShell() {
                   handleSessionForked(newSessionId);
                 }}
                 onSwitchLeaf={handleBranchLeafChange}
-                onOpenSession={(sessionId) => void handleOpenSessionById(sessionId)}
+                onOpenSession={handleOpenSessionById}
               />
             )}
             </>
