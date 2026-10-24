@@ -20,6 +20,8 @@ interface Props {
   hasSession?: boolean;
   /** When inline, render icon-only (no text label) to save horizontal space */
   compact?: boolean;
+  /** Extra class on the inline toggle button, e.g. a mobile hit-target rule */
+  buttonClassName?: string;
 }
 
 // Find the visible entry IDs on the path from root to activeLeafId.
@@ -245,7 +247,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
   );
 }
 
-export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, containerRef, open: openProp, onToggle, hasSession, compact }: Props) {
+export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, containerRef, open: openProp, onToggle, hasSession, compact, buttonClassName }: Props) {
   const { t } = useI18n();
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
@@ -305,6 +307,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
       <div style={{ height: "100%", display: "flex", alignItems: "stretch" }}>
         <button
           ref={btnRef}
+          className={buttonClassName}
           onClick={() => onToggle ? onToggle() : setOpenInternal((v) => !v)}
           style={{
             display: "flex",

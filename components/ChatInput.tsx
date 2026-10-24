@@ -2013,17 +2013,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
              {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
           </div>
         )}
-        {isMobile && (
-          <div style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            minWidth: 0,
-            marginTop: 6,
-          }}>
-            <ContextUsageMeter usage={contextUsage} t={t} />
-          </div>
-        )}
-
         {/* Bottom bar: left | center (context) | right */}
         <div style={{
           marginTop: 8,

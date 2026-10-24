@@ -7,6 +7,7 @@ import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { countRunningSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
+import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
@@ -1010,7 +1011,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
     const projectMatches = name.toLowerCase().includes(normalizedProjectFilter);
     const matchingSessions = sessions.filter((session) => {
-      const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+      const title = sessionDisplayTitle(session);
       return title.toLowerCase().includes(normalizedProjectFilter);
     });
     if (!projectMatches && matchingSessions.length === 0) return [];
@@ -2056,7 +2057,7 @@ function ArchivedSessionsSection({
           )}
           {sessions.map((s) => {
             const firstMessage = skillExpansionToCommand(s.firstMessage) ?? s.firstMessage;
-            const title = s.name || firstMessage.slice(0, 50) || s.id.slice(0, 12);
+            const title = sessionDisplayTitle({ name: s.name, firstMessage, id: s.id });
             return (
               <div
                 key={s.id}
@@ -2325,15 +2326,19 @@ function SessionItem({
   // back to the compact /skill:name args command the user typed before using
   // it as the auto-name fallback, mirroring MessageView's rendering.
   const displayFirstMessage = skillExpansionToCommand(session.firstMessage) ?? session.firstMessage;
-  const title = session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12);
+  const title = sessionDisplayTitle({
+    name: session.name,
+    firstMessage: displayFirstMessage,
+    id: session.id,
+  });
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     // Transient sessions have no file yet, so renaming would fail.
     if (session.transient) return;
-    setRenameValue(session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12));
+    setRenameValue(title);
     setRenaming(true);
-  }, [session.name, session.transient, displayFirstMessage, session.id]);
+  }, [session.transient, title]);
 
   const commitRename = useCallback(async () => {
     const name = renameValue.trim();
