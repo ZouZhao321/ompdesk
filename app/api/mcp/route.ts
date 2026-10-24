@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { dirname, join } from "path";
 import { NextResponse } from "next/server";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
@@ -241,6 +242,8 @@ async function getRouteHandler(req: Request) {
 }
 
 export const PATCH = withRequestLog("/api/mcp", async (req: Request) => {
+  let target: string | undefined;
+  let enabled: boolean | undefined;
   try {
     const cwd = await validatedCwd(req);
     const body = await req.json() as {
@@ -248,6 +251,8 @@ export const PATCH = withRequestLog("/api/mcp", async (req: Request) => {
       name?: string;
       enabled?: boolean;
     };
+    target = typeof body.name === "string" ? body.name : undefined;
+    enabled = typeof body.enabled === "boolean" ? body.enabled : undefined;
     if (body.scope !== "user" && body.scope !== "project") throw new Error("Invalid MCP scope");
     if (body.scope === "project" && !cwd) throw new Error("cwd required for project MCP settings");
     if (typeof body.name !== "string" || !SERVER_NAME.test(body.name)) throw new Error("Invalid MCP server name");
@@ -269,17 +274,26 @@ export const PATCH = withRequestLog("/api/mcp", async (req: Request) => {
       name: body.name,
       enabled: body.enabled,
     });
+    auditSuccess("mcp.server.toggle", target, { scope: body.scope, enabled: body.enabled });
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: message === "Access denied" ? 403 : 400 });
+    const denied = message === "Access denied";
+    auditFailure("mcp.server.toggle", target, { status: denied ? 403 : 400, enabled, error });
+    return NextResponse.json({ error: message }, { status: denied ? 403 : 400 });
   }
 });
 
 export const PUT = withRequestLog("/api/mcp", async (req: Request) => {
+  let target: string | undefined;
+  let mcpScope: "user" | "project" | undefined;
   try {
     const cwd = await validatedCwd(req);
     const body = await req.json() as { scope?: "user" | "project"; servers?: McpServerEntry[] };
+    if (body.scope === "user" || body.scope === "project") {
+      mcpScope = body.scope;
+      target = body.scope === "project" && !cwd ? undefined : configPath(body.scope, cwd);
+    }
     if (body.scope !== "user" && body.scope !== "project") throw new Error("Invalid MCP scope");
     if (body.scope === "project" && !cwd) throw new Error("cwd required for project MCP settings");
     if (!Array.isArray(body.servers)) throw new Error("servers must be an array");
@@ -306,8 +320,15 @@ export const PUT = withRequestLog("/api/mcp", async (req: Request) => {
     };
     mkdirSync(dirname(path), { recursive: true });
     writePrivateFileAtomicSync(path, `${JSON.stringify(document, null, 2)}\n`);
+    auditSuccess("mcp.config.write", path, { scope: body.scope, servers: servers.length });
     return NextResponse.json({ success: true, scope: readScope(body.scope, cwd) });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    const message = error instanceof Error ? error.message : String(error);
+    auditFailure("mcp.config.write", target, {
+      status: 400,
+      scope: mcpScope,
+      error,
+    });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 });
