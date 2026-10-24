@@ -5,7 +5,7 @@ import type { SessionInfo } from "@/lib/types";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
-import { countRunningSessionsByWorkspace } from "@/lib/workspace-activity";
+import { countRunningSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { useI18n } from "@/hooks/useI18n";
 import { DirectoryPicker } from "./DirectoryPicker";
@@ -210,9 +210,9 @@ function saveCollapsedProjects(projects: Set<string>): void {
  * main repo) sorted by most recent session activity.
  */
 function getRecentProjects(sessions: SessionInfo[]): string[] {
-  const latestByRoot = new Map<string, string>(); // projectRoot -> most recent modified
+  const latestByRoot = new Map<string, string>(); // workspace key -> most recent modified
   for (const s of sessions) {
-    const root = s.projectRoot ?? s.cwd;
+    const root = workspaceKeyOf(s);
     if (!root) continue;
     const prev = latestByRoot.get(root);
     if (!prev || s.modified > prev) {
@@ -882,24 +882,29 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     }
   }, [worktreeState, wtBusy, selectedCwd]);
 
+  // 收起项目菜单及其派生的确认条 / 工作树弹层状态；hover 高亮由调用方决定。
+  const dismissProjectMenu = useCallback(() => {
+    setProjectMenuOpen(null);
+    setRemoveProjectConfirm(null);
+    setWtDropdownOpen(false);
+    setWtNewOpen(false);
+    setWtNewBranch("");
+    setWtError(null);
+    setWtConfirmRemove(null);
+    setWtFilter("");
+  }, []);
+
   // Close the project actions menu on outside click.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (wtDropdownRef.current && !wtDropdownRef.current.contains(e.target as Node)) {
-        setProjectMenuOpen(null);
-        setRemoveProjectConfirm(null);
-        setWtDropdownOpen(false);
-        setWtNewOpen(false);
-        setWtNewBranch("");
-        setWtError(null);
-        setWtConfirmRemove(null);
-        setWtFilter("");
+        dismissProjectMenu();
         setHoveredProject(null);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [dismissProjectMenu]);
 
   // Clicking a session moves the effective cwd to that session's worktree.
   // Done on the click path (not via the selectedCwd prop sync) so it also
@@ -937,6 +942,29 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !projectPaths.includes(selectedProject)) {
     projectPaths.unshift(selectedProject);
   }
+  // 每个工作区的运行中会话数只汇总一次，项目行与移除前确认共用这一份快照。
+  const runningByWorkspace = useMemo(
+    () => countRunningSessionsByWorkspace(sessionsForDisplay, runningSessionIds),
+    [sessionsForDisplay, runningSessionIds],
+  );
+
+  // Per-project activity counts (running / unread) for the project rows, keyed
+  // by the shared workspace key rule. Unread stays local to the sidebar.
+  const projectActivity = useMemo(() => {
+    const counts = new Map<string, { running: number; unread: number }>();
+    for (const session of sessionsForDisplay) {
+      const key = workspaceKeyOf(session);
+      if (!key) continue;
+      let entry = counts.get(key);
+      if (!entry) {
+        entry = { running: runningByWorkspace.get(key) ?? 0, unread: 0 };
+        counts.set(key, entry);
+      }
+      if (unreadSessionIds.has(session.id)) entry.unread++;
+    }
+    return counts;
+  }, [sessionsForDisplay, runningByWorkspace, unreadSessionIds]);
+
   const executeRemoveProject = (project: string) => {
     const key = normalizeProjectKey(project);
     setRemovedProjects((current) => {
@@ -946,14 +974,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       saveRemovedProjects(next);
       return next;
     });
-    setProjectMenuOpen(null);
-    setRemoveProjectConfirm(null);
-    setWtDropdownOpen(false);
-    setWtNewOpen(false);
-    setWtNewBranch("");
-    setWtError(null);
-    setWtConfirmRemove(null);
-    setWtFilter("");
+    dismissProjectMenu();
     if (selectedProject && normalizeProjectKey(selectedProject) === key) {
       setSelectedCwd(null);
     }
@@ -961,7 +982,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   // 移除前先看运行快照：有会话仍在运行就只弹确认条，不改变任何状态。
   const requestRemoveProject = (project: string) => {
-    const running = countRunningSessionsByWorkspace(sessionsForDisplay, runningSessionIds).get(project) ?? 0;
+    const running = projectActivity.get(project)?.running ?? 0;
     if (running > 0) {
       setRemoveProjectConfirm({ project, running });
       return;
@@ -971,32 +992,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   const sessionsByProject = new Map<string, SessionInfo[]>();
   for (const session of sessionsForDisplay) {
-    const project = session.projectRoot ?? session.cwd;
+    const project = workspaceKeyOf(session);
     if (!project) continue;
     const projectSessions = sessionsByProject.get(project);
     if (projectSessions) projectSessions.push(session);
     else sessionsByProject.set(project, [session]);
   }
-
-  // Per-project activity counts (running / unread) for the project rows, keyed
-  // the same way as getRecentProjects (projectRoot ?? cwd). Running counts come
-  // from the shared workspace-activity rule; unread stays local to the sidebar.
-  const projectActivity = useMemo(() => {
-    const counts = new Map<string, { running: number; unread: number }>();
-    for (const session of sessionsForDisplay) {
-      const key = session.projectRoot ?? session.cwd;
-      if (!key) continue;
-      let entry = counts.get(key);
-      if (!entry) { entry = { running: 0, unread: 0 }; counts.set(key, entry); }
-      if (unreadSessionIds.has(session.id)) entry.unread++;
-    }
-    for (const [key, running] of countRunningSessionsByWorkspace(sessionsForDisplay, runningSessionIds)) {
-      let entry = counts.get(key);
-      if (!entry) { entry = { running: 0, unread: 0 }; counts.set(key, entry); }
-      entry.running = running;
-    }
-    return counts;
-  }, [sessionsForDisplay, runningSessionIds, unreadSessionIds]);
 
   const normalizedProjectFilter = projectFilter.trim().toLowerCase();
   const projectGroups = projectPaths.flatMap((project) => {
@@ -1371,11 +1372,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                       type="button"
                       onClick={() => {
                         const nextOpen = projectMenuOpen === project ? null : project;
+                        dismissProjectMenu();
                         setProjectMenuOpen(nextOpen);
-                        setRemoveProjectConfirm(null);
-                        setWtDropdownOpen(false);
-                        setWtNewOpen(false);
-                        setWtError(null);
                         if (!isSelectedProject) setSelectedCwd(project);
                       }}
                       title={t("sidebar.projectActions")}
@@ -1719,7 +1717,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                               gap: 6,
                               padding: "7px 10px",
                               borderTop: "1px solid var(--border)",
-                              background: "rgba(239,68,68,0.06)",
+                              background: "color-mix(in srgb, var(--danger) 6%, transparent)",
                             }}
                           >
                             <span style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.35 }}>
@@ -1729,7 +1727,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                               <button
                                 type="button"
                                 onClick={() => executeRemoveProject(project)}
-                                style={{ padding: "3px 9px", background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                                style={{ padding: "3px 9px", background: "var(--danger)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                               >
                                 {t("sidebar.removeProjectAnyway")}
                               </button>
