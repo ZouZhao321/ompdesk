@@ -162,6 +162,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
+        className="process-details-toggle"
         style={{
           display: "flex",
           alignItems: "center",
