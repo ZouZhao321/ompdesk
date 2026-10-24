@@ -250,4 +250,10 @@ export interface LogsResponse {
   truncated: boolean;
   /** The requested cursor was past the file's end (same-name rotation); entries restart at byte 0. */
   reset: boolean;
+  /**
+   * Identity of the file this page came from. Send it back with the cursor so
+   * the reader notices a same-name file that was recreated and grew past the
+   * old position; `null` when no file is selected.
+   */
+  fingerprint: string | null;
 }

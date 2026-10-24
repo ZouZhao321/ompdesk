@@ -41,6 +41,8 @@ async function getRouteHandler(request: Request) {
         limit: query.limit,
         level: query.level,
         keyword: query.keyword,
+        tail: query.tail,
+        fingerprint: query.fingerprint,
       }),
       { headers: NO_STORE },
     );

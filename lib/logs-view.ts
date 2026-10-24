@@ -24,11 +24,18 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1_024 * 1_024)).toFixed(1)} MB`;
 }
 
-/** `omp.2026-10-24.1528.log.2` → `2026-10-24 · rotation 2`. */
+/**
+ * `omp.2026-10-24.1528.log.2` → `2026-10-24 15:28 · rotation 2`. The start time
+ * keeps files from the same day distinguishable, and only the server's
+ * `current` flag claims which file is active (a file from a previous process
+ * has no rotation suffix either).
+ */
 export function formatFileLabel(file: LogFileInfo): string {
   const match = /^omp\.(\d{4}-\d{2}-\d{2})\.(\d+)\.log(?:\.(\d+))?$/.exec(file.name);
   if (!match) return file.name;
-  return match[3] ? `${match[1]} · rotation ${match[3]}` : `${match[1]} · current file`;
+  const stamp = `${match[1]} ${match[2].slice(0, 2)}:${match[2].slice(2)}`;
+  if (match[3]) return `${stamp} · rotation ${match[3]}`;
+  return file.current ? `${stamp} · current file` : stamp;
 }
 
 export function formatFileModified(iso: string): string {
@@ -46,13 +53,26 @@ export interface LogsRequestInput {
   level?: LogLevelName | "all";
   keyword?: string;
   limit?: number;
+  /** Start from the newest slice of the file; only meaningful when `cursor` is 0. */
+  tail?: boolean;
+  /** Identity from the previous page, echoed so a recreated same-name file resets. */
+  fingerprint?: string | null;
 }
 
-/** Build the query string the panel polls with; cursor 0 is omitted so the route returns the head. */
+/**
+ * Build the query string the panel polls with. A cursor of 0 starts a fresh
+ * read: `tail` asks for the newest slice instead of the file's head, and the
+ * fingerprint is only meaningful alongside a real cursor.
+ */
 export function buildLogsRequest(input: LogsRequestInput): string {
   const params = new URLSearchParams();
   if (input.file) params.set("file", input.file);
-  if (input.cursor && input.cursor > 0) params.set("cursor", String(input.cursor));
+  if (input.cursor && input.cursor > 0) {
+    params.set("cursor", String(input.cursor));
+    if (input.fingerprint) params.set("fingerprint", input.fingerprint);
+  } else if (input.tail) {
+    params.set("tail", "1");
+  }
   if (input.level && input.level !== "all") params.set("level", input.level);
   const keyword = input.keyword?.trim();
   if (keyword) params.set("q", keyword);
