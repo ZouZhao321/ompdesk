@@ -92,7 +92,7 @@ export function parseClientErrorReport(payload: unknown): ClientErrorReport {
   }
   const body = payload as Record<string, unknown>;
   for (const key of Object.keys(body)) {
-    if (!CLIENT_ERROR_FIELDS[key]) {
+    if (!Object.hasOwn(CLIENT_ERROR_FIELDS, key)) {
       throw new ClientLogValidationError(400, `Unsupported field: ${truncateClientField(key, 32)}`);
     }
   }
@@ -159,7 +159,12 @@ async function readJsonWithinLimit(request: Request, maxBytes: number): Promise<
   let size = 0;
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const chunk = await reader.read().catch(() => {
+        // The client disconnected or the stream errored: that is a bad request,
+        // not a server failure worth a 500 and a `failed: true` request log.
+        throw new ClientLogValidationError(400, "Request body could not be read");
+      });
+      const { done, value } = chunk;
       if (done) break;
       if (size + value.byteLength > maxBytes) {
         await reader.cancel().catch(() => {});
@@ -228,10 +233,12 @@ export function createClientLogHandler(options: ClientLogHandlerOptions = {}) {
       const report = parseClientErrorReport(payload);
 
       const at = now();
-      const global = globalLimiter.take("all", at);
-      if (!global.allowed) return rateLimited(global.retryAfterMs);
+      // Reject a flooding session before it can drain the shared bucket; only
+      // an accepted per-key request spends a global slot.
       const perKey = limiter.take(rateLimitKey(report, request), at);
       if (!perKey.allowed) return rateLimited(perKey.retryAfterMs);
+      const global = globalLimiter.take("all", at);
+      if (!global.allowed) return rateLimited(global.retryAfterMs);
 
       recordClientError(report);
       return new Response(null, { status: 204, headers: NO_STORE });

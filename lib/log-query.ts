@@ -187,6 +187,17 @@ export interface ReadLogPageOptions {
   pid?: number;
 }
 
+/**
+ * Byte length of the complete lines in a page. `lastIndexOf` must be limited to
+ * the bytes actually read: with a negative start offset it searches the whole
+ * uninitialized allocation, and a stray newline there lasts past `bytesRead`.
+ */
+export function completeLinesEnd(buffer: Buffer, bytesRead: number, atEof: boolean): number {
+  if (atEof) return bytesRead;
+  const lastNewline = buffer.subarray(0, bytesRead).lastIndexOf(10);
+  return lastNewline >= 0 ? lastNewline + 1 : bytesRead;
+}
+
 /** Read one raw-byte page, then apply level and keyword filters to the parsed lines. */
 export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
   const directory = options.directory ?? getLogsDir();
@@ -206,7 +217,7 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
   const files = listLogFiles(directory, pid);
   const name = options.file ?? files[0]?.name ?? null;
   if (!name) {
-    return { pid, files, file: null, entries: [], nextCursor: 0, truncated: false };
+    return { pid, files, file: null, entries: [], nextCursor: 0, truncated: false, reset: false };
   }
 
   const resolved = resolveLogFile(directory, name, pid);
@@ -217,10 +228,13 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
     current: files[0]?.name === resolved.name,
   };
 
-  const start = Math.min(cursor, resolved.size);
+  // A cursor beyond the current size means the writer restarted or rotated the
+  // same basename; the old position no longer addresses any line.
+  const reset = cursor > resolved.size;
+  const start = reset ? 0 : cursor;
   const readLength = Math.min(resolved.size - start, MAX_LOG_PAGE_BYTES);
   if (readLength <= 0) {
-    return { pid, files, file: fileInfo, entries: [], nextCursor: start, truncated: false };
+    return { pid, files, file: fileInfo, entries: [], nextCursor: start, truncated: false, reset };
   }
 
   const buffer = Buffer.allocUnsafe(readLength);
@@ -239,8 +253,7 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
   const atEof = start + bytesRead >= resolved.size;
   // Never consume a line the writer may still be appending unless the chunk
   // reaches EOF. A single record larger than the page is still surfaced.
-  const lastNewline = atEof ? -1 : buffer.lastIndexOf(10, bytesRead - 1);
-  const end = atEof ? bytesRead : lastNewline >= 0 ? lastNewline + 1 : bytesRead;
+  const end = completeLinesEnd(buffer, bytesRead, atEof);
 
   const entries: LogEntry[] = [];
   let position = 0;
@@ -270,6 +283,7 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
     entries,
     nextCursor: consumed,
     truncated: consumed < resolved.size,
+    reset,
   };
 }
 

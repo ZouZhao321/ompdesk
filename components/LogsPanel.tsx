@@ -56,6 +56,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
   const [error, setError] = useState<string | null>(null);
   const [expandedOffset, setExpandedOffset] = useState<number | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [catchingUp, setCatchingUp] = useState(false);
 
   const cursor = useRef(0);
   const activeFile = useRef<string | null>(null);
@@ -83,6 +84,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
     setExpandedOffset(null);
     setError(null);
     setLoading(true);
+    setCatchingUp(false);
   }, [selectedFile, level, debouncedKeyword, refreshToken]);
 
   const active = shouldPollLogs(hidden, paused);
@@ -95,6 +97,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
 
     const tick = async () => {
       let resetForFile = false;
+      let catchingUp = false;
       try {
         const page = await client({
           file: selectedFile,
@@ -108,28 +111,37 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
         // us after rotation. A cursor from the previous file is meaningless
         // there, so discard that page and read the new file from the head.
         const pageFile = page.file?.name ?? null;
-        if (pageFile !== activeFile.current) {
-          activeFile.current = pageFile;
-          if (cursor.current > 0) {
-            cursor.current = 0;
-            setEntries([]);
-            resetForFile = true;
-          }
-        }
-        if (!resetForFile) {
+        const fileChanged = pageFile !== activeFile.current;
+        if (fileChanged) activeFile.current = pageFile;
+        if (page.reset) {
+          // The server already restarted at byte 0 for a shrunken file, so this
+          // page is the new head and replaces what the panel shows.
+          cursor.current = page.nextCursor;
+          setEntries(page.entries);
+        } else if (fileChanged && cursor.current > 0) {
+          cursor.current = 0;
+          setEntries([]);
+          resetForFile = true;
+        } else {
           cursor.current = page.nextCursor;
           setEntries((previous) => mergeLogEntries(previous, page.entries));
         }
+        catchingUp = page.truncated;
+        setCatchingUp(catchingUp);
         setFiles(page.files);
         setFile(page.file);
         setError(null);
       } catch (caught) {
         if (cancelled || currentGeneration !== generation.current) return;
+        setCatchingUp(false);
         setError(caught instanceof Error ? caught.message : String(caught));
       } finally {
         if (!cancelled && currentGeneration === generation.current) {
           setLoading(false);
-          timer = setTimeout(() => void tick(), resetForFile ? 0 : POLL_INTERVAL_MS);
+          // A truncated page leaves a backlog: read the next page now instead
+          // of waiting for the interval, so the panel does not linger on a
+          // provisional empty/no-match view.
+          timer = setTimeout(() => void tick(), resetForFile || catchingUp ? 0 : POLL_INTERVAL_MS);
         }
       }
     };
@@ -141,11 +153,15 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
     };
   }, [active, client, debouncedKeyword, level, selectedFile, refreshToken]);
 
+  const newestOffset = entries[entries.length - 1]?.offset ?? null;
+
   useEffect(() => {
-    if (!follow || paused) return;
+    if (!follow || paused || newestOffset === null) return;
     const node = listRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [entries.length, follow, paused]);
+    // `entries.length` stops changing once the visible cap is reached; the
+    // newest offset keeps advancing and still triggers the scroll.
+  }, [newestOffset, follow, paused]);
 
   return (
     <LogsPanelView
@@ -159,6 +175,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       paused={paused}
       loading={loading}
       error={error}
+      catchingUp={catchingUp}
       selectedFile={selectedFile}
       expandedOffset={expandedOffset}
       listRef={listRef}
@@ -167,7 +184,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       onFileChange={(next) => { setPaused(false); setSelectedFile(next); }}
       onFollowChange={(next) => {
         setFollow(next);
-        setSelectedFile((current) => selectFileAfterFollow(next, current));
+        setSelectedFile((current) => selectFileAfterFollow(next, current, file?.name));
       }}
       onTogglePause={() => setPaused((value) => !value)}
       onRefresh={() => { setPaused(false); setRefreshToken((value) => value + 1); }}

@@ -29,6 +29,7 @@ export interface LogsPanelViewProps {
   paused: boolean;
   loading: boolean;
   error: string | null;
+  catchingUp: boolean;
   selectedFile: string | null;
   expandedOffset: number | null;
   listRef?: RefObject<HTMLDivElement | null>;
@@ -52,6 +53,7 @@ export function LogsPanelView({
   paused,
   loading,
   error,
+  catchingUp,
   selectedFile,
   expandedOffset,
   listRef,
@@ -70,6 +72,7 @@ export function LogsPanelView({
     entryCount: entries.length,
     level,
     keyword,
+    catchingUp,
   });
   const activeFile = selectedFile ?? file?.name ?? "";
 
