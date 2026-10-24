@@ -11,6 +11,13 @@ export const REQUEST_ID_HEADER = "x-ompdesk-request-id";
 /** How the caller was admitted: local access, the password, or recovery. */
 export const ACTOR_HEADER = "x-ompdesk-actor";
 
+/**
+ * Caller address as the proxy saw it. The proxy overwrites any client-supplied
+ * value, so a route can use it as a rate-limit bucket without reading forwarding
+ * headers itself.
+ */
+export const CLIENT_ADDRESS_HEADER = "x-ompdesk-client-address";
+
 export type RequestActor = "local" | "password" | "recovery";
 
 /** Narrow an actor value read from a header, ignoring anything this app did not write. */
