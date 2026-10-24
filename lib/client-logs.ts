@@ -32,8 +32,12 @@ export const CLIENT_ERROR_SUBSYSTEM = "client";
 export const CLIENT_LOG_MAX_BODY_BYTES = 8 * 1024;
 export const CLIENT_ERROR_RATE_LIMIT = 20;
 export const CLIENT_ERROR_RATE_WINDOW_MS = 60_000;
-/** Same ceiling for the address bucket; a session bucket and an address bucket must both allow. */
-export const CLIENT_ERROR_ADDRESS_RATE_LIMIT = 20;
+/**
+ * Address bucket ceiling. Higher than the per-session limit because every tab
+ * on one machine shares the same address (and the desktop shell reports
+ * `local`); rotating `sessionId` still cannot exceed it.
+ */
+export const CLIENT_ERROR_ADDRESS_RATE_LIMIT = 60;
 /** Ceiling across every session and address, so rotating ids cannot outrun it. */
 export const CLIENT_ERROR_GLOBAL_RATE_LIMIT = 200;
 
