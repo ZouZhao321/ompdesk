@@ -1,6 +1,8 @@
 import { resolveSessionPath } from "@/lib/session-reader";
 import { getRpcSession, startRpcSession, type AgentEvent } from "@/lib/rpc-manager";
 import { isApiRequestAllowed } from "@/lib/request-security";
+import { withRequestLog } from "@/lib/api-request-log";
+import { openSseStream, type SseStreamSession } from "@/lib/sse-lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -17,73 +19,63 @@ function toClientEvent(event: AgentEvent): AgentEvent | null {
   return event;
 }
 
-// GET /api/agent/[id]/events - SSE stream of agent events
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  if (!isApiRequestAllowed(req)) {
-    return new Response("Untrusted API request", { status: 403 });
-  }
-
-
-  // Fast path: already-running session
-  let session = getRpcSession(id);
-  if (!session || !session.isAlive()) {
-    const filePath = await resolveSessionPath(id);
-    if (!filePath) {
-      return new Response("Session not found", { status: 404 });
+// GET /api/agent/[id]/events - SSE stream of agent events.
+// The request wrapper completes when the response headers return; the stream
+// itself logs http.stream.* for as long as the connection stays open.
+export const GET = withRequestLog(
+  "/api/agent/[id]/events",
+  async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params;
+    if (!isApiRequestAllowed(req)) {
+      return new Response("Untrusted API request", { status: 403 });
     }
-    try {
-      ({ session } = await startRpcSession(id, filePath, undefined));
-    } catch {
-      return new Response("Failed to start agent", { status: 500 });
+
+
+    // Fast path: already-running session
+    let session = getRpcSession(id);
+    if (!session || !session.isAlive()) {
+      const filePath = await resolveSessionPath(id);
+      if (!filePath) {
+        return new Response("Session not found", { status: 404 });
+      }
+      try {
+        ({ session } = await startRpcSession(id, filePath, undefined));
+      } catch {
+        return new Response("Failed to start agent", { status: 500 });
+      }
     }
-  }
 
-  const stream = new ReadableStream({
-    start(controller) {
-      const encoder = new TextEncoder();
-      const encode = (data: unknown) => {
-        const text = `data: ${JSON.stringify(data)}\n\n`;
-        controller.enqueue(encoder.encode(text));
-      };
+    let streamSession: SseStreamSession | undefined;
+    const stream = new ReadableStream({
+      start(controller) {
+        streamSession = openSseStream({
+          controller,
+          request: req,
+          route: "/api/agent/[id]/events",
+          sessionId: session.sessionId,
+          runtimeId: session.runtimeId,
+          connect: (send) => {
+            // Send initial connected event
+            send({ type: "connected", sessionId: session.sessionId, runtimeId: session.runtimeId });
 
-      // Send initial connected event
-      encode({ type: "connected", sessionId: session.sessionId, runtimeId: session.runtimeId });
+            return session.onEvent((event) => {
+              const clientEvent = toClientEvent(event);
+              if (clientEvent) send(clientEvent);
+            });
+          },
+        });
+      },
+      cancel() {
+        streamSession?.cancel();
+      },
+    });
 
-      const unsubscribe = session.onEvent((event) => {
-        const clientEvent = toClientEvent(event);
-        if (clientEvent) encode(clientEvent);
-      });
-
-      // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
-      const heartbeat = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(":\n\n"));
-        } catch {
-          // controller already closed
-        }
-      }, 30_000);
-
-      // Cleanup when client disconnects
-      const cleanup = () => {
-        clearInterval(heartbeat);
-        unsubscribe();
-        controller.close();
-      };
-
-      // Detect client disconnect via abort signal
-      req.signal?.addEventListener("abort", cleanup);
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
-}
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  },
+);

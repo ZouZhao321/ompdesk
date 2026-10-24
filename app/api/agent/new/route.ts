@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { parseConfiguredThinkingLevel as parseOmpThinkingLevel, type ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import { existsSync } from "fs";
 import { randomUUID } from "crypto";
@@ -18,7 +19,7 @@ function parseThinkingLevel(value: unknown): ConfiguredThinkingLevel | undefined
 // Spawns a brand-new pi session. Most calls immediately send the first command;
 // type:"ensure_session" only creates the runtime so clients can query commands.
 // Returns pi's real session id plus the model/thinking state selected at startup.
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/agent/new", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -119,4 +120,4 @@ export async function POST(req: Request) {
         : {}),
     }, { status: 500 });
   }
-}
+});

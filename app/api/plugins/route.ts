@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { PluginManager } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
 import type { InstalledPlugin } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
@@ -133,7 +134,9 @@ async function readPlugins(cwd: string): Promise<PluginsResponse> {
   return { packages, totals, diagnostics, projectResourcesLoaded: true };
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/plugins", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   const { searchParams } = new URL(req.url);
   const cwd = searchParams.get("cwd");
   if (!cwd) return NextResponse.json({ error: "cwd required" }, { status: 400 });
@@ -150,7 +153,7 @@ export async function GET(req: Request) {
 }
 
 // POST /api/plugins body: { action, source?, cwd }
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/plugins", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -195,4 +198,4 @@ export async function POST(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
-}
+});

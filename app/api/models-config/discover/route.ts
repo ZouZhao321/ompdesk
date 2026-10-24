@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { resolveModelDiscoveryAuth } from "@/lib/model-discovery-auth";
 import { buildModelsListUrl, parseDiscoveredModels } from "@/lib/model-discovery";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -30,7 +31,7 @@ function buildHeaders(api: string, apiKey: string | undefined, configured: Recor
   return headers;
 }
 
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/models-config/discover", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -92,4 +93,4 @@ export async function POST(req: Request) {
     const status = error instanceof DOMException && error.name === "TimeoutError" ? 504 : 500;
     return NextResponse.json({ error: message.slice(-500) }, { status });
   }
-}
+});

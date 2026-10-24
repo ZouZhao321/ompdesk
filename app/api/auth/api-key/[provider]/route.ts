@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { getOmpRuntime, invalidateOmpRuntime } from "@/lib/omp-runtime";
 
@@ -7,7 +8,9 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ provider: string }> };
 
 // GET /api/auth/api-key/[provider] — returns auth status (never returns the actual key)
-export async function GET(_req: Request, { params }: Params) {
+export const GET = withRequestLog("/api/auth/api-key/[provider]", getRouteHandler);
+
+async function getRouteHandler(_req: Request, { params }: Params) {
   const { provider } = await params;
   const { modelRegistry, authStorage } = await getOmpRuntime();
   const origin = authStorage.keys.source(provider);
@@ -22,7 +25,7 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 // POST /api/auth/api-key/[provider]  body: { apiKey: string }
-export async function POST(req: Request, { params }: Params) {
+export const POST = withRequestLog("/api/auth/api-key/[provider]", async (req: Request, { params }: Params) => {
   const { provider } = await params;
   try {
     const { apiKey } = await req.json() as { apiKey?: string };
@@ -41,10 +44,10 @@ export async function POST(req: Request, { params }: Params) {
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/auth/api-key/[provider] — removes stored API keys
-export async function DELETE(_req: Request, { params }: Params) {
+export const DELETE = withRequestLog("/api/auth/api-key/[provider]", async (_req: Request, { params }: Params) => {
   const { provider } = await params;
   try {
     const { authStorage } = await getOmpRuntime();
@@ -62,4 +65,4 @@ export async function DELETE(_req: Request, { params }: Params) {
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});

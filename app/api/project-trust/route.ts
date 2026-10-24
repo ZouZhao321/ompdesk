@@ -1,4 +1,5 @@
 import { stat } from "fs/promises";
+import { withRequestLog } from "@/lib/api-request-log";
 import { resolve } from "path";
 import { NextResponse } from "next/server";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
@@ -32,13 +33,15 @@ async function validateCwd(value: unknown): Promise<
   return { cwd };
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/project-trust", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   const result = await validateCwd(new URL(req.url).searchParams.get("cwd"));
   if ("response" in result) return result.response;
   return NextResponse.json(getProjectTrustStatus(result.cwd, getAgentDir()));
 }
 
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/project-trust", async (req: Request) => {
   try {
     const body = await req.json() as { cwd?: unknown };
     const result = await validateCwd(body.cwd);
@@ -63,4 +66,4 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-}
+});

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ClientErrorReporter } from "@/components/ClientErrorReporter";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import "katex/dist/katex.min.css";
 import "./globals.css";
@@ -64,6 +65,7 @@ export default function RootLayout({
       </head>
       <body translate="no" className="notranslate">
         {children}
+        <ClientErrorReporter />
         <PwaRegistration />
       </body>
     </html>
