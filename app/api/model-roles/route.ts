@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { resolve } from "path";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
@@ -21,7 +22,9 @@ async function requireAllowedCwd(rawCwd: string | null): Promise<{ cwd: string }
 }
 
 // GET /api/model-roles?cwd=<path> — every role omp knows, with its assignment.
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/model-roles", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   const result = await requireAllowedCwd(new URL(req.url).searchParams.get("cwd"));
   if ("error" in result) return result.error;
 
@@ -43,7 +46,7 @@ export async function GET(req: Request) {
  * identically in `omp`'s `/model` selector. `selector: null` clears the role at
  * that layer and lets the next layer down take over.
  */
-export async function PUT(req: Request) {
+export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -84,4 +87,4 @@ export async function PUT(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
-}
+});

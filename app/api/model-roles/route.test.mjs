@@ -4,7 +4,7 @@ import test from "node:test";
 
 test("model-role PUT writes global roles through canonical Settings and re-reads the target scope", async () => {
   const source = await readFile(new URL("./route.ts", import.meta.url), "utf8");
-  const putSource = source.slice(source.indexOf("export async function PUT"));
+  const putSource = source.slice(source.indexOf("export const PUT"));
 
   assert.match(putSource, /const runtime = await getOmpRuntime\(\)/);
   assert.match(

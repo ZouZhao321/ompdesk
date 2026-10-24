@@ -1,4 +1,5 @@
 import { stat } from "fs/promises";
+import { withRequestLog } from "@/lib/api-request-log";
 import { resolve } from "path";
 import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
 import {
@@ -86,7 +87,9 @@ const EMPTY_MODELS: ModelsData = {
   roles: [],
 };
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/models", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   const requestedCwd = new URL(req.url).searchParams.get("cwd") || process.cwd();
   const cwd = resolve(requestedCwd);
 

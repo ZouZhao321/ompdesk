@@ -1,9 +1,12 @@
 import fs from "fs";
+import { withRequestLog } from "@/lib/api-request-log";
 import { NextRequest, NextResponse } from "next/server";
 import { getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed, isWindowsAbsolutePath } from "@/lib/file-access";
 import { getGitStatus } from "@/lib/git-changes";
 
-export async function GET(request: NextRequest) {
+export const GET = withRequestLog("/api/git/status", getRouteHandler);
+
+async function getRouteHandler(request: NextRequest) {
   try {
     const cwd = request.nextUrl.searchParams.get("cwd")?.trim() ?? "";
     if (!cwd || (!cwd.startsWith("/") && !isWindowsAbsolutePath(cwd))) {

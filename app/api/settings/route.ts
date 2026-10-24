@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import {
   getDefault,
   getEnumValues,
@@ -121,7 +122,9 @@ function validateSettingValue(path: SettingPath, value: unknown): SettingsValue 
   throw new Error("Unsupported setting type");
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/settings", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   try {
     const cwd = await validateCwd(new URL(req.url).searchParams.get("cwd"));
     const settings = await getSettingsForCwd(cwd);
@@ -168,7 +171,7 @@ export async function GET(req: Request) {
   }
 }
 
-export async function PATCH(req: Request) {
+export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
   try {
     const body = await req.json() as { path?: string; value?: unknown };
     if (!body.path || !findSetting(body.path) || !hasUi(body.path as SettingPath)) {
@@ -189,4 +192,4 @@ export async function PATCH(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
-}
+});

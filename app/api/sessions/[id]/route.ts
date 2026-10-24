@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
@@ -18,7 +19,9 @@ import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security"
 import { projectTreeForResponse } from "@/lib/project-tree";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 
-export async function GET(
+export const GET = withRequestLog("/api/sessions/[id]", getRouteHandler);
+
+async function getRouteHandler(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -92,10 +95,10 @@ export async function GET(
 }
 
 // PATCH /api/sessions/[id]  body: { name: string }
-export async function PATCH(
+export const PATCH = withRequestLog("/api/sessions/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -129,13 +132,13 @@ export async function PATCH(
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/sessions/[id]
-export async function DELETE(
+export const DELETE = withRequestLog("/api/sessions/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -186,4 +189,4 @@ export async function DELETE(
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});
