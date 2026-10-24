@@ -15,7 +15,7 @@ import { REQUEST_ID_HEADER } from "@/lib/request-headers";
 export const SSE_HEARTBEAT_MS = 30_000;
 
 /** Every way an SSE stream can end. */
-export type SseCloseReason =
+type SseCloseReason =
   | "cancelled"
   | "aborted"
   | "controller_closed"
@@ -51,7 +51,7 @@ function correlationFields(fields: SseLogFields): Record<string, unknown> {
   };
 }
 
-export interface SseLifecycle {
+interface SseLifecycle {
   readonly closed: boolean;
   /** Write `http.stream.open` once. */
   open(): void;
@@ -59,12 +59,12 @@ export interface SseLifecycle {
   close(reason: SseCloseReason): boolean;
 }
 
-export interface SseLifecycleOptions {
+interface SseLifecycleOptions {
   /** Millisecond clock used for the alive duration; tests pass a fake. */
   now?: () => number;
 }
 
-export function createSseLifecycle(
+function createSseLifecycle(
   fields: SseLogFields,
   options: SseLifecycleOptions = {},
 ): SseLifecycle {
