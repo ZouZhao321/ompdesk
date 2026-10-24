@@ -6,6 +6,7 @@ import {
   issueRecoveryCode,
 } from "@/bin/web-auth-store.js";
 import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { hasJsonContentType } from "@/lib/request-security";
 import { logEvent } from "@/lib/logging";
 import { REQUEST_ID_HEADER } from "@/lib/request-headers";
@@ -99,6 +100,11 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
         reason: issued.reason,
         retryAfterMs: issued.retryAfterMs,
       });
+      auditFailure("web-access.recovery.issue", "recovery-code", {
+        status: 429,
+        reason: issued.reason,
+        retryAfterMs: issued.retryAfterMs,
+      });
       return NextResponse.json(
         { error: "A recovery code was just issued. Check the server console, or wait a moment and try again." },
         { status: 429, headers: { "Retry-After": String(Math.ceil(issued.retryAfterMs / 1000)) } },
@@ -109,6 +115,7 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
       ok: true,
       expiresAt: issued.expiresAt,
     });
+    auditSuccess("web-access.recovery.issue", "recovery-code", { expiresAt: issued.expiresAt });
     announceRecoveryCode(issued.code, issued.expiresAt);
     return NextResponse.json(
       { ok: true, expiresAt: issued.expiresAt },
@@ -121,6 +128,7 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
     const result = consumeRecoveryCode(body.code, body.password);
     if (result.ok) {
       logEvent("info", "security", "security.recovery.code.redeemed", { ...fields, ok: true });
+      auditSuccess("web-access.recovery.redeem", "recovery-code");
       return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
     }
     logEvent("warn", "security", "security.recovery.code.redeemed", {
@@ -128,6 +136,7 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
       ok: false,
       reason: result.reason,
     });
+    auditFailure("web-access.recovery.redeem", "recovery-code", { reason: result.reason });
     switch (result.reason) {
       case "invalid-password":
         return NextResponse.json({ error: result.message }, { status: 400 });
