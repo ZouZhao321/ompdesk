@@ -13,12 +13,21 @@ import { AsyncLocalStorage } from "node:async_hooks";
 /** Severity names accepted by omp's process logger. */
 export type LogLevel = "error" | "warn" | "info" | "debug";
 
+/** Structured event handed to sinks after the local transports ran. */
+interface SdkLogEvent {
+  readonly level: LogLevel;
+  readonly message: string;
+  readonly context: Record<string, unknown> | undefined;
+  readonly timestamp: Date;
+}
+
 interface SdkLogger {
   error(message: string, context?: Record<string, unknown>): void;
   warn(message: string, context?: Record<string, unknown>): void;
   info(message: string, context?: Record<string, unknown>): void;
   debug(message: string, context?: Record<string, unknown>): void;
   setTransports(options: { console?: boolean; file?: boolean | string }): void;
+  registerLogSink(sink: (event: SdkLogEvent) => void): () => void;
   flush(): void;
 }
 
@@ -99,8 +108,10 @@ export interface ConfigureLoggingOptions {
 
 /**
  * Mirror records to stdout when `OMPDESK_LOG_STDOUT` asks for it, otherwise in
- * development only. Production and the desktop shell keep the file transport
- * quiet so the shell's own log capture does not receive a second copy.
+ * development only. The mirror is an ompdesk log sink rather than the SDK
+ * console transport, so `OMP_LOG_LEVEL` filters it exactly like the file.
+ * Production and the desktop shell keep it quiet so the shell's own log
+ * capture does not receive a second copy.
  */
 export function shouldMirrorStdout(env: NodeJS.ProcessEnv = process.env): boolean {
   const requested = env.OMPDESK_LOG_STDOUT?.trim().toLowerCase();
@@ -113,13 +124,121 @@ export function shouldMirrorStdout(env: NodeJS.ProcessEnv = process.env): boolea
 
 /**
  * Transport configuration belongs to the process, but Next compiles
- * instrumentation and route handlers into separate module instances. The flag
- * lives on `globalThis` so a route bundle cannot overwrite a policy this
+ * instrumentation and route handlers into separate module instances. The flags
+ * live on `globalThis` so a route bundle cannot overwrite a policy this
  * process already applied — an explicit `configureLogging` call always wins,
- * and the default policy is installed at most once.
+ * and the default policy and the stdout sink are installed at most once.
  */
 const TRANSPORTS_CONFIGURED = Symbol.for("ompdesk.logging.transports");
+const STDOUT_MIRROR = Symbol.for("ompdesk.logging.stdout-mirror");
+const STDOUT_SINK = Symbol.for("ompdesk.logging.stdout-sink");
 const transportState = globalThis as unknown as Record<symbol, unknown>;
+
+const LOG_LEVEL_RANK: Record<LogLevel, number> = { error: 0, warn: 1, info: 2, debug: 3 };
+
+/** `OMP_LOG_LEVEL` (error|warn|info|debug, case-insensitive), default `debug` — same policy as the file. */
+function resolveStdoutLevelRank(env: NodeJS.ProcessEnv = process.env): number {
+  const requested = env.OMP_LOG_LEVEL?.trim().toLowerCase();
+  return requested && Object.hasOwn(LOG_LEVEL_RANK, requested)
+    ? LOG_LEVEL_RANK[requested as LogLevel]
+    : LOG_LEVEL_RANK.debug;
+}
+
+function padTimestampPart(value: number, width = 2): string {
+  return String(value).padStart(width, "0");
+}
+
+/** The SDK's file-record timestamp, so both streams render the same instant the same way. */
+function formatLocalTimestamp(date: Date): string {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const absoluteOffset = Math.abs(offsetMinutes);
+  const offsetSign = offsetMinutes >= 0 ? "+" : "-";
+  return (
+    `${padTimestampPart(date.getFullYear(), 4)}-${padTimestampPart(date.getMonth() + 1)}-${padTimestampPart(date.getDate())}` +
+    `T${padTimestampPart(date.getHours())}:${padTimestampPart(date.getMinutes())}:${padTimestampPart(date.getSeconds())}` +
+    `.${padTimestampPart(date.getMilliseconds(), 3)}${offsetSign}${padTimestampPart(Math.floor(absoluteOffset / 60))}` +
+    `:${padTimestampPart(absoluteOffset % 60)}`
+  );
+}
+
+const FORMAT_TOKEN_PATTERN = /%[scdjifoO%]/;
+
+/** Error fields are non-enumerable; unwrap them the way the SDK's file transport does. */
+function jsonReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack };
+  }
+  return value;
+}
+
+/** Serialize one mirror line with the file record's shape: timestamp, level, pid, message, then context. */
+function formatStdoutRecord(event: SdkLogEvent): string {
+  const context = event.context && typeof event.context === "object" ? event.context : undefined;
+  const metadata = !FORMAT_TOKEN_PATTERN.test(event.message) ? context : undefined;
+  const entry: Record<string, unknown> = {
+    timestamp: formatLocalTimestamp(event.timestamp),
+    level: event.level,
+    pid: process.pid,
+    message: metadata?.message ? `${event.message} ${metadata.message}` : event.message,
+  };
+  if (metadata) {
+    for (const key of Object.keys(metadata)) {
+      if (key !== "level" && key !== "timestamp" && key !== "message") entry[key] = metadata[key];
+    }
+    if (metadata.stack) entry.stack = metadata.stack;
+    if (metadata.cause) entry.cause = metadata.cause;
+  }
+  return JSON.stringify(entry, jsonReplacer);
+}
+
+const STDOUT_EOL = process.platform === "win32" ? "\r\n" : "\n";
+
+interface SyncFileWriter {
+  writeSync(fd: number, data: string): number;
+}
+
+/**
+ * Resolve `node:fs` at call time. A static import would be traced into the
+ * edge/browser compilation of instrumentation and fail on the `node:` scheme;
+ * the sink only runs in the Node server, where `getBuiltinModule` exists.
+ */
+function resolveStdoutWriter(): SyncFileWriter | undefined {
+  const getBuiltin = (process as NodeJS.Process & { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule;
+  if (typeof getBuiltin !== "function") return undefined;
+  const fsModule = getBuiltin("node:fs") as Partial<SyncFileWriter> | undefined;
+  return fsModule && typeof fsModule.writeSync === "function" ? fsModule as SyncFileWriter : undefined;
+}
+
+const stdoutWriter = resolveStdoutWriter();
+
+/** Mirror every SDK event the level policy admits, synchronously and without ever throwing. */
+function writeStdoutRecord(event: SdkLogEvent): void {
+  try {
+    const override = transportState[STDOUT_MIRROR];
+    const mirror = typeof override === "boolean" ? override : shouldMirrorStdout();
+    if (!mirror) return;
+    if (LOG_LEVEL_RANK[event.level] > resolveStdoutLevelRank()) return;
+    const line = `${formatStdoutRecord(event)}${STDOUT_EOL}`;
+    if (stdoutWriter) stdoutWriter.writeSync(1, line);
+    else process.stdout.write(line);
+  } catch {
+    // The mirror is a side channel; a broken stdout must never fail a request.
+  }
+}
+
+/**
+ * Register the single process-wide stdout sink. The SDK logger module is shared
+ * by every Next bundle instance, so the registration flag must be shared too.
+ */
+function registerStdoutSink(sdk: SdkLogger): void {
+  if (transportState[STDOUT_SINK] === true) return;
+  transportState[STDOUT_SINK] = true;
+  try {
+    sdk.registerLogSink(writeStdoutRecord);
+  } catch {
+    transportState[STDOUT_SINK] = false;
+  }
+}
 
 /** Apply the transport policy once at server startup; an explicit override may reconfigure. */
 export async function configureLogging(options: ConfigureLoggingOptions = {}): Promise<void> {
@@ -127,11 +246,12 @@ export async function configureLogging(options: ConfigureLoggingOptions = {}): P
   if (!explicit && transportState[TRANSPORTS_CONFIGURED] === true) return;
   try {
     const env = options.env ?? process.env;
+    transportState[STDOUT_MIRROR] = options.stdout ?? shouldMirrorStdout(env);
     const sdk = await ensureSdkLogger();
-    sdk?.setTransports({
-      file: options.file ?? true,
-      console: options.stdout ?? shouldMirrorStdout(env),
-    });
+    if (!sdk) return;
+    // The SDK console transport ignores `OMP_LOG_LEVEL`; mirror through a sink instead.
+    sdk.setTransports({ file: options.file ?? true, console: false });
+    registerStdoutSink(sdk);
     transportState[TRANSPORTS_CONFIGURED] = true;
   } catch {
     // Bootstrapping diagnostics must never stop the server from starting.
@@ -357,8 +477,10 @@ async function bootstrapRuntime(): Promise<void> {
     pendingRecords.length = 0;
     return;
   }
+  registerStdoutSink(sdk);
   if (transportState[TRANSPORTS_CONFIGURED] !== true) {
-    sdk.setTransports({ file: true, console: shouldMirrorStdout() });
+    transportState[STDOUT_MIRROR] = shouldMirrorStdout();
+    sdk.setTransports({ file: true, console: false });
     transportState[TRANSPORTS_CONFIGURED] = true;
   }
   for (const record of pendingRecords.splice(0)) {
