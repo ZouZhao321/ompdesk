@@ -946,7 +946,14 @@ export class AgentSessionWrapper {
         const sessionDir = sessionManager.getSessionDir();
         let newSessionFile: string;
 
-        if (!entry.parentId) {
+        if (command.includeEntry === true) {
+          // The map forks after a whole turn: keep the selected entry itself so the
+          // new session's history ends with the answer the user was reading.
+          const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
+          const forkedPath = sourceManager.createBranchedSession(entryId);
+          if (!forkedPath) throw new Error("Failed to create forked session");
+          newSessionFile = forkedPath;
+        } else if (!entry.parentId) {
           // Fork before the first message: create an empty session linked to this one
           const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
           await newManager.newSession({ parentSession: currentSessionFile });
