@@ -17,12 +17,14 @@ import type {
 } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
+import { buildRewindEntries } from "@/lib/rewind";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks, type DisplayOptions } from "@/lib/message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { MessageView } from "./MessageView";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
+import { RewindDialog } from "./RewindDialog";
 import { OmpWordmark } from "./OmpWordmark";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
@@ -220,6 +222,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     effectiveThinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, modelSwitching, sessionStats,
+    rewindOpen, closeRewindPanel, handleRewind,
     slashCommands, slashCommandsLoading, queuedMessages, subagents,
     notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection,
@@ -238,6 +241,21 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSessionStatsPanelOpen,
   });
   const sessionBusy = agentRunning || bashRunning;
+  const rewindEntries = useMemo(
+    () => buildRewindEntries(messages, entryIds),
+    [messages, entryIds],
+  );
+  // The picker hands focus back to the composer both when it is dismissed and
+  // once a rewind lands, so the restored draft is ready to edit.
+  const closeRewind = useCallback(() => {
+    closeRewindPanel();
+    chatInputRef?.current?.focus();
+  }, [closeRewindPanel, chatInputRef]);
+  const selectRewindEntry = useCallback(async (entryId: string) => {
+    // A failed busy check leaves the picker open; moving focus then would send
+    // typing into the composer hidden behind it.
+    if (await handleRewind(entryId)) chatInputRef?.current?.focus();
+  }, [handleRewind, chatInputRef]);
   // omp's render-affecting settings (hideThinkingBlock). Synced here once for
   // the whole transcript; MessageView reads the shared store directly.
   const { hideThinkingBlock } = useSyncedDisplaySettings(newSessionCwd ?? session?.cwd ?? null);
@@ -497,6 +515,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
         <ExtensionCustomPanel
           request={extensionCustomUi}
           onInput={sendExtensionCustomInput}
+        />
+      )}
+
+      {rewindOpen && (
+        <RewindDialog
+          entries={rewindEntries}
+          onSelect={selectRewindEntry}
+          onClose={closeRewind}
         />
       )}
 
