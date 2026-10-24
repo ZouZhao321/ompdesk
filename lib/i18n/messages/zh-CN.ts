@@ -550,5 +550,10 @@ export const zhCNLocale: LocalePlugin = {
     "map.forking": "正在分叉…",
     "map.switchHere": "切到这条线",
     "map.forkCancelled": "分叉被取消",
+    "map.sessionMissing": "会话不存在或已被删除",
+    "map.truncatedDetail": "这一轮内容过长，已截断",
+    "map.expandCount": "展开 {count} 轮",
+    "map.collapseCount": "收起 {count} 轮",
+    "map.turnLabel": "第 {index} 轮：{preview}",
   },
 };

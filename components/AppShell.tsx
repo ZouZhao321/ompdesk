@@ -508,6 +508,14 @@ export function AppShell() {
       .catch(() => {});
   }, []);
 
+  // Open another session from the map (fork descendants live in their own file).
+  const handleOpenSessionById = useCallback(async (sessionId: string) => {
+    const response = await fetch("/api/sessions", { cache: "no-store" });
+    const data = (await response.json().catch(() => null)) as { sessions?: SessionInfo[] } | null;
+    const session = data?.sessions?.find((candidate) => candidate.id === sessionId);
+    if (session) handleSelectSession(session);
+  }, [handleSelectSession]);
+
   // Called by ChatWindow when a new session gets its real id from omp
   const handleSessionCreated = useCallback((session: SessionInfo) => {
     invalidateWorkspaceRestore();
@@ -1255,9 +1263,13 @@ export function AppShell() {
               })()}
               <button
                 type="button"
-                onClick={() => setMapOpen((open) => !open)}
+                onClick={() => {
+                  setActiveTopPanel(null);
+                  setMapOpen((open) => !open);
+                }}
                 title={translate("map.title")}
                 aria-pressed={mapOpen}
+                aria-expanded={mapOpen}
                 aria-label={translate("map.title")}
                 style={{
                   display: "flex",
@@ -1633,7 +1645,6 @@ export function AppShell() {
             {mapOpen && selectedSession && (
               <ConversationMap
                 sessionId={selectedSession.id}
-                runtimeId={selectedSession.runtimeId}
                 currentLeafId={branchActiveLeafId}
                 onClose={() => setMapOpen(false)}
                 onSessionForked={(newSessionId) => {
@@ -1641,6 +1652,7 @@ export function AppShell() {
                   handleSessionForked(newSessionId);
                 }}
                 onSwitchLeaf={handleBranchLeafChange}
+                onOpenSession={(sessionId) => void handleOpenSessionById(sessionId)}
               />
             )}
             </>
