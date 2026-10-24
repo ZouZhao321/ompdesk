@@ -301,22 +301,70 @@ export function sanitizeLogContext(context: Record<string, unknown> | undefined)
     : {};
 }
 
-function write(level: LogLevel, message: string, context: Record<string, unknown>): void {
-  if (!sdkLogger) return;
+function writeThrough(
+  sdk: SdkLogger,
+  level: LogLevel,
+  message: string,
+  context: Record<string, unknown>,
+): void {
   switch (level) {
     case "error":
-      sdkLogger.error(message, context);
+      sdk.error(message, context);
       break;
     case "warn":
-      sdkLogger.warn(message, context);
+      sdk.warn(message, context);
       break;
     case "info":
-      sdkLogger.info(message, context);
+      sdk.info(message, context);
       break;
     case "debug":
-      sdkLogger.debug(message, context);
+      sdk.debug(message, context);
       break;
   }
+}
+
+interface PendingRecord {
+  level: LogLevel;
+  message: string;
+  context: Record<string, unknown>;
+}
+
+/**
+ * Records written before this bundle resolved the SDK logger. Next compiles
+ * instrumentation and route handlers separately, so a route gets its own copy
+ * of this module with no `configureLogging` call; it must resolve the shared
+ * transport on first use and then replay what it buffered.
+ */
+const pendingRecords: PendingRecord[] = [];
+let runtimeBootstrap: Promise<void> | undefined;
+let runtimeUnavailable = false;
+
+/** Bounded so a stalled import cannot grow memory with a request backlog. */
+const MAX_PENDING_RECORDS = 1_000;
+
+async function bootstrapRuntime(): Promise<void> {
+  const sdk = await ensureSdkLogger();
+  if (!sdk) {
+    runtimeUnavailable = true;
+    pendingRecords.length = 0;
+    return;
+  }
+  sdk.setTransports({ file: true, console: shouldMirrorStdout() });
+  for (const record of pendingRecords.splice(0)) {
+    writeThrough(sdk, record.level, record.message, record.context);
+  }
+}
+
+function write(level: LogLevel, message: string, context: Record<string, unknown>): void {
+  if (sdkLogger) {
+    writeThrough(sdkLogger, level, message, context);
+    return;
+  }
+  if (runtimeUnavailable) return;
+  if (pendingRecords.length < MAX_PENDING_RECORDS) {
+    pendingRecords.push({ level, message, context });
+  }
+  runtimeBootstrap ??= bootstrapRuntime();
 }
 
 /**
