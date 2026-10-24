@@ -65,11 +65,14 @@ Fields are sanitized on the way in:
 - Binary values become `[buffer N bytes]` / `[bytes N]`, circular references
   become `[circular]`, functions become `[function]`.
 - Keys that name credentials are removed at any depth, including `password`,
-  `passwd`, `passphrase`, `secret`, `authorization`, `cookie`, `apiKey`,
-  `recoveryCode`, `privateKey`, `accessKey`, `sessionKey`, `setCookie`, and
-  credential-shaped token names (`token`, `accessToken`, `refreshToken`,
-  `bearerToken`, `authToken`, `sessionToken`, `apiToken`). Usage counters such
-  as `inputTokens`, `tokensBefore` and `tokenCount` are kept.
+  `passwords`, `passwd`, `passphrase`, `secret`, `secrets`, `authorization`,
+  `cookie`, `apiKey`, `recoveryCode`, `privateKey`, `accessKey`, `sessionKey`,
+  `setCookie`, and any name ending in a `token` segment (`token`,
+  `accessToken`, `refreshToken`, `bearerToken`, `authToken`, `sessionToken`,
+  `apiToken`, `GITHUB_TOKEN`, `HF_TOKEN`, `NPM_TOKEN`, `idToken`,
+  `oauthToken`). Usage counters such as `inputTokens`, `outputTokens`,
+  `cachedTokens`, `totalTokens`, `tokenCount`, `tokensBefore` and
+  `inputTokenCount` are kept.
 
 A logging failure never fails the request or operation being logged.
 
@@ -119,7 +122,8 @@ filter:
 The desktop shell keeps stdout mirrored off by default so its own log file does
 not receive a second, continuously growing copy of the server log. Turning the
 mirror on intentionally duplicates records there; the Settings → Logs panel
-still reads the server's file, not the shell's.
+still reads the server's file, not the shell's. The mirror applies the same key
+redaction as the file path, including records the SDK writes on its own.
 
 `process.start` records `mode` as `development`, `production` or `desktop`, so a
 log file says which of these produced it.
@@ -200,8 +204,10 @@ the log.
 Every audit record uses the event name `audit.<action>` and carries `action`,
 `outcome` (`success` or `failure`), optional `target`, optional `actor` and
 `requestId`, plus bounded details (primitives only; at most 12 keys, 200
-characters per value). URLs in targets lose userinfo, query values and
-fragments.
+characters per value). URLs in targets, detail strings and error messages lose
+userinfo, query values and fragments — including protocol-relative (`//host`)
+forms and URLs the parser cannot canonicalize (for example an out-of-range
+port).
 
 | Area | Actions |
 | --- | --- |
@@ -274,7 +280,9 @@ Open **Settings → Logs**. The panel is read-only:
   parse error and raw text.
 - Polling stops while the tab is hidden; while visible it polls every 2 seconds,
   slower than the SDK's one-second write batch so a page does not spin on an
-  unchanged file.
+  unchanged file. A truncated page is read again immediately, and the panel
+  shows a catching-up state instead of an empty or no-match result until the
+  backlog is drained.
 
 The panel is backed by `GET /api/logs`:
 
@@ -289,7 +297,10 @@ The panel is backed by `GET /api/logs`:
 
 Each page reads at most 1 MiB and stops at a line boundary unless it reaches
 end-of-file. `truncated` says whether unread bytes remain, `nextCursor` is the
-offset to request next, and `files` lists the current process's file set.
+offset to request next, and `files` lists the current process's file set. A
+`cursor` past the file's current size means the writer restarted the same
+basename; the page then restarts at byte 0 and sets `reset: true`, and the
+panel replaces its buffer instead of appending.
 
 ## What is never logged
 
