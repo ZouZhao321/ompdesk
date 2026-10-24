@@ -1254,6 +1254,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             <section key={project} style={{ marginBottom: isCollapsed ? 3 : 9 }}>
               <div
                 ref={projectMenuOpen === project ? wtDropdownRef : undefined}
+                className="sidebar-project-row"
                 onMouseEnter={() => setHoveredProject(project)}
                 onMouseLeave={() => setHoveredProject((current) => current === project && projectMenuOpen !== project ? null : current)}
                 style={{
@@ -1267,6 +1268,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               >
                 <button
                   type="button"
+                  className="sidebar-project-icon-button"
                   onClick={() => toggleProjectCollapsed(project)}
                   title={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
                   aria-label={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
@@ -1331,6 +1333,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
                 <button
                   type="button"
+                  className="sidebar-project-icon-button sidebar-project-icon-reveal"
                   onClick={() => handleNewSession(project)}
                   title={t("sidebar.newSessionTitle", { path: project })}
                   aria-label={t("sidebar.newSessionTitle", { path: project })}
@@ -1370,6 +1373,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                   <div style={{ position: "static", flexShrink: 0 }}>
                     <button
                       type="button"
+                      className="sidebar-project-icon-button sidebar-project-icon-reveal"
                       onClick={() => {
                         const nextOpen = projectMenuOpen === project ? null : project;
                         dismissProjectMenu();
@@ -1810,6 +1814,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               {!isCollapsed && showMore && (
                 <button
                   type="button"
+                  className="sidebar-show-more"
                   onClick={() => {
                     setExpandedProjects((current) => {
                       const next = new Set(current);
@@ -2047,6 +2052,7 @@ function ArchivedSessionsSection({
             return (
               <div
                 key={s.id}
+                className="sidebar-session-row"
                 onClick={() => onSelectSession(s)}
                 style={{
                   height: 40, display: "flex", alignItems: "center",
@@ -2407,6 +2413,7 @@ function SessionItem({
 
   return (
     <div
+      className="sidebar-session-row"
       onClick={confirmDelete || renaming ? undefined : onClick}
       onContextMenu={confirmDelete || renaming ? undefined : handleContextMenu}
       onMouseEnter={() => setHovered(true)}
