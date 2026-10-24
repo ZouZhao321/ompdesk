@@ -1499,6 +1499,21 @@ span.linenumber {
   .sidebar-project-row {
     min-height: 44px !important;
   }
+  .sidebar-project-name {
+    min-height: 44px;
+  }
+  .sidebar-brand-button {
+    min-width: 44px !important;
+    min-height: 44px;
+  }
+  .sidebar-new-session-button {
+    min-width: 44px !important;
+    min-height: 44px;
+  }
+  .sidebar-header-icon-button {
+    min-width: 44px !important;
+    min-height: 44px;
+  }
   .sidebar-project-icon-button {
     min-width: 44px;
     min-height: 44px;
