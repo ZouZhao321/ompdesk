@@ -8,6 +8,25 @@ export interface GeneratedSessionTitle {
   title: string;
 }
 
+/** The session fields the display title is derived from. */
+export interface SessionTitleSource {
+  name?: string;
+  firstMessage: string;
+  id: string;
+}
+
+/**
+ * Title shown for a session in the sidebar and the top bar: the stored name,
+ * else the first message, else a short id.
+ *
+ * Callers pass the first message they intend to display; a sidebar row that
+ * may hold an SDK-expanded `<skill>` block collapses it with
+ * `skillExpansionToCommand` first, so the title matches the rest of the row.
+ */
+export function sessionDisplayTitle({ name, firstMessage, id }: SessionTitleSource): string {
+  return name || firstMessage.slice(0, 50) || id.slice(0, 12);
+}
+
 /** Plain text of a session message, ignoring images and tool blocks. */
 function messageText(message: AgentMessage): string {
   const content = (message as { content: unknown }).content;
