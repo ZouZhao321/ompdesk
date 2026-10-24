@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { PluginManager } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
 import type { InstalledPlugin } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
-import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import type {
   PluginDiagnostic,
@@ -134,7 +134,9 @@ async function readPlugins(cwd: string): Promise<PluginsResponse> {
   return { packages, totals, diagnostics, projectResourcesLoaded: true };
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/plugins", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   const { searchParams } = new URL(req.url);
   const cwd = searchParams.get("cwd");
   if (!cwd) return NextResponse.json({ error: "cwd required" }, { status: 400 });

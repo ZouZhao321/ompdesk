@@ -44,7 +44,9 @@ export const POST = withRequestLog("/api/auth/login/[provider]", async (
 });
 
 // GET /api/auth/login/[provider] — SSE stream for OAuth flow
-export async function GET(
+export const GET = withRequestLog("/api/auth/login/[provider]", getRouteHandler);
+
+async function getRouteHandler(
   req: Request,
   { params }: { params: Promise<{ provider: string }> }
 ) {

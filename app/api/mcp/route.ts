@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync } from "fs";
+import { withRequestLog } from "@/lib/api-request-log";
 import { dirname, join } from "path";
 import { NextResponse } from "next/server";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
@@ -6,7 +7,6 @@ import { loadCapability } from "@oh-my-pi/pi-coding-agent/capability";
 import type { MCPServer } from "@oh-my-pi/pi-coding-agent/capability/mcp";
 import { setMcpServerEnabled } from "@oh-my-pi/pi-coding-agent/mcp/config-writer";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
-import { withRequestLog } from "@/lib/api-request-log";
 import { writePrivateFileAtomicSync } from "@/lib/atomic-file";
 import type { McpConfigResponse, McpScopeConfig, McpServerConfig, McpServerEntry } from "@/lib/settings-api";
 
@@ -222,7 +222,9 @@ async function validatedCwd(req: Request): Promise<string | undefined> {
   return cwd;
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/mcp", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   try {
     const cwd = await validatedCwd(req);
     const response: McpConfigResponse = {
