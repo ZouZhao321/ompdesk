@@ -1,4 +1,4 @@
-import { memo, type RefObject } from "react";
+import { memo, type RefObject, type UIEvent } from "react";
 import type { LogEntry, LogFileInfo, LogLevelName } from "@/lib/api-types";
 import {
   describeLogsState,
@@ -73,6 +73,8 @@ export interface LogsPanelViewProps {
   selectedFile: string | null;
   expandedOffset: number | null;
   listRef?: RefObject<HTMLDivElement | null>;
+  /** Reports list scrolling so the container can decide whether to keep pinning the bottom. */
+  onListScroll?: (event: UIEvent<HTMLDivElement>) => void;
   onLevelChange: (level: LogLevelName | "all") => void;
   onKeywordChange: (keyword: string) => void;
   onFileChange: (name: string | null) => void;
@@ -97,6 +99,7 @@ export function LogsPanelView({
   selectedFile,
   expandedOffset,
   listRef,
+  onListScroll,
   onLevelChange,
   onKeywordChange,
   onFileChange,
@@ -131,7 +134,6 @@ export function LogsPanelView({
           href={file ? downloadLogUrl(file.name) : undefined}
           download={file?.name}
           aria-disabled={!file}
-          onClick={(event) => { if (!file) event.preventDefault(); }}
         >
           Download
         </a>
@@ -218,7 +220,7 @@ export function LogsPanelView({
 
       {error && entries.length > 0 && <div className={styles.errorBanner} role="alert">{error}</div>}
 
-      <div className={styles.list} ref={listRef} data-state={state.kind}>
+      <div className={styles.list} ref={listRef} data-state={state.kind} onScroll={onListScroll}>
         {state.kind !== "ready" ? (
           <div
             className={styles.empty}

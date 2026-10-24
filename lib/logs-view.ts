@@ -43,8 +43,11 @@ export function formatFileModified(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
+/** The one route the panel reads; both polling and downloads use it. */
+export const LOGS_ENDPOINT = "/api/logs";
+
 export function downloadLogUrl(fileName: string): string {
-  return `/api/logs?download=1&file=${encodeURIComponent(fileName)}`;
+  return `${LOGS_ENDPOINT}?download=1&file=${encodeURIComponent(fileName)}`;
 }
 
 export interface LogsRequestInput {
@@ -78,7 +81,7 @@ export function buildLogsRequest(input: LogsRequestInput): string {
   if (keyword) params.set("q", keyword);
   if (input.limit) params.set("limit", String(input.limit));
   const query = params.toString();
-  return query ? `/api/logs?${query}` : "/api/logs";
+  return query ? `${LOGS_ENDPOINT}?${query}` : LOGS_ENDPOINT;
 }
 
 /** Append a cursor page without duplicating lines already on screen. */
@@ -147,7 +150,11 @@ export function describeLogsState(input: DescribeLogsStateInput): LogsStateDescr
     };
   }
   if (input.entryCount === 0 && (input.level !== "all" || input.keyword.trim())) {
-    return { kind: "no-matches", title: "No matching entries", detail: "Try a broader level or another keyword." };
+    return {
+      kind: "no-matches",
+      title: "No matching entries",
+      detail: "Only the newest part of this file is read; try a broader level, another keyword, or an older rotation.",
+    };
   }
   if (input.entryCount === 0) {
     return { kind: "empty", title: "This log file is empty", detail: "No entries have been written to it yet." };
@@ -158,6 +165,25 @@ export function describeLogsState(input: DescribeLogsStateInput): LogsStateDescr
 /** Hidden tabs and paused panels never schedule a poll. */
 export function shouldPollLogs(hidden: boolean, paused: boolean): boolean {
   return !hidden && !paused;
+}
+
+/** Slack below which the list still counts as reading the newest lines. */
+export const LOG_SCROLL_BOTTOM_TOLERANCE_PX = 24;
+
+export interface LogScrollMetrics {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+}
+
+/**
+ * Whether the list is still at the bottom. Following the newest file keeps the
+ * view pinned there, but a reader who scrolled up to older lines must not be
+ * yanked back on every poll.
+ */
+export function isScrolledToBottom(metrics: LogScrollMetrics): boolean {
+  return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight
+    <= LOG_SCROLL_BOTTOM_TOLERANCE_PX;
 }
 
 /**
