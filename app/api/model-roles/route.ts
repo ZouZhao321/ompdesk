@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { resolve } from "path";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
@@ -54,6 +55,9 @@ export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
     return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
   }
 
+  let role: string | undefined;
+  let selector: string | undefined;
+  let scope: ModelRoleScope = "global";
   try {
     const body = await req.json() as {
       cwd?: string;
@@ -62,12 +66,22 @@ export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
       scope?: ModelRoleScope;
     };
     const result = await requireAllowedCwd(body.cwd ?? null);
-    if ("error" in result) return result.error;
+    if ("error" in result) {
+      auditFailure("models.role.write", body.role, {
+        status: result.error.status,
+        cwd: body.cwd,
+        scope: body.scope,
+      });
+      return result.error;
+    }
 
-    const role = body.role?.trim();
-    if (!role) return NextResponse.json({ error: "role required" }, { status: 400 });
-    const scope: ModelRoleScope = body.scope === "project" ? "project" : "global";
-    const selector = typeof body.selector === "string" ? body.selector.trim() : undefined;
+    role = body.role?.trim();
+    if (!role) {
+      auditFailure("models.role.write", undefined, { status: 400, cwd: result.cwd });
+      return NextResponse.json({ error: "role required" }, { status: 400 });
+    }
+    scope = body.scope === "project" ? "project" : "global";
+    selector = typeof body.selector === "string" ? body.selector.trim() : undefined;
 
     const runtime = await getOmpRuntime();
     const settingsToWrite = scope === "global"
@@ -83,8 +97,10 @@ export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
     const settings = await getSettingsForCwd(result.cwd);
     const { modelRegistry } = runtime;
     const { visible } = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
+    auditSuccess("models.role.write", role, { scope, selector: selector || null, cwd: result.cwd });
     return NextResponse.json({ roles: listModelRoles(settings, [...visible]) });
   } catch (error) {
+    auditFailure("models.role.write", role, { status: 500, scope, selector: selector || null, error });
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 });

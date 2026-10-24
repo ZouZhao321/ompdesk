@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { PluginManager } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
 import type { InstalledPlugin } from "@oh-my-pi/pi-coding-agent/extensibility/plugins";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
@@ -16,6 +17,15 @@ import type {
 export const dynamic = "force-dynamic";
 
 type PluginAction = "install" | "remove" | "update" | "disable" | "enable";
+
+/** Audit names for the panel's verbs, kept stable for log filtering. */
+const PLUGIN_AUDIT_ACTIONS: Record<PluginAction, string> = {
+  install: "plugin.install",
+  remove: "plugin.uninstall",
+  update: "plugin.update",
+  enable: "plugin.enable",
+  disable: "plugin.disable",
+};
 
 function emptyCounts(): PluginResourceCounts {
   return { extensions: 0, skills: 0, prompts: 0, themes: 0 };
@@ -161,41 +171,63 @@ export const POST = withRequestLog("/api/plugins", async (req: Request) => {
     return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
   }
 
+  let auditAction: string | undefined;
+  let cwd: string | undefined;
+  let source: string | undefined;
   try {
     const body = await req.json() as {
       action?: PluginAction;
       source?: string;
       cwd?: string;
     };
+    cwd = body.cwd;
+    source = body.source?.trim();
     if (!body.cwd) return NextResponse.json({ error: "cwd required" }, { status: 400 });
     if (!body.action) return NextResponse.json({ error: "action required" }, { status: 400 });
+    auditAction = PLUGIN_AUDIT_ACTIONS[body.action];
+    if (!auditAction) {
+      return NextResponse.json({ error: `Unsupported action: ${body.action}` }, { status: 400 });
+    }
     const allowedRoots = await getAllowedFileRoots();
     if (!isExistingFilePathAllowed(body.cwd, allowedRoots)) {
+      auditFailure(auditAction, source, { status: 403, cwd: body.cwd });
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     const manager = new PluginManager(body.cwd);
-    const source = body.source?.trim();
 
     if (body.action === "install") {
-      if (!source) return NextResponse.json({ error: "source required" }, { status: 400 });
+      if (!source) {
+        auditFailure(auditAction, undefined, { status: 400, cwd: body.cwd });
+        return NextResponse.json({ error: "source required" }, { status: 400 });
+      }
       await manager.install(source);
     } else if (body.action === "remove") {
-      if (!source) return NextResponse.json({ error: "source required" }, { status: 400 });
+      if (!source) {
+        auditFailure(auditAction, undefined, { status: 400, cwd: body.cwd });
+        return NextResponse.json({ error: "source required" }, { status: 400 });
+      }
       await manager.uninstall(source);
     } else if (body.action === "update") {
       // omp has no in-place update: reinstalling the same spec re-resolves it.
-      if (!source) return NextResponse.json({ error: "source required" }, { status: 400 });
+      if (!source) {
+        auditFailure(auditAction, undefined, { status: 400, cwd: body.cwd });
+        return NextResponse.json({ error: "source required" }, { status: 400 });
+      }
       await manager.install(source, { force: true });
     } else if (body.action === "disable" || body.action === "enable") {
-      if (!source) return NextResponse.json({ error: "source required" }, { status: 400 });
+      if (!source) {
+        auditFailure(auditAction, undefined, { status: 400, cwd: body.cwd });
+        return NextResponse.json({ error: "source required" }, { status: 400 });
+      }
       await manager.setEnabled(source, body.action === "enable");
-    } else {
-      return NextResponse.json({ error: `Unsupported action: ${body.action}` }, { status: 400 });
     }
 
-    return NextResponse.json(await readPlugins(body.cwd));
+    const response = await readPlugins(body.cwd);
+    auditSuccess(auditAction, source, { cwd: body.cwd });
+    return NextResponse.json(response);
   } catch (error) {
+    if (auditAction) auditFailure(auditAction, source, { status: 500, cwd, error });
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 });
