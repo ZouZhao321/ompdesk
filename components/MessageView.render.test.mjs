@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 
-import { MessageView } from "./MessageView.tsx";
-import { I18nProvider } from "../hooks/useI18n";
-import { renderMessage, visibleText } from "../lib/testing/mock-session-harness.mjs";
+import { renderMessage, visibleText } from "../lib/testing/render-harness.mjs";
 
 const USER_TEXT = "请把这段文字渲染出来";
 const ASSISTANT_TEXT = "这是助手的回复内容";
@@ -51,22 +47,17 @@ test("a normalized tool call renders its name and argument", () => {
 });
 
 // 工具结果不是独立消息：MessageView 对 role="toolResult" 返回 null，结果正文只通过
-// toolResults 映射到对应 toolCallId 的 toolCall 下方；这里需要传 props，因此本地渲染。
-function renderWithProps(props) {
-  return renderToStaticMarkup(createElement(I18nProvider, null, createElement(MessageView, props)));
-}
-
+// toolResults 映射到对应 toolCallId 的 toolCall 下方，因此这里通过第二个参数传入。
 test("tool result body reaches the rendered markup through its tool call", () => {
   const body = "render-fixture 工具结果正文：磁盘剩余 42 GB";
-  const html = renderWithProps({
-    message: {
-      role: "assistant",
-      model: "mock-model",
-      provider: "mock",
-      content: [
-        { type: "toolCall", toolCallId: "call-result-1", toolName: "bash", input: { command: "df -h /project" } },
-      ],
-    },
+  const html = renderMessage({
+    role: "assistant",
+    model: "mock-model",
+    provider: "mock",
+    content: [
+      { type: "toolCall", toolCallId: "call-result-1", toolName: "bash", input: { command: "df -h /project" } },
+    ],
+  }, {
     toolResults: new Map([
       ["call-result-1", {
         role: "toolResult",

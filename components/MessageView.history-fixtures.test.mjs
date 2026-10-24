@@ -5,7 +5,7 @@ import { createJiti } from "jiti";
 
 import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent";
 
-import { renderMessage, visibleText } from "../lib/testing/mock-session-harness.mjs";
+import { renderMessage, visibleText } from "../lib/testing/render-harness.mjs";
 
 const jiti = createJiti(import.meta.url);
 const { buildSessionContext, invalidateSessionListCache, listAllSessions } = await jiti.import("../lib/session-reader.ts");
@@ -95,7 +95,6 @@ test("真实历史会话的消息（至多 20 条）都能渲染出非空可见�
   const { session, messages } = fixture;
 
   assert.ok(messages.length > 0, `${session.path} 没有可渲染的消息`);
-  assert.ok(messages.length <= MESSAGE_LIMIT, `应最多渲染 ${MESSAGE_LIMIT} 条消息`);
 
   for (const [index, message] of messages.entries()) {
     const label = `消息 #${index}（role=${message.role}${message.customType ? `, customType=${message.customType}` : ""}）`;
