@@ -2,6 +2,8 @@
 export const MOBILE_MAX_WIDTH = 768;
 /** 粗指针设备上判定移动档的高度断点，与 app/globals.css 共用。 */
 export const MOBILE_MAX_COARSE_HEIGHT = 480;
+/** 移动档可点控件的最小边长（px）。 */
+export const MOBILE_HIT_TARGET_PX = 44;
 
 export interface MobileLayoutInput {
   width: number;
