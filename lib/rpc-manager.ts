@@ -42,6 +42,7 @@ import type {
   ExtensionUiRequest,
   ExtensionUiResponse,
   ExtensionWidgetItem,
+  SessionActivitySnapshot,
   SessionInfo,
   SessionMessageEntry,
   SubagentSnapshot,
@@ -426,6 +427,16 @@ export class AgentSessionWrapper {
       || this.inner.isBashRunning
       || this.subagents.getSubagents().length > 0
     );
+  }
+
+  /**
+   * 是否有阻塞式 UI 请求正在等待浏览器作答。
+   *
+   * 等待集合与 `isRunning()` 相互独立：等待集合不是运行集合的子集，
+   * 空闲会话也可能挂着阻塞请求。这个标志让界面区分「正在干活」与「卡在用户这里」。
+   */
+  isAwaitingInput(): boolean {
+    return this._alive && this.pendingUiRequests.size > 0;
   }
   bindToolUiContext(setter: (uiContext: ExtensionUiContextLike, hasUI: boolean) => void): void {
     setter(this.createExtensionUiContext(), true);
@@ -1293,7 +1304,10 @@ export class AgentSessionWrapper {
       method: "custom",
       lines,
     } as ExtensionUiRequest as AgentEvent;
+    // 等待状态只在 id 首次进入待答集合时变化；后续每帧渲染不再广播。
+    const becamePending = !this.pendingUiRequests.has(id);
     this.pendingUiRequests.set(id, event);
+    if (becamePending) notifyRunningChange();
     this.emit(event);
   }
 
@@ -1303,6 +1317,7 @@ export class AgentSessionWrapper {
     custom.settled = true;
     this.activeCustomUis.delete(id);
     this.pendingUiRequests.delete(id);
+    notifyRunningChange();
     try {
       custom.component.dispose?.();
     } catch {
@@ -1427,6 +1442,7 @@ export class AgentSessionWrapper {
         signal?.removeEventListener("abort", onAbort);
         this.pendingUiRequests.delete(id);
         this.pendingUiResponses.delete(id);
+        notifyRunningChange();
       };
       const settle = (value: T) => {
         cleanup();
@@ -1442,6 +1458,7 @@ export class AgentSessionWrapper {
         resolve: (response) => settle(parseResponse(response)),
         cancel: () => settle(defaultValue),
       });
+      notifyRunningChange();
       this.emit(fullRequest as AgentEvent);
     });
   }
@@ -1586,7 +1603,7 @@ declare global {
   var __ompFinalSessionIds: Map<string, string> | undefined;
   var __ompStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
   var __ompStartingSessionCwds: Map<string, number> | undefined;
-  var __ompRunningListeners: Set<(ids: string[]) => void> | undefined;
+  var __ompRunningListeners: Set<(activity: SessionActivitySnapshot) => void> | undefined;
 }
 
 function getRegistry(): Map<string, AgentSessionWrapper> {
@@ -1744,41 +1761,40 @@ export async function destroyRpcSessionsForCwd(cwd: string): Promise<number> {
 
 // Include idle wrappers so a run that changes ID and finishes between polls
 // is attributed to its final transcript rather than its historical ID.
-export function getRpcSessionActivitySnapshot() {
+export function getRpcSessionActivitySnapshot(): SessionActivitySnapshot {
   const runningSessionIds = new Set<string>();
+  const waitingSessionIds = new Set<string>();
   const sessionIdsByRuntimeId: Record<string, string> = Object.fromEntries(globalThis.__ompFinalSessionIds ?? []);
   for (const session of getRegistry().values()) {
     if (!session.isAlive()) continue;
     sessionIdsByRuntimeId[session.runtimeId] = session.sessionId;
     if (session.isRunning()) runningSessionIds.add(session.sessionId);
+    if (session.isAwaitingInput()) waitingSessionIds.add(session.sessionId);
   }
-  return { runningSessionIds: [...runningSessionIds], sessionIdsByRuntimeId };
-}
-
-export function getRunningRpcSessionIds(): string[] {
-  const ids = new Set<string>();
-  for (const [sessionId, session] of getRegistry()) {
-    if (session.isRunning()) ids.add(session.sessionId || sessionId);
-  }
-  return [...ids];
+  return {
+    runningSessionIds: [...runningSessionIds],
+    waitingSessionIds: [...waitingSessionIds],
+    sessionIdsByRuntimeId,
+  };
 }
 
 // ----------------------------------------------------------------------------
 // Running-status broadcaster
 //
-// Pushes the current set of running session ids to subscribers whenever any
-// session's running state may have changed. This lets the sidebar receive live
-// updates over SSE instead of polling. Listeners live on globalThis so they
+// Pushes the activity snapshot — running ids, ids waiting on a user answer, and
+// the runtime→session mapping — to subscribers whenever anything may have
+// changed. This lets the sidebar receive live updates over SSE instead of
+// polling with the same payload shape. Listeners live on globalThis so they
 // survive Next.js hot-reload.
 // ----------------------------------------------------------------------------
 
-function getRunningListeners(): Set<(ids: string[]) => void> {
+function getRunningListeners(): Set<(activity: SessionActivitySnapshot) => void> {
   if (!globalThis.__ompRunningListeners) globalThis.__ompRunningListeners = new Set();
   return globalThis.__ompRunningListeners;
 }
 
-/** Subscribe to running-session-id changes. Returns an unsubscribe function. */
-export function subscribeRunningSessions(listener: (ids: string[]) => void): () => void {
+/** Subscribe to running/waiting changes. Returns an unsubscribe function. */
+export function subscribeRunningSessions(listener: (activity: SessionActivitySnapshot) => void): () => void {
   const listeners = getRunningListeners();
   listeners.add(listener);
   return () => { listeners.delete(listener); };
@@ -1787,8 +1803,8 @@ export function subscribeRunningSessions(listener: (ids: string[]) => void): () 
 let lastRunningSnapshot = "";
 
 /**
- * Recompute the running-session-id set and, if it changed since the last
- * notification, broadcast it to subscribers.
+ * Recompute the activity sets and, if they changed since the last
+ * notification, broadcast them to subscribers.
  */
 export function notifyRunningChange(): void {
   const listeners = getRunningListeners();
@@ -1798,12 +1814,16 @@ export function notifyRunningChange(): void {
     lastRunningSnapshot = "";
     return;
   }
-  const ids = getRunningRpcSessionIds();
-  const snapshot = JSON.stringify([...ids].sort());
+  const activity = getRpcSessionActivitySnapshot();
+  const snapshot = JSON.stringify([
+    activity.runningSessionIds.slice().sort(),
+    activity.waitingSessionIds.slice().sort(),
+    Object.entries(activity.sessionIdsByRuntimeId).sort(),
+  ]);
   if (snapshot === lastRunningSnapshot) return;
   lastRunningSnapshot = snapshot;
   for (const listener of listeners) {
-    try { listener(ids); } catch { /* ignore listener errors */ }
+    try { listener(activity); } catch { /* ignore listener errors */ }
   }
 }
 

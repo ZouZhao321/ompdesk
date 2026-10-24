@@ -414,6 +414,18 @@ export interface SessionInfo {
   transient?: boolean;
 }
 
+/**
+ * 侧栏活动快照：轮询接口、SSE 推送与会话列表响应共用同一结构，
+ * 保证客户端无论从哪条通道拿到数据都按同一口径渲染。
+ */
+export interface SessionActivitySnapshot {
+  runningSessionIds: string[];
+  /** 停在阻塞式 UI 请求上等待用户回答的会话；与运行集合独立，空闲会话也可能在内。 */
+  waitingSessionIds: string[];
+  /** runtime id 到当前会话 id 的映射，供客户端在会话 ID 变化后对齐同一次运行。 */
+  sessionIdsByRuntimeId: Record<string, string>;
+}
+
 export interface SessionContext {
   messages: AgentMessage[];
   entryIds: string[]; // parallel to messages — the session entry id for each message
