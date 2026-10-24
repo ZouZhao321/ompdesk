@@ -188,7 +188,14 @@ export function openSseStream(options: SseStreamOptions): SseStreamSession {
 
   const send = (data: unknown) => write(`data: ${JSON.stringify(data)}\n\n`, "controller_closed");
 
-  connection.unsubscribe = connect(send);
+  try {
+    connection.unsubscribe = connect(send);
+  } catch (error) {
+    // `connect` may have written nothing yet or already subscribed; either way
+    // the stream is unusable, so record the close before surfacing the failure.
+    stop("controller_closed", true);
+    throw error;
+  }
   if (finished) {
     // `connect` already failed to write: drop the subscription it just created.
     connection.unsubscribe();
