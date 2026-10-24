@@ -25,17 +25,17 @@ export function formatFileSize(bytes: number): string {
 }
 
 /**
- * `omp.2026-10-24.1528.log.2` → `2026-10-24 15:28 · rotation 2`. The start time
- * keeps files from the same day distinguishable, and only the server's
- * `current` flag claims which file is active (a file from a previous process
- * has no rotation suffix either).
+ * `omp.2026-10-24.4242.log.2` → `2026-10-24 · rotation 2`. The third segment is
+ * the process id (only this process's files are listed), so it adds nothing to
+ * the label; the date plus the rotation suffix is unique within that set, and
+ * only the server's `current` flag claims which file is active (a file carried
+ * over from the previous day has no rotation suffix either).
  */
 export function formatFileLabel(file: LogFileInfo): string {
   const match = /^omp\.(\d{4}-\d{2}-\d{2})\.(\d+)\.log(?:\.(\d+))?$/.exec(file.name);
   if (!match) return file.name;
-  const stamp = `${match[1]} ${match[2].slice(0, 2)}:${match[2].slice(2)}`;
-  if (match[3]) return `${stamp} · rotation ${match[3]}`;
-  return file.current ? `${stamp} · current file` : stamp;
+  if (match[3]) return `${match[1]} · rotation ${match[3]}`;
+  return file.current ? `${match[1]} · current file` : match[1];
 }
 
 export function formatFileModified(iso: string): string {
