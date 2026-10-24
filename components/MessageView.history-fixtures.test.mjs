@@ -29,10 +29,11 @@ function isInside(dir, filePath) {
 }
 
 /**
- * 每台机器的会话库不同，所以夹具在运行时挑选：取 mtime 最新的一条（mtime 相同则按
- * 路径升序，保证顺序稳定），再用仓库自己的 `buildSessionContext()` 把文件条目转成
- * 组件输入。该函数是 UI 唯一的转换入口——内部调用 `normalizeToolCalls()`，并按
- * transcript 模式折叠 compaction——因此这里不存在第二套转换逻辑。
+ * 每台机器的会话库不同，所以夹具在运行时挑选：取会话列表里 mtime（`modified`）最新
+ * 的一条（mtime 相同则按路径升序，保证顺序稳定），再用仓库自己的
+ * `buildSessionContext()` 把文件条目转成组件输入。该函数是 UI 唯一的转换入口——内部
+ * 调用 `normalizeToolCalls()`，并按 transcript 模式折叠 compaction——因此这里不存在
+ * 第二套转换逻辑。
  *
  * 读取走 `loadEntriesFromFile()`：它只解析 JSONL，不创建 writer、不取单写者锁、也
  * 不触发迁移写回（`getSessionEntries()` 背后的 `SessionManager.open()` 会取锁）。
@@ -89,7 +90,7 @@ const { fixture, reason } = await selectFixture();
 // Bun 的 reporter 只打印 skip 计数，不显示 skip 选项里的原因；这里把它写进输出。
 if (reason) console.log(`[history-fixtures] ${reason}`);
 
-test("真实历史会话的前 20 条消息都能渲染出非空可见文本", { skip: reason ?? false }, () => {
+test("真实历史会话的消息（至多 20 条）都能渲染出非空可见文本", { skip: reason ?? false }, () => {
   assert.ok(fixture, "夹具选择结果与跳过原因不一致");
   const { session, messages } = fixture;
 
