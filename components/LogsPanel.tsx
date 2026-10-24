@@ -57,6 +57,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
   const [refreshToken, setRefreshToken] = useState(0);
 
   const cursor = useRef(0);
+  const activeFile = useRef<string | null>(null);
   const generation = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -75,6 +76,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
   useEffect(() => {
     generation.current += 1;
     cursor.current = 0;
+    activeFile.current = selectedFile;
     setEntries([]);
     setFile(null);
     setExpandedOffset(null);
@@ -91,6 +93,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
     const currentGeneration = generation.current;
 
     const tick = async () => {
+      let resetForFile = false;
       try {
         const page = await client({
           file: selectedFile,
@@ -99,10 +102,25 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
           keyword: debouncedKeyword,
         });
         if (cancelled || currentGeneration !== generation.current) return;
-        cursor.current = page.nextCursor;
+
+        // Following the newest file means the server can switch files under
+        // us after rotation. A cursor from the previous file is meaningless
+        // there, so discard that page and read the new file from the head.
+        const pageFile = page.file?.name ?? null;
+        if (pageFile !== activeFile.current) {
+          activeFile.current = pageFile;
+          if (cursor.current > 0) {
+            cursor.current = 0;
+            setEntries([]);
+            resetForFile = true;
+          }
+        }
+        if (!resetForFile) {
+          cursor.current = page.nextCursor;
+          setEntries((previous) => mergeLogEntries(previous, page.entries));
+        }
         setFiles(page.files);
         setFile(page.file);
-        setEntries((previous) => mergeLogEntries(previous, page.entries));
         setError(null);
       } catch (caught) {
         if (cancelled || currentGeneration !== generation.current) return;
@@ -110,7 +128,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       } finally {
         if (!cancelled && currentGeneration === generation.current) {
           setLoading(false);
-          timer = setTimeout(() => void tick(), POLL_INTERVAL_MS);
+          timer = setTimeout(() => void tick(), resetForFile ? 0 : POLL_INTERVAL_MS);
         }
       }
     };
