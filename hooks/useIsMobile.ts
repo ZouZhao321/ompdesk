@@ -2,19 +2,45 @@
 
 import { useSyncExternalStore } from "react";
 
-// Mobile breakpoint shared with app/globals.css (max-width: 640px).
-const MOBILE_QUERY = "(max-width: 640px)";
+/** Width breakpoint shared with the mobile media query in app/globals.css. */
+export const MOBILE_MAX_WIDTH = 768;
+/** Height breakpoint for coarse-pointer devices, shared with app/globals.css. */
+export const MOBILE_MAX_COARSE_HEIGHT = 480;
+
+const COARSE_POINTER_QUERY = "(pointer: coarse)";
+
+interface MobileLayoutInput {
+  width: number;
+  height: number;
+  coarsePointer: boolean;
+}
+
+/**
+ * Decides the mobile layout tier. Phones in landscape stay on the mobile
+ * layout because their pointer is coarse and the viewport is short.
+ */
+export function isMobileLayout({ width, height, coarsePointer }: MobileLayoutInput): boolean {
+  return width <= MOBILE_MAX_WIDTH || (coarsePointer && height <= MOBILE_MAX_COARSE_HEIGHT);
+}
 
 function subscribe(cb: () => void): () => void {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};
-  const mql = window.matchMedia(MOBILE_QUERY);
-  mql.addEventListener("change", cb);
-  return () => mql.removeEventListener("change", cb);
+  window.addEventListener("resize", cb);
+  const coarsePointer = window.matchMedia(COARSE_POINTER_QUERY);
+  coarsePointer.addEventListener("change", cb);
+  return () => {
+    window.removeEventListener("resize", cb);
+    coarsePointer.removeEventListener("change", cb);
+  };
 }
 
 function getSnapshot(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return false;
-  return window.matchMedia(MOBILE_QUERY).matches;
+  return isMobileLayout({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    coarsePointer: window.matchMedia(COARSE_POINTER_QUERY).matches,
+  });
 }
 
 function getServerSnapshot(): boolean {
@@ -22,7 +48,7 @@ function getServerSnapshot(): boolean {
 }
 
 /**
- * Returns true when the viewport is at or below the mobile breakpoint.
+ * Returns true when the viewport belongs to the mobile layout tier.
  * SSR-safe: renders as desktop (false) on the server and first client paint,
  * then syncs to the real viewport after hydration.
  */
