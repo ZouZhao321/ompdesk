@@ -7,7 +7,6 @@ export interface LayoutCard {
   id: string;
   x: number;
   y: number;
-  lane: number;
 }
 
 export interface LayoutEdge {
@@ -74,7 +73,7 @@ export function layoutTurnTree(nodes: readonly LayoutInput[]): LayoutResult {
     if (placed.has(id)) return;
     placed.add(id);
     const y = laneCursor.get(lane) ?? 0;
-    cards.push({ id, x: lane * (CARD_WIDTH + LANE_GAP), y, lane });
+    cards.push({ id, x: lane * (CARD_WIDTH + LANE_GAP), y });
     laneCursor.set(lane, y + CARD_HEIGHT + ROW_GAP);
 
     const kids = children.get(id) ?? [];

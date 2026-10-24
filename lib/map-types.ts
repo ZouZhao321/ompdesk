@@ -19,18 +19,8 @@ export interface MapTurnNode {
   forkEntryId: string;
 }
 
-export interface MapSessionRef {
-  id: string;
-  title?: string;
-  parentId?: string;
-  isFork: boolean;
-}
-
 export interface SessionMapPayload {
-  sessionId: string;
-  filePath: string;
   nodes: MapTurnNode[];
-  sessions: MapSessionRef[];
   truncated: boolean;
 }
 
@@ -38,4 +28,5 @@ export interface MapTurnDetail {
   userText: string;
   answerText: string;
   tools: string[];
+  truncated: boolean;
 }

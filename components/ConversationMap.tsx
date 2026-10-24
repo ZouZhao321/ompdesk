@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { CARD_HEIGHT, CARD_WIDTH, layoutTurnTree } from "@/lib/map-layout";
 import type { MapTurnDetail, MapTurnNode, SessionMapPayload } from "@/lib/map-types";
@@ -9,11 +9,11 @@ import { useI18n } from "@/hooks/useI18n";
 
 interface ConversationMapProps {
   sessionId: string;
-  runtimeId?: string;
   currentLeafId?: string | null;
   onClose: () => void;
   onSessionForked: (newSessionId: string) => void;
   onSwitchLeaf: (leafId: string) => void;
+  onOpenSession: (sessionId: string) => void;
 }
 
 interface Camera {
@@ -25,6 +25,18 @@ interface Camera {
 interface Offset {
   x: number;
   y: number;
+}
+
+interface PointerOrigin {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+}
+
+interface CardDrag extends PointerOrigin {
+  id: string;
 }
 
 const MIN_SCALE = 0.25;
@@ -60,16 +72,22 @@ function writeOffsets(sessionId: string, offsets: Record<string, Offset>): void 
   }
 }
 
-function formatTime(timestamp?: string): string {
+function formatTime(timestamp: string | undefined, locale: string): string {
   if (!timestamp) return "";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleString(locale, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, onSessionForked, onSwitchLeaf }: ConversationMapProps) {
-  const { t } = useI18n();
-  const agentTargetId = runtimeId ?? sessionId;
+export function ConversationMap({
+  sessionId,
+  currentLeafId,
+  onClose,
+  onSessionForked,
+  onSwitchLeaf,
+  onOpenSession,
+}: ConversationMapProps) {
+  const { t, locale } = useI18n();
   const [payload, setPayload] = useState<SessionMapPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,13 +97,14 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
   const [actionError, setActionError] = useState<string | null>(null);
   const [forking, setForking] = useState(false);
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [camera, setCamera] = useState<Camera>({ x: 24, y: 24, scale: 1 });
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
-  const panRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
-  const dragRef = useRef<{ id: string; pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const panRef = useRef<PointerOrigin | null>(null);
+  const dragRef = useRef<CardDrag | null>(null);
   const moveRef = useRef<{ id: string; x: number; y: number } | null>(null);
 
   const load = useCallback(async () => {
@@ -94,6 +113,7 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/map`);
       const body = (await response.json().catch(() => ({}))) as SessionMapPayload & { error?: string };
+      if (response.status === 404) throw new Error(t("map.sessionMissing"));
       if (!response.ok || body.error) throw new Error(body.error || `HTTP ${response.status}`);
       setPayload(body);
       setOffsets(readOffsets(sessionId));
@@ -102,19 +122,77 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
     } finally {
       setLoading(false);
     }
-  }, [sessionId]);
+  }, [sessionId, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  const layout = useMemo(() => layoutTurnTree(payload?.nodes ?? []), [payload]);
 
   const nodesById = useMemo(() => {
     const map = new Map<string, MapTurnNode>();
     for (const node of payload?.nodes ?? []) map.set(node.id, node);
     return map;
   }, [payload]);
+
+  const childrenById = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const node of payload?.nodes ?? []) {
+      if (!node.parentId || !nodesById.has(node.parentId)) continue;
+      const list = map.get(node.parentId) ?? [];
+      list.push(node.id);
+      map.set(node.parentId, list);
+    }
+    return map;
+  }, [payload, nodesById]);
+
+  const subtreeSizes = useMemo(() => {
+    const sizes = new Map<string, number>();
+    const count = (id: string, seen: Set<string>): number => {
+      const memo = sizes.get(id);
+      if (memo !== undefined) return memo;
+      if (seen.has(id)) return 0;
+      seen.add(id);
+      let size = 1;
+      for (const child of childrenById.get(id) ?? []) size += count(child, seen);
+      sizes.set(id, size);
+      return size;
+    };
+    for (const node of payload?.nodes ?? []) count(node.id, new Set());
+    return sizes;
+  }, [payload, childrenById]);
+
+  // Fork entry points start collapsed so a fork reads as one stub, not a second trunk.
+  useEffect(() => {
+    if (!payload) return;
+    const entries = payload.nodes
+      .filter((node) => {
+        if (node.sessionId === sessionId) return false;
+        const parent = node.parentId ? nodesById.get(node.parentId) : undefined;
+        return Boolean(parent && parent.sessionId !== node.sessionId);
+      })
+      .map((node) => node.id);
+    setCollapsed(new Set(entries));
+  }, [payload, sessionId, nodesById]);
+
+  const hiddenIds = useMemo(() => {
+    const hidden = new Set<string>();
+    const hide = (id: string) => {
+      for (const child of childrenById.get(id) ?? []) {
+        if (hidden.has(child)) continue;
+        hidden.add(child);
+        hide(child);
+      }
+    };
+    for (const id of collapsed) hide(id);
+    return hidden;
+  }, [collapsed, childrenById]);
+
+  const visibleNodes = useMemo(
+    () => (payload?.nodes ?? []).filter((node) => !hiddenIds.has(node.id)),
+    [payload, hiddenIds],
+  );
+
+  const layout = useMemo(() => layoutTurnTree(visibleNodes), [visibleNodes]);
 
   const positions = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>();
@@ -272,7 +350,7 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
     setActionError(null);
     setForking(true);
     try {
-      const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(agentTargetId, {
+      const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(node.sessionId, {
         type: "fork",
         entryId: node.forkEntryId,
         includeEntry: true,
@@ -285,18 +363,55 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
     } finally {
       setForking(false);
     }
-  }, [agentTargetId, onClose, onSessionForked, t]);
+  }, [onClose, onSessionForked, t]);
 
-  const handleSwitch = useCallback((node: MapTurnNode) => {
-    onSwitchLeaf(node.answerEntryId ?? node.id);
-    onClose();
-  }, [onClose, onSwitchLeaf]);
+  const handleSwitch = useCallback(async (node: MapTurnNode) => {
+    setActionError(null);
+    const leafId = node.answerEntryId ?? node.id;
+    if (node.sessionId === sessionId) {
+      onSwitchLeaf(leafId);
+      onClose();
+      return;
+    }
+    try {
+      await sendAgentCommand(node.sessionId, { type: "navigate_tree", targetId: leafId });
+      onOpenSession(node.sessionId);
+      onClose();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, [onClose, onOpenSession, onSwitchLeaf, sessionId]);
 
+  const selectNode = useCallback((id: string) => {
+    setSelectedId(id);
+    setActionError(null);
+  }, []);
+
+  const onCardKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>, node: MapTurnNode) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    selectNode(node.id);
+  }, [selectNode]);
+
+  const toggleCollapsed = useCallback((id: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const sessionCount = useMemo(
+    () => new Set((payload?.nodes ?? []).map((node) => node.sessionId)).size,
+    [payload],
+  );
   const sessionColors = useMemo(() => {
     const colors = new Map<string, string>();
     const palette = ["var(--accent)", "#f59e0b", "#10b981", "#8b5cf6", "#ef4444", "#06b6d4"];
-    for (const session of payload?.sessions ?? []) {
-      colors.set(session.id, palette[colors.size % palette.length]);
+    for (const node of payload?.nodes ?? []) {
+      if (colors.has(node.sessionId)) continue;
+      colors.set(node.sessionId, palette[colors.size % palette.length]);
     }
     return colors;
   }, [payload]);
@@ -327,7 +442,7 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{t("map.title")}</span>
         {payload && (
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {t("map.stats", { turns: String(payload.nodes.length), sessions: String(payload.sessions.length) })}
+            {t("map.stats", { turns: payload.nodes.length, sessions: sessionCount })}
           </span>
         )}
         <div style={{ flex: 1 }} />
@@ -387,17 +502,25 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
               })}
             </svg>
 
-            {payload?.nodes.map((node) => {
+            {visibleNodes.map((node) => {
               const position = positions.get(node.id);
               if (!position) return null;
               const selected = node.id === selectedId;
               const active = node.answerEntryId !== undefined && node.answerEntryId === currentLeafId;
+              const childCount = childrenById.get(node.id)?.length ?? 0;
+              const isCollapsed = collapsed.has(node.id);
+              const hiddenCount = isCollapsed ? Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1) : 0;
               return (
                 <div
                   key={node.id}
                   data-map-card
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selected}
+                  aria-label={t("map.turnLabel", { index: node.turnIndex + 1, preview: node.preview || "—" })}
                   onPointerDown={(event) => startCardDrag(event, node)}
-                  onClick={() => setSelectedId(node.id)}
+                  onClick={() => selectNode(node.id)}
+                  onKeyDown={(event) => onCardKeyDown(event, node)}
                   style={{
                     position: "absolute",
                     left: position.x,
@@ -420,8 +543,8 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>
                     <span style={{ width: 6, height: 6, borderRadius: 999, background: sessionColors.get(node.sessionId) ?? "var(--accent)" }} />
                     <span>#{node.turnIndex + 1}</span>
-                    {node.toolCount > 0 && <span>{t("map.tools", { count: String(node.toolCount) })}</span>}
-                    <span style={{ marginLeft: "auto" }}>{formatTime(node.timestamp)}</span>
+                    {node.toolCount > 0 && <span>{t("map.tools", { count: node.toolCount })}</span>}
+                    <span style={{ marginLeft: "auto" }}>{formatTime(node.timestamp, locale)}</span>
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {node.preview || "—"}
@@ -429,6 +552,35 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
                   <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {node.answerPreview || "—"}
                   </div>
+                  {childCount > 0 && (childCount > 1 || isCollapsed) && (
+                    <button
+                      type="button"
+                      data-map-toggle
+                      aria-expanded={!isCollapsed}
+                      aria-label={isCollapsed ? t("map.expandCount", { count: hiddenCount }) : t("map.collapseCount", { count: Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1) })}
+                      title={isCollapsed ? t("map.expandCount", { count: hiddenCount }) : t("map.collapseCount", { count: Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1) })}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleCollapsed(node.id);
+                      }}
+                      style={{
+                        position: "absolute",
+                        right: 6,
+                        bottom: 4,
+                        height: 18,
+                        padding: "0 6px",
+                        border: "1px solid var(--border)",
+                        borderRadius: 4,
+                        background: "var(--bg)",
+                        color: "var(--text-dim)",
+                        fontSize: 10,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {isCollapsed ? t("map.expandCount", { count: hiddenCount }) : "−"}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -454,8 +606,9 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
           )}
 
           {!loading && !error && payload && payload.nodes.length === 0 && (
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)" }}>
-              {t("map.empty")}
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 12, color: "var(--text-muted)" }}>
+              <span>{t("map.empty")}</span>
+              <button type="button" style={toolbarButtonStyle} onClick={() => void load()}>{t("map.retry")}</button>
             </div>
           )}
         </div>
@@ -497,6 +650,9 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
                   {detail?.answerText || selectedNode.answerPreview || "—"}
                 </div>
               </div>
+              {detail?.truncated && (
+                <div style={{ fontSize: 10, color: "var(--warning)" }}>{t("map.truncatedDetail")}</div>
+              )}
               {detail && detail.tools.length > 0 && (
                 <div style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
                   {t("map.toolsUsed")}: {detail.tools.join(", ")}
@@ -517,7 +673,7 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
               >
                 {forking ? t("map.forking") : t("map.forkHere")}
               </button>
-              <button type="button" style={actionButtonStyle} onClick={() => handleSwitch(selectedNode)}>
+              <button type="button" style={actionButtonStyle} onClick={() => void handleSwitch(selectedNode)}>
                 {t("map.switchHere")}
               </button>
             </div>

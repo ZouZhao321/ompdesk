@@ -221,7 +221,8 @@ omp 按工作范围分配模型（`default`、`smol`、`slow`、`vision`、`plan
 
 ### 两种分支，不要混淆
 - **Fork**（用户消息上的 Fork 按钮）：创建新的独立 `.jsonl` 文件，通过
-  `parentSession` 头字段在侧栏树中显示为子节点。
+  `parentSession` 头字段在侧栏树中显示为子节点。该字段可能写会话 id
+  （`fork()`）或绝对路径（`createBranchedSession()`），两种写法都要解析成父行。
 - **会话内分支**（Continue 按钮 / BranchNavigator）：在同一文件内调用
   `navigate_tree`。多个条目共享同一个 `parentId`，切换时调用
   `/api/sessions/[id]/context?leafId=`。
@@ -238,6 +239,9 @@ id 相同，所以跨文件合并时主干只会出现一次，分支从切点�
   「从这里分叉」发送 `{ type: "fork", entryId, includeEntry: true }`。
 - `includeEntry` 让 fork 切在条目本身之后（保留整轮回答），普通 Fork 按钮仍切在
   选中条目的前一个节点。
+- 分叉入口默认折叠成一条短枝，卡片底部的按钮展开或收起整棵子树。
+- 节点动作发往该节点所属的会话文件；跨文件「切到这条线」先 `navigate_tree`
+  再打开那个会话，分叉也在目标文件上执行。
 - 切点取这一轮最后一个「没有未完成工具调用」的条目：assistant 文本或配对的
   toolResult，避免新会话带着悬空 toolCall 开始。
 

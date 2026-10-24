@@ -550,5 +550,10 @@ export const enLocale: LocalePlugin = {
     "map.forking": "Forking…",
     "map.switchHere": "Switch to this line",
     "map.forkCancelled": "Fork was cancelled",
+    "map.sessionMissing": "Session not found or deleted",
+    "map.truncatedDetail": "This turn is too long and has been truncated",
+    "map.expandCount": "Show {count} turns",
+    "map.collapseCount": "Hide {count} turns",
+    "map.turnLabel": "Turn {index}: {preview}",
   },
 };

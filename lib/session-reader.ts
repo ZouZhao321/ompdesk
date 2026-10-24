@@ -51,6 +51,9 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   const ompSessions: OmpSessionInfo[] = await SessionManager.listAll();
   const pathToId = new Map<string, string>();
   for (const s of ompSessions) pathToId.set(sessionPathKey(s.path), s.id);
+  // `fork()` stores the parent as a bare session id; `createBranchedSession()`
+  // stores an absolute path. Both forms must resolve to a parent row.
+  const idSet = new Set(ompSessions.map((s) => s.id));
 
   const sessions = ompSessions.map((s) => {
     cacheSessionPath(s.id, s.path);
@@ -63,7 +66,10 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
       messageCount: s.messageCount,
       firstMessage: s.firstMessage || "(no messages)",
-      parentSessionId: s.parentSessionPath ? pathToId.get(sessionPathKey(s.parentSessionPath)) : undefined,
+      parentSessionId: s.parentSessionPath
+        ? pathToId.get(sessionPathKey(s.parentSessionPath))
+          ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
+        : undefined,
       transient: false,
     };
   });

@@ -946,23 +946,19 @@ export class AgentSessionWrapper {
         const sessionDir = sessionManager.getSessionDir();
         let newSessionFile: string;
 
-        if (command.includeEntry === true) {
-          // The map forks after a whole turn: keep the selected entry itself so the
-          // new session's history ends with the answer the user was reading.
-          const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
-          const forkedPath = sourceManager.createBranchedSession(entryId);
-          if (!forkedPath) throw new Error("Failed to create forked session");
-          newSessionFile = forkedPath;
-        } else if (!entry.parentId) {
+        // The map forks after a whole turn (includeEntry), the chat Fork button
+        // before the selected message (entry.parentId).
+        const cutEntryId = command.includeEntry === true ? entryId : entry.parentId;
+        if (!cutEntryId) {
           // Fork before the first message: create an empty session linked to this one
           const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
           await newManager.newSession({ parentSession: currentSessionFile });
           await newManager.ensureOnDisk();
           newSessionFile = newManager.getSessionFile() as string;
         } else {
-          // Fork after some history: copy path up to (but not including) the fork point
+          // Copy the path up to and including the cut entry.
           const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
-          const forkedPath = sourceManager.createBranchedSession(entry.parentId);
+          const forkedPath = sourceManager.createBranchedSession(cutEntryId);
           if (!forkedPath) throw new Error("Failed to create forked session");
           newSessionFile = forkedPath;
         }

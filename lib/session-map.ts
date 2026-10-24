@@ -1,13 +1,13 @@
 import { statSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import type { SessionInfo } from "./types";
-import { listAllSessions, resolveSessionPath } from "./session-reader";
+import { getSessionEntries, listAllSessions, readSessionHeader, resolveSessionPath } from "./session-reader";
 import { sessionPathKey } from "./session-path";
-import type { MapSessionRef, MapTurnDetail, MapTurnNode, SessionMapPayload } from "./map-types";
+import type { MapTurnDetail, MapTurnNode, SessionMapPayload } from "./map-types";
 
 const PREVIEW_CHARS = 240;
-const DETAIL_CHARS = 6000;
+const DETAIL_CHARS = 20_000;
+const MAX_SESSIONS = 64;
 const MAX_NODES = 800;
 const MAX_TOOL_NAMES = 40;
 const CACHE_LIMIT = 64;
@@ -31,7 +31,9 @@ type ParsedTurn = {
   parentId: string | null;
   index: number;
   userText: string;
+  userTruncated: boolean;
   answerText: string;
+  answerTruncated: boolean;
   preview: string;
   answerPreview: string;
   toolCount: number;
@@ -122,13 +124,15 @@ export function turnsFromEntries(entries: readonly RawEntry[]): ParsedTurn[] {
 
     if (role === "user") {
       closeTurn();
-      const userText = textOf(entry.message?.content).slice(0, DETAIL_CHARS);
+      const userText = textOf(entry.message?.content);
       current = {
         id: entry.id,
         parentId: null,
         index: turns.length,
-        userText,
+        userText: userText.slice(0, DETAIL_CHARS),
+        userTruncated: userText.length > DETAIL_CHARS,
         answerText: "",
+        answerTruncated: false,
         preview: clip(userText),
         answerPreview: "",
         toolCount: 0,
@@ -152,6 +156,7 @@ export function turnsFromEntries(entries: readonly RawEntry[]): ParsedTurn[] {
       const text = textOf(entry.message?.content);
       if (text.trim()) {
         current.answerText = text.slice(0, DETAIL_CHARS);
+        current.answerTruncated = text.length > DETAIL_CHARS;
         current.answerEntryId = entry.id;
         if (pendingToolCalls.size === 0) current.forkEntryId = entry.id;
       }
@@ -160,7 +165,9 @@ export function turnsFromEntries(entries: readonly RawEntry[]): ParsedTurn[] {
 
     if (role === "toolResult") {
       const callId = entry.message?.toolCallId;
-      if (!callId) continue;
+      // Only a result for a call opened in this turn can close it. Orphan
+      // results must not become the cut point of the turn.
+      if (!callId || !pendingToolCalls.has(callId)) continue;
       pendingToolCalls.delete(callId);
       if (pendingToolCalls.size === 0) current.forkEntryId = entry.id;
     }
@@ -191,11 +198,11 @@ async function parseSessionFile(filePath: string): Promise<ParsedFile> {
     return cached.parsed;
   }
 
-  const manager = await SessionManager.open(filePath);
-  const entries = manager.getEntries() as unknown as RawEntry[];
-  const turns = turnsFromEntries(entries);
-
-  const parsed: ParsedFile = { headerId: manager.getSessionId(), turns };
+  const entries = (await getSessionEntries(filePath)) as unknown as RawEntry[];
+  const parsed: ParsedFile = {
+    headerId: readSessionHeader(filePath)?.id ?? "",
+    turns: turnsFromEntries(entries),
+  };
   if (stat.size <= 8 * 1024 * 1024) {
     const store = cache();
     store.set(key, { mtimeMs: stat.mtimeMs, size: stat.size, parsed });
@@ -236,7 +243,7 @@ async function collectChain(target: SessionInfo): Promise<{ sessions: SessionInf
   while (queue.length > 0) {
     const info = queue.shift()!;
     chain.push(info);
-    if (chain.length >= MAX_NODES) {
+    if (chain.length >= MAX_SESSIONS) {
       truncated = true;
       break;
     }
@@ -251,6 +258,19 @@ async function collectChain(target: SessionInfo): Promise<{ sessions: SessionInf
   return { sessions: chain, truncated };
 }
 
+async function parseChain(chain: SessionInfo[]): Promise<Array<{ info: SessionInfo; parsed: ParsedFile }>> {
+  const loaded: Array<{ info: SessionInfo; parsed: ParsedFile }> = [];
+  for (const [index, info] of chain.entries()) {
+    try {
+      loaded.push({ info, parsed: await parseSessionFile(info.path) });
+    } catch (error) {
+      // The root file is the map itself: a broken root must surface, not look empty.
+      if (index === 0) throw error;
+    }
+  }
+  return loaded;
+}
+
 async function resolveTarget(sessionId: string): Promise<{ info: SessionInfo; path: string } | null> {
   const path = await resolveSessionPath(sessionId);
   if (!path) return null;
@@ -259,15 +279,16 @@ async function resolveTarget(sessionId: string): Promise<{ info: SessionInfo; pa
   const info = all.find((session) => sessionPathKey(session.path) === key);
   if (info) return { info, path };
 
-  const parsed = await parseSessionFile(path);
+  const header = readSessionHeader(path);
+  if (!header) return null;
   return {
     path,
     info: {
-      id: parsed.headerId,
+      id: header.id,
       path,
-      cwd: "",
-      created: "",
-      modified: "",
+      cwd: header.cwd ?? "",
+      created: header.timestamp,
+      modified: statSync(path).mtime.toISOString(),
       messageCount: 0,
       firstMessage: "",
     },
@@ -279,17 +300,12 @@ export async function buildSessionMap(sessionId: string): Promise<SessionMapPayl
   if (!target) return null;
 
   const chain = await collectChain(target.info);
+  const loaded = await parseChain(chain.sessions);
   const byTurn = new Map<string, MapTurnNode>();
   const nodes: MapTurnNode[] = [];
   let truncated = chain.truncated;
 
-  for (const info of chain.sessions) {
-    let parsed: ParsedFile;
-    try {
-      parsed = await parseSessionFile(info.path);
-    } catch {
-      continue;
-    }
+  for (const { info, parsed } of loaded) {
     for (const turn of parsed.turns) {
       if (byTurn.has(turn.id)) continue;
       if (nodes.length >= MAX_NODES) {
@@ -314,36 +330,23 @@ export async function buildSessionMap(sessionId: string): Promise<SessionMapPayl
     }
   }
 
-  const sessions: MapSessionRef[] = chain.sessions.map((info) => ({
-    id: info.id,
-    title: info.name || undefined,
-    parentId: info.parentSessionId,
-    isFork: info.id !== target.info.id,
-  }));
-
-  return {
-    sessionId: target.info.id,
-    filePath: target.path,
-    nodes,
-    sessions,
-    truncated,
-  };
+  return { nodes, truncated };
 }
 
 export async function readMapTurn(sessionId: string, turnId: string): Promise<MapTurnDetail | null> {
   const target = await resolveTarget(sessionId);
   if (!target) return null;
   const chain = await collectChain(target.info);
-  for (const info of chain.sessions) {
-    let parsed: ParsedFile;
-    try {
-      parsed = await parseSessionFile(info.path);
-    } catch {
-      continue;
-    }
+  const loaded = await parseChain(chain.sessions);
+  for (const { parsed } of loaded) {
     const turn = parsed.turns.find((candidate) => candidate.id === turnId);
     if (!turn) continue;
-    return { userText: turn.userText, answerText: turn.answerText, tools: turn.tools };
+    return {
+      userText: turn.userText,
+      answerText: turn.answerText,
+      tools: turn.tools,
+      truncated: turn.userTruncated || turn.answerTruncated,
+    };
   }
   return null;
 }
