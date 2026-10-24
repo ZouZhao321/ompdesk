@@ -909,7 +909,7 @@ export function AppShell() {
           animation: none;
         }
       }
-      @media (max-width: 640px) {
+      @media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
         .sidebar-overlay-backdrop.sidebar-mobile-pending {
           opacity: 0 !important;
           pointer-events: none !important;
