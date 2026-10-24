@@ -6,6 +6,7 @@ import {
 import { logEvent } from "@/lib/logging";
 import {
   ACTOR_HEADER,
+  CLIENT_ADDRESS_HEADER,
   REQUEST_ID_HEADER,
   type RequestActor,
 } from "@/lib/request-headers";
@@ -66,6 +67,14 @@ function continueWithRequestHeaders(
   const headers = new Headers(request.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
   headers.set(ACTOR_HEADER, actor);
+  // Overwrite any client-supplied value so a route can use this as a
+  // rate-limit bucket without trusting forwarding headers itself. The last
+  // hop is the one closest to this server.
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",");
+  const address = forwarded?.[forwarded.length - 1]?.trim()
+    || request.headers.get("x-real-ip")?.trim()
+    || "local";
+  headers.set(CLIENT_ADDRESS_HEADER, address.slice(0, 64));
   return NextResponse.next({ request: { headers } });
 }
 

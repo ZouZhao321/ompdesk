@@ -331,6 +331,48 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
     );
   };
 
+  const renderSection = () => {
+    if (query.trim()) return renderGenericSettings();
+    switch (section) {
+      case "models":
+        return <ModelsConfig cwd={cwd} embedded onClose={close} onModelsChanged={onModelsChanged} />;
+      case "themes":
+        return renderThemeSection();
+      case "skills":
+        return cwd ? <SkillsConfig cwd={cwd} embedded onClose={close} /> : renderGenericSettings();
+      case "plugins":
+        return cwd
+          ? (
+            <PluginsConfig
+              cwd={cwd}
+              sessionId={sessionId}
+              runtimeId={runtimeId}
+              onRuntimeIdentity={onRuntimeIdentity}
+              embedded
+              onClose={close}
+              onReloaded={onReloaded}
+            />
+          )
+          : renderGenericSettings();
+      case "mcp":
+        return (
+          <McpSettings
+            cwd={cwd}
+            sessionId={sessionId}
+            runtimeId={runtimeId}
+            onRuntimeIdentity={onRuntimeIdentity}
+            onReloaded={onReloaded}
+          />
+        );
+      case "access":
+        return <AccessConfig />;
+      case "logs":
+        return <LogsPanel />;
+      default:
+        return renderGenericSettings();
+    }
+  };
+
   return (
     <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <div className={styles.window} role="dialog" aria-modal="true" aria-label="Settings">
@@ -346,7 +388,7 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
           <div className={styles.closeRail}><button type="button" className={styles.closeButton} onClick={close}><span>Close settings</span><span aria-hidden="true">×</span></button></div>
         </aside>
         <main className={styles.content}>
-          {query.trim() ? renderGenericSettings() : section === "models" ? <ModelsConfig cwd={cwd} embedded onClose={close} onModelsChanged={onModelsChanged} /> : section === "themes" ? renderThemeSection() : section === "skills" && cwd ? <SkillsConfig cwd={cwd} embedded onClose={close} /> : section === "plugins" && cwd ? <PluginsConfig cwd={cwd} sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} embedded onClose={close} onReloaded={onReloaded} /> : section === "mcp" ? <McpSettings cwd={cwd} sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} onReloaded={onReloaded} /> : section === "access" ? <AccessConfig /> : section === "logs" ? <LogsPanel /> : renderGenericSettings()}
+          {renderSection()}
         </main>
       </div>
     </div>

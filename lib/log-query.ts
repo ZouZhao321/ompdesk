@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync, type Stats } from "node:fs";
 import path from "node:path";
 import { getLogsDir } from "@oh-my-pi/pi-utils/dirs";
@@ -15,7 +16,16 @@ import type { LogEntry, LogFileInfo, LogLevelName, LogsResponse } from "./api-ty
 export const DEFAULT_LOG_PAGE_LIMIT = 200;
 export const MAX_LOG_PAGE_LIMIT = 1_000;
 const MAX_LOG_PAGE_BYTES = 1_024 * 1_024;
+/**
+ * First-screen window, measured back from EOF. Reading a multi-megabyte file
+ * from byte 0 only to trim it back to the visible cap is wasted IO, so a
+ * headless first page instead reads the newest slice.
+ */
+const MAX_LOG_TAIL_BYTES = 256 * 1_024;
+/** Downloads are whole-file responses; larger files must be paged in the panel. */
+export const MAX_LOG_DOWNLOAD_BYTES = 16 * 1_024 * 1_024;
 const MAX_KEYWORD_LENGTH = 200;
+const MAX_FINGERPRINT_LENGTH = 64;
 
 const LOG_FILE_PATTERN = /^omp\.(\d{4}-\d{2}-\d{2})\.(\d+)\.log(?:\.(\d+))?$/;
 
@@ -56,6 +66,31 @@ interface ResolvedLogFile {
   size: number;
   mtimeMs: number;
   modifiedAt: string;
+  /** Identity of the file object, stable across appends and different after a recreate. */
+  fingerprint: string;
+}
+
+/**
+ * `dev:ino:birthtime:head-hash` identifies the file object rather than its
+ * contents: appends keep it, while a writer that deletes and recreates the
+ * same basename gets a new one. The head hash covers filesystems that report
+ * `ino` as 0 or a coarse birth time; a rotated file's first line differs,
+ * whereas appending never touches it.
+ */
+function fileFingerprint(filePath: string, stat: Stats): string {
+  const head = Buffer.alloc(256);
+  let bytesRead = 0;
+  const fd = openSync(filePath, "r");
+  try {
+    bytesRead = readSync(fd, head, 0, head.length, 0);
+  } finally {
+    closeSync(fd);
+  }
+  const hash = createHash("sha1")
+    .update(head.subarray(0, Math.max(0, bytesRead)))
+    .digest("hex")
+    .slice(0, 12);
+  return `${stat.dev}:${stat.ino}:${stat.birthtimeMs}:${hash}`;
 }
 
 function resolveLogFile(directory: string, name: string, pid: number): ResolvedLogFile {
@@ -91,6 +126,7 @@ function resolveLogFile(directory: string, name: string, pid: number): ResolvedL
     size: stat.size,
     mtimeMs: stat.mtimeMs,
     modifiedAt: stat.mtime.toISOString(),
+    fingerprint: fileFingerprint(filePath, stat),
   };
 }
 
@@ -103,7 +139,7 @@ export function listLogFiles(directory: string = getLogsDir(), pid: number = pro
     return [];
   }
 
-  const files: ResolvedLogFile[] = [];
+  const files: Array<Omit<ResolvedLogFile, "fingerprint">> = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const match = LOG_FILE_PATTERN.exec(entry.name);
@@ -185,6 +221,10 @@ export interface ReadLogPageOptions {
   level?: LogLevelName | "all";
   keyword?: string;
   pid?: number;
+  /** Read the newest slice of the file instead of the head; only used for `cursor: 0`. */
+  tail?: boolean;
+  /** Fingerprint from the previous page; a mismatch means the file was recreated. */
+  fingerprint?: string | null;
 }
 
 /**
@@ -217,7 +257,7 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
   const files = listLogFiles(directory, pid);
   const name = options.file ?? files[0]?.name ?? null;
   if (!name) {
-    return { pid, files, file: null, entries: [], nextCursor: 0, truncated: false, reset: false };
+    return { pid, files, file: null, entries: [], nextCursor: 0, truncated: false, reset: false, fingerprint: null };
   }
 
   const resolved = resolveLogFile(directory, name, pid);
@@ -229,12 +269,30 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
   };
 
   // A cursor beyond the current size means the writer restarted or rotated the
-  // same basename; the old position no longer addresses any line.
-  const reset = cursor > resolved.size;
-  const start = reset ? 0 : cursor;
+  // same basename. A cursor whose fingerprint no longer matches the file means
+  // the same thing when the new file has already grown past the old position.
+  const reset = cursor > resolved.size
+    || (cursor > 0
+      && typeof options.fingerprint === "string"
+      && options.fingerprint !== resolved.fingerprint);
+  const requestedStart = reset ? 0 : cursor;
+  // Tail-first only applies to a fresh read; a cursor is always a line boundary.
+  const useTail = !reset && cursor === 0 && options.tail === true
+    && resolved.size > MAX_LOG_TAIL_BYTES;
+  const start = useTail ? resolved.size - MAX_LOG_TAIL_BYTES : requestedStart;
   const readLength = Math.min(resolved.size - start, MAX_LOG_PAGE_BYTES);
+  const fingerprint = resolved.fingerprint;
   if (readLength <= 0) {
-    return { pid, files, file: fileInfo, entries: [], nextCursor: start, truncated: false, reset };
+    return {
+      pid,
+      files,
+      file: fileInfo,
+      entries: [],
+      nextCursor: start,
+      truncated: false,
+      reset,
+      fingerprint,
+    };
   }
 
   const buffer = Buffer.allocUnsafe(readLength);
@@ -257,7 +315,13 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
 
   const entries: LogEntry[] = [];
   let position = 0;
-  let consumed = start;
+  if (useTail) {
+    // The window starts mid-line; skip that fragment so the first entry is a
+    // whole record at a real line boundary.
+    const firstNewline = buffer.subarray(0, bytesRead).indexOf(10);
+    position = firstNewline === -1 || firstNewline >= end ? end : firstNewline + 1;
+  }
+  let consumed = start + position;
   while (position < end) {
     const newline = buffer.indexOf(10, position);
     const lineEnd = newline === -1 || newline >= end ? end : newline;
@@ -282,8 +346,12 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
     file: fileInfo,
     entries,
     nextCursor: consumed,
-    truncated: consumed < resolved.size,
+    // A page that consumed nothing (concurrent truncation, or no newline in
+    // the window) is not a backlog: without progress a caller would re-request
+    // the same offset forever.
+    truncated: consumed > start && consumed < resolved.size,
     reset,
+    fingerprint,
   };
 }
 
@@ -298,6 +366,11 @@ export function readLogDownload(file: unknown, options: { directory?: string; pi
   const pid = options.pid ?? process.pid;
   const name = validateLogFileName(file, pid);
   const resolved = resolveLogFile(directory, name, pid);
+  // The paged reader caps a response at MAX_LOG_PAGE_BYTES; an unbounded
+  // synchronous whole-file read would block the event loop and can OOM.
+  if (resolved.size > MAX_LOG_DOWNLOAD_BYTES) {
+    throw new LogQueryError(413, "Log file is too large to download; use the paged viewer");
+  }
   return {
     file: {
       name: resolved.name,
@@ -316,6 +389,10 @@ export interface ParsedLogsQuery {
   level: LogLevelName | "all";
   keyword: string;
   download: boolean;
+  /** Read the newest slice when `cursor` is 0. */
+  tail: boolean;
+  /** Identity of the file the cursor came from, when the client sent one. */
+  fingerprint: string | null;
 }
 
 function parseNonNegativeInteger(raw: string | null, field: string): number | undefined {
@@ -351,6 +428,11 @@ export function parseLogsQuery(params: URLSearchParams): ParsedLogsQuery {
   if (keyword.length > MAX_KEYWORD_LENGTH) throw new LogQueryError(400, "Keyword is too long");
 
   const download = ["1", "true"].includes((params.get("download") ?? "").toLowerCase());
+  const tail = ["1", "true"].includes((params.get("tail") ?? "").toLowerCase());
+  const fingerprint = params.get("fingerprint");
+  if (fingerprint !== null && (fingerprint.length === 0 || fingerprint.length > MAX_FINGERPRINT_LENGTH)) {
+    throw new LogQueryError(400, "Invalid fingerprint");
+  }
 
   return {
     file: file && file !== "" ? file : null,
@@ -359,5 +441,7 @@ export function parseLogsQuery(params: URLSearchParams): ParsedLogsQuery {
     level: requestedLevel as LogLevelName | "all",
     keyword,
     download,
+    tail,
+    fingerprint,
   };
 }

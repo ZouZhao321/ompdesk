@@ -1,4 +1,6 @@
 import { logEvent } from "@/lib/logging";
+import { CLIENT_ADDRESS_HEADER } from "@/lib/request-headers";
+import { redactUrlsIn } from "@/lib/url-redaction";
 import { hasJsonContentType } from "@/lib/request-security";
 import {
   CLIENT_ERROR_BUILD_VERSION_LIMIT,
@@ -20,7 +22,8 @@ import {
  * The proxy has already enforced host, origin, and password checks before a
  * request reaches this handler. What is left is to bound what a compromised or
  * broken page can write: JSON only, one small body per request, a fixed field
- * set, truncation, and a per-session (or per-address) rate limit.
+ * set, URL redaction, truncation, per-session and per-address rate limits, and
+ * a global ceiling across both.
  */
 
 export const CLIENT_ERROR_EVENT = "client.error";
@@ -29,6 +32,12 @@ export const CLIENT_ERROR_SUBSYSTEM = "client";
 export const CLIENT_LOG_MAX_BODY_BYTES = 8 * 1024;
 export const CLIENT_ERROR_RATE_LIMIT = 20;
 export const CLIENT_ERROR_RATE_WINDOW_MS = 60_000;
+/**
+ * Address bucket ceiling. Higher than the per-session limit because every tab
+ * on one machine shares the same address (and the desktop shell reports
+ * `local`); rotating `sessionId` still cannot exceed it.
+ */
+export const CLIENT_ERROR_ADDRESS_RATE_LIMIT = 60;
 /** Ceiling across every session and address, so rotating ids cannot outrun it. */
 export const CLIENT_ERROR_GLOBAL_RATE_LIMIT = 200;
 
@@ -58,12 +67,13 @@ function requireStringField(
   body: Record<string, unknown>,
   field: string,
   limit: number,
+  redact = false,
 ): string {
   const value = body[field];
   if (typeof value !== "string") {
     throw new ClientLogValidationError(400, `${field} must be a string`);
   }
-  const normalized = normalizeClientField(value, limit);
+  const normalized = normalizeClientField(redact ? redactUrlsIn(value) : value, limit);
   if (!normalized) throw new ClientLogValidationError(400, `${field} must not be empty`);
   return normalized;
 }
@@ -72,13 +82,14 @@ function optionalStringField(
   body: Record<string, unknown>,
   field: string,
   limit: number,
+  redact = false,
 ): string | undefined {
   const value = body[field];
   if (value === undefined) return undefined;
   if (typeof value !== "string") {
     throw new ClientLogValidationError(400, `${field} must be a string`);
   }
-  return normalizeClientField(value, limit);
+  return normalizeClientField(redact ? redactUrlsIn(value) : value, limit);
 }
 
 /**
@@ -102,9 +113,9 @@ export function parseClientErrorReport(payload: unknown): ClientErrorReport {
 
   const report: ClientErrorReport = {
     kind: body.kind,
-    message: requireStringField(body, "message", CLIENT_ERROR_MESSAGE_LIMIT),
+    message: requireStringField(body, "message", CLIENT_ERROR_MESSAGE_LIMIT, true),
   };
-  const stack = optionalStringField(body, "stack", CLIENT_ERROR_STACK_LIMIT);
+  const stack = optionalStringField(body, "stack", CLIENT_ERROR_STACK_LIMIT, true);
   if (stack) report.stack = stack;
   const url = normalizeClientUrl(optionalStringField(body, "url", CLIENT_ERROR_URL_LIMIT));
   if (url) report.url = url;
@@ -159,9 +170,10 @@ async function readJsonWithinLimit(request: Request, maxBytes: number): Promise<
   let size = 0;
   try {
     while (true) {
-      const chunk = await reader.read().catch(() => {
-        // The client disconnected or the stream errored: that is a bad request,
-        // not a server failure worth a 500 and a `failed: true` request log.
+      const chunk = await reader.read().catch(async () => {
+        // The client disconnected or the stream errored: release the body so
+        // the socket is not held open, then report it as a bad request.
+        await reader.cancel().catch(() => {});
         throw new ClientLogValidationError(400, "Request body could not be read");
       });
       const { done, value } = chunk;
@@ -186,15 +198,16 @@ async function readJsonWithinLimit(request: Request, maxBytes: number): Promise<
 }
 
 /**
- * Rate-limit identity: the reported session when it has one, otherwise the
- * forwarding address. The value only selects a bucket; spoofing it cannot grant
- * access, because the proxy has already authenticated the caller.
+ * Address bucket for a request. The proxy-written header replaces whatever the
+ * client sent; the forwarding headers are only a fallback for callers that did
+ * not pass through the proxy (tests, direct route use). Without a reverse proxy
+ * that overwrites forwarding headers both values are still advisory, so the
+ * global ceiling below remains the hard bound.
  */
-function rateLimitKey(report: ClientErrorReport, request: Request): string {
-  if (report.sessionId) return `session:${report.sessionId}`;
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim();
-  const address = forwarded || request.headers.get("x-real-ip")?.trim() || "local";
-  return `address:${address.slice(0, 64)}`;
+function clientAddress(request: Request): string {
+  const proxied = request.headers.get(CLIENT_ADDRESS_HEADER)?.trim();
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return (proxied || forwarded || request.headers.get("x-real-ip")?.trim() || "local").slice(0, 64);
 }
 
 function rateLimited(retryAfterMs: number): Response {
@@ -212,6 +225,7 @@ function rateLimited(retryAfterMs: number): Response {
 
 export interface ClientLogHandlerOptions {
   limiter?: SlidingWindowLimiter;
+  addressLimiter?: SlidingWindowLimiter;
   globalLimiter?: SlidingWindowLimiter;
   now?: () => number;
 }
@@ -220,22 +234,33 @@ export interface ClientLogHandlerOptions {
 export function createClientLogHandler(options: ClientLogHandlerOptions = {}) {
   const limiter = options.limiter
     ?? new SlidingWindowLimiter(CLIENT_ERROR_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
+  const addressLimiter = options.addressLimiter
+    ?? new SlidingWindowLimiter(CLIENT_ERROR_ADDRESS_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
   const globalLimiter = options.globalLimiter
     ?? new SlidingWindowLimiter(CLIENT_ERROR_GLOBAL_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS, 1);
   const now = options.now ?? (() => Date.now());
 
   return async function handleClientLog(request: Request): Promise<Response> {
     try {
+      const at = now();
+      // Header-only, so it runs before the body is read: a flood from one
+      // address is rejected without parsing 8 KB of JSON per request. A
+      // caller rotating `sessionId` cannot reset this bucket.
+      const address = clientAddress(request);
+      const perAddress = addressLimiter.take(`client:${address}`, at);
+      if (!perAddress.allowed) return rateLimited(perAddress.retryAfterMs);
+
       if (!hasJsonContentType(request)) {
         throw new ClientLogValidationError(415, "Content-Type must be application/json");
       }
       const payload = await readJsonWithinLimit(request, CLIENT_LOG_MAX_BODY_BYTES);
       const report = parseClientErrorReport(payload);
 
-      const at = now();
       // Reject a flooding session before it can drain the shared bucket; only
-      // an accepted per-key request spends a global slot.
-      const perKey = limiter.take(rateLimitKey(report, request), at);
+      // an accepted per-key request spends a global slot. Without a session id
+      // the key is the address that the first bucket already counted.
+      const sessionKey = report.sessionId ? `session:${report.sessionId}` : `address:${address}`;
+      const perKey = limiter.take(sessionKey, at);
       if (!perKey.allowed) return rateLimited(perKey.retryAfterMs);
       const global = globalLimiter.take("all", at);
       if (!global.allowed) return rateLimited(global.retryAfterMs);
