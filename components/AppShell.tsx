@@ -857,6 +857,44 @@ export function AppShell() {
     </>
   );
 
+  // 手机档放进顶栏末尾，桌面档仍用右上角固定悬浮按钮。
+  const filePanelToggle = (
+    <button
+      onClick={() => setRightPanelOpen((v) => !v)}
+       aria-controls="file-panel"
+       aria-expanded={rightPanelOpen}
+       title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+       aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+      style={{
+        ...(isMobile
+          ? {
+              position: "relative" as const,
+              zIndex: 300,
+              marginLeft: "auto",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: topBar.iconButton, height: topBar.iconButton, padding: 0,
+              background: "var(--bg-panel)", border: "none", borderLeft: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+              color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
+              cursor: "pointer", transition: "color 0.12s", flexShrink: 0,
+            }
+          : {
+              position: "fixed", top: "env(safe-area-inset-top)", right: "env(safe-area-inset-right)", zIndex: 300,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 36, height: 36, padding: 0,
+              background: "var(--bg-panel)", border: "none", borderLeft: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+              color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
+              cursor: "pointer", transition: "color 0.12s",
+            }),
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
+      </svg>
+    </button>
+  );
+
   return (
     <>
     <style>{`
@@ -1324,7 +1362,7 @@ export function AppShell() {
                   marginLeft: "auto",
                   display: "flex", alignItems: "center", gap: 10,
                   paddingLeft: 12,
-                  paddingRight: rightPanelOpen ? 12 : 48,
+                  paddingRight: isMobile ? 12 : rightPanelOpen ? 12 : 48,
                   minWidth: isMobile ? topBar.iconButton : undefined,
                   height: "100%",
                   background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
@@ -1602,6 +1640,7 @@ export function AppShell() {
             </div>
           )}
 
+          {isMobile && filePanelToggle}
         </div>
 
         {/* Chat content */}
@@ -1759,28 +1798,8 @@ export function AppShell() {
         </div>
       </div>
     </div>
-    {/* File panel toggle — always visible at top-right */}
-    <button
-      onClick={() => setRightPanelOpen((v) => !v)}
-       aria-controls="file-panel"
-       aria-expanded={rightPanelOpen}
-       title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-       aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-      style={{
-        position: "fixed", top: "env(safe-area-inset-top)", right: "env(safe-area-inset-right)", zIndex: 300,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 36, height: 36, padding: 0,
-        background: "var(--bg-panel)", border: "none", borderLeft: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
-        color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", transition: "color 0.12s",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-      </svg>
-    </button>
+    {/* File panel toggle — desktop fixed overlay; on mobile it sits at the end of the top bar */}
+    {!isMobile && filePanelToggle}
     {settingsConfigOpen && (
       <SettingsConfig
         cwd={projectTrustCwd}
