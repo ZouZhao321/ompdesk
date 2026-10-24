@@ -54,14 +54,14 @@ export const GET = withRequestLog(
           route: "/api/agent/[id]/events",
           sessionId: session.sessionId,
           runtimeId: session.runtimeId,
-          connect: (send) => {
+          connect: (send, registerCleanup) => {
             // Send initial connected event
             send({ type: "connected", sessionId: session.sessionId, runtimeId: session.runtimeId });
 
-            return session.onEvent((event) => {
+            registerCleanup(session.onEvent((event) => {
               const clientEvent = toClientEvent(event);
               if (clientEvent) send(clientEvent);
-            });
+            }));
           },
         });
       },

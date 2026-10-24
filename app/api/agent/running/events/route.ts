@@ -19,18 +19,16 @@ export const GET = withRequestLog(
           controller,
           request: req,
           route: "/api/agent/running/events",
-          connect: (send) => {
+          connect: (send, registerCleanup) => {
             // Subscribe BEFORE taking the initial snapshot so no state change can slip
             // through the gap between snapshot and subscription.
-            const unsubscribe = subscribeRunningSessions((ids) => {
+            registerCleanup(subscribeRunningSessions((ids) => {
               send({ type: "running", runningSessionIds: ids });
-            });
+            }));
 
             // Initial snapshot so the client renders the correct state immediately.
             // (A duplicate frame here is harmless: the client just sets the same set.)
             send({ type: "running", runningSessionIds: getRunningRpcSessionIds() });
-
-            return unsubscribe;
           },
         });
       },
