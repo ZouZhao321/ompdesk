@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { importRuntimeModule } from "./runtime-import";
 
 /**
  * The single write path for ompdesk server logs.
@@ -31,23 +32,12 @@ interface SdkLogger {
   flush(): void;
 }
 
-/**
- * Next bundles instrumentation separately from route handlers, and its webpack
- * pass tries to parse the SDK's TypeScript sources there even though routes
- * externalize `@oh-my-pi/*`. Hiding the specifier behind `Function` keeps the
- * SDK external at runtime; the literal path would be statically bundled and
- * fail on the first `export type` in `logger.ts`.
- */
-const importRuntimeModule = Function("specifier", "return import(specifier)") as (
-  specifier: string,
-) => Promise<SdkLogger>;
-
 let sdkLogger: SdkLogger | undefined;
 let sdkLoad: Promise<SdkLogger | undefined> | undefined;
 
 async function loadSdkLogger(): Promise<SdkLogger | undefined> {
   try {
-    return await importRuntimeModule("@oh-my-pi/pi-utils/logger");
+    return await importRuntimeModule<SdkLogger>("@oh-my-pi/pi-utils/logger");
   } catch {
     // Without the SDK there is nowhere to write; logEvent becomes a no-op
     // rather than preventing the server from starting.
@@ -542,9 +532,13 @@ export function logEvent(
   fields: Record<string, unknown> = {},
 ): void {
   try {
+    // Ambient context only fills in correlation the caller did not state:
+    // `agent.run.end` must keep the `requestId` it captured at `begin()`, even
+    // when the run is finished from another request (an abort from a second
+    // tab). `source` and `subsystem` stay fixed last so no field can spoof them.
     const context = sanitizeLogContext({
-      ...fields,
       ...getLogContext(),
+      ...fields,
       source: LOG_SOURCE,
       subsystem,
     });
