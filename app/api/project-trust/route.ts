@@ -3,6 +3,7 @@ import { resolve } from "path";
 import { NextResponse } from "next/server";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
+import { withRequestLog } from "@/lib/api-request-log";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { getProjectTrustStatus, trustProject } from "@/lib/project-trust";
 import { destroyRpcSessionsForCwd, hasBusyRpcSessionForCwd } from "@/lib/rpc-manager";
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
   return NextResponse.json(getProjectTrustStatus(result.cwd, getAgentDir()));
 }
 
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/project-trust", async (req: Request) => {
   try {
     const body = await req.json() as { cwd?: unknown };
     const result = await validateCwd(body.cwd);
@@ -63,4 +64,4 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-}
+});

@@ -14,6 +14,7 @@ import {
 import { sessionPathKey } from "@/lib/session-path";
 import { setSessionArchived } from "@/lib/session-archive";
 import { getRpcSession } from "@/lib/rpc-manager";
+import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { projectTreeForResponse } from "@/lib/project-tree";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
@@ -92,10 +93,10 @@ export async function GET(
 }
 
 // PATCH /api/sessions/[id]  body: { name: string }
-export async function PATCH(
+export const PATCH = withRequestLog("/api/sessions/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -129,13 +130,13 @@ export async function PATCH(
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/sessions/[id]
-export async function DELETE(
+export const DELETE = withRequestLog("/api/sessions/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -186,4 +187,4 @@ export async function DELETE(
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});

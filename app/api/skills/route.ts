@@ -6,6 +6,7 @@ import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { parseFrontmatter } from "@oh-my-pi/pi-utils";
 import { loadSkillsWithInstallInfo } from "@/lib/skills-service";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
+import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
 }
 
 // PATCH /api/skills — toggle disable-model-invocation on a SKILL.md file
-export async function PATCH(req: Request) {
+export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -104,4 +105,4 @@ export async function PATCH(req: Request) {
   } catch {
     return NextResponse.json({ error: "Unable to update skill metadata" }, { status: 500 });
   }
-}
+});

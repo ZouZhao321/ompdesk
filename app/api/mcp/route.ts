@@ -6,6 +6,7 @@ import { loadCapability } from "@oh-my-pi/pi-coding-agent/capability";
 import type { MCPServer } from "@oh-my-pi/pi-coding-agent/capability/mcp";
 import { setMcpServerEnabled } from "@oh-my-pi/pi-coding-agent/mcp/config-writer";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
+import { withRequestLog } from "@/lib/api-request-log";
 import { writePrivateFileAtomicSync } from "@/lib/atomic-file";
 import type { McpConfigResponse, McpScopeConfig, McpServerConfig, McpServerEntry } from "@/lib/settings-api";
 
@@ -237,7 +238,7 @@ export async function GET(req: Request) {
   }
 }
 
-export async function PATCH(req: Request) {
+export const PATCH = withRequestLog("/api/mcp", async (req: Request) => {
   try {
     const cwd = await validatedCwd(req);
     const body = await req.json() as {
@@ -271,9 +272,9 @@ export async function PATCH(req: Request) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: message === "Access denied" ? 403 : 400 });
   }
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = withRequestLog("/api/mcp", async (req: Request) => {
   try {
     const cwd = await validatedCwd(req);
     const body = await req.json() as { scope?: "user" | "project"; servers?: McpServerEntry[] };
@@ -307,4 +308,4 @@ export async function PUT(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
-}
+});
