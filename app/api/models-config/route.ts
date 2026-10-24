@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
@@ -74,7 +75,9 @@ function writeModelsConfig(data: Record<string, unknown>): void {
   writePrivateFileAtomicSync(path, stringifyYaml(sanitizeModelsConfig(data), { lineWidth: 0 }));
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/models-config", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }

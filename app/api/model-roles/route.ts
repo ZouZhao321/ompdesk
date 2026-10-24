@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { resolve } from "path";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
@@ -21,7 +22,9 @@ async function requireAllowedCwd(rawCwd: string | null): Promise<{ cwd: string }
 }
 
 // GET /api/model-roles?cwd=<path> — every role omp knows, with its assignment.
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/model-roles", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   const result = await requireAllowedCwd(new URL(req.url).searchParams.get("cwd"));
   if ("error" in result) return result.error;
 
