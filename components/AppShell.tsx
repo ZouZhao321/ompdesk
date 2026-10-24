@@ -13,6 +13,7 @@ import { SettingsConfig } from "./SettingsConfig";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { OmpUpdateIndicator } from "./OmpUpdateIndicator";
 import { BranchNavigator } from "./BranchNavigator";
+import { ConversationMap } from "./ConversationMap";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -177,6 +178,10 @@ export function AppShell() {
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
   const [branchActiveLeafId, setBranchActiveLeafId] = useState<string | null>(null);
   const branchLeafChangeFnRef = useRef<((leafId: string | null) => void) | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  useEffect(() => {
+    setMapOpen(false);
+  }, [selectedSession?.id]);
 
   const handleBranchDataChange = useCallback((tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
     setBranchTree(tree);
@@ -512,6 +517,21 @@ export function AppShell() {
       })
       .catch(() => {});
   }, []);
+
+  // Open another session from the map (fork descendants live in their own file).
+  const handleOpenSessionById = useCallback(async (sessionId: string): Promise<boolean> => {
+    try {
+      const response = await fetch("/api/sessions", { cache: "no-store" });
+      if (!response.ok) return false;
+      const data = (await response.json()) as { sessions?: SessionInfo[] };
+      const session = data.sessions?.find((candidate) => candidate.id === sessionId);
+      if (!session) return false;
+      handleSelectSession(session);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [handleSelectSession]);
 
   // Called by ChatWindow when a new session gets its real id from omp
   const handleSessionCreated = useCallback((session: SessionInfo) => {
@@ -1258,6 +1278,41 @@ export function AppShell() {
                   </button>
                 );
               })()}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTopPanel(null);
+                  setMapOpen((open) => !open);
+                }}
+                title={translate("map.title")}
+                aria-pressed={mapOpen}
+                aria-expanded={mapOpen}
+                aria-label={translate("map.title")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  height: "100%",
+                  padding: "0 12px",
+                  background: mapOpen ? "var(--bg-selected)" : "none",
+                  border: "none",
+                  borderTop: mapOpen ? "2px solid var(--accent)" : "2px solid transparent",
+                  borderRight: "1px solid var(--border)",
+                  cursor: "pointer",
+                  color: mapOpen ? "var(--text)" : "var(--text-muted)",
+                  fontSize: 11,
+                  whiteSpace: "nowrap",
+                  transition: "color 0.1s, background 0.1s",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="5" cy="6" r="2" />
+                  <circle cx="12" cy="18" r="2" />
+                  <circle cx="19" cy="9" r="2" />
+                  <path d="M6.7 7.1 10.4 16.4M13.7 17.3 17.5 10.6M7 6h10" />
+                </svg>
+                {!isMobile && <span>{translate("map.open")}</span>}
+              </button>
               <BranchNavigator
                 tree={branchTree}
                 activeLeafId={branchActiveLeafId}
@@ -1582,6 +1637,7 @@ export function AppShell() {
         <div className="chat-content-layout">
           <div className="chat-session-column">
           {showChat ? (
+            <>
             <ChatWindow
               key={sessionKey}
               session={selectedSession}
@@ -1603,6 +1659,20 @@ export function AppShell() {
               playDoneSound={playDoneSound}
               unlockAudio={unlockAudio}
             />
+            {mapOpen && selectedSession && (
+              <ConversationMap
+                sessionId={selectedSession.id}
+                currentLeafId={branchActiveLeafId}
+                onClose={() => setMapOpen(false)}
+                onSessionForked={(newSessionId) => {
+                  setMapOpen(false);
+                  handleSessionForked(newSessionId);
+                }}
+                onSwitchLeaf={handleBranchLeafChange}
+                onOpenSession={handleOpenSessionById}
+              />
+            )}
+            </>
           ) : initialCwdStatus === "validating" ? (
             <div
               role="status"
