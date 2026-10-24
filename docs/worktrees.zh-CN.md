@@ -21,7 +21,7 @@ worktree 切换器决定 ompdesk 接下来使用哪个 checkout。
 它会影响：
 
 - 从侧边栏新建的会话。
-- 左侧 Explorer 浏览的文件。
+- 右侧文件面板中的 Explorer 浏览的文件。
 - 从 Explorer 插入到输入框里的文件路径。
 
 已有会话仍然按同一个 project root 分组。点击一个已有会话时，侧边栏会回到这个会话原本所在的 checkout。
