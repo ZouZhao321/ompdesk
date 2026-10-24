@@ -5,7 +5,7 @@ import type { SessionInfo } from "@/lib/types";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
-import { countRunningSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
+import { countSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { useI18n } from "@/hooks/useI18n";
 import { DirectoryPicker } from "./DirectoryPicker";
@@ -487,9 +487,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
   const [activitySnapshot, setActivitySnapshot] = useState<{
     runningSessionIds?: string[];
+    waitingSessionIds?: string[];
     sessionIdsByRuntimeId?: Record<string, string>;
   }>({});
   const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
+  // 运行中但停在提问表单上、等待用户作答的会话。
+  const waitingSessionIds = useMemo(() => new Set(activitySnapshot.waitingSessionIds ?? []), [activitySnapshot]);
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousActivitySnapshotRef = useRef(activitySnapshot);
   const listedRuntimeIdsRef = useRef<Record<string, string>>({});
@@ -512,13 +515,17 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[]; sessionIdsByRuntimeId?: Record<string, string> };
+      const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[]; waitingSessionIds?: string[]; sessionIdsByRuntimeId?: Record<string, string> };
       listedRuntimeIdsRef.current = data.sessionIdsByRuntimeId ?? {};
       setAllSessions(data.sessions);
       // Treat the fetched running set as an initial fallback only. Once the
       // lightweight poll is live, a slow session-list fetch cannot overwrite it.
       if (!runningPollAuthoritativeRef.current) {
-        setActivitySnapshot({ runningSessionIds: data.runningSessionIds, sessionIdsByRuntimeId: data.sessionIdsByRuntimeId });
+        setActivitySnapshot({
+          runningSessionIds: data.runningSessionIds,
+          waitingSessionIds: data.waitingSessionIds,
+          sessionIdsByRuntimeId: data.sessionIdsByRuntimeId,
+        });
       }
       // Drop unread markers for sessions that no longer exist (e.g. deleted).
       const existingIds = new Set(data.sessions.map((s) => s.id));
@@ -594,10 +601,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           signal: current.signal,
         });
         if (!res.ok) return;
-        const data = await res.json() as { runningSessionIds?: string[]; sessionIdsByRuntimeId?: Record<string, string> };
+        const data = await res.json() as { runningSessionIds?: string[]; waitingSessionIds?: string[]; sessionIdsByRuntimeId?: Record<string, string> };
         if (stopped || controller !== current) return;
         runningPollAuthoritativeRef.current = true;
-        setActivitySnapshot({ runningSessionIds: data.runningSessionIds, sessionIdsByRuntimeId: data.sessionIdsByRuntimeId });
+        setActivitySnapshot({
+          runningSessionIds: data.runningSessionIds,
+          waitingSessionIds: data.waitingSessionIds,
+          sessionIdsByRuntimeId: data.sessionIdsByRuntimeId,
+        });
       } catch {
         // Keep the last known state; the next visible-tab poll retries.
       } finally {
@@ -944,26 +955,32 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   }
   // 每个工作区的运行中会话数只汇总一次，项目行与移除前确认共用这一份快照。
   const runningByWorkspace = useMemo(
-    () => countRunningSessionsByWorkspace(sessionsForDisplay, runningSessionIds),
+    () => countSessionsByWorkspace(sessionsForDisplay, runningSessionIds),
     [sessionsForDisplay, runningSessionIds],
   );
+  const waitingByWorkspace = useMemo(
+    () => countSessionsByWorkspace(sessionsForDisplay, waitingSessionIds),
+    [sessionsForDisplay, waitingSessionIds],
+  );
 
-  // Per-project activity counts (running / unread) for the project rows, keyed
-  // by the shared workspace key rule. Unread stays local to the sidebar.
+  // Per-project activity counts for the project rows, keyed by the shared
+  // workspace key rule. `running` counts only sessions that are working (the
+  // waiting ones are reported separately), `unread` stays local to the sidebar.
   const projectActivity = useMemo(() => {
-    const counts = new Map<string, { running: number; unread: number }>();
+    const counts = new Map<string, { running: number; waiting: number; unread: number }>();
     for (const session of sessionsForDisplay) {
       const key = workspaceKeyOf(session);
       if (!key) continue;
       let entry = counts.get(key);
       if (!entry) {
-        entry = { running: runningByWorkspace.get(key) ?? 0, unread: 0 };
+        const waiting = waitingByWorkspace.get(key) ?? 0;
+        entry = { running: Math.max(0, (runningByWorkspace.get(key) ?? 0) - waiting), waiting, unread: 0 };
         counts.set(key, entry);
       }
       if (unreadSessionIds.has(session.id)) entry.unread++;
     }
     return counts;
-  }, [sessionsForDisplay, runningByWorkspace, unreadSessionIds]);
+  }, [sessionsForDisplay, runningByWorkspace, waitingByWorkspace, unreadSessionIds]);
 
   const executeRemoveProject = (project: string) => {
     const key = normalizeProjectKey(project);
@@ -982,7 +999,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   // 移除前先看运行快照：有会话仍在运行就只弹确认条，不改变任何状态。
   const requestRemoveProject = (project: string) => {
-    const running = projectActivity.get(project)?.running ?? 0;
+    // 等待回答的会话同样在运行，移除前必须一起确认。
+    const running = runningByWorkspace.get(project) ?? 0;
     if (running > 0) {
       setRemoveProjectConfirm({ project, running });
       return;
@@ -1794,6 +1812,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                       node={node}
                       selectedSessionId={selectedSessionId}
                       runningSessionIds={runningSessionIds}
+                      waitingSessionIds={waitingSessionIds}
                       unreadSessionIds={unreadSessionIds}
                       onSelectSession={handleSelectSessionFromList}
                       onRenamed={loadSessions}
@@ -2085,6 +2104,7 @@ function SessionTreeItem({
   node,
   selectedSessionId,
   runningSessionIds,
+  waitingSessionIds,
   unreadSessionIds,
   onSelectSession,
   onRenamed,
@@ -2095,6 +2115,7 @@ function SessionTreeItem({
   node: SessionTreeNode;
   selectedSessionId: string | null;
   runningSessionIds: Set<string>;
+  waitingSessionIds: Set<string>;
   unreadSessionIds: Set<string>;
   onSelectSession: (s: SessionInfo) => void;
   onRenamed?: () => void;
@@ -2123,6 +2144,7 @@ function SessionTreeItem({
           session={node.session}
           isSelected={node.session.id === selectedSessionId}
           isRunning={runningSessionIds.has(node.session.id)}
+          isWaiting={waitingSessionIds.has(node.session.id)}
           isUnread={unreadSessionIds.has(node.session.id)}
           onClick={() => onSelectSession(node.session)}
           onRenamed={onRenamed}
@@ -2142,6 +2164,7 @@ function SessionTreeItem({
               node={child}
               selectedSessionId={selectedSessionId}
               runningSessionIds={runningSessionIds}
+              waitingSessionIds={waitingSessionIds}
               unreadSessionIds={unreadSessionIds}
               onSelectSession={onSelectSession}
               onRenamed={onRenamed}
@@ -2194,6 +2217,38 @@ function RunningSessionIndicator() {
   );
 }
 
+/**
+ * 黄灯：会话仍在运行，但停在提问表单上等待用户作答。
+ *
+ * 用静态圆点加呼吸光晕区别于运行中的旋转弧线，两者一眼可分。
+ */
+function WaitingSessionIndicator() {
+  const { t } = useI18n();
+  return (
+    <span
+      title={t("sidebar.agentWaitingForInput")}
+      aria-label={t("sidebar.agentWaitingForInput")}
+      style={{
+        width: 14,
+        height: 14,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        color: "var(--warning)",
+      }}
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
+        <circle cx="7" cy="7" r="4" fill="currentColor" />
+        <circle cx="7" cy="7" r="4" stroke="currentColor" strokeWidth="1.2" opacity="0.5">
+          <animate attributeName="r" values="4;6.2;4" dur="1.8s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.5;0;0.5" dur="1.8s" repeatCount="indefinite" />
+        </circle>
+      </svg>
+    </span>
+  );
+}
+
 function UnreadSessionIndicator() {
   const { t } = useI18n();
   return (
@@ -2228,10 +2283,10 @@ function UnreadSessionIndicator() {
  * the per-session indicators so the two stay visually consistent.
  */
 function showProjectActivity(
-  activity: { running: number; unread: number } | undefined,
+  activity: { running: number; waiting: number; unread: number } | undefined,
   t: (key: string) => string,
 ): ReactNode {
-  if (!activity || (activity.running === 0 && activity.unread === 0)) return null;
+  if (!activity || (activity.running === 0 && activity.waiting === 0 && activity.unread === 0)) return null;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}>
       {activity.running > 0 && (
@@ -2247,6 +2302,18 @@ function showProjectActivity(
             </g>
           </svg>
           {activity.running}
+        </span>
+      )}
+      {activity.waiting > 0 && (
+        <span
+          title={t("sidebar.agentWaitingForInput")}
+          aria-label={`${t("sidebar.agentWaitingForInput")} (${activity.waiting})`}
+          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--warning)", fontSize: 10, fontFamily: "var(--font-mono)" }}
+        >
+          <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
+            <circle cx="7" cy="7" r="4" fill="currentColor" />
+          </svg>
+          {activity.waiting}
         </span>
       )}
       {activity.unread > 0 && (
@@ -2267,6 +2334,7 @@ function SessionItem({
   session,
   isSelected,
   isRunning,
+  isWaiting,
   isUnread,
   onClick,
   onRenamed,
@@ -2280,6 +2348,8 @@ function SessionItem({
   session: SessionInfo;
   isSelected: boolean;
   isRunning?: boolean;
+  /** 运行中但停在提问表单上，等待用户作答。 */
+  isWaiting?: boolean;
   isUnread?: boolean;
   onClick: () => void;
   onRenamed?: () => void;
@@ -2524,7 +2594,7 @@ function SessionItem({
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {title}
             </span>
-            {isRunning && <RunningSessionIndicator />}
+            {isWaiting ? <WaitingSessionIndicator /> : isRunning && <RunningSessionIndicator />}
             {!isRunning && isUnread && <UnreadSessionIndicator />}
             {session.worktreeBranch && (
               <span title={t("sidebar.worktreePath", { path: session.cwd })} style={{ display: "flex", color: "var(--accent)", flexShrink: 0 }}>
