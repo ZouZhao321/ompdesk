@@ -91,15 +91,6 @@ export function clearLastOpen(
   }
 }
 
-/** Workspace identity for a session: resolved project root when known, else cwd. */
-export function workspaceKeyOf(session: {
-  cwd: string;
-  projectRoot?: string | null;
-}): string {
-  return session.projectRoot ?? session.cwd;
-}
-
-
 // A single per-tab continuation survives refresh without aliasing history in
 // other tabs. Explicit session selection clears it before opening history.
 const CONTINUATION_KEY = "pi-web:active-runtime";
