@@ -1496,6 +1496,16 @@ span.linenumber {
   .sidebar-session-row {
     min-height: 44px;
   }
+  /* 会话行的悬停操作（重命名/归档/删除）与归档行的恢复按钮在触屏上补足命中区，
+     svg 图标尺寸保持不变；触屏没有悬停态，选中行的操作由组件按 isSelected 常驻。 */
+  .sidebar-session-action-button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .sidebar-session-restore-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
   .sidebar-project-row {
     min-height: 44px !important;
   }

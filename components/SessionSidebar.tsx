@@ -8,6 +8,7 @@ import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { countRunningSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { OmpWordmark } from "./OmpWordmark";
@@ -2073,6 +2074,7 @@ function ArchivedSessionsSection({
                   {title}
                 </div>
                 <button
+                  className="sidebar-session-restore-button"
                   onClick={(e) => restore(e, s.id)}
                   title={t("sidebar.restore")}
                   style={{
@@ -2304,6 +2306,7 @@ function SessionItem({
   onToggleCollapse?: () => void;
 }) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [hovered, setHovered] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -2572,10 +2575,11 @@ function SessionItem({
             </button>
           )}
 
-          {/* Action buttons — shown on hover */}
-          {hovered && !session.transient && (
+          {/* Action buttons — hover on desktop, also while selected on touch */}
+          {(hovered || (isMobile && isSelected)) && !session.transient && (
             <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
               <button
+                className="sidebar-session-action-button"
                 onClick={startRename}
                 title={t("sidebar.rename")}
                 style={{
@@ -2602,6 +2606,7 @@ function SessionItem({
                 </svg>
               </button>
               <button
+                className="sidebar-session-action-button"
                 onClick={performArchive}
                 title={t("sidebar.archive")}
                 style={{
@@ -2628,6 +2633,7 @@ function SessionItem({
                 </svg>
               </button>
               <button
+                className="sidebar-session-action-button"
                 onClick={handleDeleteClick}
                 title={t("sidebar.deleteWithShiftClick")}
                 style={{
