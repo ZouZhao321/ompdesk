@@ -161,14 +161,14 @@ Requests to loopback addresses are never proxied, so a local provider (Ollama, L
 - **Route by role**: assign and switch models per scope of work — the roles omp already uses for subagents, plan mode, and commits.
 - **Try different directions safely**: continue from an earlier message or fork a session into a separate route.
 - **Work across branches**: switch Git worktrees from the sidebar so new sessions and the Explorer follow the checkout you choose.
-- **Chat beside the project**: browse files on the left and preview source, docs, images, audio, and PDFs on the right while the agent works.
+- **Chat beside the project**: browse the project's files in the right panel, then preview source, docs, images, audio, and PDFs in the same panel while the agent works.
 - **See session state clearly**: context usage, cost, and compaction state are visible from the top bar.
 - **Configure less from the terminal**: manage providers, logins/API keys, model tests, plugins, and skill switches from the web UI.
 - **Use the interface in your language**: switch between the supported UI languages from the top bar.
 
 ## Screenshots
 
-**Session browsing + file explorer** — projects and past sessions on the left, the project's real file tree underneath, ready to preview or attach to a message.
+**Session browsing** — projects and past sessions on the left, with the file tree for the active project.
 
 ![Sidebar with session browsing and the file explorer](./docs/screenshots/01-sidebar-and-explorer.png)
 
@@ -307,7 +307,7 @@ app/
     skills/         # skill listing, search, install, enable/disable
 components/
   AppShell.tsx        # main layout, URL state, top panels, file tabs
-  SessionSidebar.tsx  # project selector, session tree, Explorer
+  SessionSidebar.tsx  # project selector, session tree
   DirectoryPicker.tsx # browsable and editable working-directory picker
   ChatWindow.tsx      # messages, SSE, image drag/drop, minimap
   ChatInput.tsx       # input bar, model/role/tools/thinking/compact/slash controls
@@ -316,6 +316,7 @@ components/
   ModelRolesPanel.tsx # per-role model assignment
   SkillsConfig.tsx    # skill management panel
   FileExplorer.tsx    # file tree
+  FileExplorerPanel.tsx # explorer section inside the right file panel
   FileViewer.tsx      # source, diff, image, audio, PDF, DOCX preview
 lib/
   directory-browser.ts # directory normalization and safe listing helpers

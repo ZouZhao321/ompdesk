@@ -683,7 +683,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       setUploadError(null);
     }
 
-    setLoading(cwdChanged);
+    if (cwdChanged) setLoading(true);
     setError(null);
     let cancelled = false;
     fetchEntries(cwd)
