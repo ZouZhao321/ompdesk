@@ -318,7 +318,10 @@ export class AgentSessionWrapper {
     public readonly inner: AgentSessionLike,
     eventBus: ConstructorParameters<typeof RpcSubagentRegistry>[0],
   ) {
-    this.runLog = new AgentRunTracker({ sessionId: () => this.inner.sessionId });
+    this.runLog = new AgentRunTracker({
+      sessionId: () => this.inner.sessionId,
+      contextTokens: () => this.inner.getContextUsage?.()?.tokens,
+    });
     this.subagents = new RpcSubagentRegistry(eventBus, (frame) => {
       const event = frame as unknown as AgentEvent;
       this.rememberSubagentFrame(event);
