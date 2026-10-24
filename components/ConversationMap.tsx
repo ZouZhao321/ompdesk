@@ -481,7 +481,7 @@ export function ConversationMap({ sessionId, runtimeId, currentLeafId, onClose, 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--text-dim)" }}>
               <span>#{selectedNode.turnIndex + 1}</span>
               {selectedNode.sessionTitle && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedNode.sessionTitle}</span>}
-              <button type="button" style={{ ...toolbarButtonStyle, marginLeft: "auto" }} onClick={() => setSelectedId(null)}>×</button>
+              <button type="button" aria-label={t("map.close")} title={t("map.close")} style={{ ...toolbarButtonStyle, marginLeft: "auto" }} onClick={() => setSelectedId(null)}>×</button>
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 10 }}>
               {detailLoading && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("map.loadingTurn")}</div>}

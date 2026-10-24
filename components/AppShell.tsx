@@ -1258,6 +1258,7 @@ export function AppShell() {
                 onClick={() => setMapOpen((open) => !open)}
                 title={translate("map.title")}
                 aria-pressed={mapOpen}
+                aria-label={translate("map.title")}
                 style={{
                   display: "flex",
                   alignItems: "center",
