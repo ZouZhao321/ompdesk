@@ -309,9 +309,10 @@ const SENSITIVE_SEGMENTS: Record<string, true> = {
 };
 
 /**
- * Numeric usage counters: a qualified `token` segment in these names counts
- * model tokens, not credentials. Compared on the joined lowercase name so the
- * camelCase and separator spellings agree.
+ * A trailing `token` segment marks a credential (`GITHUB_TOKEN`, `idToken`,
+ * `oauthToken`). Plural `tokens` names in this codebase report usage
+ * (`totalTokens`, `inputTokens`), so only the bare form is a credential; that
+ * keeps counters while still rejecting every provider-qualified token name.
  */
 const SENSITIVE_PAIRS: Record<string, true> = {
   apikey: true,
@@ -323,15 +324,9 @@ const SENSITIVE_PAIRS: Record<string, true> = {
   setcookie: true,
 };
 
-const TOKEN_COUNTER_KEYS: Record<string, true> = {
-  inputtokens: true,
-  outputtokens: true,
-  cachedtokens: true,
-  tokencount: true,
-  tokensbefore: true,
-  tokensafter: true,
-  tokensused: true,
-  inputtokencount: true,
+const TOKEN_CREDENTIAL_KEYS: Record<string, true> = {
+  token: true,
+  tokens: true,
 };
 
 function keySegments(key: string): string[] {
@@ -348,10 +343,8 @@ export function isSensitiveLogKey(key: string): boolean {
   if (segments.some((segment) => SENSITIVE_SEGMENTS[segment])) return true;
 
   const joined = segments.join("");
-  if (TOKEN_COUNTER_KEYS[joined]) return false;
-  // Any other name carrying a `token` segment is credential-shaped, including
-  // provider-qualified forms such as `GITHUB_TOKEN` or `oauthToken`.
-  if (segments.includes("token") || segments.includes("tokens")) return true;
+  const last = segments[segments.length - 1];
+  if (last === "token" || TOKEN_CREDENTIAL_KEYS[joined]) return true;
 
   for (let index = 0; index < segments.length - 1; index += 1) {
     const pair = `${segments[index]}${segments[index + 1]}`;
