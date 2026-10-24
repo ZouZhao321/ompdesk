@@ -1,0 +1,155 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import type { LogEntry, LogFileInfo, LogLevelName, LogsResponse } from "@/lib/api-types";
+import {
+  buildLogsRequest,
+  mergeLogEntries,
+  shouldPollLogs,
+} from "@/lib/logs-view";
+import { LogsPanelView } from "./LogsPanelView";
+import styles from "./LogsPanel.module.css";
+
+/**
+ * Read-only log viewer for the current server process.
+ *
+ * Polling only advances a raw byte cursor, so new lines arrive without
+ * re-reading the file; the panel never offers delete, clear, or a level
+ * mutation. A hidden tab or the pause button stops the timer entirely.
+ */
+
+const POLL_INTERVAL_MS = 2_000;
+const KEYWORD_DEBOUNCE_MS = 300;
+
+export interface LogsClientInput {
+  file: string | null;
+  cursor: number;
+  level: LogLevelName | "all";
+  keyword: string;
+}
+
+export type LogsClient = (input: LogsClientInput) => Promise<LogsResponse>;
+
+const fetchLogsPage: LogsClient = async (input) => {
+  const response = await fetch(
+    buildLogsRequest({ ...input, limit: 200 }),
+    { cache: "no-store" },
+  );
+  const data = await response.json() as LogsResponse & { error?: string };
+  if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+  return data;
+};
+
+export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
+  const [files, setFiles] = useState<LogFileInfo[]>([]);
+  const [file, setFile] = useState<LogFileInfo | null>(null);
+  const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [level, setLevel] = useState<LogLevelName | "all">("all");
+  const [keyword, setKeyword] = useState("");
+  const [debouncedKeyword, setDebouncedKeyword] = useState("");
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [follow, setFollow] = useState(true);
+  const [paused, setPaused] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedOffset, setExpandedOffset] = useState<number | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const cursor = useRef(0);
+  const generation = useRef(0);
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const update = () => setHidden(document.visibilityState === "hidden");
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedKeyword(keyword.trim()), KEYWORD_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [keyword]);
+
+  useEffect(() => {
+    generation.current += 1;
+    cursor.current = 0;
+    setEntries([]);
+    setFile(null);
+    setExpandedOffset(null);
+    setError(null);
+    setLoading(true);
+  }, [selectedFile, level, debouncedKeyword, refreshToken]);
+
+  const active = shouldPollLogs(hidden, paused);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const currentGeneration = generation.current;
+
+    const tick = async () => {
+      try {
+        const page = await client({
+          file: selectedFile,
+          cursor: cursor.current,
+          level,
+          keyword: debouncedKeyword,
+        });
+        if (cancelled || currentGeneration !== generation.current) return;
+        cursor.current = page.nextCursor;
+        setFiles(page.files);
+        setFile(page.file);
+        setEntries((previous) => mergeLogEntries(previous, page.entries));
+        setError(null);
+      } catch (caught) {
+        if (cancelled || currentGeneration !== generation.current) return;
+        setError(caught instanceof Error ? caught.message : String(caught));
+      } finally {
+        if (!cancelled && currentGeneration === generation.current) {
+          setLoading(false);
+          timer = setTimeout(() => void tick(), POLL_INTERVAL_MS);
+        }
+      }
+    };
+
+    void tick();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [active, client, debouncedKeyword, level, selectedFile]);
+
+  useEffect(() => {
+    if (!follow || paused) return;
+    const node = listRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [entries.length, follow, paused]);
+
+  return (
+    <LogsPanelView
+      styles={styles}
+      files={files}
+      file={file}
+      entries={entries}
+      level={level}
+      keyword={keyword}
+      follow={follow}
+      paused={paused}
+      loading={loading}
+      error={error}
+      selectedFile={selectedFile}
+      expandedOffset={expandedOffset}
+      listRef={listRef}
+      onLevelChange={(next) => { setPaused(false); setLevel(next); }}
+      onKeywordChange={(value) => { setPaused(false); setKeyword(value); }}
+      onFileChange={(next) => { setPaused(false); setSelectedFile(next); }}
+      onFollowChange={setFollow}
+      onTogglePause={() => setPaused((value) => !value)}
+      onRefresh={() => { setPaused(false); setRefreshToken((value) => value + 1); }}
+      onToggleEntry={(offset) => setExpandedOffset((value) => value === offset ? null : offset)}
+    />
+  );
+}
