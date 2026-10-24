@@ -119,7 +119,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       controller = new AbortController();
       const timeout = setTimeout(() => controller?.abort(), REQUEST_TIMEOUT_MS);
       let resetForFile = false;
-      let catchingUp = false;
+      let pageTruncated = false;
       let advanced = false;
       try {
         const previousCursor = cursor.current;
@@ -152,9 +152,9 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
           cursor.current = page.nextCursor;
           advanced = page.nextCursor > previousCursor;
           setEntries((previous) => mergeLogEntries(previous, page.entries));
-          catchingUp = page.truncated;
+          pageTruncated = page.truncated;
         }
-        setCatchingUp(catchingUp);
+        setCatchingUp(pageTruncated);
         setFiles(page.files);
         setFile(page.file);
         setError(null);
@@ -170,7 +170,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
           // cursor actually moved: a stalled server must not spin at 0ms.
           timer = setTimeout(
             () => void tick(),
-            resetForFile || (catchingUp && advanced) ? CATCH_UP_DELAY_MS : POLL_INTERVAL_MS,
+            resetForFile || (pageTruncated && advanced) ? CATCH_UP_DELAY_MS : POLL_INTERVAL_MS,
           );
         }
       }
