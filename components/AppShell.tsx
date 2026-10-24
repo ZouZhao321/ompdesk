@@ -35,7 +35,10 @@ import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
   getSidebarMaxWidth,
+  RIGHT_PANEL_EXPLORER_MIN_HEIGHT,
+  RIGHT_PANEL_EXPLORER_SHARE_PERCENT,
   RIGHT_PANEL_FALLBACK_WIDTH,
+  RIGHT_PANEL_HEADER_RESERVED_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   SIDEBAR_DEFAULT_WIDTH,
@@ -1714,15 +1717,17 @@ export function AppShell() {
             </div>
           )}
           {/* The fixed panel toggle sits in this corner. */}
-          <div style={{ width: 40, flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ width: RIGHT_PANEL_HEADER_RESERVED_WIDTH, flexShrink: 0 }} aria-hidden="true" />
         </div>
 
         {rightPanelOpen && activeCwd && (
           <div style={{
             display: "flex",
             flexDirection: "column",
-            flex: explorerOpen ? (activeFileTab ? "0 0 45%" : "1 1 auto") : "0 0 auto",
-            minHeight: explorerOpen && activeFileTab ? 140 : 0,
+            flex: explorerOpen
+              ? (activeFileTab ? `0 0 ${RIGHT_PANEL_EXPLORER_SHARE_PERCENT}%` : "1 1 auto")
+              : "0 0 auto",
+            minHeight: explorerOpen && activeFileTab ? RIGHT_PANEL_EXPLORER_MIN_HEIGHT : 0,
             overflow: "hidden",
             borderBottom: activeFileTab ? "1px solid var(--border)" : "none",
           }}>
