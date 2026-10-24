@@ -18,12 +18,14 @@ export const SSE_HEARTBEAT_MS = 30_000;
 type SseCloseReason =
   | "cancelled"
   | "aborted"
+  | "connect_failed"
   | "controller_closed"
   | "heartbeat_failed";
 
 const CLOSE_LEVEL: Record<SseCloseReason, LogLevel> = {
   cancelled: "info",
   aborted: "info",
+  connect_failed: "warn",
   controller_closed: "warn",
   heartbeat_failed: "warn",
 };
@@ -52,7 +54,6 @@ function correlationFields(fields: SseLogFields): Record<string, unknown> {
 }
 
 interface SseLifecycle {
-  readonly closed: boolean;
   /** Write `http.stream.open` once. */
   open(): void;
   /** Write `http.stream.close` once; later calls are ignored and report `false`. */
@@ -73,9 +74,6 @@ function createSseLifecycle(
   let closed = false;
 
   return {
-    get closed() {
-      return closed;
-    },
     open() {
       logEvent("info", "http", "http.stream.open", correlationFields(fields));
     },
@@ -105,12 +103,16 @@ export interface SseStreamOptions {
   sessionId?: string;
   runtimeId?: string;
   /**
-   * Emits the initial frames and wires the subscriptions, returning their
-   * unsubscribe function. Runs after `http.stream.open`; the route keeps its
-   * existing frame order (connected-first for agent events, subscribe-first for
-   * running sessions).
+   * Emits the initial frames and wires the subscriptions, registering their
+   * cleanup with `registerCleanup` instead of returning it: a `connect` that
+   * subscribes and then throws must not leak the listener. Runs after
+   * `http.stream.open`; the route keeps its existing frame order
+   * (connected-first for agent events, subscribe-first for running sessions).
    */
-  connect: (send: (data: unknown) => boolean) => () => void;
+  connect: (
+    send: (data: unknown) => boolean,
+    registerCleanup: (cleanup: () => void) => void,
+  ) => void;
   heartbeatMs?: number;
   now?: () => number;
   /** Starts the heartbeat; returns the function that stops it. Tests pass a manual timer. */
@@ -151,18 +153,31 @@ export function openSseStream(options: SseStreamOptions): SseStreamSession {
   );
   lifecycle.open();
 
-  // Filled in as the connection is wired; `stop` can run before either exists.
+  // Filled in as the connection is wired; `stop` can run before any of it exists.
   const connection: {
-    unsubscribe?: () => void;
+    cleanups: Array<() => void>;
     stopHeartbeat?: () => void;
-  } = {};
+    abortHandler?: () => void;
+  } = { cleanups: [] };
   let finished = false;
 
   const stop = (reason: SseCloseReason, closeController: boolean) => {
     if (finished) return;
     finished = true;
     connection.stopHeartbeat?.();
-    connection.unsubscribe?.();
+    connection.stopHeartbeat = undefined;
+    if (connection.abortHandler) {
+      request.signal?.removeEventListener("abort", connection.abortHandler);
+      connection.abortHandler = undefined;
+    }
+    for (const cleanup of connection.cleanups.splice(0)) {
+      try {
+        cleanup();
+      } catch {
+        // Cleanup is a rollback path; one failing unsubscribe must not keep
+        // the rest of the wiring alive or mask the close reason.
+      }
+    }
     if (closeController) {
       try {
         controller.close();
@@ -188,17 +203,24 @@ export function openSseStream(options: SseStreamOptions): SseStreamSession {
 
   const send = (data: unknown) => write(`data: ${JSON.stringify(data)}\n\n`, "controller_closed");
 
+  if (request.signal?.aborted) {
+    // The request was already aborted, so no `abort` event will fire later;
+    // wiring subscriptions now would keep them alive with no way to end.
+    stop("aborted", true);
+    return { cancel: () => stop("cancelled", false) };
+  }
+
   try {
-    connection.unsubscribe = connect(send);
+    connect(send, (cleanup) => connection.cleanups.push(cleanup));
   } catch (error) {
-    // `connect` may have written nothing yet or already subscribed; either way
-    // the stream is unusable, so record the close before surfacing the failure.
-    stop("controller_closed", true);
+    // `connect` may have registered subscriptions before failing; `stop` runs
+    // those cleanups, records the real reason, and the caller still sees the
+    // original failure.
+    stop("connect_failed", true);
     throw error;
   }
   if (finished) {
-    // `connect` already failed to write: drop the subscription it just created.
-    connection.unsubscribe();
+    // `connect` already failed to write: `stop` has dropped its subscriptions.
     return { cancel: () => stop("cancelled", false) };
   }
 
@@ -206,7 +228,11 @@ export function openSseStream(options: SseStreamOptions): SseStreamSession {
     write(":\n\n", "heartbeat_failed");
   }, heartbeatMs);
 
-  request.signal?.addEventListener("abort", () => stop("aborted", true));
+  const onAbort = () => stop("aborted", true);
+  connection.abortHandler = onAbort;
+  request.signal?.addEventListener("abort", onAbort);
+  // The signal can abort between the check above and the listener being added.
+  if (request.signal?.aborted) stop("aborted", true);
 
   return { cancel: () => stop("cancelled", false) };
 }
