@@ -87,6 +87,7 @@ app/api/
   sessions/route.ts               GET  列出全部会话
   sessions/[id]/route.ts          GET/PATCH/DELETE 会话
   sessions/[id]/context/route.ts  GET ?leafId= 指定叶节点的上下文
+  sessions/[id]/map/route.ts      GET 会话地图（轮次树）；?turn= 取单轮全文
   sessions/[id]/export/route.ts   GET 导出会话 HTML
   agent/new/route.ts              POST { cwd, message, toolNames?, provider?, modelId? }
   agent/[id]/route.ts             GET 状态 | POST 任意命令
@@ -120,6 +121,8 @@ lib/
   draft-store.ts       本地草稿持久化辅助
   file-access.ts       /api/files 与 worktree 允许的文件根
   file-paths.ts        客户端与服务端的路径编码辅助
+  map-layout.ts        按轮树的布局计算（lane + 主干优先）
+  map-types.ts         会话地图的共享类型
   markdown.ts          共享 markdown 辅助
   model-roles.ts       omp 的模型角色，供浏览器读写
   model-scope.ts       UI 与启动共享的 enabledModels 解析
@@ -129,6 +132,7 @@ lib/
   project-trust.ts     控制项目可执行资源的开关
   rpc-manager.ts       AgentSessionWrapper + 注册表 + startRpcSession
   session-reader.ts    会话列表 + 路径缓存 + buildSessionContext 适配器
+  session-map.ts       .jsonl → 轮次树，并合并 fork 文件
   session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
   session-title.ts     omp 自带标题生成器的薄封装
   tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
@@ -144,6 +148,7 @@ components/
   ChatInput.tsx       输入栏 + 模型/角色/思考/tools/compact 控件
   MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
   BranchNavigator.tsx 会话内分支切换器
+  ConversationMap.tsx 会话地图：卡片、连线、缩放、分叉与切换
   ChatMinimap.tsx     消息列表旁的滚动缩略图
   MarkdownBody.tsx    markdown 渲染器
   ModelsConfig.tsx    提供方与认证弹窗（从侧栏底部打开）
@@ -210,6 +215,21 @@ omp 按工作范围分配模型（`default`、`smol`、`slow`、`vision`、`plan
 - **会话内分支**（Continue 按钮 / BranchNavigator）：在同一文件内调用
   `navigate_tree`。多个条目共享同一个 `parentId`，切换时调用
   `/api/sessions/[id]/context?leafId=`。
+
+### 会话地图（`components/ConversationMap.tsx`）
+顶栏「地图」把当前会话画成一棵按轮聚合的树。一个节点是一轮用户提问，连同其后的
+助手回答与工具调用；边来自条目的 `parentId`。fork 文件逐字复制父会话的条目，
+id 相同，所以跨文件合并时主干只会出现一次，分支从切点长出去。
+
+- 数据每次从 `.jsonl` 现算（`lib/session-map.ts`，按 mtime + 大小缓存），不落
+  副本；只有拖动过的卡片坐标写 `localStorage`。
+- 子代理会话（位于以父文件名命名的子目录下）不进图，否则单个父会话最多 84 条边。
+- 点击卡片只选中；「切到这条线」走现有 `navigate_tree` + `?leafId=` 路径，
+  「从这里分叉」发送 `{ type: "fork", entryId, includeEntry: true }`。
+- `includeEntry` 让 fork 切在条目本身之后（保留整轮回答），普通 Fork 按钮仍切在
+  选中条目的前一个节点。
+- 切点取这一轮最后一个「没有未完成工具调用」的条目：assistant 文本或配对的
+  toolResult，避免新会话带着悬空 toolCall 开始。
 
 ### 会话文件可以整体重写
 头部的 `parentSession` **只是显示元数据**，对聊天内容没有影响。整文件
