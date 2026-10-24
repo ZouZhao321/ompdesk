@@ -2,6 +2,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import pkg from "../package.json";
 import { configureLogging, logEvent } from "./logging";
+import { importRuntimeModule } from "./runtime-import";
 
 /**
  * Server bootstrap logging: apply the transport policy once, then write the
@@ -15,10 +16,6 @@ interface AuthStoreModule {
   getWebAuthStatus(): { enabled: boolean };
 }
 
-const importRuntimeModule = Function("specifier", "return import(specifier)") as (
-  specifier: string,
-) => Promise<AuthStoreModule>;
-
 /**
  * `bin/web-auth-store.js` is plain CommonJS shared with the launcher. A static
  * import would make Next's instrumentation webpack pass bundle it and reject
@@ -30,7 +27,7 @@ async function detectAuthEnabled(): Promise<boolean> {
     // `pathToFileURL` handles drive letters, spaces, `#`, and `?`; a hand-built
     // `file://` URL would misparse every one of them on Windows.
     const moduleUrl = pathToFileURL(path.join(process.cwd(), "bin", "web-auth-store.js"));
-    const authStore = await importRuntimeModule(moduleUrl.href);
+    const authStore = await importRuntimeModule<AuthStoreModule>(moduleUrl.href);
     return authStore.getWebAuthStatus().enabled;
   } catch (error) {
     // The fallback is only a guess: say so, because a wrong `authEnabled`
@@ -74,8 +71,10 @@ export function resolveListenAddress(
   env: NodeJS.ProcessEnv = process.env,
   argv: string[] = process.argv,
 ): string {
-  const host = env.OMPDESK_HOSTNAME ?? readArg(argv, "--hostname", "-H") ?? "127.0.0.1";
-  const port = env.PORT ?? readArg(argv, "--port", "-p") ?? "30141";
+  // An empty environment variable means "not set", not a host or port of "";
+  // `??` would build `http://:30141` and record it as the listen address.
+  const host = env.OMPDESK_HOSTNAME?.trim() || readArg(argv, "--hostname", "-H") || "127.0.0.1";
+  const port = env.PORT?.trim() || readArg(argv, "--port", "-p") || "30141";
   return `http://${formatHost(host)}:${port}`;
 }
 
