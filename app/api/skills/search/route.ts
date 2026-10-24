@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { runNpx, getSafeNpxEnv, redactNpxOutput } from "@/lib/npx";
 import type { SkillSearchResult } from "@/lib/api-types";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -90,7 +91,7 @@ function parseInstallCount(installs: string): number {
 }
 
 // POST /api/skills/search  body: { query: string, limit?: number }
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/skills/search", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -129,4 +130,4 @@ export async function POST(req: Request) {
       error: redactNpxOutput(err.message ?? "Skill search failed").slice(-500),
     }, { status: 500 });
   }
-}
+});

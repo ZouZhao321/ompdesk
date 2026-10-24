@@ -84,7 +84,7 @@ async function getRouteHandler(req: Request) {
   return NextResponse.json(readModelsConfig());
 }
 
-export async function PUT(req: Request) {
+export const PUT = withRequestLog("/api/models-config", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -113,4 +113,4 @@ export async function PUT(req: Request) {
   } catch {
     return NextResponse.json({ error: "Unable to save models config" }, { status: 500 });
   }
-}
+});

@@ -5,6 +5,7 @@ import {
   getWebAuthStatus,
   issueRecoveryCode,
 } from "@/bin/web-auth-store.js";
+import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType } from "@/lib/request-security";
 import { logEvent } from "@/lib/logging";
 import { REQUEST_ID_HEADER } from "@/lib/request-headers";
@@ -53,7 +54,7 @@ function announceRecoveryCode(code: string, expiresAt: number): void {
   ].join("\n"));
 }
 
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/web-access/recovery", async (req: Request) => {
   if (!hasJsonContentType(req)) {
     return NextResponse.json({ error: "Expected a JSON body" }, { status: 415 });
   }
@@ -146,4 +147,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-}
+});

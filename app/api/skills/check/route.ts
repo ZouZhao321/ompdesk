@@ -3,11 +3,12 @@ import type { SkillInstallScope } from "@/lib/api-types";
 import { checkSkillUpdates } from "@/lib/skill-updates";
 import { loadSkillsWithInstallInfo } from "@/lib/skills-service";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
+import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/skills/check", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -56,4 +57,4 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-}
+});

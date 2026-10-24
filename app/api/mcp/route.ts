@@ -240,7 +240,7 @@ async function getRouteHandler(req: Request) {
   }
 }
 
-export async function PATCH(req: Request) {
+export const PATCH = withRequestLog("/api/mcp", async (req: Request) => {
   try {
     const cwd = await validatedCwd(req);
     const body = await req.json() as {
@@ -274,9 +274,9 @@ export async function PATCH(req: Request) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: message === "Access denied" ? 403 : 400 });
   }
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = withRequestLog("/api/mcp", async (req: Request) => {
   try {
     const cwd = await validatedCwd(req);
     const body = await req.json() as { scope?: "user" | "project"; servers?: McpServerEntry[] };
@@ -310,4 +310,4 @@ export async function PUT(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
-}
+});

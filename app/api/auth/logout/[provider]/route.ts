@@ -1,13 +1,14 @@
+import { withRequestLog } from "@/lib/api-request-log";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { getOmpRuntime, invalidateOmpRuntime } from "@/lib/omp-runtime";
 import { resolveOAuthLoginId } from "@/lib/provider-listing-runtime";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(
+export const POST = withRequestLog("/api/auth/logout/[provider]", async (
   _req: Request,
   { params }: { params: Promise<{ provider: string }> }
-) {
+) => {
   const { provider } = await params;
   if (!resolveOAuthLoginId(provider)) {
     return Response.json({ error: `Unknown provider: ${provider}` }, { status: 400 });
@@ -23,4 +24,4 @@ export async function POST(
   invalidateModelsCache();
   invalidateOmpRuntime();
   return Response.json({ ok: true });
-}
+});

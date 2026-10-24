@@ -41,7 +41,7 @@ async function getRouteHandler(req: Request) {
   return NextResponse.json(getProjectTrustStatus(result.cwd, getAgentDir()));
 }
 
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/project-trust", async (req: Request) => {
   try {
     const body = await req.json() as { cwd?: unknown };
     const result = await validateCwd(body.cwd);
@@ -66,4 +66,4 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-}
+});

@@ -153,7 +153,7 @@ async function getRouteHandler(req: Request) {
 }
 
 // POST /api/plugins body: { action, source?, cwd }
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/plugins", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -198,4 +198,4 @@ export async function POST(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
-}
+});

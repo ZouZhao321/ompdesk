@@ -95,10 +95,10 @@ async function getRouteHandler(
 }
 
 // PATCH /api/sessions/[id]  body: { name: string }
-export async function PATCH(
+export const PATCH = withRequestLog("/api/sessions/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -132,13 +132,13 @@ export async function PATCH(
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/sessions/[id]
-export async function DELETE(
+export const DELETE = withRequestLog("/api/sessions/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -189,4 +189,4 @@ export async function DELETE(
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});

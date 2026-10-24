@@ -36,7 +36,7 @@ async function getRouteHandler() {
   return statusResponse(getWebAuthStatus());
 }
 
-export async function PUT(req: Request) {
+export const PUT = withRequestLog("/api/web-access", async (req: Request) => {
   if (!hasJsonContentType(req)) {
     return NextResponse.json({ error: "Expected a JSON body" }, { status: 415 });
   }
@@ -82,4 +82,4 @@ export async function PUT(req: Request) {
       { status: 400 },
     );
   }
-}
+});
