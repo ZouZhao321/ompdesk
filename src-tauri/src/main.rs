@@ -92,6 +92,20 @@ impl ServerChild {
     }
 }
 
+/// Leaves the process with `code` after stopping the sidecar.
+///
+/// `AppHandle::exit(code)` is not usable here: it sets `ControlFlow::Exit`,
+/// which tao turns into exit code 0, so a refused launch would look like a
+/// clean exit to launchers and scripts. `std::process::exit` keeps the code,
+/// and the sidecar is torn down first because process exit skips the
+/// `RunEvent::Exit` cleanup.
+fn fail_exit(handle: &AppHandle, code: i32) -> ! {
+    if let Some(server) = handle.try_state::<ServerChild>() {
+        server.kill();
+    }
+    std::process::exit(code)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -119,7 +133,7 @@ fn main() {
             if !tauri::is_dev() {
                 if let Err(error) = start_server(app) {
                     desktop_log(&format!("[omp-desktop] failed to start the bundled server: {error}"));
-                    app.handle().exit(1);
+                    fail_exit(app.handle(), 1);
                 }
             }
             Ok(())
@@ -198,7 +212,7 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
         }
         Err(error) => {
             desktop_log(&format!("[omp-desktop] bundled server failed to become ready: {error}"));
-            handle.exit(1);
+            fail_exit(&handle, 1);
         }
     });
 
@@ -276,20 +290,19 @@ fn navigate_main(handle: &AppHandle, port: u16) {
         Ok(url) => url,
         Err(error) => {
             desktop_log(&format!("[omp-desktop] invalid server URL: {error}"));
-            handle.exit(1);
-            return;
+            fail_exit(handle, 1);
         }
     };
     match handle.get_webview_window(WINDOW_LABEL) {
         Some(window) => {
             if let Err(error) = window.navigate(url) {
                 desktop_log(&format!("[omp-desktop] failed to navigate to the ompdesk server: {error}"));
-                handle.exit(1);
+                fail_exit(handle, 1);
             }
         }
         None => {
             desktop_log("[omp-desktop] main window not found");
-            handle.exit(1);
+            fail_exit(handle, 1);
         }
     }
 }
