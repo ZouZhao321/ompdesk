@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 import type { LogEntry, LogFileInfo, LogLevelName } from "@/lib/api-types";
 import {
   describeLogsState,
@@ -17,6 +17,46 @@ import {
  */
 
 export type LogsPanelStyles = Record<string, string>;
+
+interface LogEntryRowProps {
+  entry: LogEntry;
+  styles: LogsPanelStyles;
+  expanded: boolean;
+  onToggleEntry: (offset: number) => void;
+}
+
+/**
+ * One log line. Memoized because the polling loop produces a new `entries`
+ * array every couple of seconds while the existing entries keep their identity;
+ * without this every visible row re-renders on each poll.
+ */
+const LogEntryRow = memo(function LogEntryRow({ entry, styles, expanded, onToggleEntry }: LogEntryRowProps) {
+  return (
+    <article
+      className={styles.entry}
+      data-level={entry.level ?? "raw"}
+      data-expanded={expanded}
+    >
+      <button
+        type="button"
+        className={styles.entrySummary}
+        aria-expanded={expanded}
+        onClick={() => onToggleEntry(entry.offset)}
+      >
+        <span className={styles.levelBadge} data-level={entry.level ?? "raw"}>
+          {entry.level ?? "raw"}
+        </span>
+        <span className={styles.entryMessage} title={entry.message}>{entry.message}</span>
+        <span className={styles.entryMeta}>
+          {entry.subsystem ?? entry.source}
+          <span aria-hidden="true"> · </span>
+          {entry.timestamp ?? `offset ${entry.offset}`}
+        </span>
+      </button>
+      {expanded && <pre className={styles.entryDetail}>{entryDetail(entry)}</pre>}
+    </article>
+  );
+});
 
 export interface LogsPanelViewProps {
   styles: LogsPanelStyles;
@@ -189,35 +229,15 @@ export function LogsPanelView({
             <span>{state.detail}</span>
           </div>
         ) : (
-          entries.map((entry) => {
-            const expanded = expandedOffset === entry.offset;
-            return (
-              <article
-                className={styles.entry}
-                key={`${entry.offset}-${entry.raw.slice(0, 24)}`}
-                data-level={entry.level ?? "raw"}
-                data-expanded={expanded}
-              >
-                <button
-                  type="button"
-                  className={styles.entrySummary}
-                  aria-expanded={expanded}
-                  onClick={() => onToggleEntry(entry.offset)}
-                >
-                  <span className={styles.levelBadge} data-level={entry.level ?? "raw"}>
-                    {entry.level ?? "raw"}
-                  </span>
-                  <span className={styles.entryMessage} title={entry.message}>{entry.message}</span>
-                  <span className={styles.entryMeta}>
-                    {entry.subsystem ?? entry.source}
-                    <span aria-hidden="true"> · </span>
-                    {entry.timestamp ?? `offset ${entry.offset}`}
-                  </span>
-                </button>
-                {expanded && <pre className={styles.entryDetail}>{entryDetail(entry)}</pre>}
-              </article>
-            );
-          })
+          entries.map((entry) => (
+            <LogEntryRow
+              key={entry.offset}
+              entry={entry}
+              styles={styles}
+              expanded={expandedOffset === entry.offset}
+              onToggleEntry={onToggleEntry}
+            />
+          ))
         )}
       </div>
     </div>

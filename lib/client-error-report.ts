@@ -8,8 +8,11 @@
  * Only a fixed set of string fields leaves the browser: a thrown error's
  * message and stack, the page path, the session id from the URL, and the build
  * version. Prompt text, chat content, and arbitrary rejection reasons are never
- * serialized.
+ * serialized; URLs embedded in a message or stack are stripped of credentials,
+ * query values, and fragments before they leave the page.
  */
+
+import { redactUrlsIn } from "@/lib/url-redaction";
 
 /** Where the reporter posts. Protected by the proxy's host, origin, and auth checks. */
 export const CLIENT_LOG_ENDPOINT = "/api/client-logs";
@@ -41,7 +44,7 @@ export interface ClientErrorReport {
 
 export interface ClientErrorInput {
   kind: ClientErrorKind;
-  /** The thrown value. Only `Error` shapes and strings contribute text. */
+  /** The thrown value. Only `Error`-shaped values (including DOMException) contribute text. */
   error?: unknown;
   /** Fallback text, used for `ErrorEvent.message` and for non-error rejections. */
   message?: string;
@@ -54,10 +57,22 @@ export function isClientErrorKind(value: unknown): value is ClientErrorKind {
   return value === "error" || value === "unhandledrejection";
 }
 
-/** Cut `value` to `limit` characters, marking the removed tail like the server logger does. */
+/** The marker `truncateClientField` appends, so an already-truncated field is left alone. */
+const TRUNCATION_MARKER = /… \[truncated (\d+) chars\]$/;
+
+/**
+ * Cut `value` to `limit` characters, marking the removed tail like the server
+ * logger does. Idempotent: a value that already ends in a truncation marker
+ * keeps it (and its original count), so the client and the server can both
+ * apply this without losing the real truncated length.
+ */
 export function truncateClientField(value: string, limit: number): string {
-  if (value.length <= limit) return value;
-  return `${value.slice(0, limit)}… [truncated ${value.length - limit} chars]`;
+  const cap = Math.max(0, Math.trunc(limit));
+  const marker = TRUNCATION_MARKER.exec(value);
+  const body = marker ? value.slice(0, value.length - marker[0].length) : value;
+  if (body.length <= cap) return value;
+  const removed = body.length - cap + (marker ? Number(marker[1]) : 0);
+  return `${body.slice(0, cap)}… [truncated ${removed} chars]`;
 }
 
 /** Trim, reject empty values, and cut the rest to `limit`. */
@@ -98,9 +113,11 @@ export function readSessionId(search: string | null | undefined): string | undef
 
 function isErrorLike(value: unknown): value is { message?: unknown; stack?: unknown } {
   if (value instanceof Error) return true;
-  return typeof value === "object"
-    && value !== null
-    && Object.prototype.toString.call(value) === "[object Error]";
+  if (!value || typeof value !== "object") return false;
+  // Cross-realm errors fail `instanceof`; DOMException (AbortError,
+  // QuotaExceededError, clipboard failures) has its own toString tag.
+  const tag = Object.prototype.toString.call(value);
+  return tag === "[object Error]" || tag === "[object DOMException]";
 }
 
 function describeReason(error: unknown): { message: string; stack?: string } {
@@ -110,9 +127,8 @@ function describeReason(error: unknown): { message: string; stack?: string } {
       stack: typeof error.stack === "string" ? error.stack : undefined,
     };
   }
-  if (typeof error === "string") return { message: error };
-  // Anything else is an arbitrary rejection reason or a cross-origin error: it
-  // stays unread, and the report carries a generic description instead.
+  // Anything else — including a string rejection, which is usually upstream
+  // response text — is an arbitrary reason and must not be serialized.
   return { message: "" };
 }
 
@@ -123,13 +139,17 @@ function describeReason(error: unknown): { message: string; stack?: string } {
  */
 export function buildClientErrorReport(input: ClientErrorInput): ClientErrorReport {
   const described = describeReason(input.error);
+  const rawMessage = described.message || input.message;
   const message = normalizeClientField(
-    described.message || input.message,
+    rawMessage ? redactUrlsIn(rawMessage) : undefined,
     CLIENT_ERROR_MESSAGE_LIMIT,
   ) ?? (input.kind === "unhandledrejection" ? "Unhandled promise rejection" : "Uncaught exception");
 
   const report: ClientErrorReport = { kind: input.kind, message };
-  const stack = normalizeClientField(described.stack, CLIENT_ERROR_STACK_LIMIT);
+  const stack = normalizeClientField(
+    described.stack ? redactUrlsIn(described.stack) : undefined,
+    CLIENT_ERROR_STACK_LIMIT,
+  );
   if (stack) report.stack = stack;
   const url = normalizeClientUrl(input.url);
   if (url) report.url = url;
@@ -166,9 +186,12 @@ export class SlidingWindowLimiter {
     const hits = (this.hits.get(key) ?? []).filter((at) => at > cutoff);
     if (hits.length >= this.limit) {
       this.hits.set(key, hits);
+      // `hits` is empty when the limit is ≤ 0: fall back to the full window
+      // instead of producing `Retry-After: NaN`.
+      const oldest = hits[0] ?? now;
       return {
         allowed: false,
-        retryAfterMs: Math.max(1, hits[0] + this.windowMs - now),
+        retryAfterMs: Math.max(1, oldest + this.windowMs - now),
       };
     }
     hits.push(now);
@@ -185,10 +208,21 @@ export class SlidingWindowLimiter {
       if (kept.length === 0) this.hits.delete(key);
       else this.hits.set(key, kept);
     }
+    // Evict the least recently active bucket, not the first inserted one: a
+    // map's iteration order is insertion order, which would let a caller
+    // rotating keys reset a hot bucket's count.
     while (this.hits.size > this.maxKeys) {
-      const oldest = this.hits.keys().next().value;
-      if (oldest === undefined) return;
-      this.hits.delete(oldest);
+      let oldestKey: string | undefined;
+      let oldestAt = Number.POSITIVE_INFINITY;
+      for (const [key, hits] of this.hits) {
+        const last = hits[hits.length - 1] ?? Number.NEGATIVE_INFINITY;
+        if (last < oldestAt) {
+          oldestAt = last;
+          oldestKey = key;
+        }
+      }
+      if (oldestKey === undefined) return;
+      this.hits.delete(oldestKey);
     }
   }
 }

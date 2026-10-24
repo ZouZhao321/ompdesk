@@ -1,3 +1,5 @@
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import pkg from "../package.json";
 import { configureLogging, logEvent } from "./logging";
 
@@ -25,10 +27,17 @@ const importRuntimeModule = Function("specifier", "return import(specifier)") as
  */
 async function detectAuthEnabled(): Promise<boolean> {
   try {
-    const moduleUrl = new URL(`file://${process.cwd().replace(/\\/g, "/")}/bin/web-auth-store.js`);
+    // `pathToFileURL` handles drive letters, spaces, `#`, and `?`; a hand-built
+    // `file://` URL would misparse every one of them on Windows.
+    const moduleUrl = pathToFileURL(path.join(process.cwd(), "bin", "web-auth-store.js"));
     const authStore = await importRuntimeModule(moduleUrl.href);
     return authStore.getWebAuthStatus().enabled;
-  } catch {
+  } catch (error) {
+    // The fallback is only a guess: say so, because a wrong `authEnabled`
+    // field would contradict the real access policy in the audit trail.
+    logEvent("warn", "process", "process.auth.detect-failed", {
+      reason: error instanceof Error ? error.message : String(error),
+    });
     return Boolean(process.env.OMPDESK_PASSWORD);
   }
 }
