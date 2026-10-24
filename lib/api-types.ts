@@ -248,4 +248,6 @@ export interface LogsResponse {
   nextCursor: number;
   /** More bytes remain after `nextCursor` (either filtered out or above the page cap). */
   truncated: boolean;
+  /** The requested cursor was past the file's end (same-name rotation); entries restart at byte 0. */
+  reset: boolean;
 }
