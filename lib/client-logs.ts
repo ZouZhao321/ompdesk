@@ -1,5 +1,5 @@
 import { logEvent } from "@/lib/logging";
-import { CLIENT_ADDRESS_HEADER } from "@/lib/request-headers";
+import { CLIENT_ADDRESS_HEADER, resolveForwardedAddress } from "@/lib/request-headers";
 import { redactUrlsIn } from "@/lib/url-redaction";
 import { hasJsonContentType } from "@/lib/request-security";
 import {
@@ -29,7 +29,13 @@ import {
 export const CLIENT_ERROR_EVENT = "client.error";
 export const CLIENT_ERROR_SUBSYSTEM = "client";
 
-export const CLIENT_LOG_MAX_BODY_BYTES = 8 * 1024;
+/**
+ * Wire cap for one report. The field limits are counted in characters while the
+ * body is bounded in bytes, and a CJK character takes three bytes in UTF-8:
+ * message (1,000) + stack (2,000) + url (1,000) + ids is about 12.8 KiB once
+ * encoded, so 8 KiB silently dropped legitimate reports.
+ */
+export const CLIENT_LOG_MAX_BODY_BYTES = 16 * 1024;
 export const CLIENT_ERROR_RATE_LIMIT = 20;
 export const CLIENT_ERROR_RATE_WINDOW_MS = 60_000;
 /**
@@ -198,16 +204,15 @@ async function readJsonWithinLimit(request: Request, maxBytes: number): Promise<
 }
 
 /**
- * Address bucket for a request. The proxy-written header replaces whatever the
- * client sent; the forwarding headers are only a fallback for callers that did
- * not pass through the proxy (tests, direct route use). Without a reverse proxy
- * that overwrites forwarding headers both values are still advisory, so the
- * global ceiling below remains the hard bound.
+ * Address bucket for a request. The proxy-written header is the address the
+ * proxy actually observed; the forwarding headers are only a fallback for
+ * callers that did not pass through it (tests, direct route use), and they are
+ * read with the same trust rule as the proxy. Without a trusted proxy in front
+ * both values are advisory, so the global ceiling below remains the hard bound.
  */
 function clientAddress(request: Request): string {
   const proxied = request.headers.get(CLIENT_ADDRESS_HEADER)?.trim();
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return (proxied || forwarded || request.headers.get("x-real-ip")?.trim() || "local").slice(0, 64);
+  return (proxied || resolveForwardedAddress(request.headers)).slice(0, 64);
 }
 
 function rateLimited(retryAfterMs: number): Response {
@@ -244,7 +249,7 @@ export function createClientLogHandler(options: ClientLogHandlerOptions = {}) {
     try {
       const at = now();
       // Header-only, so it runs before the body is read: a flood from one
-      // address is rejected without parsing 8 KB of JSON per request. A
+      // address is rejected without parsing the JSON body per request. A
       // caller rotating `sessionId` cannot reset this bucket.
       const address = clientAddress(request);
       const perAddress = addressLimiter.take(`client:${address}`, at);
