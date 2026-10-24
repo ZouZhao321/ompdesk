@@ -123,3 +123,11 @@ export function describeLogsState(input: DescribeLogsStateInput): LogsStateDescr
 export function shouldPollLogs(hidden: boolean, paused: boolean): boolean {
   return !hidden && !paused;
 }
+
+/**
+ * Enabling follow returns to the newest file; disabling it keeps whatever the
+ * user selected. Following a rotated file would otherwise pin the panel to it.
+ */
+export function selectFileAfterFollow(follow: boolean, selectedFile: string | null): string | null {
+  return follow ? null : selectedFile;
+}
