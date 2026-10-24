@@ -12,7 +12,7 @@
  * query values, and fragments before they leave the page.
  */
 
-import { redactUrlsIn } from "./url-redaction";
+import { redactUrlsIn } from "@/lib/url-redaction";
 
 /** Where the reporter posts. Protected by the proxy's host, origin, and auth checks. */
 export const CLIENT_LOG_ENDPOINT = "/api/client-logs";
