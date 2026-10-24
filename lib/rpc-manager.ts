@@ -47,6 +47,13 @@ import type {
   SubagentSnapshot,
 } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
+import {
+  AgentRunTracker,
+  currentRequestId,
+  resolveSessionModelRole,
+  writeAgentRunRecords,
+  type AgentRunStart,
+} from "./agent-run-log";
 
 // ============================================================================
 // Types
@@ -300,6 +307,7 @@ export class AgentSessionWrapper {
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
   private readonly subagents: RpcSubagentRegistry;
+  private readonly runLog: AgentRunTracker;
   // The SDK registry removes terminal entries after emitting their lifecycle frame.
   // Keep a bounded per-session copy so state requests can still expose history.
   private readonly subagentHistory = new Map<string, SubagentSnapshot>();
@@ -310,6 +318,7 @@ export class AgentSessionWrapper {
     public readonly inner: AgentSessionLike,
     eventBus: ConstructorParameters<typeof RpcSubagentRegistry>[0],
   ) {
+    this.runLog = new AgentRunTracker({ sessionId: () => this.inner.sessionId });
     this.subagents = new RpcSubagentRegistry(eventBus, (frame) => {
       const event = frame as unknown as AgentEvent;
       this.rememberSubagentFrame(event);
@@ -555,6 +564,31 @@ export class AgentSessionWrapper {
     }
   }
 
+  /**
+   * 执行一次喂给或取消当前 run 的命令并记录结果；命令文本不会进入记录。
+   */
+  private async withRunCommand<T>(
+    command: "steer" | "follow_up" | "abort" | "compact",
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const startedAt = performance.now();
+    try {
+      const result = await operation();
+      writeAgentRunRecords(this.runLog.command(command, {
+        ok: true,
+        durationMs: performance.now() - startedAt,
+      }));
+      return result;
+    } catch (error) {
+      writeAgentRunRecords(this.runLog.command(command, {
+        ok: false,
+        durationMs: performance.now() - startedAt,
+        error,
+      }));
+      throw error;
+    }
+  }
+
   private async shutdownAfterCommittedFork(newSessionId: string): Promise<void> {
     try {
       await this.shutdown();
@@ -744,8 +778,25 @@ export class AgentSessionWrapper {
   }
 
   private emit(event: AgentEvent): void {
+    writeAgentRunRecords(this.runLog.push(event));
     this.syncSessionIdentity();
     for (const l of this.listeners) l(event);
+  }
+
+  /** 发送 prompt 前捕获的模型元数据，此时信息仍然准确。 */
+  private runStart(): AgentRunStart {
+    const model = this.inner.model;
+    const configured = this.inner.configuredThinkingLevel();
+    const thinkingLevel = this.inner.agent.state?.thinkingLevel ?? configured ?? "off";
+    return {
+      sessionId: this.inner.sessionId,
+      provider: model?.provider,
+      model: model?.id,
+      role: resolveSessionModelRole(this.inner.sessionManager.getEntries()),
+      thinkingLevel,
+      configuredThinkingLevel: configured && configured !== thinkingLevel ? configured : undefined,
+      requestId: currentRequestId(),
+    };
   }
 
   private resetIdleTimer(): void {
@@ -821,8 +872,14 @@ export class AgentSessionWrapper {
         // Fire and forget — events come via subscribe
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         const streamingBehavior = command.streamingBehavior as "steer" | "followUp" | undefined;
+        // 只排入当前轮次的 prompt 属于这次运行，记为 steer/follow_up 结果，不再另开 run。
+        const queuedCommand = streamingBehavior === "steer"
+          ? "steer"
+          : streamingBehavior === "followUp" ? "follow_up" : undefined;
+        const startedAt = performance.now();
         this.promptRunning = true;
         notifyRunningChange();
+        if (!queuedCommand) writeAgentRunRecords(this.runLog.begin(this.runStart()));
         this.inner.prompt(command.message as string, {
           ...(promptImages?.length ? { images: promptImages } : {}),
           ...(streamingBehavior ? { streamingBehavior } : {}),
@@ -830,12 +887,22 @@ export class AgentSessionWrapper {
         }).then(() => {
           this.promptRunning = false;
           this.resetIdleTimer();
+          writeAgentRunRecords(queuedCommand
+            ? this.runLog.command(queuedCommand, { ok: true, durationMs: performance.now() - startedAt })
+            : this.runLog.finish());
           if (!streamingBehavior) this.emit({ type: "prompt_done" });
           notifyRunningChange();
         }).catch((error) => {
           this.promptRunning = false;
           this.resetIdleTimer();
           invalidateSessionListCache();
+          writeAgentRunRecords(queuedCommand
+            ? this.runLog.command(queuedCommand, {
+              ok: false,
+              durationMs: performance.now() - startedAt,
+              error,
+            })
+            : this.runLog.finish({ stopReason: "error", error }));
           this.emit({
             type: "prompt_error",
             errorMessage: error instanceof Error ? error.message : String(error),
@@ -848,7 +915,10 @@ export class AgentSessionWrapper {
 
       case "abort":
         this.goalMode.onAbort();
-        await this.withFinalRunningNotification(() => this.inner.abort());
+        await this.withRunCommand("abort", () =>
+          this.withFinalRunningNotification(() => this.inner.abort())
+        );
+        writeAgentRunRecords(this.runLog.finish({ stopReason: "aborted" }));
         return null;
 
       case "get_state": {
@@ -927,44 +997,68 @@ export class AgentSessionWrapper {
       }
 
       case "fork": {
-        if (this.inner.isBashRunning) {
-          throw new Error("Cannot fork while a shell command is running");
+        const startedAt = performance.now();
+        try {
+          if (this.inner.isBashRunning) {
+            throw new Error("Cannot fork while a shell command is running");
+          }
+          const sessionManager = this.inner.sessionManager;
+          const entryId = resolveForkEntryId(
+            sessionManager.getBranch() as ForkBranchEntry[],
+            command.entryId,
+          );
+          if (!entryId) throw new Error("No user message to fork from yet");
+          const currentSessionFile = this.inner.sessionFile;
+
+          if (!currentSessionFile) {
+            writeAgentRunRecords(this.runLog.command("fork", {
+              ok: true,
+              cancelled: true,
+              durationMs: performance.now() - startedAt,
+            }));
+            return { cancelled: true };
+          }
+
+          const entry = sessionManager.getEntry(entryId);
+          if (!entry) throw new Error("Invalid entry ID for forking");
+
+          const sessionDir = sessionManager.getSessionDir();
+          let newSessionFile: string;
+
+          if (!entry.parentId) {
+            // Fork before the first message: create an empty session linked to this one
+            const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
+            await newManager.newSession({ parentSession: currentSessionFile });
+            await newManager.ensureOnDisk();
+            newSessionFile = newManager.getSessionFile() as string;
+          } else {
+            // Fork after some history: copy path up to (but not including) the fork point
+            const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
+            const forkedPath = sourceManager.createBranchedSession(entry.parentId);
+            if (!forkedPath) throw new Error("Failed to create forked session");
+            newSessionFile = forkedPath;
+          }
+
+          const newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
+          cacheSessionPath(newSessionId, newSessionFile);
+          invalidateSessionListCache();
+          writeAgentRunRecords(this.runLog.command("fork", {
+            ok: true,
+            durationMs: performance.now() - startedAt,
+            newSessionId,
+          }));
+          // 旧包装器正在关闭，它仍持有的运行无法继续。
+          writeAgentRunRecords(this.runLog.finish({ stopReason: "fork" }));
+          await this.shutdownAfterCommittedFork(newSessionId);
+          return { cancelled: false, newSessionId };
+        } catch (error) {
+          writeAgentRunRecords(this.runLog.command("fork", {
+            ok: false,
+            durationMs: performance.now() - startedAt,
+            error,
+          }));
+          throw error;
         }
-        const sessionManager = this.inner.sessionManager;
-        const entryId = resolveForkEntryId(
-          sessionManager.getBranch() as ForkBranchEntry[],
-          command.entryId,
-        );
-        if (!entryId) throw new Error("No user message to fork from yet");
-        const currentSessionFile = this.inner.sessionFile;
-
-        if (!currentSessionFile) return { cancelled: true };
-
-        const entry = sessionManager.getEntry(entryId);
-        if (!entry) throw new Error("Invalid entry ID for forking");
-
-        const sessionDir = sessionManager.getSessionDir();
-        let newSessionFile: string;
-
-        if (!entry.parentId) {
-          // Fork before the first message: create an empty session linked to this one
-          const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
-          await newManager.newSession({ parentSession: currentSessionFile });
-          await newManager.ensureOnDisk();
-          newSessionFile = newManager.getSessionFile() as string;
-        } else {
-          // Fork after some history: copy path up to (but not including) the fork point
-          const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
-          const forkedPath = sourceManager.createBranchedSession(entry.parentId);
-          if (!forkedPath) throw new Error("Failed to create forked session");
-          newSessionFile = forkedPath;
-        }
-
-        const newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
-        cacheSessionPath(newSessionId, newSessionFile);
-        invalidateSessionListCache();
-        await this.shutdownAfterCommittedFork(newSessionId);
-        return { cancelled: false, newSessionId };
       }
 
       case "handoff": {
@@ -1016,8 +1110,10 @@ export class AgentSessionWrapper {
 
       case "compact": {
         try {
-          return await this.withFinalRunningNotification(() =>
-            this.inner.compact(command.customInstructions as string | undefined)
+          return await this.withRunCommand("compact", () =>
+            this.withFinalRunningNotification(() =>
+              this.inner.compact(command.customInstructions as string | undefined)
+            )
           );
         } finally {
           invalidateSessionListCache();
@@ -1062,13 +1158,17 @@ export class AgentSessionWrapper {
 
       case "steer": {
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+        await this.withRunCommand("steer", () =>
+          this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined)
+        );
         return null;
       }
 
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+        await this.withRunCommand("follow_up", () =>
+          this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined)
+        );
         return null;
       }
 
