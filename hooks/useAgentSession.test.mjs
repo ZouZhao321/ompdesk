@@ -253,3 +253,74 @@ test("renders the transcript with omp's hideThinkingBlock setting", () => {
   assert.match(chatWindowSource, /splitFinalAssistantBlocks\(finalAssistant, displayOptions\)/);
   assert.match(chatWindowSource, /findFinalAssistantIndex\(messages, userIdx, endIdx, displayOptions\)/);
 });
+
+test("/branch and /rewind reach the rewind plan through a normalized command name", () => {
+  const dispatchSource = source.slice(
+    source.indexOf("const handleBuiltinSlashCommand = useCallback"),
+    source.indexOf("const handleSteer = useCallback"),
+  );
+
+  assert.match(source, /import \{[^}]*\bplanRewindCommand\b[^}]*\} from "@\/lib\/rewind"/);
+  assert.match(source, /import \{[^}]*\bnormalizeRewindCommand\b[^}]*\} from "@\/lib\/rewind"/);
+
+  // `/branch` is an alias of `/rewind`; without normalization it fell through
+  // to `execute_slash_command`, which forwarded it to the model.
+  const switchMatch = dispatchSource.match(/switch \(([\s\S]*?)\) \{/);
+  assert.ok(switchMatch, "the builtin handler must switch on a command name");
+  const switchSubject = switchMatch[1].trim();
+
+  const normalizeIndex = dispatchSource.search(/normalizeRewindCommand\(/);
+  assert.ok(normalizeIndex >= 0, "the dispatch must call normalizeRewindCommand");
+  assert.ok(
+    normalizeIndex < switchMatch.index,
+    "the command name must be normalized before the switch",
+  );
+
+  const assignedName = dispatchSource.match(
+    /const\s+([A-Za-z_$][\w$]*)\s*=\s*normalizeRewindCommand\(commandName\)/,
+  );
+  const routesNormalizedName =
+    /normalizeRewindCommand\(commandName\)/.test(switchSubject)
+    || (assignedName !== null
+      && switchSubject === assignedName[1]
+      && assignedName.index < switchMatch.index);
+  assert.ok(
+    routesNormalizedName,
+    `the switch must dispatch on the normalized name, got: ${switchSubject}`,
+  );
+
+  const rewindIndex = dispatchSource.indexOf('case "rewind":');
+  assert.ok(rewindIndex >= 0, "/rewind must have a dispatch case");
+
+  const nextCase = dispatchSource.indexOf('case "', rewindIndex + 'case "rewind":'.length);
+  const defaultCase = dispatchSource.indexOf("default:", rewindIndex);
+  const regionEnd = [nextCase, defaultCase]
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0] ?? dispatchSource.length;
+  const rewindRegion = dispatchSource.slice(rewindIndex, regionEnd);
+
+  assert.match(rewindRegion, /planRewindCommand\(\{/);
+  assert.match(rewindRegion, /agentRunning:\s*agentRunningRef\.current/);
+  assert.match(rewindRegion, /bashRunning:\s*bashRunningRef\.current/);
+  assert.match(
+    rewindRegion,
+    /return\s+(?:complete\()?[A-Za-z_$][\w$]*(?:\))?\s*;/,
+    "the dispatch must return the plan result unchanged",
+  );
+
+  // Every other command keeps its own case and is never rewritten by the alias.
+  const caseLabels = [...dispatchSource.matchAll(/case "([^"]+)":/g)].map((match) => match[1]);
+  assert.deepEqual(caseLabels, [
+    "compact",
+    "reload",
+    "name",
+    "session",
+    "copy",
+    "fork",
+    "goal",
+    "rewind",
+    "handoff",
+  ]);
+  assert.doesNotMatch(dispatchSource, /case "branch":/);
+  assert.doesNotMatch(dispatchSource, /Cannot rewind while the session is busy/);
+});
