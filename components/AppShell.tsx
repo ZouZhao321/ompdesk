@@ -1770,7 +1770,7 @@ export function AppShell() {
         } as React.CSSProperties}
       >
         {/* Right panel tab bar */}
-        <div style={{
+        <div className="panel-tab-header" style={{
           display: "flex",
           alignItems: "center",
           flexShrink: 0,

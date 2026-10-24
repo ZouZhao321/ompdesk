@@ -25,6 +25,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
 
   return (
     <div
+      className="panel-tab-bar"
       style={{
         display: "flex",
         alignItems: "flex-end",
@@ -39,6 +40,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
         return (
           <div
             key={tab.id}
+            className="panel-tab"
             onClick={() => onSelectTab(tab.id)}
             onMouseDown={(e) => {
               if (e.button === 1) e.preventDefault();
@@ -84,6 +86,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               {tab.label}
             </span>
             <button
+              className="panel-tab-close"
               onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
               onMouseEnter={() => setHoveredClose(tab.id)}
               onMouseLeave={() => setHoveredClose(null)}
