@@ -1,4 +1,4 @@
-import { MOBILE_MAX_WIDTH } from "../hooks/useIsMobile";
+import { MOBILE_MAX_WIDTH } from "./mobile-layout";
 
 export const SPLIT_PANEL_MIN_WIDTH = 960;
 
