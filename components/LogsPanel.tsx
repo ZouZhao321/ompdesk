@@ -5,6 +5,7 @@ import type { LogEntry, LogFileInfo, LogLevelName, LogsResponse } from "@/lib/ap
 import {
   buildLogsRequest,
   mergeLogEntries,
+  selectFileAfterFollow,
   shouldPollLogs,
 } from "@/lib/logs-view";
 import { LogsPanelView } from "./LogsPanelView";
@@ -138,7 +139,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [active, client, debouncedKeyword, level, selectedFile]);
+  }, [active, client, debouncedKeyword, level, selectedFile, refreshToken]);
 
   useEffect(() => {
     if (!follow || paused) return;
@@ -164,7 +165,10 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       onLevelChange={(next) => { setPaused(false); setLevel(next); }}
       onKeywordChange={(value) => { setPaused(false); setKeyword(value); }}
       onFileChange={(next) => { setPaused(false); setSelectedFile(next); }}
-      onFollowChange={setFollow}
+      onFollowChange={(next) => {
+        setFollow(next);
+        setSelectedFile((current) => selectFileAfterFollow(next, current));
+      }}
       onTogglePause={() => setPaused((value) => !value)}
       onRefresh={() => { setPaused(false); setRefreshToken((value) => value + 1); }}
       onToggleEntry={(offset) => setExpandedOffset((value) => value === offset ? null : offset)}

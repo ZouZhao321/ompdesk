@@ -42,8 +42,7 @@ are flat next to it rather than nested under a `context` key.
   "method": "GET",
   "status": 200,
   "durationMs": 42,
-  "slow": false,
-  "sessionId": "..."
+  "slow": false
 }
 ```
 
@@ -96,7 +95,7 @@ Concrete mappings:
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `OMP_LOG_LEVEL` | `debug` | Most verbose level written to the log **file**: `error`, `warn`, `info` or `debug`, case-insensitive. An unknown value falls back to `debug`. It filters the file transport only; console mirroring ignores it. |
+| `OMP_LOG_LEVEL` | `debug` | Most verbose level written to the log **file and the stdout mirror**: `error`, `warn`, `info` or `debug`, case-insensitive. An unknown value falls back to `debug`. |
 | `OMPDESK_LOG_STDOUT` | unset | Mirror records to stdout. `1`, `true`, `yes`, `on` enable it; `0`, `false`, `no`, `off` disable it. When unset, stdout mirroring is on only when `NODE_ENV` is not `production`. |
 | `OMPDESK_SLOW_REQUEST_MS` | `1000` | Threshold for the `slow` flag on `http.request`. A positive number of milliseconds; anything else keeps the default. |
 
@@ -106,7 +105,9 @@ configuration. Restart the server after changing these variables.
 ## Standard output, Docker and the desktop app
 
 The file transport is always on. Stdout is a mirror, decided by
-`OMPDESK_LOG_STDOUT` or, when it is unset, by development mode:
+`OMPDESK_LOG_STDOUT` or, when it is unset, by development mode. The mirror
+writes the same JSON lines as the file and applies the same `OMP_LOG_LEVEL`
+filter:
 
 | Environment | `NODE_ENV` | Stdout by default | How to change it |
 | --- | --- | --- | --- |
@@ -224,7 +225,9 @@ itself is never part of the record.
 
 These records are written by the proxy and the recovery endpoint. They carry
 `requestId`, `route` and `method` where a request exists; they never carry
-credentials or headers.
+credentials or headers. The proxy reaches the same runtime-resolved logger as
+the route handlers, so security events need no second logging stack and the SDK
+is never bundled into the proxy bundle.
 
 | Event | Level | Meaning and fields |
 | --- | --- | --- |
