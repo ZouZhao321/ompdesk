@@ -3,7 +3,12 @@ import {
   isApiRequestAllowed,
   isApiRequestHostAllowed,
 } from "@/lib/request-security";
-import { authorizeWebRequest } from "@/lib/web-auth";
+import {
+  ACTOR_HEADER,
+  REQUEST_ID_HEADER,
+  type RequestActor,
+} from "@/lib/request-headers";
+import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 
 /**
  * The password-recovery surface, and the only thing that answers without
@@ -48,8 +53,24 @@ function unauthorizedPage(): string {
 `;
 }
 
+/**
+ * Forward the correlation headers to the route handler. The client's own values
+ * are replaced, so a caller cannot choose the id their request is logged under.
+ */
+function continueWithRequestHeaders(
+  request: NextRequest,
+  requestId: string,
+  actor: RequestActor,
+): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
+  headers.set(ACTOR_HEADER, actor);
+  return NextResponse.next({ request: { headers } });
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const requestId = globalThis.crypto.randomUUID();
   const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
   const isTrustedRequest = isApiRequest
     ? isApiRequestAllowed(request)
@@ -64,11 +85,15 @@ export function proxy(request: NextRequest) {
 
   // Recovery stays reachable while locked out — that is the whole point of it —
   // but only after the host and cross-site checks above have run.
-  if (pathname === RECOVERY_PAGE || pathname === RECOVERY_API) return NextResponse.next();
+  if (pathname === RECOVERY_PAGE || pathname === RECOVERY_API) {
+    return continueWithRequestHeaders(request, requestId, "recovery");
+  }
 
-  const decision = authorizeWebRequest(request.headers.get("authorization"));
+  const authorization = authorizeWebRequestWithActor(
+    request.headers.get("authorization"),
+  );
 
-  if (decision === "unavailable") {
+  if (authorization.decision === "unavailable") {
     const message = "Password access is enabled but the ompdesk credential file could not be read."
       + " Run `ompdesk --reset-password` on the server to set a new password.";
     return isApiRequest
@@ -76,7 +101,7 @@ export function proxy(request: NextRequest) {
       : new NextResponse(message, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 
-  if (decision === "unauthorized") {
+  if (authorization.decision === "unauthorized") {
     return isApiRequest
       ? NextResponse.json(
         { error: "Authentication required", recoveryPath: RECOVERY_PAGE },
@@ -88,7 +113,7 @@ export function proxy(request: NextRequest) {
       });
   }
 
-  return NextResponse.next();
+  return continueWithRequestHeaders(request, requestId, authorization.actor);
 }
 
 export const config = { matcher: ["/", "/recover", "/api/:path*"] };
