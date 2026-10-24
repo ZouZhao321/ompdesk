@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
@@ -14,7 +15,9 @@ export const dynamic = "force-dynamic";
 // Uses omp's own skill discovery (the same `loadSkills` AgentSession startup
 // runs), so `.omp/skills`, `~/.omp/agent/skills`, `.claude/skills`, plugin
 // skills, and `.agents/skills` are all included with identical precedence.
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/skills", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }

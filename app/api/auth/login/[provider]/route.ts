@@ -1,4 +1,5 @@
 import type { OAuthAuthInfo, OAuthPrompt } from "@oh-my-pi/pi-ai/oauth";
+import { withRequestLog } from "@/lib/api-request-log";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { getOmpRuntime, invalidateOmpRuntime } from "@/lib/omp-runtime";
 import { resolveOAuthLoginId } from "@/lib/provider-listing-runtime";
@@ -43,7 +44,9 @@ export async function POST(
 }
 
 // GET /api/auth/login/[provider] — SSE stream for OAuth flow
-export async function GET(
+export const GET = withRequestLog("/api/auth/login/[provider]", getRouteHandler);
+
+async function getRouteHandler(
   req: Request,
   { params }: { params: Promise<{ provider: string }> }
 ) {

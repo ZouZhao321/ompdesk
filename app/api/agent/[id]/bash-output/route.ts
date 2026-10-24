@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { tmpdir } from "node:os";
 import { Readable } from "node:stream";
 import {
@@ -12,7 +13,9 @@ import { isBashOutputPathReferencedBySession } from "@/lib/session-file-referenc
 // GET /api/agent/[id]/bash-output?path=<absPath>
 // Reads a bash output temp file referenced by this session. Inline display is
 // size-limited; download responses stream the file without buffering it.
-export async function GET(
+export const GET = withRequestLog("/api/agent/[id]/bash-output", getRouteHandler);
+
+async function getRouteHandler(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {

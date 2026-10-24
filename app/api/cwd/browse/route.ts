@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { stat } from "fs/promises";
 import {
   getBrowseStartDirectory,
@@ -10,7 +11,9 @@ import {
 } from "@/lib/directory-browser";
 
 // GET /api/cwd/browse?path=...：列出文件系统中的可读子目录。
-export async function GET(request: NextRequest) {
+export const GET = withRequestLog("/api/cwd/browse", getRouteHandler);
+
+async function getRouteHandler(request: NextRequest) {
   try {
     const requested = request.nextUrl.searchParams.get("path")?.trim();
 
