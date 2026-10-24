@@ -279,6 +279,11 @@ omp 没有信任存储：它运行某个仓库的扩展，因为你选择在那�
 ### 运行状态轮询与核对
 - 标签页可见时，侧栏每 2.5 秒轮询 `/api/agent/running`，后台标签页暂停轮询。
   会话列表响应仍是初始回退。
+- 该快照同时返回 `runningSessionIds` 与 `waitingSessionIds`。后者是停在阻塞式
+  扩展 UI 请求（`ask` 表单、`select`、`confirm`、`input`、`editor`、`custom`）上、
+  等待用户作答的会话：`AgentSessionWrapper.isAwaitingInput()` 按
+  `pendingUiRequests` 是否为空判断，等待期间 `isRunning()` 仍为真。侧栏对这类
+  会话显示黄灯而不是旋转图标，项目行另行统计黄灯数量。
 - `useAgentSession` 把每个会话的 SSE 作为聊天事件的主要来源，并在每次 prompt 前
   打开。`prompt_done` 立即结束当前 UI 阶段与通知，空闲 SSE 保持 30 秒宽限窗口
   并被下一个 prompt 复用。`agent_start` 取消该关闭计时器；`agent_settled` 结束
