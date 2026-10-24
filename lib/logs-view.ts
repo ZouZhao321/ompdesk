@@ -64,6 +64,13 @@ export function buildLogsRequest(input: LogsRequestInput): string {
 /** Append a cursor page without duplicating lines already on screen. */
 export function mergeLogEntries(existing: LogEntry[], incoming: LogEntry[], limit = MAX_VISIBLE_ENTRIES): LogEntry[] {
   if (incoming.length === 0) return existing.length > limit ? existing.slice(existing.length - limit) : existing;
+  const lastExisting = existing[existing.length - 1];
+  // The poll path almost always appends strictly newer offsets; skip the map
+  // and sort unless a page overlaps or arrives out of order.
+  if (!lastExisting || incoming[0].offset > lastExisting.offset) {
+    const appended = existing.concat(incoming);
+    return appended.length > limit ? appended.slice(appended.length - limit) : appended;
+  }
   const byOffset = new Map<number, LogEntry>();
   for (const entry of existing) byOffset.set(entry.offset, entry);
   for (const entry of incoming) byOffset.set(entry.offset, entry);
@@ -78,7 +85,7 @@ export function entryDetail(entry: LogEntry): string {
   return JSON.stringify(entry.fields, null, 2);
 }
 
-export type LogsEmptyKind = "loading" | "error" | "no-files" | "empty" | "no-matches";
+export type LogsEmptyKind = "loading" | "error" | "no-files" | "empty" | "no-matches" | "catching-up";
 
 export interface LogsStateDescription {
   kind: LogsEmptyKind | "ready";
@@ -93,6 +100,8 @@ export interface DescribeLogsStateInput {
   entryCount: number;
   level: LogLevelName | "all";
   keyword: string;
+  /** The last page was cut short, so an empty list is provisional rather than final. */
+  catchingUp?: boolean;
 }
 
 /** Distinguish "still loading", "load failed", "no file yet", "empty file", and "filters match nothing". */
@@ -110,6 +119,13 @@ export function describeLogsState(input: DescribeLogsStateInput): LogsStateDescr
       detail: "ompdesk creates this process's log file with its first record. Send a message or retry a request, then refresh.",
     };
   }
+  if (input.catchingUp && input.entryCount === 0) {
+    return {
+      kind: "catching-up",
+      title: "Catching up…",
+      detail: "The log file is longer than one page; reading the backlog before showing matches.",
+    };
+  }
   if (input.entryCount === 0 && (input.level !== "all" || input.keyword.trim())) {
     return { kind: "no-matches", title: "No matching entries", detail: "Try a broader level or another keyword." };
   }
@@ -125,9 +141,15 @@ export function shouldPollLogs(hidden: boolean, paused: boolean): boolean {
 }
 
 /**
- * Enabling follow returns to the newest file; disabling it keeps whatever the
- * user selected. Following a rotated file would otherwise pin the panel to it.
+ * Enabling follow returns to the newest file; disabling it keeps the user's
+ * selection, or pins the file that was being followed. Following a rotated file
+ * would otherwise pin the panel to it.
  */
-export function selectFileAfterFollow(follow: boolean, selectedFile: string | null): string | null {
-  return follow ? null : selectedFile;
+export function selectFileAfterFollow(
+  follow: boolean,
+  selectedFile: string | null,
+  currentFileName?: string | null,
+): string | null {
+  if (follow) return null;
+  return selectedFile ?? currentFileName ?? null;
 }
