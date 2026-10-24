@@ -16,6 +16,8 @@ import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
+import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
+import type { ChatDraftImage } from "@/lib/draft-store";
 import { rememberSessionContinuation, clearSessionContinuation } from "@/lib/workspace-memory";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { ContextUsage, GoalStatusInfo, SessionStatsInfo, SlashCommandInfo } from "@/lib/omp-types";
@@ -166,7 +168,7 @@ export interface CompactResultInfo {
 
 export type BuiltinSlashCommandResult =
   | { handled: false }
-  | { handled: true; message?: string; error?: string; prompt?: string; action?: "openSessionStats" };
+  | { handled: true; message?: string; error?: string; prompt?: string; action?: "openSessionStats" | "openRewind" };
 
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
@@ -336,6 +338,7 @@ function readCompactResult(result: unknown, reason: string): CompactResultInfo |
 }
 
 export interface ChatInputHandle {
+  focus: () => void;
   insertText: (text: string) => void;
   insertIfEmpty: (content: string) => void;
   prependText: (text: string) => void;
@@ -401,6 +404,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
+  const [rewindOpen, setRewindOpen] = useState(false);
+  const rewindInFlightRef = useRef(false);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [modelSwitching, setModelSwitching] = useState(false);
@@ -1971,20 +1976,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!match) return { handled: false };
 
     const [, commandName, rawArgs = ""] = match;
+    const normalizedCommandName = normalizeRewindCommand(commandName);
     const args = rawArgs.trim();
     const sid = sessionIdRef.current ?? await ensureNewSession();
     const complete = (result: BuiltinSlashCommandResult): BuiltinSlashCommandResult => {
       if (!result.handled) return result;
       if (result.error) {
         addNotice({ type: "error", message: result.error });
-      } else if (result.action !== "openSessionStats") {
+      } else if (result.action !== "openSessionStats" && result.action !== "openRewind") {
         addNotice({ type: "success", message: result.message ?? "Command completed" });
       }
       return result;
     };
 
     try {
-      switch (commandName) {
+      switch (normalizedCommandName) {
         case "compact": {
           if (!sid || isCompacting) return complete({ handled: true, error: "No active session to compact" });
           setIsCompacting(true);
@@ -2067,6 +2073,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           return complete({ handled: true, message: result?.message ?? "Command completed" });
         }
 
+        case "rewind": {
+          const plan = planRewindCommand({
+            agentRunning: agentRunningRef.current,
+            bashRunning: bashRunningRef.current,
+          });
+          if ("action" in plan) setRewindOpen(true);
+          return complete(plan);
+        }
+
         case "handoff": {
           if (!sid) return complete({ handled: true, error: "No active session" });
           if (agentRunningRef.current || bashRunningRef.current) {
@@ -2128,6 +2143,63 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (commandName === "compact") setIsCompacting(false);
     }
   }, [addNotice, appendCommandOutput, ensureEventsConnected, ensureNewSession, handleFork, isCompacting, loadModels, loadSession, loadSlashCommands, loadTools, promoteNewSession, onSessionStatsPanelOpen, scheduleEventStreamClose]);
+
+  const closeRewindPanel = useCallback(() => {
+    setRewindOpen(false);
+  }, []);
+
+  // Resolves to whether the picker is closed, so the caller only moves focus
+  // once nothing is left for the picker to receive.
+  const handleRewind = useCallback(async (entryId: string): Promise<boolean> => {
+    // The picker stays clickable until React re-renders, so a double click
+    // would otherwise fire two tree moves and restore the draft twice.
+    if (rewindInFlightRef.current) {
+      setRewindOpen(false);
+      addNotice({ type: "info", message: "Rewind is already in progress" });
+      return true;
+    }
+
+    const plan = planRewindCommand({
+      agentRunning: agentRunningRef.current,
+      bashRunning: bashRunningRef.current,
+    });
+    if ("error" in plan) {
+      addNotice({ type: "error", message: plan.error });
+      return false;
+    }
+
+    const sid = sessionIdRef.current;
+    if (!sid) {
+      addNotice({ type: "error", message: "No active session to rewind" });
+      setRewindOpen(false);
+      return true;
+    }
+
+    rewindInFlightRef.current = true;
+    // Close before the round trip so the picker cannot take another selection.
+    setRewindOpen(false);
+    try {
+      const result = await sendAgentCommand<{
+        cancelled?: boolean;
+        editorText?: string;
+        editorImages?: ChatDraftImage[];
+      }>(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef);
+      if (!result || result.cancelled) {
+        addNotice({ type: "info", message: "Rewind cancelled" });
+        return true;
+      }
+      // Rewind is an SDK-side tree move: the SDK pulls out the editor draft of
+      // the message it rewound past, so reload the transcript and hand that
+      // draft back to the composer.
+      await loadSession(sessionIdRef.current ?? sid);
+      opts.chatInputRef?.current?.restoreSubmission(result.editorText ?? "", result.editorImages);
+    } catch (e) {
+      addNotice({ type: "error", message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      rewindInFlightRef.current = false;
+    }
+    return true;
+  }, [addNotice, loadSession, opts.chatInputRef]);
 
   // Queued (undelivered) messages live in the queue panel only; the chat gets
   // the real user message when pi delivers it (user message_end event). An
@@ -2449,6 +2521,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     effectiveThinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, modelSwitching, sessionStats,
+    rewindOpen, closeRewindPanel, handleRewind,
     slashCommands, slashCommandsLoading, queuedMessages, subagents,
     notices: noticeState.visible, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection: isNew && newSessionModel === null,
