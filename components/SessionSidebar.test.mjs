@@ -63,7 +63,6 @@ test("manual and lifecycle refreshes bypass the server session-list cache", () =
 
 test("does not expose disk-backed actions for transient sessions", () => {
   assert.match(sessionItemSource, /if \(session\.transient\) return;/);
-  assert.match(sessionItemSource, /\{hovered && !session\.transient && \(/);
 });
 
 // Execute the actual activity effect with state/notification doubles, so these

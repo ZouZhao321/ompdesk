@@ -1934,6 +1934,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                     background: canQueueStreamingMessage ? "rgba(234,179,8,0.12)" : "none",
                     border: "1px solid rgba(234,179,8,0.35)",
                     borderRadius: 8,
@@ -1957,6 +1959,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                     background: canQueueStreamingMessage ? "rgba(129,140,248,0.12)" : "none",
                     border: "1px solid rgba(129,140,248,0.35)",
                     borderRadius: 8,
@@ -2011,6 +2015,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         {bashMode && (
           <div className="text-xs px-2 py-1" style={{ color: bashExcluded ? "var(--text-muted)" : "var(--accent)", marginTop: 4 }}>
              {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
+          </div>
+        )}
+        {/* Mobile: the space freed by the hidden center meter is reused only
+            while the more-controls panel is open, above the bottom bar. */}
+        {isMobile && controlsMenuOpen && (
+          <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+            <ContextUsageMeter usage={contextUsage} t={t} />
           </div>
         )}
         {/* Bottom bar: left | center (context) | right */}
