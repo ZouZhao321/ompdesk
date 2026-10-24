@@ -123,10 +123,10 @@ function parseUploadFileNames(value: unknown): string[] | null {
   return value;
 }
 
-export async function POST(
+export const POST = withRequestLog("/api/files/[...path]", async (
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
-) {
+) => {
   if (!isApiRequestAllowed(request)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -240,7 +240,7 @@ export async function POST(
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
-}
+});
 
 function createFileBodyStream(filePath: string, range?: { start: number; end: number }): ReadableStream<Uint8Array> {
   const fileStream = fs.createReadStream(filePath, range);

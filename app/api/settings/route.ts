@@ -171,7 +171,7 @@ async function getRouteHandler(req: Request) {
   }
 }
 
-export async function PATCH(req: Request) {
+export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
   try {
     const body = await req.json() as { path?: string; value?: unknown };
     if (!body.path || !findSetting(body.path) || !hasUi(body.path as SettingPath)) {
@@ -192,4 +192,4 @@ export async function PATCH(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
-}
+});

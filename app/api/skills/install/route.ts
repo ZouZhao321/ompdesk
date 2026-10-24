@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { runNpx, getSafeNpxEnv, redactNpxOutput } from "@/lib/npx";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
+import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { getProjectTrustStatus } from "@/lib/project-trust";
 
@@ -12,7 +13,7 @@ const SKILL_PACKAGE_RE = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+@[A-Za-z0-9_.-]+
 const MAX_SKILL_PACKAGE_LENGTH = 256;
 
 // POST /api/skills/install  body: { package: string; scope: "global" | "project"; cwd?: string }
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/skills/install", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -68,4 +69,4 @@ export async function POST(req: Request) {
     const output = redactNpxOutput((err.stdout ?? "") + (err.stderr ?? "")).replace(ANSI_RE, "").slice(-4000);
     return NextResponse.json({ error: output || "Install failed" }, { status: 500 });
   }
-}
+});

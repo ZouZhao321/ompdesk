@@ -38,7 +38,7 @@ async function getRouteHandler(req: Request) {
 }
 
 // PATCH /api/skills — toggle disable-model-invocation on a SKILL.md file
-export async function PATCH(req: Request) {
+export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -107,4 +107,4 @@ export async function PATCH(req: Request) {
   } catch {
     return NextResponse.json({ error: "Unable to update skill metadata" }, { status: 500 });
   }
-}
+});

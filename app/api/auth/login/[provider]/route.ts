@@ -17,10 +17,10 @@ function getCallbackRegistry() {
 }
 
 // POST /api/auth/login/[provider] — frontend sends redirect URL or auth code
-export async function POST(
+export const POST = withRequestLog("/api/auth/login/[provider]", async (
   req: Request,
   { params }: { params: Promise<{ provider: string }> }
-) {
+) => {
   const { provider } = await params;
   const { token, code } = (await req.json()) as { token?: string; code?: string };
 
@@ -41,7 +41,7 @@ export async function POST(
   callbacks.resolve(code);
   registry.delete(token);
   return Response.json({ ok: true, provider });
-}
+});
 
 // GET /api/auth/login/[provider] — SSE stream for OAuth flow
 export const GET = withRequestLog("/api/auth/login/[provider]", getRouteHandler);

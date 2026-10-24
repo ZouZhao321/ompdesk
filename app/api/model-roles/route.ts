@@ -46,7 +46,7 @@ async function getRouteHandler(req: Request) {
  * identically in `omp`'s `/model` selector. `selector: null` clears the role at
  * that layer and lets the next layer down take over.
  */
-export async function PUT(req: Request) {
+export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -87,4 +87,4 @@ export async function PUT(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
-}
+});
