@@ -837,6 +837,7 @@ export function AppShell() {
         <button
           onClick={() => setSettingsConfigOpen(true)}
           title={translate("common.settings")}
+          className="sidebar-settings-button"
           style={{
             width: "100%", height: 34, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             background: "none", border: "1px solid var(--border)", borderRadius: 9,

@@ -58,6 +58,7 @@ function ToolbarIconButton({
       title={title}
       aria-label={title}
       aria-pressed={ariaPressed}
+      className="sidebar-toolbar-icon-button"
       style={{
         position: "relative",
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -1874,6 +1875,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                 saveExplorerOpen(next);
                 return next;
               })}
+              className="sidebar-explorer-toggle"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -2027,6 +2029,7 @@ function ArchivedSessionsSection({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        className="sidebar-archived-toggle"
         style={{
           display: "flex", alignItems: "center", gap: 6,
           width: "100%", padding: "7px 12px",
