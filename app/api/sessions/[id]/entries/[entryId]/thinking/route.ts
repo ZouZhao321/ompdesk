@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { getSessionEntries, resolveSessionPath } from "@/lib/session-reader";
 
-export async function GET(
+export const GET = withRequestLog("/api/sessions/[id]/entries/[entryId]/thinking", getRouteHandler);
+
+async function getRouteHandler(
   req: Request,
   { params }: { params: Promise<{ id: string; entryId: string }> },
 ) {

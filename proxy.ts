@@ -3,7 +3,15 @@ import {
   isApiRequestAllowed,
   isApiRequestHostAllowed,
 } from "@/lib/request-security";
-import { authorizeWebRequest } from "@/lib/web-auth";
+import { logEvent } from "@/lib/logging";
+import {
+  ACTOR_HEADER,
+  CLIENT_ADDRESS_HEADER,
+  REQUEST_ID_HEADER,
+  resolveForwardedAddress,
+  type RequestActor,
+} from "@/lib/request-headers";
+import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 
 /**
  * The password-recovery surface, and the only thing that answers without
@@ -48,14 +56,52 @@ function unauthorizedPage(): string {
 `;
 }
 
+/**
+ * Forward the correlation headers to the route handler. The client's own values
+ * are replaced, so a caller cannot choose the id their request is logged under.
+ */
+function continueWithRequestHeaders(
+  request: NextRequest,
+  requestId: string,
+  actor: RequestActor,
+): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
+  headers.set(ACTOR_HEADER, actor);
+  // Overwrite any client-supplied value so a route can use this as a
+  // rate-limit bucket without trusting forwarding headers itself. The value is
+  // only as good as the deployment: without `OMPDESK_TRUST_PROXY` the client
+  // sets the forwarding headers, so the address is recorded as `local`.
+  headers.set(CLIENT_ADDRESS_HEADER, resolveForwardedAddress(request.headers));
+  return NextResponse.next({ request: { headers } });
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const requestId = globalThis.crypto.randomUUID();
+  const securityFields = {
+    requestId,
+    route: pathname,
+    method: request.method,
+  };
   const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
   const isTrustedRequest = isApiRequest
     ? isApiRequestAllowed(request)
     : isApiRequestHostAllowed(request);
 
   if (!isTrustedRequest) {
+    // The combined check already rejected the request; asking about the host
+    // again only narrows the reason, it never lets a rejected request through.
+    const hostDenied = !isApiRequestHostAllowed(request);
+    logEvent(
+      "warn",
+      "security",
+      hostDenied ? "security.host.denied" : "security.origin.denied",
+      {
+        ...securityFields,
+        reason: hostDenied ? "untrusted-host" : "cross-site-request",
+      },
+    );
     if (!isApiRequest) {
       return new NextResponse("Untrusted request", { status: 403 });
     }
@@ -64,11 +110,23 @@ export function proxy(request: NextRequest) {
 
   // Recovery stays reachable while locked out — that is the whole point of it —
   // but only after the host and cross-site checks above have run.
-  if (pathname === RECOVERY_PAGE || pathname === RECOVERY_API) return NextResponse.next();
+  if (pathname === RECOVERY_PAGE || pathname === RECOVERY_API) {
+    logEvent("info", "security", "security.recovery.access", {
+      ...securityFields,
+      reason: "recovery-surface",
+    });
+    return continueWithRequestHeaders(request, requestId, "recovery");
+  }
 
-  const decision = authorizeWebRequest(request.headers.get("authorization"));
+  const authorization = authorizeWebRequestWithActor(
+    request.headers.get("authorization"),
+  );
 
-  if (decision === "unavailable") {
+  if (authorization.decision === "unavailable") {
+    logEvent("warn", "security", "security.auth.unavailable", {
+      ...securityFields,
+      reason: "credential-file-unreadable",
+    });
     const message = "Password access is enabled but the ompdesk credential file could not be read."
       + " Run `ompdesk --reset-password` on the server to set a new password.";
     return isApiRequest
@@ -76,7 +134,11 @@ export function proxy(request: NextRequest) {
       : new NextResponse(message, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 
-  if (decision === "unauthorized") {
+  if (authorization.decision === "unauthorized") {
+    logEvent("warn", "security", "security.auth.denied", {
+      ...securityFields,
+      reason: request.headers.get("authorization") ? "invalid-credentials" : "missing-credentials",
+    });
     return isApiRequest
       ? NextResponse.json(
         { error: "Authentication required", recoveryPath: RECOVERY_PAGE },
@@ -88,7 +150,7 @@ export function proxy(request: NextRequest) {
       });
   }
 
-  return NextResponse.next();
+  return continueWithRequestHeaders(request, requestId, authorization.actor);
 }
 
 export const config = { matcher: ["/", "/recover", "/api/:path*"] };

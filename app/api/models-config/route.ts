@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
@@ -74,14 +76,16 @@ function writeModelsConfig(data: Record<string, unknown>): void {
   writePrivateFileAtomicSync(path, stringifyYaml(sanitizeModelsConfig(data), { lineWidth: 0 }));
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/models-config", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
   return NextResponse.json(readModelsConfig());
 }
 
-export async function PUT(req: Request) {
+export const PUT = withRequestLog("/api/models-config", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -89,9 +93,11 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
   }
 
+  const target = getWritePath();
   try {
     const body = await req.json() as unknown;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      auditFailure("models.config.write", target, { status: 400, reason: "not-an-object" });
       return NextResponse.json({ error: "models config must be an object" }, { status: 400 });
     }
     const config = body as Record<string, unknown>;
@@ -99,6 +105,7 @@ export async function PUT(req: Request) {
       "providers" in config
       && (typeof config.providers !== "object" || config.providers === null || Array.isArray(config.providers))
     ) {
+      auditFailure("models.config.write", target, { status: 400, reason: "invalid-providers" });
       return NextResponse.json({ error: "providers must be an object" }, { status: 400 });
     }
     writeModelsConfig(config);
@@ -106,8 +113,13 @@ export async function PUT(req: Request) {
     // The registry caches models.yml at construction; drop it so the next
     // request rebuilds against the edited providers.
     invalidateOmpRuntime();
+    const providers = config.providers && typeof config.providers === "object"
+      ? Object.keys(config.providers).length
+      : 0;
+    auditSuccess("models.config.write", target, { providers });
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    auditFailure("models.config.write", target, { status: 500, error });
     return NextResponse.json({ error: "Unable to save models config" }, { status: 500 });
   }
-}
+});
