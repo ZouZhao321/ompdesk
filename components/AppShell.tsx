@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
@@ -15,6 +15,7 @@ import { BranchNavigator } from "./BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useAudio } from "@/hooks/useAudio";
@@ -28,6 +29,7 @@ import {
   showBrowserNotification,
 } from "@/lib/browser-notifications";
 import { getInitialNavigation } from "@/lib/initial-navigation";
+import { sessionDisplayTitle } from "@/lib/session-title";
 import { clearLastOpen, getLastOpenSession, setLastOpenSession, getSessionContinuation, clearSessionContinuation, rememberSessionContinuation, restoreSessionContinuation } from "@/lib/workspace-memory";
 import {
   getDefaultRightPanelWidth,
@@ -55,8 +57,22 @@ type AutoNameStatus =
 /** 顶栏尺寸：手机档把高度与按钮命中区放大到 44px，桌面档保持原样。 */
 const TOP_BAR_METRICS = {
   desktop: { height: 36, iconButton: 36 },
-  mobile: { height: 44, iconButton: 44 },
+  mobile: { height: MOBILE_HIT_TARGET_PX, iconButton: MOBILE_HIT_TARGET_PX },
 } as const;
+/** 文件面板开关在手机档顶栏与桌面档悬浮按钮之间共用的外观。 */
+const FILE_PANEL_TOGGLE_STYLE = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  zIndex: 300,
+  background: "var(--bg-panel)",
+  border: "none",
+  borderLeft: "1px solid var(--border)",
+  borderBottom: "1px solid var(--border)",
+  cursor: "pointer",
+  transition: "color 0.12s",
+} satisfies CSSProperties;
 const LANGUAGE_MENU_WIDTH = 176;
 
 export function AppShell() {
@@ -739,9 +755,9 @@ export function AppShell() {
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
-  // 手机档顶栏展示的会话标题，与侧栏会话行的回退顺序一致。
+  // 手机档顶栏展示的会话标题，与侧栏会话行共用 lib/session-title.ts 的回退顺序。
   const mobileSessionTitle = selectedSession
-    ? selectedSession.name || selectedSession.firstMessage.slice(0, 50) || selectedSession.id.slice(0, 12)
+    ? sessionDisplayTitle(selectedSession)
     : "";
   const showSubagentPanel = !isMobile && selectedSession !== null && subagents.length > 0;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
@@ -866,25 +882,23 @@ export function AppShell() {
        title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
        aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
       style={{
+        ...FILE_PANEL_TOGGLE_STYLE,
         ...(isMobile
           ? {
               position: "relative" as const,
-              zIndex: 300,
               marginLeft: "auto",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: topBar.iconButton, height: topBar.iconButton, padding: 0,
-              background: "var(--bg-panel)", border: "none", borderLeft: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
-              color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-              cursor: "pointer", transition: "color 0.12s", flexShrink: 0,
+              width: topBar.iconButton,
+              height: topBar.iconButton,
+              flexShrink: 0,
             }
           : {
-              position: "fixed", top: "env(safe-area-inset-top)", right: "env(safe-area-inset-right)", zIndex: 300,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "var(--bg-panel)", border: "none", borderLeft: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
-              color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-              cursor: "pointer", transition: "color 0.12s",
+              position: "fixed" as const,
+              top: "env(safe-area-inset-top)",
+              right: "env(safe-area-inset-right)",
+              width: 36,
+              height: 36,
             }),
+        color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
       }}
       onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
@@ -952,10 +966,9 @@ export function AppShell() {
         animation: session-info-light-wash 620ms ease-out both;
       }
       /* 手机档顶栏的分支入口与图标按钮保持同一命中区。 */
-      .mobile-topbar-branches > div > button {
+      .mobile-topbar-branch-button {
         min-width: 44px;
         justify-content: center;
-        padding: 0;
       }
       @media (prefers-reduced-motion: reduce) {
         .session-info-popover,
@@ -1192,7 +1205,7 @@ export function AppShell() {
             </button>
           )}
           {showChat && (
-            <div className={isMobile ? "mobile-topbar-branches" : undefined} style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
+            <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
               {!isMobile && (<>
               <button
                 onClick={handleViewFullHistory}
@@ -1327,6 +1340,7 @@ export function AppShell() {
                 onLeafChange={handleBranchLeafChange}
                 inline
                 compact={isMobile}
+                buttonClassName={isMobile ? "mobile-topbar-branch-button" : undefined}
                 containerRef={topBarRef}
                 open={activeTopPanel === "branches"}
                 onToggle={() => toggleTopPanel("branches")}
@@ -1363,7 +1377,7 @@ export function AppShell() {
                   display: "flex", alignItems: "center", gap: 10,
                   paddingLeft: 12,
                   paddingRight: isMobile ? 12 : rightPanelOpen ? 12 : 48,
-                  minWidth: isMobile ? topBar.iconButton : undefined,
+                  minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                   height: "100%",
                   background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
                   border: "none",
