@@ -26,6 +26,7 @@ function props(overrides = {}) {
     paused: false,
     loading: false,
     error: null,
+    catchingUp: false,
     selectedFile: null,
     expandedOffset: null,
     onLevelChange: noop,
@@ -76,6 +77,15 @@ test("shows no-matches separately from a genuinely empty file", () => {
   const file = { name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true };
   assert.match(render({ files: [file], file, level: "warn" }), /No matching entries/);
   assert.match(render({ files: [file], file }), /This log file is empty/);
+});
+
+test("does not claim no matches while a truncated page is still catching up", () => {
+  const file = { name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true };
+  const html = render({ files: [file], file, level: "warn", catchingUp: true });
+
+  assert.match(html, /Catching up/);
+  assert.match(html, /data-kind="catching-up"/);
+  assert.equal(html.includes("No matching entries"), false, html);
 });
 
 test("renders level badges, messages, and file metadata", () => {
