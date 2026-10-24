@@ -121,6 +121,7 @@ lib/
   file-access.ts       /api/files 与 worktree 允许的文件根
   file-paths.ts        客户端与服务端的路径编码辅助
   markdown.ts          共享 markdown 辅助
+  mobile-layout.ts     移动档断点常量与 isMobileLayout() 判定
   model-roles.ts       omp 的模型角色，供浏览器读写
   model-scope.ts       UI 与启动共享的 enabledModels 解析
   npx.ts               skill 安装使用的 npx 运行器
@@ -130,7 +131,8 @@ lib/
   rpc-manager.ts       AgentSessionWrapper + 注册表 + startRpcSession
   session-reader.ts    会话列表 + 路径缓存 + buildSessionContext 适配器
   session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
-  session-title.ts     omp 自带标题生成器的薄封装
+  session-title.ts     会话显示标题回退与标题文本工具
+  session-title-generator.ts  omp 标题生成器封装（仅服务端）
   tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
   types.ts             共享 TypeScript 类型
   normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
@@ -372,6 +374,18 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
 在 Bun 下因此是空操作；它的 undici `EnvHttpProxyAgent` 路径只为在 Node 上运行的
 开发服务器存在，因为 Bun 把 `undici` 解析为自己的 shim，其中
 `setGlobalDispatcher` 不影响 `fetch`，`install` 不存在。
+
+### 移动档布局（`lib/mobile-layout.ts`）
+- 判定移动档只有一个来源：`lib/mobile-layout.ts` 的 `isMobileLayout()`。宽度
+  ≤ `MOBILE_MAX_WIDTH`（768），或粗指针且高度 ≤ `MOBILE_MAX_COARSE_HEIGHT`
+  （480）。`hooks/useIsMobile.ts` 只订阅视口变化并调用它，不再自带判断。
+- `app/globals.css` 的移动查询 `(max-width: 768px), (pointer: coarse) and
+  (max-height: 480px)` 与上述函数语义一致；改断点时两处同时改，否则 React 侧与
+  CSS 侧会分叉。
+- 手机档的四个界面——顶栏、输入区（含扩展弹窗）、侧栏抽屉、消息操作——的可点
+  控件按 `MOBILE_HIT_TARGET_PX`（44px）给命中区。TSX 中的尺寸直接引用该常量，
+  不要重写 `44`；CSS 无法导入 TS 常量，`app/globals.css` 内的手机查询使用等值
+  的 `44px`。
 
 ## omp 会话文件格式
 

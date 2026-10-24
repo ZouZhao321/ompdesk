@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
@@ -15,6 +15,7 @@ import { BranchNavigator } from "./BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useAudio } from "@/hooks/useAudio";
@@ -28,6 +29,7 @@ import {
   showBrowserNotification,
 } from "@/lib/browser-notifications";
 import { getInitialNavigation } from "@/lib/initial-navigation";
+import { sessionDisplayTitle } from "@/lib/session-title";
 import { clearLastOpen, getLastOpenSession, setLastOpenSession, getSessionContinuation, clearSessionContinuation, rememberSessionContinuation, restoreSessionContinuation } from "@/lib/workspace-memory";
 import {
   getDefaultRightPanelWidth,
@@ -52,7 +54,25 @@ type AutoNameStatus =
   | { kind: "success" }
   | { kind: "error"; message: string };
 
-const TOP_BAR_ICON_BUTTON_SIZE = 36;
+/** 顶栏尺寸：手机档把高度与按钮命中区放大到 44px，桌面档保持原样。 */
+const TOP_BAR_METRICS = {
+  desktop: { height: 36, iconButton: 36 },
+  mobile: { height: MOBILE_HIT_TARGET_PX, iconButton: MOBILE_HIT_TARGET_PX },
+} as const;
+/** 文件面板开关在手机档顶栏与桌面档悬浮按钮之间共用的外观。 */
+const FILE_PANEL_TOGGLE_STYLE = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  zIndex: 300,
+  background: "var(--bg-panel)",
+  border: "none",
+  borderLeft: "1px solid var(--border)",
+  borderBottom: "1px solid var(--border)",
+  cursor: "pointer",
+  transition: "color 0.12s",
+} satisfies CSSProperties;
 const LANGUAGE_MENU_WIDTH = 176;
 
 export function AppShell() {
@@ -64,6 +84,7 @@ export function AppShell() {
     preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
   const isMobile = useIsMobile();
+  const topBar = isMobile ? TOP_BAR_METRICS.mobile : TOP_BAR_METRICS.desktop;
   useViewportHeight();
   // Audio ownership lives here (not in ChatWindow) so the completion tone can
   // also fire for tasks finishing in a non-active workspace whose ChatWindow
@@ -734,6 +755,10 @@ export function AppShell() {
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
+  // 手机档顶栏展示的会话标题，与侧栏会话行共用 lib/session-title.ts 的回退顺序。
+  const mobileSessionTitle = selectedSession
+    ? sessionDisplayTitle(selectedSession)
+    : "";
   const showSubagentPanel = !isMobile && selectedSession !== null && subagents.length > 0;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   // While restoring initial session from URL, don't show the placeholder
@@ -828,6 +853,7 @@ export function AppShell() {
         <button
           onClick={() => setSettingsConfigOpen(true)}
           title={translate("common.settings")}
+          className="sidebar-settings-button"
           style={{
             width: "100%", height: 34, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             background: "none", border: "1px solid var(--border)", borderRadius: 9,
@@ -845,6 +871,42 @@ export function AppShell() {
         </button>
       </div>
     </>
+  );
+
+  // 手机档放进顶栏末尾，桌面档仍用右上角固定悬浮按钮。
+  const filePanelToggle = (
+    <button
+      onClick={() => setRightPanelOpen((v) => !v)}
+       aria-controls="file-panel"
+       aria-expanded={rightPanelOpen}
+       title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+       aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+      style={{
+        ...FILE_PANEL_TOGGLE_STYLE,
+        ...(isMobile
+          ? {
+              position: "relative" as const,
+              marginLeft: "auto",
+              width: topBar.iconButton,
+              height: topBar.iconButton,
+              flexShrink: 0,
+            }
+          : {
+              position: "fixed" as const,
+              top: "env(safe-area-inset-top)",
+              right: "env(safe-area-inset-right)",
+              width: 36,
+              height: 36,
+            }),
+        color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
+      </svg>
+    </button>
   );
 
   return (
@@ -903,13 +965,18 @@ export function AppShell() {
         background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 24%, transparent), transparent);
         animation: session-info-light-wash 620ms ease-out both;
       }
+      /* 手机档顶栏的分支入口与图标按钮保持同一命中区。 */
+      .mobile-topbar-branch-button {
+        min-width: 44px;
+        justify-content: center;
+      }
       @media (prefers-reduced-motion: reduce) {
         .session-info-popover,
         .session-info-popover::after {
           animation: none;
         }
       }
-      @media (max-width: 640px) {
+      @media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
         .sidebar-overlay-backdrop.sidebar-mobile-pending {
           opacity: 0 !important;
           pointer-events: none !important;
@@ -976,14 +1043,14 @@ export function AppShell() {
       {/* Center: chat */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}>
+        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: `calc(${topBar.height}px + env(safe-area-inset-top))`, paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}>
           <button
             onClick={handleSidebarToggle}
              title={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
              aria-label={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+              width: topBar.iconButton, height: topBar.iconButton, padding: 0,
               background: "none", border: "none", borderRight: "1px solid var(--border)",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
@@ -1000,6 +1067,20 @@ export function AppShell() {
               </svg>
             )}
           </button>
+          {isMobile && showChat && (
+            <div
+              title={mobileSessionTitle}
+              style={{
+                display: "flex", alignItems: "center",
+                flex: 1, minWidth: 0, height: "100%", padding: "0 10px",
+                fontSize: 12, color: "var(--text)", overflow: "hidden",
+                whiteSpace: "nowrap", textOverflow: "ellipsis",
+              }}
+            >
+              {mobileSessionTitle}
+            </div>
+          )}
+          {!isMobile && (
           <button
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
@@ -1009,7 +1090,7 @@ export function AppShell() {
             aria-label={translate(themeLabelKey)}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+              width: topBar.iconButton, height: topBar.iconButton, padding: 0,
               background: "none", border: "none", borderRight: "1px solid var(--border)",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
@@ -1036,6 +1117,8 @@ export function AppShell() {
               </svg>
             )}
            </button>
+          )}
+          {!isMobile && (
            <button
              ref={languageBtnRef}
              type="button"
@@ -1047,7 +1130,7 @@ export function AppShell() {
              aria-pressed={activeTopPanel === "language"}
              style={{
                display: "flex", alignItems: "center", justifyContent: "center",
-               width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+               width: topBar.iconButton, height: topBar.iconButton, padding: 0,
                background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
                border: "none", borderRight: "1px solid var(--border)",
                color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
@@ -1077,6 +1160,7 @@ export function AppShell() {
                <path d="M14 18h6" />
              </svg>
            </button>
+          )}
           {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
               type="button"
@@ -1089,9 +1173,12 @@ export function AppShell() {
               style={{
                 display: "flex",
                 alignItems: "center",
+                justifyContent: isMobile ? "center" : undefined,
                 gap: 6,
                 height: "100%",
-                padding: isMobile ? "0 10px" : "0 12px",
+                width: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                padding: isMobile ? 0 : "0 12px",
                 background: "none",
                 border: "none",
                 borderRight: "1px solid var(--border)",
@@ -1122,6 +1209,7 @@ export function AppShell() {
           )}
           {showChat && (
             <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
+              {!isMobile && (<>
               <button
                 onClick={handleViewFullHistory}
                 disabled={!selectedSession}
@@ -1173,7 +1261,7 @@ export function AppShell() {
                   <path d="M3 3v5h5" />
                   <path d="M12 7v5l3 2" />
                 </svg>
-                 {!isMobile && <span>{translate("history.label")}</span>}
+                 <span>{translate("history.label")}</span>
               </button>
               {(() => {
                 // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
@@ -1244,16 +1332,18 @@ export function AppShell() {
                         <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
                       </svg>
                     )}
-                    {!isMobile && <span>{label}</span>}
+                    <span>{label}</span>
                   </button>
                 );
               })()}
+              </>)}
               <BranchNavigator
                 tree={branchTree}
                 activeLeafId={branchActiveLeafId}
                 onLeafChange={handleBranchLeafChange}
                 inline
                 compact={isMobile}
+                buttonClassName={isMobile ? "mobile-topbar-branch-button" : undefined}
                 containerRef={topBarRef}
                 open={activeTopPanel === "branches"}
                 onToggle={() => toggleTopPanel("branches")}
@@ -1289,7 +1379,8 @@ export function AppShell() {
                   marginLeft: "auto",
                   display: "flex", alignItems: "center", gap: 10,
                   paddingLeft: 12,
-                  paddingRight: rightPanelOpen ? 12 : 48,
+                  paddingRight: isMobile ? 12 : rightPanelOpen ? 12 : 48,
+                  minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                   height: "100%",
                   background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
                   border: "none",
@@ -1566,6 +1657,7 @@ export function AppShell() {
             </div>
           )}
 
+          {isMobile && filePanelToggle}
         </div>
 
         {/* Chat content */}
@@ -1678,7 +1770,7 @@ export function AppShell() {
         } as React.CSSProperties}
       >
         {/* Right panel tab bar */}
-        <div style={{
+        <div className="panel-tab-header" style={{
           display: "flex",
           alignItems: "center",
           flexShrink: 0,
@@ -1723,28 +1815,8 @@ export function AppShell() {
         </div>
       </div>
     </div>
-    {/* File panel toggle — always visible at top-right */}
-    <button
-      onClick={() => setRightPanelOpen((v) => !v)}
-       aria-controls="file-panel"
-       aria-expanded={rightPanelOpen}
-       title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-       aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-      style={{
-        position: "fixed", top: "env(safe-area-inset-top)", right: "env(safe-area-inset-right)", zIndex: 300,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 36, height: 36, padding: 0,
-        background: "var(--bg-panel)", border: "none", borderLeft: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
-        color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", transition: "color 0.12s",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-      </svg>
-    </button>
+    {/* File panel toggle — desktop fixed overlay; on mobile it sits at the end of the top bar */}
+    {!isMobile && filePanelToggle}
     {settingsConfigOpen && (
       <SettingsConfig
         cwd={projectTrustCwd}

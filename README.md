@@ -109,6 +109,49 @@ API requests accept loopback names, IP literals, the selected bind hostname, and
 
 Full details, including the recovery threat model: [docs/authentication.md](./docs/authentication.md).
 
+## Phone access (Tailscale)
+
+The desktop app and the `bun run dev` / `bun run start` scripts serve the
+fixed loopback port **30141** and never pick another one, so a tailnet forward
+set up once keeps working across restarts. The `ompdesk` CLI launcher defaults
+to 30141 but takes another port (`ompdesk --port 8080`, `PORT=8080 ompdesk`);
+point the tailnet forward at whichever port it uses.
+
+1. Start ompdesk on the machine that holds your projects and sessions: the
+   desktop app, `ompdesk`, or `bun run start`.
+2. Turn the password lock on (see [Password access](#password-access)). Phone
+   access without Basic Auth hands your agent to everyone on the tailnet.
+3. Forward the loopback port into your tailnet. `--bg` keeps the forward in
+   place across reboots:
+   ```bash
+   tailscale serve --bg --tcp=30141 tcp://localhost:30141
+   ```
+4. On the phone, open `http://<tailnet address>:30141` — the machine's tailnet
+   IPv4 address (`tailscale ip -4` prints it) — and sign in with the Basic
+   Auth username `omp` and the password from step 2.
+
+Keep these constraints in mind:
+
+- **MagicDNS names need `OMPDESK_ALLOWED_HOSTS`.** IP literals and loopback
+  names pass the host check as they are; the machine's tailnet name
+  (`<machine>.<tailnet>.ts.net`) does not, so add that exact name
+  (`OMPDESK_ALLOWED_HOSTS=myhost.tail1234.ts.net`) before opening
+  `http://myhost.tail1234.ts.net:30141`. The desktop app reads the variable
+  from the environment it was launched in.
+- **Plain HTTP is only acceptable inside the tailnet.** Basic Auth sends the
+  password in cleartext, so reaching ompdesk from outside a trusted tailnet
+  needs TLS — for example a tailnet HTTPS forward
+  (`tailscale serve --bg --https=443 http://localhost:30141`, then
+  `https://<tailnet address>/`) or a reverse proxy that terminates HTTPS.
+- **Run one ompdesk server per port.** The desktop shell cannot bind a port
+  another process already holds: it logs `port 30141 on 127.0.0.1 is already in
+  use` and exits with a non-zero status instead of picking another port. The
+  CLI launcher passes the requested port through unchanged, so a taken port
+  fails there too instead of moving to a free one.
+
+The desktop shell writes its startup lines (including the port it serves) to
+`omp-desktop.log` in the system temp directory.
+
 ## Model roles
 
 omp does not have "the" model — it has a model per **scope of work**, and ompdesk exposes the same roles the TUI's `/model` selector and `Ctrl+P` cycle use:
@@ -248,8 +291,11 @@ Avoid running `bun run build` during local development. It writes to `.next/` an
 
 `src-tauri/` is a Tauri v2 shell that runs this same app as a desktop
 application: the webview loads the Next.js server, which is started as a Bun
-sidecar on a free loopback port. Desktop and CLI share `~/.omp`, so sessions,
-credentials and model config are identical across both.
+sidecar on the fixed loopback port 30141 (`http://127.0.0.1:30141`). The port
+never changes between launches, and when another process already holds it the
+shell logs the reason and exits instead of picking a different port. Desktop
+and CLI share `~/.omp`, so sessions, credentials and model config are identical
+across both.
 
 Requires a Rust toolchain in addition to Bun. Useful commands (all defined in
 `package.json`):
