@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { addWorktree, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
 import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
+import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 /** Same gate as /api/files: only session cwds / project roots / explicitly
@@ -54,7 +55,7 @@ export async function GET(req: Request) {
 }
 
 // POST /api/worktrees  body: { cwd, branch }  →  { path, branch }
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/worktrees", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -82,10 +83,10 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 400 });
   }
-}
+});
 
 // DELETE /api/worktrees  body: { cwd, path, force? }
-export async function DELETE(req: Request) {
+export const DELETE = withRequestLog("/api/worktrees", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -113,4 +114,4 @@ export async function DELETE(req: Request) {
     const dirty = /contains modified or untracked files|is dirty/i.test(message);
     return NextResponse.json({ error: message, dirty }, { status: dirty ? 409 : 400 });
   }
-}
+});

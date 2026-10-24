@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { withRequestLog } from "@/lib/api-request-log";
 import { writePrivateFileAtomicSync } from "@/lib/atomic-file";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { invalidateOmpRuntime } from "@/lib/omp-runtime";
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
   return NextResponse.json(readModelsConfig());
 }
 
-export async function PUT(req: Request) {
+export const PUT = withRequestLog("/api/models-config", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -110,4 +111,4 @@ export async function PUT(req: Request) {
   } catch {
     return NextResponse.json({ error: "Unable to save models config" }, { status: 500 });
   }
-}
+});

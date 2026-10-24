@@ -1,4 +1,5 @@
 import type { OAuthAuthInfo, OAuthPrompt } from "@oh-my-pi/pi-ai/oauth";
+import { withRequestLog } from "@/lib/api-request-log";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { getOmpRuntime, invalidateOmpRuntime } from "@/lib/omp-runtime";
 import { resolveOAuthLoginId } from "@/lib/provider-listing-runtime";
@@ -16,10 +17,10 @@ function getCallbackRegistry() {
 }
 
 // POST /api/auth/login/[provider] — frontend sends redirect URL or auth code
-export async function POST(
+export const POST = withRequestLog("/api/auth/login/[provider]", async (
   req: Request,
   { params }: { params: Promise<{ provider: string }> }
-) {
+) => {
   const { provider } = await params;
   const { token, code } = (await req.json()) as { token?: string; code?: string };
 
@@ -40,7 +41,7 @@ export async function POST(
   callbacks.resolve(code);
   registry.delete(token);
   return Response.json({ ok: true, provider });
-}
+});
 
 // GET /api/auth/login/[provider] — SSE stream for OAuth flow
 export async function GET(

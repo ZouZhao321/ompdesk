@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { realpathSync, statSync } from "fs";
 import { allowFileRoot } from "@/lib/file-access";
 import { normalizeDirectory } from "@/lib/directory-browser";
@@ -6,7 +7,7 @@ import { normalizeDirectory } from "@/lib/directory-browser";
 
 // POST /api/cwd/validate  body: { cwd: string }
 // Validates a candidate workspace before the UI selects it.
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/cwd/validate", async (req: Request) => {
   try {
     const body = await req.json() as { cwd?: unknown };
     const cwd = typeof body.cwd === "string" ? body.cwd.trim() : "";
@@ -32,4 +33,4 @@ export async function POST(req: Request) {
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});
