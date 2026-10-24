@@ -3,6 +3,7 @@ import {
   isApiRequestAllowed,
   isApiRequestHostAllowed,
 } from "@/lib/request-security";
+import { logEvent } from "@/lib/logging";
 import {
   ACTOR_HEADER,
   REQUEST_ID_HEADER,
@@ -71,12 +72,29 @@ function continueWithRequestHeaders(
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId = globalThis.crypto.randomUUID();
+  const securityFields = {
+    requestId,
+    route: pathname,
+    method: request.method,
+  };
   const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
   const isTrustedRequest = isApiRequest
     ? isApiRequestAllowed(request)
     : isApiRequestHostAllowed(request);
 
   if (!isTrustedRequest) {
+    // The combined check already rejected the request; asking about the host
+    // again only narrows the reason, it never lets a rejected request through.
+    const hostDenied = !isApiRequestHostAllowed(request);
+    logEvent(
+      "warn",
+      "security",
+      hostDenied ? "security.host.denied" : "security.origin.denied",
+      {
+        ...securityFields,
+        reason: hostDenied ? "untrusted-host" : "cross-site-request",
+      },
+    );
     if (!isApiRequest) {
       return new NextResponse("Untrusted request", { status: 403 });
     }
@@ -86,6 +104,10 @@ export function proxy(request: NextRequest) {
   // Recovery stays reachable while locked out — that is the whole point of it —
   // but only after the host and cross-site checks above have run.
   if (pathname === RECOVERY_PAGE || pathname === RECOVERY_API) {
+    logEvent("info", "security", "security.recovery.access", {
+      ...securityFields,
+      reason: "recovery-surface",
+    });
     return continueWithRequestHeaders(request, requestId, "recovery");
   }
 
@@ -94,6 +116,10 @@ export function proxy(request: NextRequest) {
   );
 
   if (authorization.decision === "unavailable") {
+    logEvent("warn", "security", "security.auth.unavailable", {
+      ...securityFields,
+      reason: "credential-file-unreadable",
+    });
     const message = "Password access is enabled but the ompdesk credential file could not be read."
       + " Run `ompdesk --reset-password` on the server to set a new password.";
     return isApiRequest
@@ -102,6 +128,10 @@ export function proxy(request: NextRequest) {
   }
 
   if (authorization.decision === "unauthorized") {
+    logEvent("warn", "security", "security.auth.denied", {
+      ...securityFields,
+      reason: request.headers.get("authorization") ? "invalid-credentials" : "missing-credentials",
+    });
     return isApiRequest
       ? NextResponse.json(
         { error: "Authentication required", recoveryPath: RECOVERY_PAGE },

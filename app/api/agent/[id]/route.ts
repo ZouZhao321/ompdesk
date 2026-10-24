@@ -67,7 +67,9 @@ export const POST = withRequestLog("/api/agent/[id]", async (
 });
 
 // GET /api/agent/[id] - Get current agent state
-export async function GET(
+export const GET = withRequestLog("/api/agent/[id]", getRouteHandler);
+
+async function getRouteHandler(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {

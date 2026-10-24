@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
@@ -14,12 +15,13 @@ import {
 import { sessionPathKey } from "@/lib/session-path";
 import { setSessionArchived } from "@/lib/session-archive";
 import { getRpcSession } from "@/lib/rpc-manager";
-import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { projectTreeForResponse } from "@/lib/project-tree";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 
-export async function GET(
+export const GET = withRequestLog("/api/sessions/[id]", getRouteHandler);
+
+async function getRouteHandler(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {

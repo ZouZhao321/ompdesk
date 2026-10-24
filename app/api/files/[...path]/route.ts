@@ -412,7 +412,9 @@ ${bodyHtml}
 </html>`;
 }
 
-export async function GET(
+export const GET = withRequestLog("/api/files/[...path]", getRouteHandler);
+
+async function getRouteHandler(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {

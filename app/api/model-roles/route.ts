@@ -22,7 +22,9 @@ async function requireAllowedCwd(rawCwd: string | null): Promise<{ cwd: string }
 }
 
 // GET /api/model-roles?cwd=<path> — every role omp knows, with its assignment.
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/model-roles", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   const result = await requireAllowedCwd(new URL(req.url).searchParams.get("cwd"));
   if ("error" in result) return result.error;
 

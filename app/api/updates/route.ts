@@ -6,7 +6,9 @@ import { redactNpxOutput } from "@/lib/npx";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/updates", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }

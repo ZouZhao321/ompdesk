@@ -7,6 +7,8 @@ import {
 } from "@/bin/web-auth-store.js";
 import { withRequestLog } from "@/lib/api-request-log";
 import { hasJsonContentType } from "@/lib/request-security";
+import { logEvent } from "@/lib/logging";
+import { REQUEST_ID_HEADER } from "@/lib/request-headers";
 
 /**
  * Password recovery, and the only endpoint `proxy.ts` lets through unauthenticated.
@@ -20,6 +22,20 @@ import { hasJsonContentType } from "@/lib/request-security";
 export const dynamic = "force-dynamic";
 
 const RECOVERY_BANNER = "─".repeat(52);
+const RECOVERY_ROUTE = "/api/web-access/recovery";
+
+/**
+ * Correlation fields for recovery records. The code itself never enters them:
+ * the proxy stamps a request id, and only a bounded outcome is logged.
+ */
+function recoveryRequestFields(request: Request): Record<string, unknown> {
+  return {
+    requestId: request.headers.get(REQUEST_ID_HEADER)?.trim()
+      || globalThis.crypto.randomUUID(),
+    route: RECOVERY_ROUTE,
+    method: request.method,
+  };
+}
 
 function announceRecoveryCode(code: string, expiresAt: number): void {
   const minutes = Math.round(RECOVERY_CODE_TTL_MS / 60_000);
@@ -74,13 +90,25 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
   }
 
   if (body.action === "request") {
+    const fields = recoveryRequestFields(req);
     const issued = issueRecoveryCode();
     if (!issued.ok) {
+      logEvent("warn", "security", "security.recovery.code.issued", {
+        ...fields,
+        ok: false,
+        reason: issued.reason,
+        retryAfterMs: issued.retryAfterMs,
+      });
       return NextResponse.json(
         { error: "A recovery code was just issued. Check the server console, or wait a moment and try again." },
         { status: 429, headers: { "Retry-After": String(Math.ceil(issued.retryAfterMs / 1000)) } },
       );
     }
+    logEvent("info", "security", "security.recovery.code.issued", {
+      ...fields,
+      ok: true,
+      expiresAt: issued.expiresAt,
+    });
     announceRecoveryCode(issued.code, issued.expiresAt);
     return NextResponse.json(
       { ok: true, expiresAt: issued.expiresAt },
@@ -89,10 +117,17 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
   }
 
   if (body.action === "complete") {
+    const fields = recoveryRequestFields(req);
     const result = consumeRecoveryCode(body.code, body.password);
     if (result.ok) {
+      logEvent("info", "security", "security.recovery.code.redeemed", { ...fields, ok: true });
       return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
     }
+    logEvent("warn", "security", "security.recovery.code.redeemed", {
+      ...fields,
+      ok: false,
+      reason: result.reason,
+    });
     switch (result.reason) {
       case "invalid-password":
         return NextResponse.json({ error: result.message }, { status: 400 });
