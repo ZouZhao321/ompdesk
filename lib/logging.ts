@@ -111,12 +111,20 @@ export function shouldMirrorStdout(env: NodeJS.ProcessEnv = process.env): boolea
   return env.NODE_ENV !== "production";
 }
 
-let configured = false;
+/**
+ * Transport configuration belongs to the process, but Next compiles
+ * instrumentation and route handlers into separate module instances. The flag
+ * lives on `globalThis` so a route bundle cannot overwrite a policy this
+ * process already applied — an explicit `configureLogging` call always wins,
+ * and the default policy is installed at most once.
+ */
+const TRANSPORTS_CONFIGURED = Symbol.for("ompdesk.logging.transports");
+const transportState = globalThis as unknown as Record<symbol, unknown>;
 
 /** Apply the transport policy once at server startup; an explicit override may reconfigure. */
 export async function configureLogging(options: ConfigureLoggingOptions = {}): Promise<void> {
   const explicit = options.file !== undefined || options.stdout !== undefined;
-  if (configured && !explicit) return;
+  if (!explicit && transportState[TRANSPORTS_CONFIGURED] === true) return;
   try {
     const env = options.env ?? process.env;
     const sdk = await ensureSdkLogger();
@@ -124,7 +132,7 @@ export async function configureLogging(options: ConfigureLoggingOptions = {}): P
       file: options.file ?? true,
       console: options.stdout ?? shouldMirrorStdout(env),
     });
-    configured = true;
+    transportState[TRANSPORTS_CONFIGURED] = true;
   } catch {
     // Bootstrapping diagnostics must never stop the server from starting.
   }
@@ -349,7 +357,10 @@ async function bootstrapRuntime(): Promise<void> {
     pendingRecords.length = 0;
     return;
   }
-  sdk.setTransports({ file: true, console: shouldMirrorStdout() });
+  if (transportState[TRANSPORTS_CONFIGURED] !== true) {
+    sdk.setTransports({ file: true, console: shouldMirrorStdout() });
+    transportState[TRANSPORTS_CONFIGURED] = true;
+  }
   for (const record of pendingRecords.splice(0)) {
     writeThrough(sdk, record.level, record.message, record.context);
   }
