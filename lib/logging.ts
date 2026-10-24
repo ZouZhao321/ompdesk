@@ -149,14 +149,15 @@ const MAX_ARRAY_ITEMS = 50;
  * Key fragments that always mean a credential, a session secret, or recovery
  * material. Matching works on camelCase and separator-delimited segments so
  * `apiKey`, `api_key`, and `x-api-key` are all redacted.
+ *
+ * `token` is handled separately: usage counters (`inputTokens`, `tokenCount`,
+ * `tokensBefore`) must survive, while credential-shaped token names do not.
  */
 const SENSITIVE_SEGMENTS: Record<string, true> = {
   password: true,
   passwd: true,
   passphrase: true,
   secret: true,
-  token: true,
-  tokens: true,
   authorization: true,
   cookie: true,
   cookies: true,
@@ -181,6 +182,18 @@ const SENSITIVE_PAIRS: Record<string, true> = {
   setcookie: true,
 };
 
+/** Exact credential token names, and the qualified forms that carry one. */
+const CREDENTIAL_TOKEN_KEYS: Record<string, true> = {
+  token: true,
+  tokens: true,
+  accesstoken: true,
+  refreshtoken: true,
+  bearertoken: true,
+  authtoken: true,
+  sessiontoken: true,
+  apitoken: true,
+};
+
 function keySegments(key: string): string[] {
   return key
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -193,8 +206,13 @@ function keySegments(key: string): string[] {
 export function isSensitiveLogKey(key: string): boolean {
   const segments = keySegments(key);
   if (segments.some((segment) => SENSITIVE_SEGMENTS[segment])) return true;
+
+  const joined = segments.join("");
+  if (CREDENTIAL_TOKEN_KEYS[joined]) return true;
+
   for (let index = 0; index < segments.length - 1; index += 1) {
-    if (SENSITIVE_PAIRS[`${segments[index]}${segments[index + 1]}`]) return true;
+    const pair = `${segments[index]}${segments[index + 1]}`;
+    if (SENSITIVE_PAIRS[pair] || CREDENTIAL_TOKEN_KEYS[pair]) return true;
   }
   return false;
 }
