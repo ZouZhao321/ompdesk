@@ -93,6 +93,15 @@ function fileFingerprint(filePath: string, stat: Stats): string {
   return `${stat.dev}:${stat.ino}:${stat.birthtimeMs}:${hash}`;
 }
 
+/**
+ * A rotation can unlink the file between the listing, the stat, and the read.
+ * That is a normal race for the panel, so it maps to a retryable 404 rather
+ * than the route's generic 500.
+ */
+function isMissingFileError(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === "ENOENT";
+}
+
 function resolveLogFile(directory: string, name: string, pid: number): ResolvedLogFile {
   validateLogFileName(name, pid);
   const filePath = path.join(directory, name);
@@ -120,13 +129,21 @@ function resolveLogFile(directory: string, name: string, pid: number): ResolvedL
     throw new LogQueryError(404, "Log file not found");
   }
 
+  let fingerprint: string;
+  try {
+    fingerprint = fileFingerprint(filePath, stat);
+  } catch (error) {
+    if (isMissingFileError(error)) throw new LogQueryError(404, "Log file not found");
+    throw error;
+  }
+
   return {
     name,
     filePath,
     size: stat.size,
     mtimeMs: stat.mtimeMs,
     modifiedAt: stat.mtime.toISOString(),
-    fingerprint: fileFingerprint(filePath, stat),
+    fingerprint,
   };
 }
 
@@ -295,41 +312,67 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
     };
   }
 
-  const buffer = Buffer.allocUnsafe(readLength);
-  const fd = openSync(resolved.filePath, "r");
-  let bytesRead = 0;
-  try {
-    while (bytesRead < readLength) {
-      const chunk = readSync(fd, buffer, bytesRead, readLength - bytesRead, start + bytesRead);
-      if (chunk <= 0) break;
-      bytesRead += chunk;
+  const readWindow = (fromByte: number, length: number): Buffer => {
+    const buffer = Buffer.allocUnsafe(length);
+    let bytesRead = 0;
+    let fd: number;
+    try {
+      fd = openSync(resolved.filePath, "r");
+    } catch (error) {
+      if (isMissingFileError(error)) throw new LogQueryError(404, "Log file not found");
+      throw error;
     }
-  } finally {
-    closeSync(fd);
+    try {
+      while (bytesRead < length) {
+        const chunk = readSync(fd, buffer, bytesRead, length - bytesRead, fromByte + bytesRead);
+        if (chunk <= 0) break;
+        bytesRead += chunk;
+      }
+    } catch (error) {
+      if (isMissingFileError(error)) throw new LogQueryError(404, "Log file not found");
+      throw error;
+    } finally {
+      closeSync(fd);
+    }
+    return buffer.subarray(0, bytesRead);
+  };
+
+  let tail = useTail;
+  let windowStart = start;
+  let buffer = readWindow(start, readLength);
+  if (tail && buffer.indexOf(10) === -1) {
+    // The tail window is one record with no newline in it: the file's last
+    // record is larger than the window. Skipping it and moving the cursor to
+    // EOF would hide it for good, because the cursor only moves forward, so
+    // reread from the head where an oversized record is truncated but shown.
+    tail = false;
+    windowStart = 0;
+    buffer = readWindow(0, Math.min(resolved.size, MAX_LOG_PAGE_BYTES));
   }
 
-  const atEof = start + bytesRead >= resolved.size;
+  const bytesRead = buffer.length;
+  const atEof = windowStart + bytesRead >= resolved.size;
   // Never consume a line the writer may still be appending unless the chunk
   // reaches EOF. A single record larger than the page is still surfaced.
   const end = completeLinesEnd(buffer, bytesRead, atEof);
 
   const entries: LogEntry[] = [];
   let position = 0;
-  if (useTail) {
+  if (tail) {
     // The window starts mid-line; skip that fragment so the first entry is a
     // whole record at a real line boundary.
-    const firstNewline = buffer.subarray(0, bytesRead).indexOf(10);
+    const firstNewline = buffer.indexOf(10);
     position = firstNewline === -1 || firstNewline >= end ? end : firstNewline + 1;
   }
-  let consumed = start + position;
+  let consumed = windowStart + position;
   while (position < end) {
     const newline = buffer.indexOf(10, position);
     const lineEnd = newline === -1 || newline >= end ? end : newline;
     const nextPosition = newline === -1 || newline >= end ? end : newline + 1;
     const segment = buffer.subarray(position, lineEnd);
-    const offset = start + position;
+    const offset = windowStart + position;
     position = nextPosition;
-    consumed = start + position;
+    consumed = windowStart + position;
 
     const raw = segment.toString("utf8").replace(/\r$/, "");
     if (!raw.trim()) continue;
@@ -349,7 +392,7 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
     // A page that consumed nothing (concurrent truncation, or no newline in
     // the window) is not a backlog: without progress a caller would re-request
     // the same offset forever.
-    truncated: consumed > start && consumed < resolved.size,
+    truncated: consumed > windowStart && consumed < resolved.size,
     reset,
     fingerprint,
   };
@@ -371,6 +414,14 @@ export function readLogDownload(file: unknown, options: { directory?: string; pi
   if (resolved.size > MAX_LOG_DOWNLOAD_BYTES) {
     throw new LogQueryError(413, "Log file is too large to download; use the paged viewer");
   }
+  let data: Buffer;
+  try {
+    data = readFileSync(resolved.filePath);
+  } catch (error) {
+    // The file rotated away between resolution and the read.
+    if (isMissingFileError(error)) throw new LogQueryError(404, "Log file not found");
+    throw error;
+  }
   return {
     file: {
       name: resolved.name,
@@ -378,7 +429,7 @@ export function readLogDownload(file: unknown, options: { directory?: string; pi
       modifiedAt: resolved.modifiedAt,
       current: listLogFiles(directory, pid)[0]?.name === resolved.name,
     },
-    data: readFileSync(resolved.filePath),
+    data,
   };
 }
 
