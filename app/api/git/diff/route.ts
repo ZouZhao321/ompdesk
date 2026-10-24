@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed, isWindowsAbsolutePath } from "@/lib/file-access";
 import { getGitFileDiff } from "@/lib/git-changes";
 
-export async function GET(request: NextRequest) {
+export const GET = withRequestLog("/api/git/diff", getRouteHandler);
+
+async function getRouteHandler(request: NextRequest) {
   try {
     const cwd = request.nextUrl.searchParams.get("cwd")?.trim() ?? "";
     const filePath = request.nextUrl.searchParams.get("path")?.trim() ?? "";

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { getSettingsForCwd } from "@/lib/omp-runtime";
 import { isApiRequestAllowed } from "@/lib/request-security";
@@ -12,7 +13,9 @@ export const dynamic = "force-dynamic";
  * transcript. The Settings panel writes these through /api/settings; the
  * client reads them back here instead of pulling the whole settings payload.
  */
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/display-settings", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }

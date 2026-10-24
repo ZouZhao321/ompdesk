@@ -63,7 +63,9 @@ everything.
 Trust is granted from the dialog ompdesk shows when you open such a project, and
 takes effect immediately: granting it invalidates the model cache and destroys
 any running session for that working directory so the next one starts with the
-project's resources loaded.
+project's resources loaded. The settings API exposes the same decision as
+`POST /api/project-trust` (grant) and `DELETE /api/project-trust` (revoke); both
+write an audit record naming the project.
 
 ## Relationship to the CLI
 

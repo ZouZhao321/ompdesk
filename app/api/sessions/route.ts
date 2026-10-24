@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import {
   attachSessionProjectInfo,
   listAllSessions,
@@ -9,7 +10,7 @@ import { readArchivedIds } from "@/lib/session-archive";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/sessions", async (req: Request) => {
   try {
     const force = new URL(req.url).searchParams.get("force") === "1";
     const showArchived = new URL(req.url).searchParams.get("archived") === "1";
@@ -30,4 +31,4 @@ export async function GET(req: Request) {
       { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }
-}
+});
