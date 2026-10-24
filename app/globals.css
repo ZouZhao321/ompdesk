@@ -1491,6 +1491,30 @@ span.linenumber {
     width: 100%;
     min-width: 0;
   }
+  /* 抽屉内的点按目标：会话行与项目行至少 44px 高，行内图标按钮的命中区
+     不小于 44×44，而 svg 自身尺寸保持不变。 */
+  .sidebar-session-row {
+    min-height: 44px;
+  }
+  .sidebar-project-row {
+    min-height: 44px !important;
+  }
+  .sidebar-project-icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* 触屏没有悬停态，项目图标常驻显示并保持可点。 */
+  .sidebar-project-icon-reveal {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  .sidebar-show-more {
+    display: inline-flex !important;
+    align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 8px !important;
+  }
   /* 横屏手机也命中本块，抵消 min-width: 769px 桌面规则留下的隐藏与定宽。 */
   .sidebar-overlay-backdrop {
     display: block !important;
