@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type UIEvent } from "react";
 import type { LogEntry, LogFileInfo, LogLevelName, LogsResponse } from "@/lib/api-types";
 import {
   buildLogsRequest,
+  isScrolledToBottom,
   mergeLogEntries,
   selectFileAfterFollow,
   shouldPollLogs,
@@ -53,8 +54,20 @@ const fetchLogsPage: LogsClient = async (input) => {
     }),
     { cache: "no-store", signal: input.signal },
   );
-  const data = await response.json() as LogsResponse & { error?: string };
-  if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+  // A gateway can answer with HTML or an empty body, and the error banner is
+  // user-facing, so read the body once and only then trust it as JSON.
+  const body = await response.text();
+  let data: (LogsResponse & { error?: string }) | undefined;
+  if (body) {
+    try {
+      data = JSON.parse(body) as LogsResponse & { error?: string };
+    } catch {
+      // Non-JSON error page; the status line below is the useful part.
+    }
+  }
+  if (!response.ok) throw new Error(data?.error ?? `HTTP ${response.status}`);
+  if (data?.error) throw new Error(data.error);
+  if (!data) throw new Error("The logs response was not valid JSON");
   return data;
 };
 
@@ -80,6 +93,9 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
   const fingerprint = useRef<string | null>(null);
   const generation = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // Following the newest file and pinning the view to the bottom are separate:
+  // a reader who scrolled up must keep their position across polls.
+  const stickToBottom = useRef(true);
 
   useEffect(() => {
     const update = () => setHidden(document.visibilityState === "hidden");
@@ -98,6 +114,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
     cursor.current = 0;
     activeFile.current = selectedFile;
     fingerprint.current = null;
+    stickToBottom.current = true;
     setEntries([]);
     setFile(null);
     setExpandedOffset(null);
@@ -109,7 +126,13 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
   const active = shouldPollLogs(hidden, paused);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      // A reset while paused or hidden sets `loading` but this effect never
+      // reaches its tick, so nothing else would clear it: the list would stay
+      // on "Loading logs…" and Refresh would stay disabled.
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let controller: AbortController | undefined;
@@ -161,7 +184,11 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       } catch (caught) {
         if (cancelled || currentGeneration !== generation.current) return;
         setCatchingUp(false);
-        setError(caught instanceof Error ? caught.message : String(caught));
+        setError(
+          (caught as { name?: string } | null)?.name === "AbortError"
+            ? "Reading logs timed out; try again."
+            : caught instanceof Error ? caught.message : String(caught),
+        );
       } finally {
         clearTimeout(timeout);
         if (!cancelled && currentGeneration === generation.current) {
@@ -187,7 +214,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
   const newestOffset = entries[entries.length - 1]?.offset ?? null;
 
   useEffect(() => {
-    if (!follow || paused || newestOffset === null) return;
+    if (!follow || paused || newestOffset === null || !stickToBottom.current) return;
     const node = listRef.current;
     if (node) node.scrollTop = node.scrollHeight;
     // `entries.length` stops changing once the visible cap is reached; the
@@ -197,6 +224,15 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
   // Stable identity so memoized rows are not re-rendered by a new callback.
   const handleToggleEntry = useCallback((offset: number) => {
     setExpandedOffset((value) => value === offset ? null : offset);
+  }, []);
+
+  const handleListScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const node = event.currentTarget;
+    stickToBottom.current = isScrolledToBottom({
+      scrollTop: node.scrollTop,
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight,
+    });
   }, []);
 
   return (
@@ -226,12 +262,18 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
         setSelectedFile(next);
       }}
       onFollowChange={(next) => {
+        // Following is a polling change like the other controls: leaving the
+        // panel paused here would keep the view frozen while the button says
+        // it follows the newest file.
+        setPaused(false);
         setFollow(next);
+        if (next) stickToBottom.current = true;
         setSelectedFile((current) => selectFileAfterFollow(next, current, file?.name));
       }}
       onTogglePause={() => setPaused((value) => !value)}
       onRefresh={() => { setPaused(false); setRefreshToken((value) => value + 1); }}
       onToggleEntry={handleToggleEntry}
+      onListScroll={handleListScroll}
     />
   );
 }

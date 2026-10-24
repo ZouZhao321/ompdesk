@@ -883,19 +883,10 @@ export class AgentSessionWrapper {
         this.promptRunning = true;
         notifyRunningChange();
         if (!queuedCommand) writeAgentRunRecords(this.runLog.begin(this.runStart()));
-        this.inner.prompt(command.message as string, {
-          ...(promptImages?.length ? { images: promptImages } : {}),
-          ...(streamingBehavior ? { streamingBehavior } : {}),
-          userInitiated: true,
-        }).then(() => {
-          this.promptRunning = false;
-          this.resetIdleTimer();
-          writeAgentRunRecords(queuedCommand
-            ? this.runLog.command(queuedCommand, { ok: true, durationMs: performance.now() - startedAt })
-            : this.runLog.finish());
-          if (!streamingBehavior) this.emit({ type: "prompt_done" });
-          notifyRunningChange();
-        }).catch((error) => {
+
+        // A rejected `prompt()` and a rejected promise both leave the run opened
+        // above in flight; close it and tell the browser the turn failed.
+        const failPrompt = (error: unknown) => {
           this.promptRunning = false;
           this.resetIdleTimer();
           invalidateSessionListCache();
@@ -912,17 +903,50 @@ export class AgentSessionWrapper {
           });
           if (!streamingBehavior) this.emit({ type: "prompt_done" });
           notifyRunningChange();
-        });
+        };
+
+        let running: Promise<boolean>;
+        try {
+          running = this.inner.prompt(command.message as string, {
+            ...(promptImages?.length ? { images: promptImages } : {}),
+            ...(streamingBehavior ? { streamingBehavior } : {}),
+            userInitiated: true,
+          });
+        } catch (error) {
+          // The SDK rejected the prompt before returning a promise, so there is
+          // no handler below to close the run record it just opened.
+          failPrompt(error);
+          throw error;
+        }
+        running.then(() => {
+          this.promptRunning = false;
+          this.resetIdleTimer();
+          writeAgentRunRecords(queuedCommand
+            ? this.runLog.command(queuedCommand, { ok: true, durationMs: performance.now() - startedAt })
+            : this.runLog.finish());
+          if (!streamingBehavior) this.emit({ type: "prompt_done" });
+          notifyRunningChange();
+        }).catch(failPrompt);
         return null;
       }
 
-      case "abort":
+      case "abort": {
         this.goalMode.onAbort();
-        await this.withRunCommand("abort", () =>
-          this.withFinalRunningNotification(() => this.inner.abort())
-        );
-        writeAgentRunRecords(this.runLog.finish({ stopReason: "aborted" }));
+        // Only a prompt in flight owns an active run; aborting an idle session
+        // must not manufacture a run to end. The guard is captured before the
+        // call because `abort()` may release the prompt while it awaits.
+        const hadRun = this.promptRunning;
+        try {
+          await this.withRunCommand("abort", () =>
+            this.withFinalRunningNotification(() => this.inner.abort())
+          );
+        } finally {
+          // A failing `abort()` still ends the run it targeted, or that run
+          // would stay open for the rest of the process.
+          if (hadRun) writeAgentRunRecords(this.runLog.finish({ stopReason: "aborted" }));
+        }
         return null;
+      }
 
       case "get_state": {
         const model = this.inner.model;
@@ -1001,6 +1025,7 @@ export class AgentSessionWrapper {
 
       case "fork": {
         const startedAt = performance.now();
+        let newSessionId: string;
         try {
           if (this.inner.isBashRunning) {
             throw new Error("Cannot fork while a shell command is running");
@@ -1042,18 +1067,9 @@ export class AgentSessionWrapper {
             newSessionFile = forkedPath;
           }
 
-          const newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
+          newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
           cacheSessionPath(newSessionId, newSessionFile);
           invalidateSessionListCache();
-          writeAgentRunRecords(this.runLog.command("fork", {
-            ok: true,
-            durationMs: performance.now() - startedAt,
-            newSessionId,
-          }));
-          // 旧包装器正在关闭，它仍持有的运行无法继续。
-          writeAgentRunRecords(this.runLog.finish({ stopReason: "fork" }));
-          await this.shutdownAfterCommittedFork(newSessionId);
-          return { cancelled: false, newSessionId };
         } catch (error) {
           writeAgentRunRecords(this.runLog.command("fork", {
             ok: false,
@@ -1062,6 +1078,19 @@ export class AgentSessionWrapper {
           }));
           throw error;
         }
+
+        // The fork is committed from here on: its result is recorded before the
+        // wrapper teardown, so a shutdown failure can never turn the same fork
+        // into a contradictory failure record.
+        writeAgentRunRecords(this.runLog.command("fork", {
+          ok: true,
+          durationMs: performance.now() - startedAt,
+          newSessionId,
+        }));
+        // 旧包装器正在关闭，它仍持有的运行无法继续。
+        writeAgentRunRecords(this.runLog.finish({ stopReason: "fork" }));
+        await this.shutdownAfterCommittedFork(newSessionId);
+        return { cancelled: false, newSessionId };
       }
 
       case "handoff": {

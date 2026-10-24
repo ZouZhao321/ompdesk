@@ -89,7 +89,7 @@ Concrete mappings:
 
 - `http.request` is `error` for `5xx`, `warn` for `4xx`, `info` otherwise.
 - `http.stream.close` is `info` for `cancelled` / `aborted` and `warn` for
-  `controller_closed` / `heartbeat_failed`.
+  `connect_failed` / `controller_closed` / `heartbeat_failed`.
 - `agent.run.end` is `error` for `stopReason: "error"`, `warn` for `aborted` or
   `fork`, and `info` for the rest.
 - `audit.*` is `info` for `outcome: "success"` and `warn` for `"failure"`.
@@ -101,6 +101,7 @@ Concrete mappings:
 | `OMP_LOG_LEVEL` | `debug` | Most verbose level written to the log **file and the stdout mirror**: `error`, `warn`, `info` or `debug`, case-insensitive. An unknown value falls back to `debug`. |
 | `OMPDESK_LOG_STDOUT` | unset | Mirror records to stdout. `1`, `true`, `yes`, `on` enable it; `0`, `false`, `no`, `off` disable it. When unset, stdout mirroring is on only when `NODE_ENV` is not `production`. |
 | `OMPDESK_SLOW_REQUEST_MS` | `1000` | Threshold for the `slow` flag on `http.request`. A positive number of milliseconds; anything else keeps the default. |
+| `OMPDESK_TRUST_PROXY` | unset | Trust `x-forwarded-for` / `x-real-ip` from a reverse proxy in front of ompdesk. `1`, `true`, `yes`, `on` enable it. When unset, the proxy records the client address as `local`: a directly reachable server cannot distinguish a real forwarding header from one the caller made up. |
 
 The Settings panel does not change the level or retention; both are process
 configuration. Restart the server after changing these variables.
@@ -173,7 +174,7 @@ applied.
 | --- | --- |
 | `http.request` | `requestId`, `route` (template, e.g. `/api/sessions/[id]`), `method`, `status`, `durationMs`, `slow`, optional `actor`; on a thrown handler `failed: true` and `error` with name/message/stack. One record per completed request. |
 | `http.stream.open` | `requestId`, `route`, optional `sessionId`, `runtimeId`. |
-| `http.stream.close` | Same ids plus `reason` (`cancelled`, `aborted`, `controller_closed`, `heartbeat_failed`) and `durationMs` for the connection lifetime. Written once per connection. |
+| `http.stream.close` | Same ids plus `reason` (`cancelled`, `aborted`, `connect_failed`, `controller_closed`, `heartbeat_failed`) and `durationMs` for the connection lifetime. Written once per connection. |
 
 Every API route handler is exported through `withRequestLog`. The two SSE
 routes (`/api/agent/[id]/events` and `/api/agent/running/events`) are no
@@ -181,7 +182,9 @@ exception, but their response outlives the handler that returned its headers.
 `http.request` for an SSE route therefore measures time to response headers;
 the connection's own lifetime appears in `http.stream.open` /
 `http.stream.close`. The stream opens before frames start and closes exactly
-once on client cancel, request abort, controller failure or heartbeat failure.
+once on client cancel, request abort, connection setup failure, controller
+failure or heartbeat failure; cleanup registered by the wiring step runs even
+when that step throws.
 
 ### `agent`
 
@@ -263,9 +266,9 @@ The browser installs the reporter at the app root. It reports at most one copy
 of the same failure per 5 seconds, at most 20 reports per minute per page, and
 never wraps `console.error`. It sends `POST /api/client-logs`, which the proxy
 protects like every other API route. The endpoint accepts JSON only, rejects
-unknown fields, caps the body at 8 KiB (413 beyond it, 400 for invalid JSON),
-and rate-limits to 20 reports per minute per session (or forwarding address) and
-200 per minute globally (429 with `Retry-After`).
+unknown fields, caps the body at 16 KiB (413 beyond it, 400 for invalid JSON),
+and rate-limits to 20 reports per minute per session (or observed client
+address) and 200 per minute globally (429 with `Retry-After`).
 
 ## Settings → Logs
 
@@ -275,7 +278,9 @@ Open **Settings → Logs**. The panel is read-only:
 - Keyword search over the raw JSON line, debounced by 300 ms.
 - File selector for the current file and its rotations, with size and last-write
   time.
-- Follow latest, pause, refresh, and download of the selected file.
+- Follow latest, pause, refresh, and download of the selected file. Following
+  keeps new lines in view only while the list is scrolled to the bottom;
+  scrolling up leaves the reader where they are.
 - Expand an entry to see its full JSON. Unparseable lines are shown with their
   parse error and raw text.
 - Polling stops while the tab is hidden; while visible it polls every 2 seconds,
@@ -290,6 +295,8 @@ The panel is backed by `GET /api/logs`:
 | --- | --- |
 | `file` | Basename from the file list. Omitted means the newest file. Names must match `omp.<day>.<pid>.log[.N]` for the running PID; separators, `..`, symlinks and other PIDs are rejected. |
 | `cursor` | Raw byte offset of the next line; `0` starts at the beginning. |
+| `tail=1` | With `cursor=0`, read the newest 256 KiB instead of the head, so the first screen of a large file does not replay from byte 0. A file whose last record is wider than that window falls back to the head so the record is still shown. |
+| `fingerprint` | Identity from the previous page. A mismatch means the same basename was recreated, and the page restarts with `reset: true`. |
 | `limit` | Entries per page, 1–1000, default 200. |
 | `level` | `error`, `warn`, `info`, `debug` or `all` (default), applied after parsing. |
 | `q` | Case-insensitive keyword, at most 200 characters, applied after parsing. |
@@ -301,6 +308,11 @@ offset to request next, and `files` lists the current process's file set. A
 `cursor` past the file's current size means the writer restarted the same
 basename; the page then restarts at byte 0 and sets `reset: true`, and the
 panel replaces its buffer instead of appending.
+
+A filtered first page only covers the newest window of a file larger than
+256 KiB, so its empty state says so and points at the older rotations instead of
+claiming the whole file has no matches. A rotation that removes the file while
+it is being read returns `404`, which the panel treats as retryable.
 
 ## What is never logged
 
