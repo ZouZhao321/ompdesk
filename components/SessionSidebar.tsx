@@ -428,6 +428,7 @@ function PiWebTitle() {
   return (
     <button
       onClick={handleClick}
+      className="sidebar-brand-button"
       style={{
         display: "flex",
         alignItems: "center",
@@ -1058,6 +1059,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             <button
               onClick={() => handleNewSession()}
               disabled={!selectedCwd}
+              className="sidebar-new-session-button"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                 background: "var(--bg-hover)",
@@ -1094,6 +1096,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             </button>
             <button
               onClick={() => loadSessions(false, true)}
+              className="sidebar-header-icon-button"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "var(--bg-hover)",
@@ -1154,6 +1157,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           onClick={handleCustomPathClick}
           title={t("sidebar.addProject")}
           aria-label={t("sidebar.addProject")}
+          className="sidebar-header-icon-button"
           style={{
             display: "flex",
             alignItems: "center",
@@ -1307,6 +1311,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                   type="button"
                   onClick={() => setSelectedCwd(project)}
                   title={project}
+                  className="sidebar-project-name"
                   style={{
                     display: "flex",
                     alignItems: "center",
