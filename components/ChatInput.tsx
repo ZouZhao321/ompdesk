@@ -1934,6 +1934,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                     background: canQueueStreamingMessage ? "rgba(234,179,8,0.12)" : "none",
                     border: "1px solid rgba(234,179,8,0.35)",
                     borderRadius: 8,
@@ -1957,6 +1959,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                     background: canQueueStreamingMessage ? "rgba(129,140,248,0.12)" : "none",
                     border: "1px solid rgba(129,140,248,0.35)",
                     borderRadius: 8,
