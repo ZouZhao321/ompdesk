@@ -44,7 +44,6 @@ type ParsedTurn = {
 };
 
 type ParsedFile = {
-  headerId: string;
   turns: ParsedTurn[];
 };
 
@@ -176,7 +175,9 @@ export function turnsFromEntries(entries: readonly RawEntry[]): ParsedTurn[] {
 
   for (const turn of turns) {
     let parentId = byId.get(turn.id)?.parentId ?? null;
-    while (parentId) {
+    const seenParents = new Set<string>();
+    while (parentId && !seenParents.has(parentId)) {
+      seenParents.add(parentId);
       const entry = byId.get(parentId);
       if (!entry) break;
       if (entry.type === "message" && entry.message?.role === "user") {
@@ -199,10 +200,7 @@ async function parseSessionFile(filePath: string): Promise<ParsedFile> {
   }
 
   const entries = (await getSessionEntries(filePath)) as unknown as RawEntry[];
-  const parsed: ParsedFile = {
-    headerId: readSessionHeader(filePath)?.id ?? "",
-    turns: turnsFromEntries(entries),
-  };
+  const parsed: ParsedFile = { turns: turnsFromEntries(entries) };
   if (stat.size <= 8 * 1024 * 1024) {
     const store = cache();
     store.set(key, { mtimeMs: stat.mtimeMs, size: stat.size, parsed });
@@ -241,12 +239,12 @@ async function collectChain(target: SessionInfo): Promise<{ sessions: SessionInf
   let truncated = false;
 
   while (queue.length > 0) {
-    const info = queue.shift()!;
-    chain.push(info);
     if (chain.length >= MAX_SESSIONS) {
       truncated = true;
       break;
     }
+    const info = queue.shift()!;
+    chain.push(info);
     for (const child of children.get(info.id) ?? []) {
       if (isSubagentFile(child.path, info.path)) continue;
       const key = sessionPathKey(child.path);
@@ -259,15 +257,14 @@ async function collectChain(target: SessionInfo): Promise<{ sessions: SessionInf
 }
 
 async function parseChain(chain: SessionInfo[]): Promise<Array<{ info: SessionInfo; parsed: ParsedFile }>> {
+  const results = await Promise.allSettled(chain.map((info) => parseSessionFile(info.path)));
+  const root = results[0];
+  // The root file is the map itself: a broken root must surface, not look empty.
+  if (root?.status === "rejected") throw root.reason;
   const loaded: Array<{ info: SessionInfo; parsed: ParsedFile }> = [];
-  for (const [index, info] of chain.entries()) {
-    try {
-      loaded.push({ info, parsed: await parseSessionFile(info.path) });
-    } catch (error) {
-      // The root file is the map itself: a broken root must surface, not look empty.
-      if (index === 0) throw error;
-    }
-  }
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") loaded.push({ info: chain[index], parsed: result.value });
+  });
   return loaded;
 }
 

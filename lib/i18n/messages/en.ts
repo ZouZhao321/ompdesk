@@ -555,5 +555,6 @@ export const enLocale: LocalePlugin = {
     "map.expandCount": "Show {count} turns",
     "map.collapseCount": "Hide {count} turns",
     "map.turnLabel": "Turn {index}: {preview}",
+    "map.openFailed": "Could not open that session; refresh and try again",
   },
 };

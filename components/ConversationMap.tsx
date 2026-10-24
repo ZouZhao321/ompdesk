@@ -13,7 +13,7 @@ interface ConversationMapProps {
   onClose: () => void;
   onSessionForked: (newSessionId: string) => void;
   onSwitchLeaf: (leafId: string) => void;
-  onOpenSession: (sessionId: string) => void;
+  onOpenSession: (sessionId: string) => Promise<boolean>;
 }
 
 interface Camera {
@@ -106,6 +106,10 @@ export function ConversationMap({
   const panRef = useRef<PointerOrigin | null>(null);
   const dragRef = useRef<CardDrag | null>(null);
   const moveRef = useRef<{ id: string; x: number; y: number } | null>(null);
+  const offsetsRef = useRef<Record<string, Offset>>({});
+  offsetsRef.current = offsets;
+  const dragMovedRef = useRef(false);
+  const fittedPayloadRef = useRef<SessionMapPayload | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -223,7 +227,8 @@ export function ConversationMap({
   }, [layout]);
 
   useEffect(() => {
-    if (!payload) return;
+    if (!payload || fittedPayloadRef.current === payload) return;
+    fittedPayloadRef.current = payload;
     fit();
   }, [payload, fit]);
 
@@ -282,6 +287,7 @@ export function ConversationMap({
     if (drag && drag.pointerId === event.pointerId) {
       const dx = (event.clientX - drag.startX) / cameraRef.current.scale;
       const dy = (event.clientY - drag.startY) / cameraRef.current.scale;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragMovedRef.current = true;
       const next = { id: drag.id, x: Math.round(drag.originX + dx), y: Math.round(drag.originY + dy) };
       moveRef.current = next;
       setOffsets((current) => ({ ...current, [next.id]: { x: next.x, y: next.y } }));
@@ -297,11 +303,9 @@ export function ConversationMap({
       const moved = moveRef.current;
       moveRef.current = null;
       if (moved) {
-        setOffsets((current) => {
-          const next = { ...current, [moved.id]: { x: moved.x, y: moved.y } };
-          writeOffsets(sessionId, next);
-          return next;
-        });
+        const next = { ...offsetsRef.current, [moved.id]: { x: moved.x, y: moved.y } };
+        setOffsets(next);
+        writeOffsets(sessionId, next);
       }
     }
   }, [sessionId]);
@@ -336,14 +340,18 @@ export function ConversationMap({
     const position = positions.get(node.id);
     if (!position) return;
     event.stopPropagation();
+    dragMovedRef.current = false;
+    const offset = offsetsRef.current[node.id];
     dragRef.current = {
       id: node.id,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originX: position.x,
-      originY: position.y,
+      // Offsets are relative to the laid-out card, not to the rendered position.
+      originX: offset?.x ?? 0,
+      originY: offset?.y ?? 0,
     };
+    viewportRef.current?.setPointerCapture(event.pointerId);
   }, [positions]);
 
   const handleFork = useCallback(async (node: MapTurnNode) => {
@@ -375,12 +383,16 @@ export function ConversationMap({
     }
     try {
       await sendAgentCommand(node.sessionId, { type: "navigate_tree", targetId: leafId });
-      onOpenSession(node.sessionId);
+      const opened = await onOpenSession(node.sessionId);
+      if (!opened) {
+        setActionError(t("map.openFailed"));
+        return;
+      }
       onClose();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, [onClose, onOpenSession, onSwitchLeaf, sessionId]);
+  }, [onClose, onOpenSession, onSwitchLeaf, sessionId, t]);
 
   const selectNode = useCallback((id: string) => {
     setSelectedId(id);
@@ -519,7 +531,13 @@ export function ConversationMap({
                   aria-pressed={selected}
                   aria-label={t("map.turnLabel", { index: node.turnIndex + 1, preview: node.preview || "—" })}
                   onPointerDown={(event) => startCardDrag(event, node)}
-                  onClick={() => selectNode(node.id)}
+                  onClick={() => {
+                    if (dragMovedRef.current) {
+                      dragMovedRef.current = false;
+                      return;
+                    }
+                    selectNode(node.id);
+                  }}
                   onKeyDown={(event) => onCardKeyDown(event, node)}
                   style={{
                     position: "absolute",
