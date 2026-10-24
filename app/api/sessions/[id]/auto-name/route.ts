@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateSessionTitle } from "@/lib/session-title";
+import { generateSessionTitle } from "@/lib/session-title-generator";
 import { getRpcSession, startRpcSession, getFinalRpcSessionId } from "@/lib/rpc-manager";
 import { invalidateSessionListCache, resolveSessionPath } from "@/lib/session-reader";
 
