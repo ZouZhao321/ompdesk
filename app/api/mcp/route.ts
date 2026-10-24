@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync } from "fs";
+import { withRequestLog } from "@/lib/api-request-log";
 import { dirname, join } from "path";
 import { NextResponse } from "next/server";
 import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
@@ -221,7 +222,9 @@ async function validatedCwd(req: Request): Promise<string | undefined> {
   return cwd;
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/mcp", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   try {
     const cwd = await validatedCwd(req);
     const response: McpConfigResponse = {

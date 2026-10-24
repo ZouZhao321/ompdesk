@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import {
   getDefault,
   getEnumValues,
@@ -121,7 +122,9 @@ function validateSettingValue(path: SettingPath, value: unknown): SettingsValue 
   throw new Error("Unsupported setting type");
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/settings", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   try {
     const cwd = await validateCwd(new URL(req.url).searchParams.get("cwd"));
     const settings = await getSettingsForCwd(cwd);

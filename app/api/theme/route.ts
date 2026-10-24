@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { getSettingsForCwd } from "@/lib/omp-runtime";
 import { getWebThemeConfig } from "@/lib/omp-theme";
@@ -6,7 +7,9 @@ import { isApiRequestAllowed } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/theme", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }

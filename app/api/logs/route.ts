@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { LogQueryError, parseLogsQuery, readLogDownload, readLogPage } from "@/lib/log-query";
 
 /**
@@ -13,7 +14,9 @@ export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
-export async function GET(request: Request) {
+export const GET = withRequestLog("/api/logs", getRouteHandler);
+
+async function getRouteHandler(request: Request) {
   try {
     const url = new URL(request.url);
     const query = parseLogsQuery(url.searchParams);

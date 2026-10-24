@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { startRpcSession, getRpcSession, getFinalRpcSessionId } from "@/lib/rpc-manager";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -66,7 +67,9 @@ export async function POST(
 }
 
 // GET /api/agent/[id] - Get current agent state
-export async function GET(
+export const GET = withRequestLog("/api/agent/[id]", getRouteHandler);
+
+async function getRouteHandler(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {

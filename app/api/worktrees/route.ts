@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { existsSync } from "fs";
 import { addWorktree, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
 import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
@@ -15,7 +16,9 @@ async function checkCwdAllowed(cwd: string): Promise<NextResponse | null> {
 }
 
 // GET /api/worktrees?cwd=  →  { projectRoot, isGit, isTopLevel, worktrees }
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/worktrees", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
