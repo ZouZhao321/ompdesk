@@ -109,6 +109,8 @@ export const enLocale: LocalePlugin = {
     "sidebar.projectActions": "Project actions",
     "sidebar.removeProject": "Remove from sidebar",
     "sidebar.removeProjectTitle": "Remove this project from the sidebar",
+    "sidebar.removeProjectRunning": "Running sessions: {count}. They keep running after removal.",
+    "sidebar.removeProjectAnyway": "Remove anyway",
     "sidebar.expandProject": "Expand project",
     "sidebar.collapseProject": "Collapse project",
     "sidebar.showMore": "Show more",
