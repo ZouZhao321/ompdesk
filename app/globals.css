@@ -1097,7 +1097,7 @@ pre, code {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
   .file-viewer-meta {
     display: none;
   }
@@ -1319,7 +1319,7 @@ span.linenumber {
   border-left: 1px solid var(--border);
   background: var(--bg-panel);
 }
-@media (max-width: 640px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
   .subagent-column {
     display: none !important;
   }
@@ -1357,7 +1357,7 @@ span.linenumber {
 }
 
 /* Desktop sidebar: animate width */
-@media (min-width: 641px) {
+@media (min-width: 769px) {
   .sidebar-overlay-backdrop {
     display: none !important;
   }
@@ -1414,7 +1414,7 @@ span.linenumber {
 }
 
 /* Compact desktop file panel: overlay the chat instead of collapsing it. */
-@media (min-width: 641px) and (max-width: 959px) {
+@media (min-width: 769px) and (max-width: 959px) {
   .right-panel-resize-handle {
     display: none;
   }
@@ -1457,8 +1457,9 @@ span.linenumber {
   }
 }
 
+/* 移动档：判定规则与 hooks/useIsMobile.ts 中的 isMobileLayout() 保持一致。 */
 /* Mobile sidebar: slide in/out as overlay */
-@media (max-width: 640px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
   .chat-stats-center {
     display: none !important;
   }
@@ -1470,7 +1471,13 @@ span.linenumber {
     width: 280px;
     max-width: 85vw;
     height: var(--app-viewport-height, 100dvh);
+    overflow: visible;
     transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .sidebar-container.sidebar-open,
+  .sidebar-container.sidebar-closed {
+    width: 280px;
+    min-width: 0;
   }
   .sidebar-container.sidebar-open {
     transform: translateX(0);
@@ -1479,6 +1486,14 @@ span.linenumber {
   .sidebar-container.sidebar-closed {
     transform: translateX(calc(-100% - env(safe-area-inset-left)));
     box-shadow: none;
+  }
+  .sidebar-container > * {
+    width: 100%;
+    min-width: 0;
+  }
+  /* 横屏手机也命中本块，抵消 min-width: 769px 桌面规则留下的隐藏与定宽。 */
+  .sidebar-overlay-backdrop {
+    display: block !important;
   }
 
   .right-panel-container {
