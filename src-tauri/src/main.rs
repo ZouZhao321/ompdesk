@@ -393,9 +393,10 @@ mod tests {
     }
 
     // The README phone-access steps, tauri.conf.json's devUrl and the CLI
-    // launcher all assume this exact port.
+    // launcher's default all point at this literal; keep the shell's constant
+    // on that port so those instructions stay valid.
     #[test]
-    fn fixed_port_matches_the_documented_port() {
+    fn server_port_is_30141() {
         assert_eq!(SERVER_PORT, 30141);
     }
 }
