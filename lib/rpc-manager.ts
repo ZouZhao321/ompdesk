@@ -32,6 +32,7 @@ import { untrustedProjectSessionOptions } from "./project-trust";
 import { resolveSessionSystemPrompts } from "./session-system-prompt";
 import { readDefaultModelRole } from "./model-roles";
 import { getOmpRuntime, getSettingsForCwd } from "./omp-runtime";
+import { flushSessionTelemetry, sessionTelemetry } from "./telemetry";
 import { PRESET_FULL } from "./tool-presets";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import type { SlashCommandInfo } from "./omp-types";
@@ -665,6 +666,7 @@ export class AgentSessionWrapper {
       this.promptRunning = false;
       this.resetIdleTimer();
       this.emit({ type: "prompt_done" });
+      flushSessionTelemetry();
       notifyRunningChange();
     }
   }
@@ -912,7 +914,10 @@ export class AgentSessionWrapper {
             type: "prompt_error",
             errorMessage: error instanceof Error ? error.message : String(error),
           });
-          if (!streamingBehavior) this.emit({ type: "prompt_done" });
+          if (!streamingBehavior) {
+            this.emit({ type: "prompt_done" });
+            flushSessionTelemetry();
+          }
           notifyRunningChange();
         };
 
@@ -935,7 +940,10 @@ export class AgentSessionWrapper {
           writeAgentRunRecords(queuedCommand
             ? this.runLog.command(queuedCommand, { ok: true, durationMs: performance.now() - startedAt })
             : this.runLog.finish());
-          if (!streamingBehavior) this.emit({ type: "prompt_done" });
+          if (!streamingBehavior) {
+            this.emit({ type: "prompt_done" });
+            flushSessionTelemetry();
+          }
           notifyRunningChange();
         }).catch(failPrompt);
         return null;
@@ -2030,6 +2038,9 @@ export async function startRpcSession(
       const systemPrompts = await resolveSessionSystemPrompts(sessionCwd);
 
       const { modelRegistry } = runtime;
+      // OTLP export is opt-in through `OTEL_EXPORTER_OTLP_*`; without an
+      // endpoint this resolves to `undefined` and nothing is instrumented.
+      const telemetry = await sessionTelemetry(settings, modelRegistry);
       const scope = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
       const defaultRole = readDefaultModelRole(settings);
       const hasExistingMessages = sessionManager.buildSessionContext().messages.length > 0;
@@ -2052,6 +2063,7 @@ export async function startRpcSession(
         ...(initial.scopedModels.length > 0 ? { scopedModels: initial.scopedModels } : {}),
         ...(toolsOption !== undefined ? { toolNames: toolsOption, restrictToolNames: true } : {}),
         ...(untrusted ?? {}),
+        ...(telemetry ? { telemetry } : {}),
       };
       // omp's own applier, so a prompt file goes through the same templates the
       // CLI renders it with instead of overwriting the whole system prompt.
