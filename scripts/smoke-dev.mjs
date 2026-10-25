@@ -18,9 +18,22 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const HOST = "127.0.0.1";
-const PORT = Number(process.env.OMPDESK_SMOKE_PORT ?? 30199);
+
+/** 环境变量里的数字统一在这里校验：非法值直接退出，不要变成 NaN 传到超时里挂住。 */
+function positiveInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    console.error(`[ompdesk] ${name} 必须是正整数，当前是 ${JSON.stringify(raw)}`);
+    process.exit(2);
+  }
+  return Math.floor(value);
+}
+
+const PORT = positiveInt("OMPDESK_SMOKE_PORT", 30199);
 const DIST_DIR = process.env.OMPDESK_DIST_DIR ?? ".next-smoke";
-const STARTUP_TIMEOUT_MS = Number(process.env.OMPDESK_SMOKE_STARTUP_MS ?? 240_000);
+const STARTUP_TIMEOUT_MS = positiveInt("OMPDESK_SMOKE_STARTUP_MS", 240_000);
 const BASE_URL = `http://${HOST}:${PORT}`;
 const AUTH = process.env.OMPDESK_SMOKE_AUTH ?? "";
 const AUTH_HEADER = AUTH ? `Basic ${Buffer.from(AUTH).toString("base64")}` : null;
