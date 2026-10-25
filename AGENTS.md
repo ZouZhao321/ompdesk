@@ -430,7 +430,7 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
 
 ### 图片缩放（`components/ImageZoom.tsx`）
 - 图片文件标签页与全屏预览共用 `ImageZoomSurface`；相机是 `translate + scale`，
-  几何计算在 `lib/image-zoom.ts`，不碰 DOM。比例范围 10%–800%，超过 200% 用
+  几何计算在 `lib/image-zoom.ts`，不碰 DOM。比例范围 1%–800%，超过 200% 用
   `image-rendering: pixelated`，看清像素而不做插值。
 - 「适配窗口」取 `min(视口宽/图宽, 视口高/图高, 1)`：小图不放大超过 100%。滚轮与
   双指捏合以光标或双指中点为锚点缩放；平移按内容尺寸收敛，图小于视口时居中，

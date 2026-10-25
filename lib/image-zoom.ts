@@ -16,7 +16,7 @@ export interface Size {
   h: number;
 }
 
-export const IMAGE_ZOOM_MIN = 0.1;
+export const IMAGE_ZOOM_MIN = 0.01;
 export const IMAGE_ZOOM_MAX = 8;
 /** 每次按钮或键盘缩放的倍数。 */
 export const IMAGE_ZOOM_STEP = 1.25;
