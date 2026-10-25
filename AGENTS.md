@@ -83,22 +83,24 @@ JSON 记录，当前 `version: 3`。记录语义与顺序见 ADR-0004，字段�
 就得把目标整个读一遍。ADR 文件头部带 `name` 与 `description` 两个字段，`description`
 说明它约束什么、什么时候读。
 
-| 改什么 | 结论 | 出处 |
-| --- | --- | --- |
-| 会话生命周期、fork | fork 原地改写 sessionId；返回新 id 前销毁 wrapper，下一次请求从原文件重建 | `adr/0001-session-wrapper-lifecycle.md` |
-| 运行时接线 | 进程内只有一个 Settings + AuthStorage + ModelRegistry，缓存挂 globalThis；第二个 AuthStorage 会分裂凭据事件 | `adr/0002-single-omp-runtime.md` |
-| 选模型、改角色 | 角色清单以 SDK 的 `ModelRole` 为准；`enabledModels` 委托 `resolveModelScope()`，解析为空回退全部 | `adr/0003-model-roles.md` |
-| 读会话记录、拼上下文 | 顺序跟随 omp 的 transcript 语义，摘要渲染在压缩位置；`entryIds` 本地生成；`SessionManager` 全是异步 | `adr/0004-session-record-and-context.md` |
-| 分支功能 | fork 写新文件，`parentSession` 可写 id 或路径；会话内分支走 `navigate_tree` | `adr/0005-two-kinds-of-branch.md` |
-| 会话地图 | 按轮现算，按 mtime 与大小缓存；子代理会话不入图；切点取无悬空工具调用的条目 | `adr/0006-conversation-map.md` |
-| 建或删工作副本 | 手建在 `.worktrees/`，界面建在同级 `<repo>-worktrees/`；删除后的会话推断只认后者 | `adr/0007-worktree-path.md` |
-| 改文件浏览 | `/api/files` 只开放允许根：会话 cwd、项目根、`~/omp-cwd-*`、显式添加的根 | `adr/0008-file-access-roots.md` |
-| 改插件与 skills | 五类 skills 来源；开关只改 `disable-model-invocation`；安装用 `--agent claude-code` | `adr/0009-skills-and-plugins.md` |
-| 改凭据、`models.yml` | 凭据在 `agent.db`，写走 `credentials.*` 与 `oauth.login`；写后必须失效运行时与模型两个缓存 | `adr/0010-credentials-and-models-yml.md` |
-| 改访问控制 | 密码只存 scrypt 摘要；`proxy.ts` 在 Node 运行时且不引 SDK；文件缺失与不可读必须区别对待 | `adr/0011-password-lock.md` |
-| 改流式、运行状态 | `prompt_done` 收尾、空闲 30 秒宽限；等待集合独立于运行集合；旧 run id 的迟到事件必须忽略 | `adr/0012-stream-and-running-state.md` |
-| 改项目信任 | 未信任项目过滤项目内扩展与工具并禁用 MCP；skills 与 rules 始终加载 | `adr/0013-project-trust.md` |
-| 改样式、主题 | 主题来自 omp，`globals.css` 是首屏回退，运行期由 `/api/theme` 覆盖；字体只用系统列表 | `adr/0014-theme-and-css.md` |
+ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `description`。下面按 omp
+加载 skill 的格式列成清单：一行一条，先给路径，冒号后是该条约束与读取时机，与文件
+头部的 `description` 一致。
+
+- `adr/0001-session-wrapper-lifecycle.md`: fork 原地改写 sessionId，返回新 id 前销毁 wrapper；改会话生命周期或 fork 时读。
+- `adr/0002-single-omp-runtime.md`: 进程内只有一个 Settings、AuthStorage、ModelRegistry；改运行时接线或凭据来源时读。
+- `adr/0003-model-roles.md`: 角色清单以 SDK 的 ModelRole 为准，enabledModels 委托 resolveModelScope；改模型选择或角色时读。
+- `adr/0004-session-record-and-context.md`: 记录顺序跟随 omp 的 transcript 语义，entryIds 本地生成；改会话读取或上下文拼接时读。
+- `adr/0005-two-kinds-of-branch.md`: fork 写新文件，parentSession 可写 id 或路径；改分支、侧栏树或删除级联时读。
+- `adr/0006-conversation-map.md`: 地图按轮现算并缓存，子代理会话不入图，切点避开悬空工具调用；改地图时读。
+- `adr/0007-worktree-path.md`: 手建的工作副本在 `.worktrees/`，界面建在同级 `<repo>-worktrees/`；建或删工作副本时读。
+- `adr/0008-file-access-roots.md`: 文件浏览只开放允许根，`/api/files` 的根由三个端点扩充；改文件访问或放行新目录时读。
+- `adr/0009-skills-and-plugins.md`: skills 有五个来源，开关只改一个 frontmatter 键；改插件或 skills 安装时读。
+- `adr/0010-credentials-and-models-yml.md`: 凭据在 `agent.db`，写后必须失效运行时与模型两个缓存；改登录、密钥或 `models.yml` 时读。
+- `adr/0011-password-lock.md`: 密码只存 scrypt 摘要，`proxy.ts` 在 Node 运行时校验；改访问控制或恢复流程时读。
+- `adr/0012-stream-and-running-state.md`: 30 秒宽限与两套集合独立，旧 run id 的迟到事件要丢弃；改流式、轮询或运行状态时读。
+- `adr/0013-project-trust.md`: 未信任项目过滤项目内扩展与工具并禁用 MCP，skills 与 rules 始终加载；改信任开关时读。
+- `adr/0014-theme-and-css.md`: 主题来自 omp，`globals.css` 只是首屏回退；改配色、字体或主题同步时读。
 
 `docs/file-map.md` 按目录列出每个文件的职责（路径加一句话），用于确认某个文件
 属于哪一块；文件是否存在以 `git ls-files` 为准。
