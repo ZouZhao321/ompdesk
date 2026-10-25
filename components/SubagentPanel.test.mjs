@@ -21,6 +21,7 @@ test("renders live and completed subagent groups in the right panel tab", () => 
 test("loads a selected subagent transcript after it finishes", () => {
   assert.match(source, /type: "get_subagent_messages"/);
   assert.match(source, /subagentId: subagent\.id/);
-  assert.match(source, /active \? setInterval/);
+  assert.match(source, /if \(!visible \|\| !active\) return;/);
+  assert.match(source, /setInterval\(\(\) => void loadTranscript\(\), 1000\)/);
   assert.match(source, /subagents\.transcriptUnavailable/);
 });

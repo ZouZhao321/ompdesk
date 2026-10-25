@@ -1294,7 +1294,7 @@ span.linenumber {
   to   { stroke-dashoffset: 0;  opacity: 1; }
 }
 
-/* Subagents occupy a real desktop column beside the chat, never an overlay. */
+/* Chat content is a single column; the right panel is a sibling element outside this layout. */
 .chat-content-layout {
   display: flex;
   flex: 1 1 0%;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentMessage, SubagentSnapshot, ToolResultMessage } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { normalizeToolCalls } from "@/lib/normalize";
@@ -19,7 +19,7 @@ type SubagentTranscriptResult = {
   entries: Array<{ id?: string; type?: string; message?: AgentMessage }>;
 };
 
-function isSubagentActive(subagent: SubagentSnapshot): boolean {
+export function isSubagentActive(subagent: SubagentSnapshot): boolean {
   return subagent.status === "pending" || subagent.status === "running";
 }
 
@@ -74,6 +74,7 @@ function SubagentDetail({
   onRuntimeIdentity,
   cwd,
   subagent,
+  visible,
   onBack,
 }: {
   sessionId: string;
@@ -81,6 +82,7 @@ function SubagentDetail({
   onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"];
   cwd?: string;
   subagent: SubagentSnapshot;
+  visible: boolean;
   onBack: () => void;
 }) {
   const { t } = useI18n();
@@ -90,54 +92,63 @@ function SubagentDetail({
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const followTailRef = useRef(true);
+  const nextByteRef = useRef(0);
+  const inFlightRef = useRef(false);
+  const requestRef = useRef(0);
+
+  const loadTranscript = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    const requestId = requestRef.current;
+    try {
+      const result = await sendAgentCommand<SubagentTranscriptResult>(sessionId, {
+        type: "get_subagent_messages",
+        subagentId: subagent.id,
+        fromByte: nextByteRef.current,
+      }, { current: runtimeId ?? null, onIdentity: (identity, request) => {
+        if (requestId !== requestRef.current) return false;
+        return onRuntimeIdentity?.(identity, request);
+      } });
+      if (requestId !== requestRef.current) return;
+      const chunk = result.entries.flatMap((entry, index) =>
+        entry.type === "message" && entry.message
+          ? [{
+              id: entry.id ?? `${result.fromByte}:${index}`,
+              message: normalizeToolCalls(entry.message),
+            }]
+          : []);
+      setEntries((current) => result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk]);
+      nextByteRef.current = result.nextByte;
+      setTranscriptError(null);
+    } catch (error) {
+      if (requestId === requestRef.current) {
+        setTranscriptError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      if (requestId === requestRef.current) setLoadingTranscript(false);
+      inFlightRef.current = false;
+    }
+  }, [sessionId, runtimeId, onRuntimeIdentity, subagent.id]);
 
   useEffect(() => {
-    let disposed = false;
-    let inFlight = false;
-    let nextByte = 0;
+    requestRef.current += 1;
+    nextByteRef.current = 0;
+    inFlightRef.current = false;
     setEntries([]);
     setLoadingTranscript(true);
     setTranscriptError(null);
     followTailRef.current = true;
-
-    const loadTranscript = async () => {
-      if (inFlight || disposed) return;
-      inFlight = true;
-      try {
-        const result = await sendAgentCommand<SubagentTranscriptResult>(sessionId, {
-          type: "get_subagent_messages",
-          subagentId: subagent.id,
-          fromByte: nextByte,
-        }, { current: runtimeId ?? null, onIdentity: (identity, request) => {
-          if (disposed) return false;
-          return onRuntimeIdentity?.(identity, request);
-        } });
-        if (disposed) return;
-        const chunk = result.entries.flatMap((entry, index) =>
-          entry.type === "message" && entry.message
-            ? [{
-                id: entry.id ?? `${result.fromByte}:${index}`,
-                message: normalizeToolCalls(entry.message),
-              }]
-            : []);
-        setEntries((current) => result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk]);
-        nextByte = result.nextByte;
-        setTranscriptError(null);
-      } catch (error) {
-        if (!disposed) setTranscriptError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (!disposed) setLoadingTranscript(false);
-        inFlight = false;
-      }
-    };
-
     void loadTranscript();
-    const interval = active ? setInterval(() => void loadTranscript(), 1000) : undefined;
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
-  }, [active, sessionId, runtimeId, onRuntimeIdentity, subagent.id]);
+  }, [loadTranscript]);
+
+  useEffect(() => () => { requestRef.current += 1; }, []);
+
+  // 只有运行中的子代理且标签可见时才轮询记录，隐藏的标签不产生请求。
+  useEffect(() => {
+    if (!visible || !active) return;
+    const interval = setInterval(() => void loadTranscript(), 1000);
+    return () => clearInterval(interval);
+  }, [active, loadTranscript, visible]);
 
   useEffect(() => {
     if (!followTailRef.current) return;
@@ -149,12 +160,13 @@ function SubagentDetail({
   }, [entries.length]);
 
   useEffect(() => {
+    if (!visible) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onBack();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onBack]);
+  }, [onBack, visible]);
 
   const toolResults = useMemo(() => {
     const resultMap = new Map<string, ToolResultMessage>();
@@ -276,7 +288,7 @@ function SubagentRow({ subagent, selected, onSelect }: { subagent: SubagentSnaps
   );
 }
 
-export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, subagents }: { sessionId: string | null; runtimeId?: string; onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"]; cwd?: string; subagents: SubagentSnapshot[] }) {
+export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, subagents, active = true }: { sessionId: string | null; runtimeId?: string; onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"]; cwd?: string; subagents: SubagentSnapshot[]; active?: boolean }) {
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const running = subagents.filter(isSubagentActive);
@@ -295,7 +307,7 @@ export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, su
   if (!sessionId || subagents.length === 0) {
     body = <div style={{ padding: "12px 11px", color: "var(--text-dim)", fontSize: 12 }}>{t("subagents.none")}</div>;
   } else if (selected) {
-    body = <SubagentDetail sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} cwd={cwd} subagent={selected} onBack={() => setSelectedId(null)} />;
+    body = <SubagentDetail sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} cwd={cwd} subagent={selected} visible={active} onBack={() => setSelectedId(null)} />;
   } else {
     body = (
       <>
