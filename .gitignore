@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# verification evidence (see .agents/skills/verify-ompdesk)
+/.verify/
+
 # next.js
 /.next/
 /.next-smoke/
