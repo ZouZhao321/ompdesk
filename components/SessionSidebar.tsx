@@ -2070,9 +2070,9 @@ function RunningSessionIndicator() {
 }
 
 /**
- * 黄灯：会话仍在运行，但停在提问表单上等待用户作答。
+ * 黄环：会话仍在运行，但停在提问表单上等待用户作答。
  *
- * 用静态圆点加呼吸光晕区别于运行中的旋转弧线，两者一眼可分。
+ * 用完整圆环加呼吸明暗区别于运行中的旋转缺口圆环：形状一闭一缺，动静一停一转。
  */
 function WaitingSessionIndicator() {
   const { t } = useI18n();
@@ -2092,10 +2092,9 @@ function WaitingSessionIndicator() {
       }}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
-        <circle cx="7" cy="7" r="4" fill="currentColor" />
-        <circle cx="7" cy="7" r="4" stroke="currentColor" strokeWidth="1.2" opacity="0.5">
-          <animate attributeName="r" values="4;6.2;4" dur="1.8s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.5;0;0.5" dur="1.8s" repeatCount="indefinite" />
+        <circle cx="7" cy="7" r="4.6" stroke="currentColor" strokeWidth="2">
+          <animate attributeName="r" values="4.2;5;4.2" dur="1.8s" repeatCount="indefinite" />
+          <animate attributeName="stroke-opacity" values="1;0.4;1" dur="1.8s" repeatCount="indefinite" />
         </circle>
       </svg>
     </span>
@@ -2486,8 +2485,10 @@ function SessionItem({
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {title}
             </span>
-            {isWaiting ? <WaitingSessionIndicator /> : isRunning && <RunningSessionIndicator />}
-            {marker ? <StaticSessionMarker /> : !isRunning && isUnread && <UnreadSessionIndicator />}
+            {marker?.kind === "awaiting" && <WaitingSessionIndicator />}
+            {marker?.kind === "running" && <RunningSessionIndicator />}
+            {marker?.kind === "static" && <StaticSessionMarker />}
+            {!marker && isUnread && <UnreadSessionIndicator />}
             {session.worktreeBranch && (
               <span title={t("sidebar.worktreePath", { path: session.cwd })} style={{ display: "flex", color: "var(--accent)", flexShrink: 0 }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

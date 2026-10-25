@@ -1,12 +1,18 @@
 import type { SessionInfo, SessionStatus } from "./types";
 
+/** 静态层已接入的生命周期结果。本阶段只有「中断」，其余四种结果由后续改动接入。 */
+export type StaticMarkerStatus = "interrupted";
+
 /**
- * 侧栏静态标记。本阶段只接入「中断」这一种结果；动态标记与其余静态结果由后续改动接入。
+ * 侧栏标记。
+ *
+ * 动态层有两个子状态：正在处理、等你回答；静态层是最后一条消息的结果。
+ * 动态层优先，所以任一动态子状态成立时不会返回静态标记。
  */
-export interface SessionMarker {
-  kind: "static";
-  status: "interrupted";
-}
+export type SessionMarker =
+  | { kind: "running" }
+  | { kind: "awaiting" }
+  | { kind: "static"; status: StaticMarkerStatus };
 
 /** resolveSessionMarker 的输入条件。 */
 export interface SessionMarkerInput {
@@ -23,10 +29,13 @@ export interface SessionMarkerInput {
 /**
  * 判定顺序：等你回答 → 正在处理 → 未读且状态属于已接入的结果 → 无标记。
  *
- * 动态状态优先，所以运行或等待期间不返回静态标记；读完的会话立即熄灭。
+ * 等你回答与正在处理可能同时成立（表单等待本身就是运行中的一段），此时只返回
+ * 等你回答，回答完之后自然落回正在处理。动态状态优先，所以运行期间读不读都
+ * 挡掉静态标记。
  */
 export function resolveSessionMarker(input: SessionMarkerInput): SessionMarker | null {
-  if (input.isWaiting || input.isRunning) return null;
+  if (input.isWaiting) return { kind: "awaiting" };
+  if (input.isRunning) return { kind: "running" };
   if (!input.isUnread) return null;
   if (input.status !== "interrupted") return null;
   return { kind: "static", status: "interrupted" };
@@ -44,12 +53,14 @@ export function initialMarkerUnreadIds(
   waitingSessionIds: ReadonlySet<string>,
 ): string[] {
   return sessions
-    .filter((session) =>
-      resolveSessionMarker({
-        status: session.status,
-        isRunning: runningSessionIds.has(session.id),
-        isWaiting: waitingSessionIds.has(session.id),
-        isUnread: true,
-      }) !== null)
+    .filter(
+      (session) =>
+        resolveSessionMarker({
+          status: session.status,
+          isRunning: runningSessionIds.has(session.id),
+          isWaiting: waitingSessionIds.has(session.id),
+          isUnread: true,
+        })?.kind === "static",
+    )
     .map((session) => session.id);
 }

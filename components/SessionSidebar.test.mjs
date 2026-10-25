@@ -41,11 +41,11 @@ test("includes project activity counts in accessible labels", () => {
   );
 });
 
-test("shows the waiting indicator ahead of the running spinner", () => {
-  assert.match(
-    sessionItemSource,
-    /\{isWaiting \? <WaitingSessionIndicator \/> : isRunning && <RunningSessionIndicator \/>\}/,
-  );
+test("renders one marker slot driven by the resolved marker kind", () => {
+  assert.equal((sessionItemSource.match(/marker\?\.kind === "awaiting"/g) ?? []).length, 1);
+  assert.equal((sessionItemSource.match(/marker\?\.kind === "running"/g) ?? []).length, 1);
+  assert.equal((sessionItemSource.match(/marker\?\.kind === "static"/g) ?? []).length, 1);
+  assert.match(sessionItemSource, /!marker && isUnread && <UnreadSessionIndicator \/>/);
 });
 
 test("labels the inline waiting indicator without a count", () => {
@@ -83,6 +83,24 @@ test("marks activity indicators as images for screen readers", () => {
 
   const projectBadges = indicatorSource("function showProjectActivity(", "function SessionItem(");
   assert.equal((projectBadges.match(/role="img"/g) ?? []).length, 3);
+});
+
+test("spins an accent gap ring while the session is processing", () => {
+  const running = indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()");
+  assert.match(running, /var\(--accent\)/);
+  assert.match(running, /<animateTransform[\s\S]*?type="rotate"/);
+  assert.match(running, /<path[\s\S]*?stroke="currentColor"/);
+  assert.doesNotMatch(running, /<circle/);
+});
+
+test("breathes a complete yellow ring without spinning while the session waits for the user", () => {
+  const waiting = indicatorSource("function WaitingSessionIndicator()", "function StaticSessionMarker(");
+  assert.match(waiting, /var\(--warning\)/);
+  assert.match(waiting, /<circle[\s\S]*?stroke="currentColor"/);
+  assert.doesNotMatch(waiting, /fill="currentColor"/);
+  assert.match(waiting, /<animate /);
+  assert.doesNotMatch(waiting, /animateTransform/);
+  assert.doesNotMatch(waiting, /type="rotate"/);
 });
 
 test("does not persist an unchanged fallback title ending in whitespace", () => {
