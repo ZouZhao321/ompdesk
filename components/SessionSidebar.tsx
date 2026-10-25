@@ -5,7 +5,7 @@ import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
-import { STATIC_MARKER_APPEARANCE, initialMarkerUnreadIds, resolveSessionMarker, type StaticMarkerStatus } from "@/lib/session-marker";
+import { STATIC_MARKER_APPEARANCE, initialMarkerUnreadIds, resolveFinishedRuns, resolveSessionMarker, type StaticMarkerStatus } from "@/lib/session-marker";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -64,6 +64,7 @@ type SessionsResponse = SessionActivitySnapshotState & { sessions: SessionInfo[]
 
 const UNREAD_SESSIONS_STORAGE_KEY = "ompdesk:unread-session-ids";
 const MARKER_SEEDED_STORAGE_KEY = "ompdesk:session-marker-seeded";
+const RUNNING_SESSIONS_STORAGE_KEY = "ompdesk:running-session-ids";
 const RUNNING_SESSIONS_POLL_MS = 2500;
 const PROJECT_SESSION_LIMIT = 5;
 const COLLAPSED_PROJECTS_STORAGE_KEY = "ompdesk:collapsed-projects";
@@ -138,6 +139,31 @@ function markInitialMarkerUnreadSeeded(): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(MARKER_SEEDED_STORAGE_KEY, "1");
+  } catch {
+    // ignore storage quota / privacy-mode errors
+  }
+}
+
+/** 上次页面看到的运行会话；服务退出后用于判断哪些会话随进程一起结束。 */
+function loadPersistedRunningSessionIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(RUNNING_SESSIONS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? new Set(parsed.filter((id): id is string => typeof id === "string"))
+      : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function savePersistedRunningSessionIds(ids: ReadonlySet<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (ids.size === 0) window.localStorage.removeItem(RUNNING_SESSIONS_STORAGE_KEY);
+    else window.localStorage.setItem(RUNNING_SESSIONS_STORAGE_KEY, JSON.stringify([...ids]));
   } catch {
     // ignore storage quota / privacy-mode errors
   }
@@ -449,6 +475,16 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const waitingSessionIds = useMemo(() => new Set(activitySnapshot.waitingSessionIds ?? []), [activitySnapshot]);
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousActivitySnapshotRef = useRef(activitySnapshot);
+  // 页面在相邻两份快照之间是否一直可见；隐藏期间结束的运行要亮标记。
+  const pageVisibilitySinceSnapshotRef = useRef<DocumentVisibilityState>(
+    typeof document === "undefined" ? "visible" : document.visibilityState,
+  );
+  // 相邻两份快照之间是否与服务失去过联系；进程退出没有可观察的完成时刻。
+  const serverOutageSinceSnapshotRef = useRef(false);
+  // 首轮轮询是否已经到达；进程退出的对账只认轮询快照，不认会话列表的初始回退。
+  const [activityPolled, setActivityPolled] = useState(false);
+  const startupRunningIdsRef = useRef<Set<string> | null>(null);
+  const processExitReconciledRef = useRef(false);
   const listedRuntimeIdsRef = useRef<Record<string, string>>({});
   // Once polling has delivered a snapshot it is the source of truth for
   // running state; late /api/sessions responses must not overwrite it.
@@ -552,6 +588,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       timer = setTimeout(() => void poll(), RUNNING_SESSIONS_POLL_MS);
     };
 
+    // 只有上一份快照里还有运行中的会话时才算与服务失联，否则没有结束归属要改。
+    const markServerOutage = () => {
+      if ((previousActivitySnapshotRef.current.runningSessionIds?.length ?? 0) > 0) {
+        serverOutageSinceSnapshotRef.current = true;
+      }
+    };
+
     const poll = async () => {
       if (stopped || document.visibilityState !== "visible") return;
       const current = new AbortController();
@@ -562,10 +605,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           cache: "no-store",
           signal: current.signal,
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          markServerOutage();
+          return;
+        }
         const data = await res.json() as SessionActivitySnapshotState;
         if (stopped || controller !== current) return;
         runningPollAuthoritativeRef.current = true;
+        setActivityPolled(true);
         setActivitySnapshot({
           runningSessionIds: data.runningSessionIds,
           waitingSessionIds: data.waitingSessionIds,
@@ -573,6 +620,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         });
       } catch {
         // Keep the last known state; the next visible-tab poll retries.
+        markServerOutage();
       } finally {
         if (controller === current) controller = null;
         schedule();
@@ -581,9 +629,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        // 回到前台时同时核对运行快照与会话最后状态，标记才有正确的依据。
         void poll();
+        loadSessions(false, true);
         return;
       }
+      pageVisibilitySinceSnapshotRef.current = "hidden";
       clearTimer();
       controller?.abort();
       controller = null;
@@ -597,58 +648,84 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, []);
+  }, [loadSessions]);
 
   useEffect(() => {
     const previousSnapshot = previousActivitySnapshotRef.current;
     const previous = new Set(previousSnapshot.runningSessionIds ?? []);
-    // Compare the same live wrapper across fallback IDs before reporting completion.
-    const previousRuntimeIds = new Map(Object.entries(previousSnapshot.sessionIdsByRuntimeId ?? {})
-      .map(([runtimeId, sessionId]) => [sessionId, runtimeId]));
-    const selectedCanonicalId = selectedRuntimeId
-      ? activitySnapshot.sessionIdsByRuntimeId?.[selectedRuntimeId] ?? selectedSessionId
-      : selectedSessionId;
-    const completedInBackground = [...previous].flatMap((id) => {
-      const runtimeId = previousRuntimeIds.get(id);
-      // A server restart can erase the current mapping before the sidebar sees
-      // a relocation. The previous snapshot still identifies the selected run.
-      if (runtimeId && runtimeId === selectedRuntimeId) return [];
-      const currentId = (runtimeId && activitySnapshot.sessionIdsByRuntimeId?.[runtimeId]) || id;
-      return !runningSessionIds.has(currentId) && currentId !== selectedCanonicalId
-        ? [currentId] : [];
+    // 结束归属看这份快照覆盖的时间段：期间隐藏过或与服务失联，结束就不算被看到。
+    const finished = resolveFinishedRuns({
+      previousRunningSessionIds: previousSnapshot.runningSessionIds ?? [],
+      runningSessionIds,
+      previousSessionIdsByRuntimeId: previousSnapshot.sessionIdsByRuntimeId,
+      sessionIdsByRuntimeId: activitySnapshot.sessionIdsByRuntimeId,
+      selectedSessionId,
+      selectedRuntimeId,
+      isPageVisible: pageVisibilitySinceSnapshotRef.current === "visible",
+      isProcessExit: serverOutageSinceSnapshotRef.current,
     });
     const newlyRunning = [...runningSessionIds].filter((id) => !previous.has(id));
 
-    if (completedInBackground.length > 0 || newlyRunning.length > 0) {
+    if (finished.finishedIds.length > 0 || newlyRunning.length > 0) {
       setUnreadSessionIds((prev) => {
         const next = new Set(prev);
+        // 再次进入运行的会话先清掉旧标记，结束后按新结果重新亮。
         runningSessionIds.forEach((id) => next.delete(id));
-        completedInBackground.forEach((id) => next.add(id));
+        finished.unreadIds.forEach((id) => next.add(id));
         return next;
       });
     }
     const hasUnlistedRunningSession = newlyRunning.some(
       (id) => !allSessions.some((session) => session.id === id),
     );
-    if (completedInBackground.length > 0 || hasUnlistedRunningSession) {
+    // 结束的运行要重读最后状态，静态标记才能按新结果出现。
+    if (finished.finishedIds.length > 0 || hasUnlistedRunningSession) {
       loadSessions(false, true);
     }
-    if (completedInBackground.length > 0) {
+    if (finished.backgroundIds.length > 0) {
       onBackgroundTaskDone?.();
     }
 
-    previousActivitySnapshotRef.current = activitySnapshot;
+    // 只有新快照才移动对比窗口；会话列表刷新等无关重跑不能把窗口提前关掉。
+    const hasNewSnapshot = previousSnapshot !== activitySnapshot;
+    if (hasNewSnapshot) {
+      previousActivitySnapshotRef.current = activitySnapshot;
+      pageVisibilitySinceSnapshotRef.current = document.visibilityState;
+      serverOutageSinceSnapshotRef.current = false;
+    }
   }, [activitySnapshot, runningSessionIds, selectedSessionId, selectedRuntimeId, allSessions, loadSessions, onBackgroundTaskDone]);
 
+  // 进程退出时页面看不到结束的那一刻，也无法区分哪次运行是被打断的。把上次页面
+  // 看到过的运行集合与首轮轮询对比：消失的会话一律记为未读，之后持续记录当前集合。
   useEffect(() => {
-    if (!selectedSessionId) return;
+    if (!activityPolled) return;
+    if (startupRunningIdsRef.current === null) {
+      startupRunningIdsRef.current = loadPersistedRunningSessionIds();
+    }
+    if (!processExitReconciledRef.current) {
+      processExitReconciledRef.current = true;
+      const endedByProcessExit = [...startupRunningIdsRef.current]
+        .filter((id) => !runningSessionIds.has(id));
+      if (endedByProcessExit.length > 0) {
+        setUnreadSessionIds((prev) => {
+          const next = new Set(prev);
+          endedByProcessExit.forEach((id) => next.add(id));
+          return next;
+        });
+      }
+    }
+    savePersistedRunningSessionIds(runningSessionIds);
+  }, [activityPolled, runningSessionIds]);
+
+  // 静态标记在用户点开会话时熄灭。自动恢复打开的会话不算点开，所以这里不做处理。
+  const markSessionRead = useCallback((sessionId: string) => {
     setUnreadSessionIds((prev) => {
-      if (!prev.has(selectedSessionId)) return prev;
+      if (!prev.has(sessionId)) return prev;
       const next = new Set(prev);
-      next.delete(selectedSessionId);
+      next.delete(sessionId);
       return next;
     });
-  }, [selectedSessionId]);
+  }, []);
 
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
@@ -880,9 +957,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // works when the prop value won't change — e.g. re-clicking the already
   // open session after manually switching worktrees.
   const handleSelectSessionFromList = useCallback((s: SessionInfo) => {
+    markSessionRead(s.id);
     if (s.cwd) setSelectedCwd(s.cwd);
     onSelectSession(s);
-  }, [onSelectSession]);
+  }, [markSessionRead, onSelectSession]);
 
   const handleNewSession = useCallback((project = selectedCwd) => {
     if (!project) return;
