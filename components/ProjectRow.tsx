@@ -17,6 +17,8 @@ interface Props {
   name: string;
   isSelected: boolean;
   isCollapsed: boolean;
+  /** 项目已置顶时在项目名旁显示图钉标记。 */
+  isPinned?: boolean;
   activity?: ProjectActivity;
   /** 由父组件持有，鼠标进入/离开时通过 onHoverChange 回报。 */
   hovered: boolean;
@@ -43,6 +45,7 @@ export function ProjectRow({
   name,
   isSelected,
   isCollapsed,
+  isPinned = false,
   activity,
   hovered,
   menuOpen,
@@ -133,6 +136,19 @@ export function ProjectRow({
           <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
         </svg>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+        {isPinned && (
+          <span
+            role="img"
+            aria-label={t("sidebar.pinnedProject")}
+            title={t("sidebar.pinnedProject")}
+            style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, color: "var(--text-dim)" }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 17v5" />
+              <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+            </svg>
+          </span>
+        )}
         {showProjectActivity(activity, t)}
       </button>
 
