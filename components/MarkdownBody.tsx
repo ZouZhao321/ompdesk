@@ -82,10 +82,8 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
         <ZoomableImage
           src={imageSrc}
           alt={alt}
-          title={props.title}
-          width={props.width}
-          height={props.height}
           className="markdown-image-zoomable"
+          imgProps={props}
         />
       );
     },
