@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, type CSSProperties, type ReactNode } from "react";
+import { useState, useCallback, useRef, useEffect, memo, type CSSProperties, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
@@ -51,6 +51,12 @@ import type { BlockingExtensionUiRequest, SessionInfo, SessionTreeNode, Subagent
 import type { ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/omp-types";
+
+// 隐藏标签只切换 display，仍然参与渲染；用 memo 让它们的正文在 AppShell
+// 重渲染（面板拖动、子代理快照更新）时保持不动。
+const MemoFileViewer = memo(FileViewer);
+const MemoFileExplorerPanel = memo(FileExplorerPanel);
+const MemoSubagentPanel = memo(SubagentPanel);
 
 type SessionCopyField = "file" | "id";
 type AutoNameStatus =
@@ -816,6 +822,11 @@ export function AppShell() {
     handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
   }, [handleOpenFile, selectedSession?.id]);
 
+  // 文件标签打开的链接沿用该标签的 sourceSessionId；身份稳定，标签正文才能用 memo。
+  const handleOpenFileFromViewer = useCallback((filePath: string, sourceSessionId?: string | null) => {
+    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId });
+  }, [handleOpenFile]);
+
   const handleClosePanelTab = useCallback((tabId: string) => {
     setPanelTabs((prev) => prev.filter((t) => t.id !== tabId));
     setActivePanelTabId((cur) => {
@@ -915,7 +926,7 @@ export function AppShell() {
     switch (tab.kind) {
       case "file":
         return (
-          <FileViewer
+          <MemoFileViewer
             filePath={tab.filePath}
             cwd={activeCwd ?? undefined}
             sourceSessionId={tab.sourceSessionId}
@@ -924,16 +935,12 @@ export function AppShell() {
             initialDisplayMode={tab.initialDisplayMode}
             onMentionLines={handleFileLineMention}
             onAtMention={handleAtMention}
-            onOpenFile={(filePath) => handleOpenFile(
-              filePath,
-              getFileName(filePath),
-              { sourceSessionId: tab.sourceSessionId },
-            )}
+            onOpenFile={handleOpenFileFromViewer}
           />
         );
       case "explorer":
         return activeCwd ? (
-          <FileExplorerPanel
+          <MemoFileExplorerPanel
             cwd={activeCwd}
             onOpenFile={handleOpenFile}
             refreshKey={explorerRefreshKey}
@@ -948,7 +955,7 @@ export function AppShell() {
         );
       case "subagents":
         return (
-          <SubagentPanel
+          <MemoSubagentPanel
             sessionId={selectedSession?.id ?? null}
             runtimeId={selectedSession?.runtimeId}
             onRuntimeIdentity={handleRuntimeIdentity}

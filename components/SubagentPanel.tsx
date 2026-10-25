@@ -95,10 +95,14 @@ function SubagentDetail({
   const nextByteRef = useRef(0);
   const inFlightRef = useRef(false);
   const requestRef = useRef(0);
+  const pendingRef = useRef(false);
   const prevVisibleRef = useRef(visible);
 
   const loadTranscript = useCallback(async () => {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current) {
+      pendingRef.current = true;
+      return;
+    }
     inFlightRef.current = true;
     const requestId = requestRef.current;
     try {
@@ -129,6 +133,10 @@ function SubagentDetail({
       if (requestId === requestRef.current) {
         setLoadingTranscript(false);
         inFlightRef.current = false;
+        if (pendingRef.current) {
+          pendingRef.current = false;
+          void loadTranscript();
+        }
       }
     }
   }, [sessionId, runtimeId, onRuntimeIdentity, subagent.id]);
@@ -137,11 +145,13 @@ function SubagentDetail({
     requestRef.current += 1;
     nextByteRef.current = 0;
     inFlightRef.current = false;
+    pendingRef.current = false;
     setEntries([]);
     setLoadingTranscript(true);
     setTranscriptError(null);
     followTailRef.current = true;
-    void loadTranscript();
+    // 重置时不发请求：交给可见性副作用，隐藏的标签不产生 RPC。
+    prevVisibleRef.current = false;
   }, [loadTranscript]);
 
   useEffect(() => () => { requestRef.current += 1; }, []);

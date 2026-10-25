@@ -31,7 +31,7 @@ interface Props {
   filePath: string;
   cwd?: string;
   sourceSessionId?: string | null;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, sourceSessionId?: string | null) => void;
   onMentionLines?: (relativePath: string, startLine: number, endLine: number) => void;
   /** Insert this file's relative path into the chat input (@ mention). */
   onAtMention?: (relativePath: string, isDir: boolean) => void;
@@ -163,6 +163,67 @@ function parseWatchPayload(event: MessageEvent): WatchPayload {
   } catch {
     return {};
   }
+}
+
+/**
+ * 订阅单个文件的 watch 流：只有当前标签保持连接，重连时用 connected 带回的
+ * mtime 判断隐藏期间是否有变化，变化才调用 onChanged。
+ */
+function useFileWatch({
+  filePath,
+  sourceSessionId,
+  active,
+  onChanged,
+}: {
+  filePath: string;
+  sourceSessionId?: string | null;
+  active: boolean;
+  onChanged: (payload: WatchPayload) => void;
+}): boolean {
+  const [watching, setWatching] = useState(false);
+  const esRef = useRef<EventSource | null>(null);
+  const lastMtimeRef = useRef<string | null>(null);
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged;
+
+  useEffect(() => {
+    setWatching(false);
+
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+    if (!active) return;
+
+    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
+    esRef.current = es;
+
+    const applyChange = (payload: WatchPayload) => {
+      if (typeof payload.mtime === "string") lastMtimeRef.current = payload.mtime;
+      onChangedRef.current(payload);
+    };
+
+    es.addEventListener("connected", (e) => {
+      setWatching(true);
+      const d = parseWatchPayload(e);
+      if (typeof d.mtime !== "string") return;
+      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) {
+        applyChange(d);
+        return;
+      }
+      lastMtimeRef.current = d.mtime;
+    });
+    es.addEventListener("change", (e) => applyChange(parseWatchPayload(e)));
+    es.addEventListener("error", () => setWatching(false));
+    es.onerror = () => setWatching(false);
+
+    return () => {
+      es.close();
+      esRef.current = null;
+    };
+  }, [active, filePath, sourceSessionId]);
+
+  return watching;
 }
 
 function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: SourceCodeRendererProps) {
@@ -476,14 +537,10 @@ function DiffView({ patch }: { patch: string }) {
 
 function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
-  // 隐藏期间可能发生改动：重连时用 connected 带回的 mtime 判断是否需要重读。
-  const lastMtimeRef = useRef<string | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -494,39 +551,17 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
     setError(null);
   }, [filePath, sourceSessionId]);
 
-  useEffect(() => {
-    setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-    if (!active) return;
-
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", (e) => {
-      setWatching(true);
-      const d = parseWatchPayload(e);
-      if (typeof d.mtime !== "string") return;
-      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) setBust((b) => b + 1);
-      lastMtimeRef.current = d.mtime;
-    });
-    es.addEventListener("change", (e) => {
-      const d = parseWatchPayload(e);
+  const watching = useFileWatch({
+    filePath,
+    sourceSessionId,
+    active,
+    onChanged: (d) => {
       if (typeof d.size === "number") setSize(d.size);
-      if (typeof d.mtime === "string") lastMtimeRef.current = d.mtime;
+      setNaturalSize(null);
+      setError(null);
       setBust((b) => b + 1);
-    });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [filePath, sourceSessionId, active]);
+    },
+  });
 
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
 
@@ -621,14 +656,10 @@ function formatDuration(seconds: number): string {
 
 function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
-  // 隐藏期间可能发生改动：重连时用 connected 带回的 mtime 判断是否需要重读。
-  const lastMtimeRef = useRef<string | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -639,45 +670,17 @@ function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
     setError(null);
   }, [filePath, sourceSessionId]);
 
-  useEffect(() => {
-    setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-    if (!active) return;
-
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", (e) => {
-      setWatching(true);
-      const d = parseWatchPayload(e);
-      if (typeof d.mtime !== "string") return;
-      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) {
-        setDuration(null);
-        setError(null);
-        setBust((b) => b + 1);
-      }
-      lastMtimeRef.current = d.mtime;
-    });
-    es.addEventListener("change", (e) => {
-      const d = parseWatchPayload(e);
+  const watching = useFileWatch({
+    filePath,
+    sourceSessionId,
+    active,
+    onChanged: (d) => {
       if (typeof d.size === "number") setSize(d.size);
-      if (typeof d.mtime === "string") lastMtimeRef.current = d.mtime;
       setDuration(null);
       setError(null);
       setBust((b) => b + 1);
-    });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [filePath, sourceSessionId, active]);
+    },
+  });
 
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
 
@@ -753,13 +756,9 @@ function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
 
 function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
-  // 隐藏期间可能发生改动：重连时用 connected 带回的 mtime 判断是否需要重读。
-  const lastMtimeRef = useRef<string | null>(null);
 
   const ext = getFileExt(filePath);
   const isPdf = ext === "pdf";
@@ -786,20 +785,11 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props
       .catch((e) => setError(String(e)));
   }, [filePath, isPdf, sourceSessionId]);
 
-  useEffect(() => {
-    setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-    if (!active) return;
-
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    const applyFileChange = (d: WatchPayload) => {
-      if (typeof d.mtime === "string") lastMtimeRef.current = d.mtime;
+  const watching = useFileWatch({
+    filePath,
+    sourceSessionId,
+    active,
+    onChanged: (d) => {
       if (typeof d.size === "number") {
         setSize(d.size);
         if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
@@ -809,27 +799,8 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props
       }
       setError(null);
       setBust((b) => b + 1);
-    };
-
-    es.addEventListener("connected", (e) => {
-      setWatching(true);
-      const d = parseWatchPayload(e);
-      if (typeof d.mtime !== "string") return;
-      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) {
-        applyFileChange(d);
-        return;
-      }
-      lastMtimeRef.current = d.mtime;
-    });
-    es.addEventListener("change", (e) => applyFileChange(parseWatchPayload(e)));
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [filePath, isPdf, sourceSessionId, active]);
+    },
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -911,10 +882,6 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const [error, setError] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("source");
   const [wrapLines, setWrapLines] = useState(false);
-  const [watching, setWatching] = useState(false);
-  const esRef = useRef<EventSource | null>(null);
-  // 隐藏期间可能发生改动：重连时用 connected 带回的 mtime 判断是否需要重读。
-  const lastMtimeRef = useRef<string | null>(null);
   const gitDiffRequestRef = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [selectedLineRange, setSelectedLineRange] = useState<SelectedLineRange | null>(null);
@@ -971,52 +938,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     fetchContent(filePath).finally(() => setLoading(false));
   }, [filePath, fetchContent]);
 
-  // Watch only while this tab is the visible one
-  useEffect(() => {
-    setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-    if (!active) return;
-
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    const refresh = () => {
-      void fetchContent(filePath);
-      void fetchGitDiff(filePath);
-    };
-
-    es.addEventListener("connected", (e) => {
-      setWatching(true);
-      const d = parseWatchPayload(e);
-      if (typeof d.mtime !== "string") return;
-      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) refresh();
-      lastMtimeRef.current = d.mtime;
-    });
-
-    es.addEventListener("change", (e) => {
-      const d = parseWatchPayload(e);
-      if (typeof d.mtime === "string") lastMtimeRef.current = d.mtime;
-      refresh();
-    });
-
-    es.addEventListener("error", () => {
-      setWatching(false);
-    });
-
-    es.onerror = () => {
-      setWatching(false);
-    };
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [active, fetchContent, fetchGitDiff, filePath, sourceSessionId]);
-
+  // 只有当前标签刷新 git diff
   useEffect(() => {
     if (!active) return;
     void fetchGitDiff(filePath);
@@ -1034,16 +956,20 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const hasGitDiff = gitDiff?.supported === true && typeof gitDiff.patch === "string";
   const isDeletedDiff = hasGitDiff && gitDiff.status === "deleted";
 
+  // 切换标签、关闭面板或文件已被删除时都不保持监听。
+  const watching = useFileWatch({
+    filePath,
+    sourceSessionId,
+    active: active && !isDeletedDiff,
+    onChanged: () => {
+      void fetchContent(filePath);
+      void fetchGitDiff(filePath);
+    },
+  });
+
   useEffect(() => {
     if (!hasGitDiff && displayMode === "diff") setDisplayMode("source");
   }, [displayMode, hasGitDiff]);
-
-  useEffect(() => {
-    if (!isDeletedDiff || !esRef.current) return;
-    esRef.current.close();
-    esRef.current = null;
-    setWatching(false);
-  }, [isDeletedDiff]);
 
   // Opened from the Changes list (initialDisplayMode === "diff"): switch to the
   // diff view once the git diff has resolved. We do this after the diff loads
@@ -1325,7 +1251,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                     if (event.defaultPrevented || event.button !== 0) return;
                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
-                    onOpenFile(linkedFile);
+                    onOpenFile(linkedFile, sourceSessionId);
                   };
 
                   return <a href={href} {...props} onClick={handleClick}>{children}</a>;
