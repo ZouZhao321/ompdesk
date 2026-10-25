@@ -100,13 +100,16 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   }, [applyCamera]);
 
   useEffect(() => {
+    // 换源（live 刷新或换文件）后先回到加载占位，避免新图按旧尺寸拉伸，也避免失败时留下旧画面。
+    naturalSizeRef.current = { w: 0, h: 0 };
+    setNatural({ w: 0, h: 0 });
+    setLoadFailed(false);
+  }, [src]);
+
+  useEffect(() => {
     const image = imageRef.current;
     if (image?.complete && image.naturalWidth > 0) syncNaturalSize(image);
   }, [src, syncNaturalSize]);
-
-  useEffect(() => {
-    setLoadFailed(false);
-  }, [src]);
 
   useEffect(() => {
     const element = viewportRef.current;
@@ -493,7 +496,7 @@ interface ZoomableImageProps {
 export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false, imgProps }: ZoomableImageProps) {
   const { t } = useI18n();
   const openImagePreview = useImagePreview();
-  const [insideLink, setInsideLink] = useState(false);
+  const [insideLink, setInsideLink] = useState<boolean | null>(null);
 
   // 图片被 markdown 包在链接里时，可聚焦的应该是那个链接；图片本身不再冒充按钮。
   const attachImage = useCallback((node: HTMLImageElement | null) => {
@@ -522,6 +525,8 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
 
   const restProps: ImgHTMLAttributes<HTMLImageElement> & { node?: unknown } = { ...imgProps };
   delete restProps.node;
+  // 链接关系只能在挂载后从 DOM 读出，服务端渲染先保持普通图片语义。
+  const interactive = insideLink === false;
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -533,14 +538,14 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
       loading={restProps.loading ?? "lazy"}
       className={[restProps.className, className].filter(Boolean).join(" ") || undefined}
       style={imgStyle ?? restProps.style}
-      role={insideLink ? undefined : "button"}
-      tabIndex={insideLink ? undefined : 0}
-      aria-label={insideLink ? undefined : label}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? label : undefined}
       onClick={open}
-      onKeyDown={insideLink ? undefined : (event) => {
+      onKeyDown={interactive ? (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         open(event);
-      }}
+      } : undefined}
     />
   );
 }
