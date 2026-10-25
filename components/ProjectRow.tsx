@@ -65,6 +65,7 @@ export function ProjectRow({
   return (
     <div
       ref={menuRef}
+      className="sidebar-project-row"
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
       style={{
@@ -114,6 +115,7 @@ export function ProjectRow({
       </button>
       <button
         type="button"
+        className="sidebar-project-name"
         onClick={onSelect}
         title={project}
         style={{
