@@ -43,9 +43,14 @@ export const STATIC_MARKER_APPEARANCE: Record<StaticMarkerStatus, StaticMarkerAp
   pending: { color: "var(--accent)", labelKey: "sidebar.sessionPending" },
 };
 
-/** 把 omp 的最后状态收窄成静态标记支持的结果。 */
+/**
+ * 把 omp 的最后状态收窄成静态标记支持的结果。
+ *
+ * 会话文件与接口都可能在联合类型之外送来新状态，所以按外观表的实际键校验：
+ * 没有外观的状态在渲染期取不到颜色与无障碍文字，必须在这里挡掉。
+ */
 function isStaticMarkerStatus(status: SessionStatus | undefined): status is StaticMarkerStatus {
-  return status !== undefined && status !== "unknown";
+  return status !== undefined && Object.hasOwn(STATIC_MARKER_APPEARANCE, status);
 }
 
 /**
@@ -152,11 +157,15 @@ export function resolveFinishedRuns(input: FinishedRunsInput): FinishedRuns {
   for (const id of input.previousRunningSessionIds) {
     const runtimeId = previousRuntimeIds.get(id);
     const currentId = (runtimeId === undefined ? undefined : input.sessionIdsByRuntimeId?.[runtimeId]) ?? id;
-    if (input.runningSessionIds.has(currentId) || finished.some((run) => run.id === currentId)) continue;
-    finished.push({
-      id: currentId,
-      isSelected: currentId === selectedCanonicalId || (runtimeId !== undefined && runtimeId === input.selectedRuntimeId),
-    });
+    if (input.runningSessionIds.has(currentId)) continue;
+    const isSelected = currentId === selectedCanonicalId || (runtimeId !== undefined && runtimeId === input.selectedRuntimeId);
+    const merged = finished.find((run) => run.id === currentId);
+    if (merged) {
+      // 多次运行可能换算到同一个会话：任一次属于选中，这次结束就算被看到。
+      merged.isSelected ||= isSelected;
+      continue;
+    }
+    finished.push({ id: currentId, isSelected });
   }
 
   const unreadIds = finished
