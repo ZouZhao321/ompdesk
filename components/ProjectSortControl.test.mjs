@@ -8,7 +8,7 @@ const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
-const { ProjectSortControl } = await jiti.import("./ProjectSortControl.tsx");
+const { ProjectSortControl, sortMenuKeyAction } = await jiti.import("./ProjectSortControl.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 const TRIGGER_LABEL = "Sort projects";
@@ -134,4 +134,40 @@ test("renders the menu labels in zh-CN", () => {
   assert.equal(menuItemSnippets(html).length, 2, "expected one menu item per sort mode");
   assert.equal(ariaCheckedOf(menuItemFor(html, "按最近活动")), "false");
   assert.equal(ariaCheckedOf(menuItemFor(html, "按名称")), "true");
+});
+
+// 键盘映射是菜单导航的唯一决策点：组件只负责把结果落到焦点与开关上。
+const focusAction = (index) => ({ kind: "focus", index });
+
+test("moves focus down and up through the sort options with wrapping", () => {
+  assert.deepEqual(sortMenuKeyAction("ArrowDown", 0, 2), focusAction(1));
+  assert.deepEqual(sortMenuKeyAction("ArrowDown", 1, 2), focusAction(0));
+  assert.deepEqual(sortMenuKeyAction("ArrowUp", 1, 2), focusAction(0));
+  assert.deepEqual(sortMenuKeyAction("ArrowUp", 0, 2), focusAction(1));
+});
+
+test("enters the sort menu at the first or last option when no item is focused", () => {
+  assert.deepEqual(sortMenuKeyAction("ArrowDown", -1, 2), focusAction(0));
+  assert.deepEqual(sortMenuKeyAction("ArrowUp", -1, 2), focusAction(1));
+});
+
+test("jumps to the first and last sort option with Home and End", () => {
+  assert.deepEqual(sortMenuKeyAction("Home", 1, 2), focusAction(0));
+  assert.deepEqual(sortMenuKeyAction("End", 0, 2), focusAction(1));
+});
+
+test("closes the sort menu on Escape and hands focus back to the trigger", () => {
+  assert.deepEqual(sortMenuKeyAction("Escape", 0, 2), { kind: "close", returnFocus: true });
+});
+
+test("closes the sort menu on Tab without pulling focus back to the trigger", () => {
+  assert.deepEqual(sortMenuKeyAction("Tab", 1, 2), { kind: "close", returnFocus: false });
+});
+
+test("leaves unrelated keys and an empty menu to the browser", () => {
+  for (const key of ["Enter", " ", "a", "PageDown"]) {
+    assert.equal(sortMenuKeyAction(key, 0, 2), null, `expected "${key}" to keep the default behavior`);
+  }
+  assert.equal(sortMenuKeyAction("ArrowDown", -1, 0), null);
+  assert.equal(sortMenuKeyAction("Escape", -1, 0), null);
 });

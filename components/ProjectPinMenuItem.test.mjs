@@ -57,6 +57,15 @@ test("render does not invoke onToggle or change markup", () => {
   assert.equal(html, renderItem({ isPinned: true }));
 });
 
+test("does not claim a pressed state next to a state-changing label", () => {
+  for (const isPinned of [false, true]) {
+    const [tag] = buttonTags(renderItem({ isPinned }));
+
+    assert.ok(!tag.includes("aria-pressed"), "expected no aria-pressed on the pin toggle");
+    assert.ok(!tag.includes("aria-checked"), "expected no aria-checked on the pin toggle");
+  }
+});
+
 test("shows the localized pin labels in zh-CN", () => {
   const unpinned = renderItem({ isPinned: false }, "zh-CN");
   assert.ok(unpinned.includes(">置顶项目<"), "expected the zh-CN pin label");

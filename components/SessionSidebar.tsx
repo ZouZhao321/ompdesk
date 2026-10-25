@@ -888,14 +888,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   // 切换置顶后菜单立即收起，行高亮也随之清掉，避免菜单悬在移动过的项目上。
   const handleTogglePinnedProject = useCallback((project: string) => {
-    setPinnedProjects((current) => {
-      const next = togglePinnedProject(current, project);
-      savePinnedProjects(next);
-      return next;
-    });
+    const next = togglePinnedProject(pinnedProjects, project);
+    setPinnedProjects(next);
+    savePinnedProjects(next);
     dismissProjectMenu();
     setHoveredProject(null);
-  }, [dismissProjectMenu]);
+  }, [pinnedProjects, dismissProjectMenu]);
 
   const selectedProject = projectRootFor(selectedCwd);
   const recentProjectPaths = getRecentProjects(sessionsForDisplay)

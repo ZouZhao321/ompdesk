@@ -2,12 +2,16 @@
 export type ProjectSortMode = "time" | "name";
 
 /**
- * 项目键：把 Windows 反斜杠统一成 /，并折叠盘符路径的大小写。
+ * 项目键：把 Windows 反斜杠统一成 /，去掉结尾分隔符，并折叠盘符路径的大小写。
  * POSIX 路径保持原样，因为大小写不同可能是两个不同的目录。
+ * 根目录（`/`、`c:/`）去掉结尾分隔符后仍是根目录，单独保留。
  */
 export function normalizeProjectKey(project: string): string {
-  const normalized = project.replace(/\\/g, "/");
-  return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+  const slashed = project.replace(/\\/g, "/");
+  if (/^[a-zA-Z]:\/+$/.test(slashed)) return `${slashed.slice(0, 1).toLowerCase()}:/`;
+  const trimmed = slashed.replace(/\/+$/, "");
+  if (trimmed === "") return "/";
+  return /^[a-zA-Z]:\//.test(trimmed) ? trimmed.toLowerCase() : trimmed;
 }
 
 /** 项目分组的显示名：工作目录最后一段，忽略结尾的分隔符。 */
@@ -25,6 +29,7 @@ const projectNameCollator = new Intl.Collator(undefined, { numeric: true, sensit
  *
  * 传入 `pinned` 时，命中的项目按置顶先后排在最前，其余项目保持上式顺序。
  * 置顶项按归一化键匹配，重复的置顶记录只算一次，项目列表里没有的置顶项被忽略。
+ * 尾部只移除真正进入置顶区的那个字符串，键相同但写法不同的路径仍留在原位。
  */
 export function orderProjectPaths(
   projects: readonly string[],
@@ -60,7 +65,14 @@ export function orderProjectPaths(
   }
   if (head.length === 0) return ordered;
 
-  return [...head, ...ordered.filter((project) => !pinnedKeys.has(normalizeProjectKey(project)))];
+  // 只按原样移除已经进入置顶区的字符串：归一化后键相同、写法不同的路径是另一个项目，
+  // 必须留在尾部，否则它的会话会从侧边栏消失。
+  const remaining = [...ordered];
+  for (const project of head) {
+    const index = remaining.indexOf(project);
+    if (index >= 0) remaining.splice(index, 1);
+  }
+  return [...head, ...remaining];
 }
 
 /**
