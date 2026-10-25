@@ -102,3 +102,20 @@ test("does not normalize escaped delimiters or link destinations", () => {
   assert.equal(normalizeDisplayMath(escaped), escaped);
   assert.equal(normalizeDisplayMath(link), link);
 });
+
+test("renders local markdown images as zoomable images served by the file API", () => {
+  const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)");
+
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+  assert.match(html, /alt="shot"/);
+  assert.match(html, /class="markdown-image-zoomable"/);
+  assert.match(html, /loading="lazy"/);
+  assert.doesNotMatch(html, /\snode=/);
+});
+
+test("keeps linked images free of button semantics in server markup", () => {
+  const html = renderMarkdown("[![shot](/home/me/project/assets/shot.png)](https://example.com)");
+
+  assert.match(html, /<a [^>]*href="https:\/\/example\.com"/);
+  assert.doesNotMatch(html, /role="button"/);
+});
