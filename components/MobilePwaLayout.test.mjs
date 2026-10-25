@@ -4,10 +4,10 @@ import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url);
-const { MOBILE_MAX_COARSE_HEIGHT, MOBILE_MAX_WIDTH } = await jiti.import("../lib/mobile-layout.ts");
+const { MOBILE_HIT_TARGET_PX, MOBILE_LAYOUT_QUERY } = await jiti.import("../lib/mobile-layout.ts");
 
-/** 移动档媒体查询串：与 lib/mobile-layout 的判定条件保持同源。 */
-const mobileMediaQuery = `(max-width: ${MOBILE_MAX_WIDTH}px), (pointer: coarse) and (max-height: ${MOBILE_MAX_COARSE_HEIGHT}px)`;
+/** 移动档媒体查询串：CSS 必须与 lib/mobile-layout 的导出常量逐字一致。 */
+const mobileMediaQuery = MOBILE_LAYOUT_QUERY;
 
 const layoutSource = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
@@ -60,6 +60,26 @@ test("prevents iOS focus zoom from widening the layout", () => {
     mobileBlock,
     /textarea,\s*input,\s*select \{\s*font-size: 16px !important;/,
     "form controls inside the mobile tier must keep 16px so iOS does not zoom on focus",
+  );
+});
+
+test("手机档把文件面板页签栏与顶栏抬到同一命中区高度", () => {
+  const marker = `@media ${mobileMediaQuery} {`;
+  const start = cssSource.lastIndexOf(marker);
+  assert.ok(start >= 0, "globals.css must keep the mobile media query");
+  const end = cssSource.indexOf("\n}", start);
+  const mobileBlock = cssSource.slice(start, end);
+  assert.match(
+    mobileBlock,
+    new RegExp(
+      `\\.panel-tab-header \\{\\s*height: calc\\(${MOBILE_HIT_TARGET_PX}px \\+ env\\(safe-area-inset-top\\)\\) !important;`,
+    ),
+    "手机档页签栏高度必须等于命中区加安全区，才与顶栏对齐",
+  );
+  assert.match(
+    mobileBlock,
+    new RegExp(`\\.panel-tab-close \\{\\s*width: ${MOBILE_HIT_TARGET_PX}px !important;\\s*height: ${MOBILE_HIT_TARGET_PX}px !important;`),
+    "手机档关闭按钮必须是命中区大小",
   );
 });
 
