@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createJiti } from "jiti";
+
+const jiti = createJiti(import.meta.url);
+const { MOBILE_MAX_COARSE_HEIGHT, MOBILE_MAX_WIDTH } = await jiti.import("../lib/mobile-layout.ts");
+
+/** 移动档媒体查询串：与 lib/mobile-layout 的判定条件保持同源。 */
+const mobileMediaQuery = `(max-width: ${MOBILE_MAX_WIDTH}px), (pointer: coarse) and (max-height: ${MOBILE_MAX_COARSE_HEIGHT}px)`;
 
 const layoutSource = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
@@ -40,5 +47,19 @@ test("contains chat content and inputs within the mobile viewport", () => {
   assert.match(cssSource, /\.markdown-code-block \{[\s\S]*?min-width: 0;[\s\S]*?max-width: 100%;/);
   assert.match(chatWindowSource, /overflow-x-hidden overflow-y-auto/);
   assert.match(chatInputSource, /flex: 1,\s*minWidth: 0,\s*width: "100%",/);
+});
+
+test("prevents iOS focus zoom from widening the layout", () => {
+  const marker = `@media ${mobileMediaQuery} {`;
+  const start = cssSource.lastIndexOf(marker);
+  assert.ok(start >= 0, "globals.css must keep the mobile media query");
+  const end = cssSource.indexOf("\n}", start);
+  assert.ok(end > start, "the last mobile media query block must be closed");
+  const mobileBlock = cssSource.slice(start, end);
+  assert.match(
+    mobileBlock,
+    /textarea,\s*input,\s*select \{\s*font-size: 16px !important;/,
+    "form controls inside the mobile tier must keep 16px so iOS does not zoom on focus",
+  );
 });
 
