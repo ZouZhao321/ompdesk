@@ -6,6 +6,7 @@ import { resolveLocalFileHref } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
+import { ZoomableImage } from "./ImageZoom";
 
 interface MarkdownBodyProps {
   children: string;
@@ -75,9 +76,18 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
       const imageSrc = filePath
         ? `/api/files/${encodeFilePathForApi(filePath)}?type=read`
         : src;
+      if (typeof imageSrc !== "string") return null;
       // Dynamic local paths are served directly by the file API.
-      // eslint-disable-next-line @next/next/no-img-element
-      return <img src={imageSrc} alt={alt ?? ""} loading="lazy" {...props} />;
+      return (
+        <ZoomableImage
+          src={imageSrc}
+          alt={alt}
+          title={props.title}
+          width={props.width}
+          height={props.height}
+          className="markdown-image-zoomable"
+        />
+      );
     },
     table({ children }) {
       return (
