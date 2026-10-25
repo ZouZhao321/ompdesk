@@ -182,6 +182,9 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
             "OMPDESK_LAUNCH_CWD",
             app.path().home_dir().map_err(|error| error.to_string())?,
         )
+        // The server writes this into its `process.start` log so the Logs
+        // panel can distinguish the desktop shell from a plain production run.
+        .env("OMPDESK_DESKTOP", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if let Some(no_proxy) = loopback_no_proxy() {

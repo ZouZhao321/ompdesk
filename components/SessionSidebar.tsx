@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
-import type { SessionInfo } from "@/lib/types";
-import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
+import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
-import { countRunningSessionsByWorkspace, workspaceKeyOf } from "@/lib/workspace-activity";
+import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import type { TranslationParams } from "@/lib/i18n/types";
 import { DirectoryPicker } from "./DirectoryPicker";
-import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { OmpWordmark } from "./OmpWordmark";
 
 declare global {
@@ -19,66 +18,6 @@ declare global {
       selectDirectory: () => Promise<string | null>;
     };
   }
-}
-
-function ToolbarIconButton({
-  onClick,
-  title,
-  disabled,
-  skipHover,
-  color,
-  background = "none",
-  marginRight,
-  ariaPressed,
-  children,
-}: {
-  onClick: () => void;
-  title: string;
-  disabled?: boolean;
-  skipHover?: boolean;
-  color: string;
-  background?: string;
-  marginRight?: number;
-  ariaPressed?: boolean;
-  children: ReactNode;
-}) {
-  const enter = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled || skipHover) return;
-    e.currentTarget.style.color = "var(--text-muted)";
-    e.currentTarget.style.background = "var(--bg-hover)";
-  };
-  const leave = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled || skipHover) return;
-    e.currentTarget.style.color = color;
-    e.currentTarget.style.background = background;
-  };
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      aria-pressed={ariaPressed}
-      className="sidebar-toolbar-icon-button"
-      style={{
-        position: "relative",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 26, height: 26, padding: 0, marginRight,
-        background,
-        border: "none",
-        color,
-        cursor: disabled ? "default" : "pointer",
-        borderRadius: 5,
-        flexShrink: 0,
-        opacity: disabled ? 0.6 : 1,
-        transition: "color 0.3s, background 0.3s",
-      }}
-      onMouseEnter={enter}
-      onMouseLeave={leave}
-    >
-      {children}
-    </button>
-  );
 }
 
 interface Props {
@@ -94,11 +33,6 @@ interface Props {
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
   onCwdChange?: (cwd: string | null, projectRoot?: string | null) => void;
-  onOpenFile?: (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => void;
-  explorerRefreshKey?: number;
-  onExplorerRefresh?: () => void;
-  onAtMention?: (relativePath: string, isDir: boolean) => void;
-  onAtMentions?: (relativePaths: string[]) => void;
   /** Fired when a session that is not currently selected finishes running.
    *  Lets the app play a cross-workspace completion tone. */
   onBackgroundTaskDone?: () => void;
@@ -120,6 +54,12 @@ interface WorktreeState {
   isTopLevel: boolean;
   worktrees: WorktreeEntry[];
 }
+
+/** 会话活动快照的客户端形态；字段可选是因为首次渲染时还没有拿到任何数据。 */
+type SessionActivitySnapshotState = { [K in keyof SessionActivitySnapshot]?: SessionActivitySnapshot[K] };
+
+/** 会话列表接口的响应：会话数组加上同一份活动快照。 */
+type SessionsResponse = SessionActivitySnapshotState & { sessions: SessionInfo[] };
 
 const UNREAD_SESSIONS_STORAGE_KEY = "ompdesk:unread-session-ids";
 const RUNNING_SESSIONS_POLL_MS = 2500;
@@ -429,8 +369,8 @@ function PiWebTitle() {
 
   return (
     <button
-      onClick={handleClick}
       className="sidebar-brand-button"
+      onClick={handleClick}
       style={{
         display: "flex",
         alignItems: "center",
@@ -450,7 +390,7 @@ function PiWebTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisticSession, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, onBackgroundTaskDone }: Props) {
+export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisticSession, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onBackgroundTaskDone }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const sessionsForDisplay = optimisticSession && !allSessions.some((session) => session.id === optimisticSession.id)
@@ -465,7 +405,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
-  const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; running: number } | null>(null);
+  const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; count: number } | null>(null);
   const [removedProjects, setRemovedProjects] = useState<Set<string>>(() => new Set());
   const [wtFilter, setWtFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
@@ -481,18 +421,11 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [wtConfirmRemove, setWtConfirmRemove] = useState<string | null>(null);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
-  const [explorerOpen, setExplorerOpen] = useState(true);
-  const [explorerKey, setExplorerKey] = useState(0);
-  const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
-  const [changesCount, setChangesCount] = useState(0);
-  const [changesCollapsed, setChangesCollapsed] = useState(true);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
-  const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
-  const [activitySnapshot, setActivitySnapshot] = useState<{
-    runningSessionIds?: string[];
-    sessionIdsByRuntimeId?: Record<string, string>;
-  }>({});
+  const [activitySnapshot, setActivitySnapshot] = useState<SessionActivitySnapshotState>({});
   const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
+  // 运行中但停在提问表单上、等待用户作答的会话。
+  const waitingSessionIds = useMemo(() => new Set(activitySnapshot.waitingSessionIds ?? []), [activitySnapshot]);
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousActivitySnapshotRef = useRef(activitySnapshot);
   const listedRuntimeIdsRef = useRef<Record<string, string>>({});
@@ -500,8 +433,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // running state; late /api/sessions responses must not overwrite it.
   const runningPollAuthoritativeRef = useRef(false);
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fileExplorerRef = useRef<FileExplorerHandle>(null);
   useEffect(() => {
     setCollapsedProjects(loadCollapsedProjects());
     setRemovedProjects(loadRemovedProjects());
@@ -515,13 +446,17 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[]; sessionIdsByRuntimeId?: Record<string, string> };
+      const data = await res.json() as SessionsResponse;
       listedRuntimeIdsRef.current = data.sessionIdsByRuntimeId ?? {};
       setAllSessions(data.sessions);
       // Treat the fetched running set as an initial fallback only. Once the
       // lightweight poll is live, a slow session-list fetch cannot overwrite it.
       if (!runningPollAuthoritativeRef.current) {
-        setActivitySnapshot({ runningSessionIds: data.runningSessionIds, sessionIdsByRuntimeId: data.sessionIdsByRuntimeId });
+        setActivitySnapshot({
+          runningSessionIds: data.runningSessionIds,
+          waitingSessionIds: data.waitingSessionIds,
+          sessionIdsByRuntimeId: data.sessionIdsByRuntimeId,
+        });
       }
       // Drop unread markers for sessions that no longer exist (e.g. deleted).
       const existingIds = new Set(data.sessions.map((s) => s.id));
@@ -558,12 +493,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     loadSessions(isFirst, !isFirst);
   }, [loadSessions, refreshKey]);
 
-  // Browser storage is unavailable during server rendering. Restore the panel
-  // preference after hydration so a collapsed explorer stays collapsed on reload.
-  useEffect(() => {
-    setExplorerOpen(loadExplorerOpen());
-  }, []);
-
   // Persist unread markers so they survive a browser refresh before the user
   // has actually opened the completed session.
   useEffect(() => {
@@ -597,10 +526,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           signal: current.signal,
         });
         if (!res.ok) return;
-        const data = await res.json() as { runningSessionIds?: string[]; sessionIdsByRuntimeId?: Record<string, string> };
+        const data = await res.json() as SessionActivitySnapshotState;
         if (stopped || controller !== current) return;
         runningPollAuthoritativeRef.current = true;
-        setActivitySnapshot({ runningSessionIds: data.runningSessionIds, sessionIdsByRuntimeId: data.sessionIdsByRuntimeId });
+        setActivitySnapshot({
+          runningSessionIds: data.runningSessionIds,
+          waitingSessionIds: data.waitingSessionIds,
+          sessionIdsByRuntimeId: data.sessionIdsByRuntimeId,
+        });
       } catch {
         // Keep the last known state; the next visible-tab poll retries.
       } finally {
@@ -679,10 +612,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       return next;
     });
   }, [selectedSessionId]);
-
-  useEffect(() => {
-    if (explorerRefreshKey !== undefined) setExplorerKey((k) => k + 1);
-  }, [explorerRefreshKey]);
 
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
@@ -945,28 +874,35 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !projectPaths.includes(selectedProject)) {
     projectPaths.unshift(selectedProject);
   }
-  // 每个工作区的运行中会话数只汇总一次，项目行与移除前确认共用这一份快照。
-  const runningByWorkspace = useMemo(
-    () => countRunningSessionsByWorkspace(sessionsForDisplay, runningSessionIds),
-    [sessionsForDisplay, runningSessionIds],
+  // 每个工作区的 active / waiting / busy 计数一次遍历算出。等待集合与运行集合
+  // 来源独立，所以「正在干活」必须用集合差、「移除前确认」必须用并集，
+  // 不能从运行总数里直接减等待数。
+  const workspaceActivity = useMemo(
+    () => summarizeWorkspaceActivity(sessionsForDisplay, runningSessionIds, waitingSessionIds),
+    [sessionsForDisplay, runningSessionIds, waitingSessionIds],
   );
 
-  // Per-project activity counts (running / unread) for the project rows, keyed
-  // by the shared workspace key rule. Unread stays local to the sidebar.
+  // Per-project activity counts for the project rows, keyed by the shared
+  // workspace key rule. `running` counts only sessions that are working (the
+  // waiting ones are reported separately), `unread` stays local to the sidebar.
   const projectActivity = useMemo(() => {
-    const counts = new Map<string, { running: number; unread: number }>();
+    const counts = new Map<string, { running: number; waiting: number; unread: number }>();
     for (const session of sessionsForDisplay) {
       const key = workspaceKeyOf(session);
       if (!key) continue;
       let entry = counts.get(key);
       if (!entry) {
-        entry = { running: runningByWorkspace.get(key) ?? 0, unread: 0 };
+        entry = {
+          running: workspaceActivity.get(key)?.active ?? 0,
+          waiting: workspaceActivity.get(key)?.waiting ?? 0,
+          unread: 0,
+        };
         counts.set(key, entry);
       }
       if (unreadSessionIds.has(session.id)) entry.unread++;
     }
     return counts;
-  }, [sessionsForDisplay, runningByWorkspace, unreadSessionIds]);
+  }, [sessionsForDisplay, workspaceActivity, unreadSessionIds]);
 
   const executeRemoveProject = (project: string) => {
     const key = normalizeProjectKey(project);
@@ -983,11 +919,11 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     }
   };
 
-  // 移除前先看运行快照：有会话仍在运行就只弹确认条，不改变任何状态。
+  // 移除前先看活动快照：还有会话在运行或等待回答就只弹确认条，不改变任何状态。
   const requestRemoveProject = (project: string) => {
-    const running = projectActivity.get(project)?.running ?? 0;
-    if (running > 0) {
-      setRemoveProjectConfirm({ project, running });
+    const count = workspaceActivity.get(project)?.busy ?? 0;
+    if (count > 0) {
+      setRemoveProjectConfirm({ project, count });
       return;
     }
     executeRemoveProject(project);
@@ -1059,9 +995,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           <PiWebTitle />
           <div style={{ display: "flex", gap: 6 }}>
             <button
+              className="sidebar-new-session-button"
               onClick={() => handleNewSession()}
               disabled={!selectedCwd}
-              className="sidebar-new-session-button"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                 background: "var(--bg-hover)",
@@ -1097,8 +1033,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               {t("sidebar.new")}
             </button>
             <button
-              onClick={() => loadSessions(false, true)}
               className="sidebar-header-icon-button"
+              onClick={() => loadSessions(false, true)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "var(--bg-hover)",
@@ -1232,7 +1168,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           />
         </label>
 
-      <div style={{ flex: explorerOpen && (selectedCwdProp || selectedCwd) ? "1 1 0" : "1 1 auto", overflowY: "auto", minHeight: 80, padding: "0 6px 10px" }}>
+      <div style={{ flex: "1 1 0", overflowY: "auto", minHeight: 80, padding: "0 6px 10px" }}>
         {loading && (
           <div style={{ padding: "12px 8px", color: "var(--text-muted)", fontSize: 12 }}>
             {t("sidebar.loading")}
@@ -1732,7 +1668,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             }}
                           >
                             <span style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.35 }}>
-                              {t("sidebar.removeProjectRunning", { count: removeProjectConfirm.running })}
+                              {t("sidebar.removeProjectBusy", { count: removeProjectConfirm.count })}
                             </span>
                             <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                               <button
@@ -1805,6 +1741,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                       node={node}
                       selectedSessionId={selectedSessionId}
                       runningSessionIds={runningSessionIds}
+                      waitingSessionIds={waitingSessionIds}
                       unreadSessionIds={unreadSessionIds}
                       onSelectSession={handleSelectSessionFromList}
                       onRenamed={loadSessions}
@@ -1856,125 +1793,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         onSelectSession={handleSelectSessionFromList}
         onRestored={handleSessionArchived}
       />
-
-      {/* File Explorer section */}
-      {(selectedCwdProp || selectedCwd) && (
-        <div
-          style={{
-            borderTop: "1px solid var(--border)",
-            display: "flex",
-            flexDirection: "column",
-            flex: explorerOpen ? "1 1 0" : "0 0 auto",
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            <button
-              onClick={() => setExplorerOpen((open) => {
-                const next = !open;
-                saveExplorerOpen(next);
-                return next;
-              })}
-              className="sidebar-explorer-toggle"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                flex: 1,
-                padding: "6px 10px",
-                background: "none",
-                border: "none",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-                textAlign: "left",
-              }}
-            >
-              <svg
-                width="9" height="9" viewBox="0 0 10 10" fill="none"
-                stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-                style={{ transform: explorerOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}
-              >
-                <polyline points="3 2 7 5 3 8" />
-              </svg>
-              {t("files.explorer")}
-            </button>
-            {explorerOpen && changesCount > 0 && (
-              <ToolbarIconButton
-                onClick={() => setChangesCollapsed((v) => !v)}
-                title={t("sidebar.changedFiles", { count: changesCount })}
-                ariaPressed={!changesCollapsed}
-                color={changesCollapsed ? "var(--text-dim)" : "var(--accent)"}
-                background={changesCollapsed ? "none" : "var(--bg-selected)"}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M3 12h6" />
-                  <path d="M15 12h6" />
-                </svg>
-              </ToolbarIconButton>
-            )}
-            {explorerOpen && (
-              <ToolbarIconButton
-                onClick={() => fileExplorerRef.current?.openUploadPicker()}
-                disabled={explorerUploadBusy}
-                title={t("sidebar.uploadFilesTitle")}
-                color="var(--text-dim)"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <path d="m17 8-5-5-5 5" />
-                  <path d="M12 3v12" />
-                </svg>
-              </ToolbarIconButton>
-            )}
-            <ToolbarIconButton
-              onClick={() => {
-                if (onExplorerRefresh) onExplorerRefresh();
-                else setExplorerKey((k) => k + 1);
-                setExplorerRefreshDone(true);
-                if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
-                explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
-              }}
-              title={t("sidebar.refreshExplorer")}
-              skipHover={explorerRefreshDone}
-              color={explorerRefreshDone ? "#4ade80" : "var(--text-dim)"}
-              background={explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none"}
-              marginRight={6}
-            >
-              {explorerRefreshDone ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              )}
-            </ToolbarIconButton>
-          </div>
-          {explorerOpen && (
-            <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
-              <FileExplorer
-                ref={fileExplorerRef}
-                cwd={selectedCwd ?? selectedCwdProp!}
-                onOpenFile={onOpenFile ?? (() => {})}
-                refreshKey={explorerKey}
-                onAtMention={onAtMention}
-                onAtMentions={onAtMentions}
-                onUploadBusyChange={setExplorerUploadBusy}
-                changesCollapsed={changesCollapsed}
-                onChangesCountChange={setChangesCount}
-              />
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -2100,6 +1918,7 @@ function SessionTreeItem({
   node,
   selectedSessionId,
   runningSessionIds,
+  waitingSessionIds,
   unreadSessionIds,
   onSelectSession,
   onRenamed,
@@ -2110,6 +1929,7 @@ function SessionTreeItem({
   node: SessionTreeNode;
   selectedSessionId: string | null;
   runningSessionIds: Set<string>;
+  waitingSessionIds: Set<string>;
   unreadSessionIds: Set<string>;
   onSelectSession: (s: SessionInfo) => void;
   onRenamed?: () => void;
@@ -2138,6 +1958,7 @@ function SessionTreeItem({
           session={node.session}
           isSelected={node.session.id === selectedSessionId}
           isRunning={runningSessionIds.has(node.session.id)}
+          isWaiting={waitingSessionIds.has(node.session.id)}
           isUnread={unreadSessionIds.has(node.session.id)}
           onClick={() => onSelectSession(node.session)}
           onRenamed={onRenamed}
@@ -2157,6 +1978,7 @@ function SessionTreeItem({
               node={child}
               selectedSessionId={selectedSessionId}
               runningSessionIds={runningSessionIds}
+              waitingSessionIds={waitingSessionIds}
               unreadSessionIds={unreadSessionIds}
               onSelectSession={onSelectSession}
               onRenamed={onRenamed}
@@ -2177,6 +1999,7 @@ function RunningSessionIndicator() {
     <span
       title={t("sidebar.agentRunning")}
       aria-label={t("sidebar.agentRunning")}
+      role="img"
       style={{
         width: 14,
         height: 14,
@@ -2209,12 +2032,46 @@ function RunningSessionIndicator() {
   );
 }
 
+/**
+ * 黄灯：会话仍在运行，但停在提问表单上等待用户作答。
+ *
+ * 用静态圆点加呼吸光晕区别于运行中的旋转弧线，两者一眼可分。
+ */
+function WaitingSessionIndicator() {
+  const { t } = useI18n();
+  return (
+    <span
+      title={t("sidebar.agentWaitingForInput")}
+      aria-label={t("sidebar.agentWaitingForInput")}
+      role="img"
+      style={{
+        width: 14,
+        height: 14,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        color: "var(--warning)",
+      }}
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
+        <circle cx="7" cy="7" r="4" fill="currentColor" />
+        <circle cx="7" cy="7" r="4" stroke="currentColor" strokeWidth="1.2" opacity="0.5">
+          <animate attributeName="r" values="4;6.2;4" dur="1.8s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.5;0;0.5" dur="1.8s" repeatCount="indefinite" />
+        </circle>
+      </svg>
+    </span>
+  );
+}
+
 function UnreadSessionIndicator() {
   const { t } = useI18n();
   return (
     <span
       title={t("sidebar.newActivity")}
       aria-label={t("sidebar.newSessionActivity")}
+      role="img"
       style={{
         width: 14,
         height: 14,
@@ -2238,21 +2095,23 @@ function UnreadSessionIndicator() {
 
 /**
  * Compact per-project activity badges for the workspace selector dropdown items:
- * a spinning running icon + count and an unread dot + count. Renders nothing
- * when the project has no activity. Counts share the accent / unread colors of
- * the per-session indicators so the two stay visually consistent.
+ * a spinning running icon + count, a yellow waiting badge + count, and an unread
+ * dot + count. Renders nothing when the project has no activity. Counts share
+ * the accent / warning / unread colors of the per-session indicators so the two
+ * stay visually consistent.
  */
 function showProjectActivity(
-  activity: { running: number; unread: number } | undefined,
-  t: (key: string) => string,
+  activity: { running: number; waiting: number; unread: number } | undefined,
+  t: (key: string, params?: TranslationParams) => string,
 ): ReactNode {
-  if (!activity || (activity.running === 0 && activity.unread === 0)) return null;
+  if (!activity || (activity.running === 0 && activity.waiting === 0 && activity.unread === 0)) return null;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}>
       {activity.running > 0 && (
         <span
           title={t("sidebar.agentRunning")}
           aria-label={`${t("sidebar.agentRunning")} (${activity.running})`}
+          role="img"
           style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
@@ -2264,10 +2123,24 @@ function showProjectActivity(
           {activity.running}
         </span>
       )}
+      {activity.waiting > 0 && (
+        <span
+          title={t("sidebar.agentWaitingForInput")}
+          aria-label={t("sidebar.agentWaitingForInputWithCount", { count: activity.waiting })}
+          role="img"
+          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--warning)", fontSize: 10, fontFamily: "var(--font-mono)" }}
+        >
+          <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
+            <circle cx="7" cy="7" r="4" fill="currentColor" />
+          </svg>
+          {activity.waiting}
+        </span>
+      )}
       {activity.unread > 0 && (
         <span
           title={t("sidebar.newSessionActivity")}
           aria-label={`${t("sidebar.newSessionActivity")} (${activity.unread})`}
+          role="img"
           style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
         >
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
@@ -2282,6 +2155,7 @@ function SessionItem({
   session,
   isSelected,
   isRunning,
+  isWaiting,
   isUnread,
   onClick,
   onRenamed,
@@ -2295,6 +2169,8 @@ function SessionItem({
   session: SessionInfo;
   isSelected: boolean;
   isRunning?: boolean;
+  /** 运行中但停在提问表单上，等待用户作答。 */
+  isWaiting?: boolean;
   isUnread?: boolean;
   onClick: () => void;
   onRenamed?: () => void;
@@ -2540,7 +2416,7 @@ function SessionItem({
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {title}
             </span>
-            {isRunning && <RunningSessionIndicator />}
+            {isWaiting ? <WaitingSessionIndicator /> : isRunning && <RunningSessionIndicator />}
             {!isRunning && isUnread && <UnreadSessionIndicator />}
             {session.worktreeBranch && (
               <span title={t("sidebar.worktreePath", { path: session.cwd })} style={{ display: "flex", color: "var(--accent)", flexShrink: 0 }}>

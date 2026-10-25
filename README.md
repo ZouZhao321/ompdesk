@@ -204,14 +204,14 @@ Requests to loopback addresses are never proxied, so a local provider (Ollama, L
 - **Route by role**: assign and switch models per scope of work — the roles omp already uses for subagents, plan mode, and commits.
 - **Try different directions safely**: continue from an earlier message or fork a session into a separate route.
 - **Work across branches**: switch Git worktrees from the sidebar so new sessions and the Explorer follow the checkout you choose.
-- **Chat beside the project**: browse files on the left and preview source, docs, images, audio, and PDFs on the right while the agent works.
+- **Chat beside the project**: browse the project's files in the right panel, then preview source, docs, images, audio, and PDFs in the same panel while the agent works.
 - **See session state clearly**: context usage, cost, and compaction state are visible from the top bar.
 - **Configure less from the terminal**: manage providers, logins/API keys, model tests, plugins, and skill switches from the web UI.
 - **Use the interface in your language**: switch between the supported UI languages from the top bar.
 
 ## Screenshots
 
-**Session browsing + file explorer** — projects and past sessions on the left, the project's real file tree underneath, ready to preview or attach to a message.
+**Session browsing** — projects and past sessions on the left, with the file tree for the active project.
 
 ![Sidebar with session browsing and the file explorer](./docs/screenshots/01-sidebar-and-explorer.png)
 
@@ -237,6 +237,7 @@ Requests to loopback addresses are never proxied, so a local provider (Ollama, L
 - **Session files**: files are stored as `~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`.
 - **Provider config**: the Models panel reads and writes `models.yml` in the omp agent directory. Credentials live in omp's `agent.db`, shared with the CLI. A header value that names an environment variable (bare name, no `$`) is substituted at request time.
 - **Custom system prompts**: `SYSTEM.md` and `APPEND_SYSTEM.md` are picked up for browser sessions exactly as `omp` picks them up in a terminal — the project's `.omp/` (or `.claude/`, `.codex/`, `.gemini/`) first, then `~/.omp/agent/` — resolved against the session's own working directory.
+- **Runtime logs**: every request, agent run, tool call, security decision and audit action is written as structured JSON to omp's rotating process log (`~/.omp/logs/omp.<day>.<pid>.log`) and can be read, searched and downloaded from **Settings → Logs**. See [Runtime logs](./docs/logging.md) for the record shape, event names, levels, `OMP_LOG_LEVEL` / `OMPDESK_LOG_STDOUT`, and what is never logged.
 - **Project trust**: opening a repository in a browser tab must not run its code, so ompdesk gates a project's `.omp/extensions`, `.omp/hooks`, `.omp/tools` and `.mcp.json` behind an explicit trust decision. Skills and rules are data and load either way. See [Project trust](./docs/project-trust.md).
 - **File access**: file browsing and preview are scoped to the selected project directory and working directories that appear in sessions.
 - **Git worktrees**: see [Worktrees in ompdesk](./docs/worktrees.md) for when the switcher appears, how new worktrees are created, and what removal does.
@@ -353,7 +354,7 @@ app/
     skills/         # skill listing, search, install, enable/disable
 components/
   AppShell.tsx        # main layout, URL state, top panels, file tabs
-  SessionSidebar.tsx  # project selector, session tree, Explorer
+  SessionSidebar.tsx  # project selector, session tree
   DirectoryPicker.tsx # browsable and editable working-directory picker
   ChatWindow.tsx      # messages, SSE, image drag/drop, minimap
   ChatInput.tsx       # input bar, model/role/tools/thinking/compact/slash controls
@@ -362,6 +363,7 @@ components/
   ModelRolesPanel.tsx # per-role model assignment
   SkillsConfig.tsx    # skill management panel
   FileExplorer.tsx    # file tree
+  FileExplorerPanel.tsx # explorer section inside the right file panel
   FileViewer.tsx      # source, diff, image, audio, PDF, DOCX preview
 lib/
   directory-browser.ts # directory normalization and safe listing helpers

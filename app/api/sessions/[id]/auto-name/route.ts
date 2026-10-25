@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { generateSessionTitle } from "@/lib/session-title-generator";
 import { getRpcSession, startRpcSession, getFinalRpcSessionId } from "@/lib/rpc-manager";
 import { invalidateSessionListCache, resolveSessionPath } from "@/lib/session-reader";
 
-export async function POST(
+export const POST = withRequestLog("/api/sessions/[id]/auto-name", async (
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
-) {
+) => {
   const { id } = await params;
 
   try {
@@ -47,4 +48,4 @@ export async function POST(
       { status: 500 },
     );
   }
-}
+});

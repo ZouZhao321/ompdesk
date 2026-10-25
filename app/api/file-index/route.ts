@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
@@ -115,7 +116,9 @@ function listWithWalk(cwd: string): FileListing {
 // repos larger than MAX_FILES still find deep files (cap applied after
 // matching, like the TUI passing the query to fd).
 // Guarded by the same allow-list as /api/files.
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("/api/file-index", getRouteHandler);
+
+async function getRouteHandler(req: NextRequest) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }

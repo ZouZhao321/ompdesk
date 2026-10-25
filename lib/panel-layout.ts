@@ -10,6 +10,13 @@ export const RIGHT_PANEL_FALLBACK_WIDTH = 560;
 export const RIGHT_PANEL_MIN_WIDTH = 300;
 export const RIGHT_PANEL_MAX_WIDTH = 1200;
 
+/** Space reserved in the panel header for the fixed open/close toggle. */
+export const RIGHT_PANEL_HEADER_RESERVED_WIDTH = 40;
+/** Share of the panel height the explorer takes while a file is open. */
+export const RIGHT_PANEL_EXPLORER_SHARE_PERCENT = 45;
+/** Lowest height the explorer keeps while a file is open, so its header and a few rows stay usable. */
+export const RIGHT_PANEL_EXPLORER_MIN_HEIGHT = 140;
+
 const COMPACT_CHAT_MIN_WIDTH = 320;
 const DESKTOP_CHAT_MIN_WIDTH = 420;
 
