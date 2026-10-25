@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
+import { memo, useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
 import {
   Prism as SyntaxHighlighter,
   createElement as renderSyntaxNode,
@@ -155,6 +155,16 @@ function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | nu
   return { startLine, endLine };
 }
 
+type WatchPayload = { size?: number; mtime?: string };
+
+function parseWatchPayload(event: MessageEvent): WatchPayload {
+  try {
+    return JSON.parse(event.data) as WatchPayload;
+  } catch {
+    return {};
+  }
+}
+
 function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: SourceCodeRendererProps) {
   return rows.map((row, lineIndex) => {
     const children = row.children ?? [];
@@ -197,6 +207,54 @@ function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: So
     );
   });
 }
+
+/** 源码高亮结果按内容与主题缓存，父级重渲染（如子代理快照更新）不再重新分词。 */
+const SourceView = memo(function SourceView({
+  content,
+  language,
+  wrapLines,
+  isDark,
+}: {
+  content: string;
+  language: string;
+  wrapLines: boolean;
+  isDark: boolean;
+}) {
+  return (
+    <SyntaxHighlighter
+      className={wrapLines ? "file-source-view is-wrapped" : "file-source-view"}
+      language={language === "text" ? "plaintext" : language}
+      style={isDark ? vscDarkPlus : vs}
+      showLineNumbers
+      lineNumberStyle={{
+        ...FILE_LINE_NUMBER_STYLE,
+      }}
+      customStyle={{
+        margin: 0,
+        padding: 0,
+        border: 0,
+        background: "var(--bg)",
+        ...FILE_CODE_STYLE,
+        width: wrapLines ? "100%" : "max-content",
+        minWidth: "100%",
+        minHeight: "100%",
+        overflow: "visible",
+      }}
+      codeTagProps={{
+        style: {
+          fontFamily: "var(--font-mono)",
+          overflowWrap: wrapLines ? "anywhere" : "normal",
+        },
+      }}
+      renderer={(rendererProps) => (
+        <SourceCodeRenderer {...rendererProps} wrapLines={wrapLines} />
+      )}
+      wrapLongLines={wrapLines}
+    >
+      {content}
+    </SyntaxHighlighter>
+  );
+});
 
 function getFileApiUrl(
   filePath: string,
@@ -424,8 +482,8 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
-  // 只有「隐藏后再显示」才补读一次；初次挂载由数据加载负责。
-  const visibilityRef = useRef<"never" | "hidden" | "shown">("never");
+  // 隐藏期间可能发生改动：重连时用 connected 带回的 mtime 判断是否需要重读。
+  const lastMtimeRef = useRef<string | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -443,25 +501,22 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
       esRef.current.close();
       esRef.current = null;
     }
-    if (!active) {
-      visibilityRef.current = "hidden";
-      return;
-    }
-    if (visibilityRef.current === "hidden") {
-      setError(null);
-      setBust((b) => b + 1);
-    }
-    visibilityRef.current = "shown";
+    if (!active) return;
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
 
-    es.addEventListener("connected", () => setWatching(true));
+    es.addEventListener("connected", (e) => {
+      setWatching(true);
+      const d = parseWatchPayload(e);
+      if (typeof d.mtime !== "string") return;
+      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) setBust((b) => b + 1);
+      lastMtimeRef.current = d.mtime;
+    });
     es.addEventListener("change", (e) => {
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
+      const d = parseWatchPayload(e);
+      if (typeof d.size === "number") setSize(d.size);
+      if (typeof d.mtime === "string") lastMtimeRef.current = d.mtime;
       setBust((b) => b + 1);
     });
     es.addEventListener("error", () => setWatching(false));
@@ -572,8 +627,8 @@ function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const [duration, setDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
-  // 只有「隐藏后再显示」才补读一次；初次挂载由数据加载负责。
-  const visibilityRef = useRef<"never" | "hidden" | "shown">("never");
+  // 隐藏期间可能发生改动：重连时用 connected 带回的 mtime 判断是否需要重读。
+  const lastMtimeRef = useRef<string | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -591,25 +646,26 @@ function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
       esRef.current.close();
       esRef.current = null;
     }
-    if (!active) {
-      visibilityRef.current = "hidden";
-      return;
-    }
-    if (visibilityRef.current === "hidden") {
-      setError(null);
-      setBust((b) => b + 1);
-    }
-    visibilityRef.current = "shown";
+    if (!active) return;
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
 
-    es.addEventListener("connected", () => setWatching(true));
+    es.addEventListener("connected", (e) => {
+      setWatching(true);
+      const d = parseWatchPayload(e);
+      if (typeof d.mtime !== "string") return;
+      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) {
+        setDuration(null);
+        setError(null);
+        setBust((b) => b + 1);
+      }
+      lastMtimeRef.current = d.mtime;
+    });
     es.addEventListener("change", (e) => {
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
+      const d = parseWatchPayload(e);
+      if (typeof d.size === "number") setSize(d.size);
+      if (typeof d.mtime === "string") lastMtimeRef.current = d.mtime;
       setDuration(null);
       setError(null);
       setBust((b) => b + 1);
@@ -702,8 +758,8 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props
   const [size, setSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
-  // 只有「隐藏后再显示」才补读一次；初次挂载由数据加载负责。
-  const visibilityRef = useRef<"never" | "hidden" | "shown">("never");
+  // 隐藏期间可能发生改动：重连时用 connected 带回的 mtime 判断是否需要重读。
+  const lastMtimeRef = useRef<string | null>(null);
 
   const ext = getFileExt(filePath);
   const isPdf = ext === "pdf";
@@ -737,34 +793,35 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props
       esRef.current.close();
       esRef.current = null;
     }
-    if (!active) {
-      visibilityRef.current = "hidden";
-      return;
-    }
-    if (visibilityRef.current === "hidden") {
-      setError(null);
-      setBust((b) => b + 1);
-    }
-    visibilityRef.current = "shown";
+    if (!active) return;
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
 
-    es.addEventListener("connected", () => setWatching(true));
-    es.addEventListener("change", (e) => {
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") {
-          setSize(d.size);
-          if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
-            setError("DOCX too large for preview (>10MB)");
-            return;
-          }
+    const applyFileChange = (d: WatchPayload) => {
+      if (typeof d.mtime === "string") lastMtimeRef.current = d.mtime;
+      if (typeof d.size === "number") {
+        setSize(d.size);
+        if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
+          setError("DOCX too large for preview (>10MB)");
+          return;
         }
-      } catch { /* ignore */ }
+      }
       setError(null);
       setBust((b) => b + 1);
+    };
+
+    es.addEventListener("connected", (e) => {
+      setWatching(true);
+      const d = parseWatchPayload(e);
+      if (typeof d.mtime !== "string") return;
+      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) {
+        applyFileChange(d);
+        return;
+      }
+      lastMtimeRef.current = d.mtime;
     });
+    es.addEventListener("change", (e) => applyFileChange(parseWatchPayload(e)));
     es.addEventListener("error", () => setWatching(false));
     es.onerror = () => setWatching(false);
 
@@ -856,8 +913,8 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const [wrapLines, setWrapLines] = useState(false);
   const [watching, setWatching] = useState(false);
   const esRef = useRef<EventSource | null>(null);
-  // 只有「隐藏后再显示」才补读一次；初次挂载由数据加载负责。
-  const visibilityRef = useRef<"never" | "hidden" | "shown">("never");
+  // 隐藏期间可能发生改动：重连时用 connected 带回的 mtime 判断是否需要重读。
+  const lastMtimeRef = useRef<string | null>(null);
   const gitDiffRequestRef = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [selectedLineRange, setSelectedLineRange] = useState<SelectedLineRange | null>(null);
@@ -922,25 +979,28 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
       esRef.current.close();
       esRef.current = null;
     }
-    if (!active) {
-      visibilityRef.current = "hidden";
-      return;
-    }
-    if (visibilityRef.current === "hidden") {
-      void fetchContent(filePath);
-    }
-    visibilityRef.current = "shown";
+    if (!active) return;
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
 
-    es.addEventListener("connected", () => {
-      setWatching(true);
-    });
-
-    es.addEventListener("change", () => {
+    const refresh = () => {
       void fetchContent(filePath);
       void fetchGitDiff(filePath);
+    };
+
+    es.addEventListener("connected", (e) => {
+      setWatching(true);
+      const d = parseWatchPayload(e);
+      if (typeof d.mtime !== "string") return;
+      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) refresh();
+      lastMtimeRef.current = d.mtime;
+    });
+
+    es.addEventListener("change", (e) => {
+      const d = parseWatchPayload(e);
+      if (typeof d.mtime === "string") lastMtimeRef.current = d.mtime;
+      refresh();
     });
 
     es.addEventListener("error", () => {
@@ -1010,21 +1070,24 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   );
 
   useEffect(() => {
+    if (!active || !onMentionLines || displayMode !== "source") {
+      setSelectedLineRange(null);
+      return;
+    }
     const updateSelectedLineRange = () => {
       const root = contentRef.current;
       setSelectedLineRange(
-        onMentionLines && displayMode === "source" && root
+        displayMode === "source" && root
           ? getSelectedSourceLineRange(root, window.getSelection())
           : null,
       );
     };
 
     updateSelectedLineRange();
-    if (!onMentionLines || displayMode !== "source") return;
 
     document.addEventListener("selectionchange", updateSelectedLineRange);
     return () => document.removeEventListener("selectionchange", updateSelectedLineRange);
-  }, [data?.content, displayMode, onMentionLines]);
+  }, [active, data?.content, displayMode, onMentionLines]);
 
   const mentionLineRange = useCallback((lineRange: SelectedLineRange | null) => {
     if (!onMentionLines || !lineRange) return;
@@ -1285,38 +1348,12 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
             </ReactMarkdown>
           </div>
         ) : (
-          <SyntaxHighlighter
-            className={wrapLines ? "file-source-view is-wrapped" : "file-source-view"}
-            language={language === "text" ? "plaintext" : language}
-            style={isDark ? vscDarkPlus : vs}
-            showLineNumbers
-            lineNumberStyle={{
-              ...FILE_LINE_NUMBER_STYLE,
-            }}
-            customStyle={{
-              margin: 0,
-              padding: 0,
-              border: 0,
-              background: "var(--bg)",
-              ...FILE_CODE_STYLE,
-              width: wrapLines ? "100%" : "max-content",
-              minWidth: "100%",
-              minHeight: "100%",
-              overflow: "visible",
-            }}
-            codeTagProps={{
-              style: {
-                fontFamily: "var(--font-mono)",
-                overflowWrap: wrapLines ? "anywhere" : "normal",
-              },
-            }}
-            renderer={(rendererProps) => (
-              <SourceCodeRenderer {...rendererProps} wrapLines={wrapLines} />
-            )}
-            wrapLongLines={wrapLines}
-          >
-            {content}
-          </SyntaxHighlighter>
+          <SourceView
+            content={content}
+            language={language}
+            wrapLines={wrapLines}
+            isDark={isDark}
+          />
         )}
       </div>
     </div>
