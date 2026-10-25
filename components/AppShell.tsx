@@ -81,6 +81,21 @@ const FILE_PANEL_TOGGLE_STYLE = {
   transition: "color 0.12s",
 } satisfies CSSProperties;
 const LANGUAGE_MENU_WIDTH = 176;
+/** 手机档会话面板里的动作按钮：顶栏放不下的入口统一落在这里。 */
+const MOBILE_SESSION_ACTION_STYLE = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: MOBILE_HIT_TARGET_PX,
+  minHeight: MOBILE_HIT_TARGET_PX,
+  padding: "0 12px",
+  background: "none",
+  border: "1px solid var(--border)",
+  borderRadius: 8,
+  color: "var(--text-muted)",
+  fontSize: 12,
+  whiteSpace: "nowrap",
+} satisfies CSSProperties;
 
 export function AppShell() {
   const router = useRouter();
@@ -953,6 +968,33 @@ export function AppShell() {
     </button>
   );
 
+  // 自动命名按钮的状态：桌面顶栏与手机档会话面板共用同一份判定。
+  const autoNameUi = (() => {
+    // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
+    const hasMessages = Boolean(
+      selectedSession
+      && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
+    );
+    const disabled = !selectedSession || selectedSession.transient || !hasMessages || autoNameStatus.kind === "naming";
+    const isSuccess = autoNameStatus.kind === "success";
+    const isError = autoNameStatus.kind === "error";
+    const label = autoNameStatus.kind === "naming"
+      ? translate("title.generating")
+      : isSuccess
+        ? translate("title.updated")
+        : isError
+          ? translate("title.failed")
+          : translate("title.generate");
+    const title = !selectedSession || selectedSession.transient
+      ? translate("title.unsaved")
+      : !hasMessages
+        ? translate("title.noMessages")
+        : isError
+          ? autoNameStatus.message
+          : translate("title.generateSession");
+    return { disabled, isSuccess, isError, label, title };
+  })();
+
   return (
     <>
     <style>{`
@@ -1306,79 +1348,52 @@ export function AppShell() {
                 </svg>
                  <span>{translate("history.label")}</span>
               </button>
-              {(() => {
-                // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
-                const hasMessages = Boolean(
-                  selectedSession
-                  && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
-                );
-                const disabled = !selectedSession || selectedSession.transient || !hasMessages || autoNameStatus.kind === "naming";
-                const isSuccess = autoNameStatus.kind === "success";
-                const isError = autoNameStatus.kind === "error";
-                const label = autoNameStatus.kind === "naming"
-                   ? translate("title.generating")
-                    : isSuccess
-                    ? translate("title.updated")
-                    : isError
-                      ? translate("title.failed")
-                      : translate("title.generate");
-                const title = !selectedSession || selectedSession.transient
-                   ? translate("title.unsaved")
-                   : !hasMessages
-                     ? translate("title.noMessages")
-                     : isError
-                       ? autoNameStatus.message
-                       : translate("title.generateSession");
-
-                return (
-                  <button
-                    type="button"
-                    onClick={() => void handleAutoName()}
-                    disabled={disabled}
-                    title={title}
-                    aria-label={label}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      height: "100%", padding: "0 12px",
-                      background: "none", border: "none",
-                      borderTop: "2px solid transparent",
-                      borderRight: "1px solid var(--border)",
-                      color: isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)",
-                      cursor: disabled ? "not-allowed" : "pointer",
-                      opacity: disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
-                      flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-                      transition: "color 0.1s, background 0.1s, opacity 0.1s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (disabled) return;
-                      e.currentTarget.style.color = isError ? "#dc2626" : "var(--text)";
-                      e.currentTarget.style.background = "var(--bg-hover)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)";
-                      e.currentTarget.style.background = "none";
-                    }}
-                  >
-                    {autoNameStatus.kind === "naming" ? (
-                      <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                    ) : isSuccess ? (
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    ) : (
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="m15 4 5 5L7 22l-5-5Z" />
-                        <path d="m14 5 5 5" />
-                        <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
-                      </svg>
-                    )}
-                    <span>{label}</span>
-                  </button>
-                );
-              })()}
+              <button
+                type="button"
+                onClick={() => void handleAutoName()}
+                disabled={autoNameUi.disabled}
+                title={autoNameUi.title}
+                aria-label={autoNameUi.label}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  height: "100%", padding: "0 12px",
+                  background: "none", border: "none",
+                  borderTop: "2px solid transparent",
+                  borderRight: "1px solid var(--border)",
+                  color: autoNameUi.isError ? "#dc2626" : autoNameUi.isSuccess ? "var(--accent)" : autoNameUi.disabled ? "var(--text-dim)" : "var(--text-muted)",
+                  cursor: autoNameUi.disabled ? "not-allowed" : "pointer",
+                  opacity: autoNameUi.disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
+                  flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
+                  transition: "color 0.1s, background 0.1s, opacity 0.1s",
+                }}
+                onMouseEnter={(e) => {
+                  if (autoNameUi.disabled) return;
+                  e.currentTarget.style.color = autoNameUi.isError ? "#dc2626" : "var(--text)";
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = autoNameUi.isError ? "#dc2626" : autoNameUi.isSuccess ? "var(--accent)" : autoNameUi.disabled ? "var(--text-dim)" : "var(--text-muted)";
+                  e.currentTarget.style.background = "none";
+                }}
+              >
+                {autoNameStatus.kind === "naming" ? (
+                  <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                ) : autoNameUi.isSuccess ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m15 4 5 5L7 22l-5-5Z" />
+                    <path d="m14 5 5 5" />
+                    <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
+                  </svg>
+                )}
+                <span>{autoNameUi.label}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1412,7 +1427,7 @@ export function AppShell() {
                   <circle cx="19" cy="9" r="2" />
                   <path d="M6.7 7.1 10.4 16.4M13.7 17.3 17.5 10.6M7 6h10" />
                 </svg>
-                {!isMobile && <span>{translate("map.open")}</span>}
+                <span>{translate("map.open")}</span>
               </button>
               </>)}
               <BranchNavigator
@@ -1728,6 +1743,54 @@ export function AppShell() {
                   })() : (
                     <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
                        {translate("session.load")}
+                    </div>
+                  )}
+                  {/* 手机档顶栏不展示全量历史、自动命名与会话地图，统一收进会话面板。 */}
+                  {isMobile && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                      <button
+                        type="button"
+                        onClick={handleViewFullHistory}
+                        disabled={!selectedSession}
+                        title={selectedSession ? translate("history.full") : translate("history.unsaved")}
+                        style={{
+                          ...MOBILE_SESSION_ACTION_STYLE,
+                          opacity: selectedSession ? 1 : 0.45,
+                          cursor: selectedSession ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {translate("history.label")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleAutoName()}
+                        disabled={autoNameUi.disabled}
+                        title={autoNameUi.title}
+                        style={{
+                          ...MOBILE_SESSION_ACTION_STYLE,
+                          opacity: autoNameUi.disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
+                          cursor: autoNameUi.disabled ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {autoNameUi.label}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTopPanel(null);
+                          setMapOpen((open) => !open);
+                        }}
+                        disabled={!selectedSession}
+                        aria-pressed={mapOpen}
+                        title={translate("map.title")}
+                        style={{
+                          ...MOBILE_SESSION_ACTION_STYLE,
+                          opacity: selectedSession ? 1 : 0.45,
+                          cursor: selectedSession ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {translate("map.open")}
+                      </button>
                     </div>
                   )}
                 </div>
