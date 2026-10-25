@@ -12,6 +12,12 @@ const { ProjectRow } = await jiti.import("./ProjectRow.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 const PROJECT_PATH = "C:/Users/dev/my-app";
+const PIN_MARK_LABEL = "Pinned project";
+
+/** 返回所有带 role="img" 的起始标签，用于区分图钉标记与活动计数徽标。 */
+function roleImgTags(html) {
+  return html.match(/<[a-zA-Z]+[^>]*role="img"[^>]*>/g) ?? [];
+}
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -158,4 +164,36 @@ test("render does not invoke callbacks or change markup", () => {
 
   assert.deepEqual(calls, []);
   assert.equal(html, renderRow());
+});
+
+test("renders exactly one pin mark with an accessible name when isPinned is true", () => {
+  const html = renderRow({ isPinned: true });
+  const marks = roleImgTags(html).filter((tag) => tag.includes(`aria-label="${PIN_MARK_LABEL}"`));
+
+  assert.equal(marks.length, 1, "expected exactly one pin mark");
+});
+
+test("renders no pin mark when isPinned is false or absent", () => {
+  for (const overrides of [{}, { isPinned: false }]) {
+    const html = renderRow(overrides);
+
+    assert.ok(!html.includes(PIN_MARK_LABEL), "expected the pin mark label to be absent");
+    assert.deepEqual(roleImgTags(html).filter((tag) => tag.includes("Pin")), [], "expected no pin glyph");
+  }
+});
+
+test("keeps the activity badges alongside the pin mark", () => {
+  const activity = { running: 2, waiting: 1, unread: 3 };
+  const pinned = renderRow({ isPinned: true, activity });
+  const unpinned = renderRow({ activity });
+
+  assert.equal(roleImgTags(pinned).length, roleImgTags(unpinned).length + 1, "expected the pin mark on top of the badges");
+  assert.equal(
+    roleImgTags(pinned).filter((tag) => tag.includes(`aria-label="${PIN_MARK_LABEL}"`)).length,
+    1,
+    "expected the extra mark to be the pin",
+  );
+  for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "New session activity (3)"]) {
+    assert.ok(pinned.includes(`aria-label="${label}"`), `expected the badge labelled "${label}" while pinned`);
+  }
 });

@@ -7,11 +7,12 @@ import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import type { ProjectSortMode } from "@/lib/project-order";
-import { orderProjectPaths, projectDisplayName } from "@/lib/project-order";
+import { normalizeProjectKey, orderProjectPaths, projectDisplayName, togglePinnedProject } from "@/lib/project-order";
 import { useI18n } from "@/hooks/useI18n";
 import { AnimatedDropdown } from "./AnimatedDropdown";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OmpWordmark } from "./OmpWordmark";
+import { ProjectPinMenuItem } from "./ProjectPinMenuItem";
 import { ProjectRow } from "./ProjectRow";
 import { ProjectSortControl } from "./ProjectSortControl";
 
@@ -70,11 +71,7 @@ const PROJECT_SESSION_LIMIT = 5;
 const COLLAPSED_PROJECTS_STORAGE_KEY = "ompdesk:collapsed-projects";
 const REMOVED_PROJECTS_STORAGE_KEY = "ompdesk:removed-projects";
 const PROJECT_SORT_STORAGE_KEY = "ompdesk:project-sort";
-
-function normalizeProjectKey(project: string): string {
-  const normalized = project.replace(/\\/g, "/");
-  return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
-}
+const PINNED_PROJECTS_STORAGE_KEY = "ompdesk:pinned-projects";
 
 function loadRemovedProjects(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -163,6 +160,31 @@ function saveProjectSortMode(mode: ProjectSortMode): void {
   try {
     if (mode === "time") window.localStorage.removeItem(PROJECT_SORT_STORAGE_KEY);
     else window.localStorage.setItem(PROJECT_SORT_STORAGE_KEY, "name");
+  } catch {
+    // Ignore storage quota and privacy-mode errors.
+  }
+}
+
+/** 置顶序列按点击置顶的先后排列；存储里缺失或损坏时按未置顶处理。 */
+function loadPinnedProjects(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PINNED_PROJECTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((project): project is string => typeof project === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePinnedProjects(projects: readonly string[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (projects.length === 0) window.localStorage.removeItem(PINNED_PROJECTS_STORAGE_KEY);
+    else window.localStorage.setItem(PINNED_PROJECTS_STORAGE_KEY, JSON.stringify(projects));
   } catch {
     // Ignore storage quota and privacy-mode errors.
   }
@@ -381,6 +403,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
   const [projectSortMode, setProjectSortMode] = useState<ProjectSortMode>("time");
+  const [pinnedProjects, setPinnedProjects] = useState<string[]>([]);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; count: number } | null>(null);
   const [removedProjects, setRemovedProjects] = useState<Set<string>>(() => new Set());
@@ -415,6 +438,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     setCollapsedProjects(loadCollapsedProjects());
     setRemovedProjects(loadRemovedProjects());
     setProjectSortMode(loadProjectSortMode());
+    setPinnedProjects(loadPinnedProjects());
   }, []);
 
 
@@ -856,13 +880,34 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     setSortMenuOpen(false);
   }, []);
 
+  // 切换置顶后菜单立即收起，行高亮也随之清掉，避免菜单悬在移动过的项目上。
+  const handleTogglePinnedProject = useCallback((project: string) => {
+    setPinnedProjects((current) => {
+      const next = togglePinnedProject(current, project);
+      savePinnedProjects(next);
+      return next;
+    });
+    dismissProjectMenu();
+    setHoveredProject(null);
+  }, [dismissProjectMenu]);
+
   const selectedProject = projectRootFor(selectedCwd);
   const recentProjectPaths = getRecentProjects(sessionsForDisplay)
     .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
-  if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !recentProjectPaths.includes(selectedProject)) {
-    recentProjectPaths.unshift(selectedProject);
+  const projectPaths = orderProjectPaths(recentProjectPaths, projectSortMode, pinnedProjects);
+  const pinnedProjectKeys = new Set(pinnedProjects.map(normalizeProjectKey));
+  // 当前选中但还没有会话的项目排在全部置顶项之后、其余未置顶项目之前。
+  if (
+    selectedProject
+    && !removedProjects.has(normalizeProjectKey(selectedProject))
+    && !recentProjectPaths.includes(selectedProject)
+  ) {
+    let insertAt = 0;
+    while (insertAt < projectPaths.length && pinnedProjectKeys.has(normalizeProjectKey(projectPaths[insertAt]))) {
+      insertAt++;
+    }
+    projectPaths.splice(insertAt, 0, selectedProject);
   }
-  const projectPaths = orderProjectPaths(recentProjectPaths, projectSortMode);
   // 每个工作区的 active / waiting / busy 计数一次遍历算出。等待集合与运行集合
   // 来源独立，所以「正在干活」必须用集合差、「移除前确认」必须用并集，
   // 不能从运行总数里直接减等待数。
@@ -1191,6 +1236,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                 name={name}
                 isSelected={isSelectedProject}
                 isCollapsed={isCollapsed}
+                isPinned={pinnedProjectKeys.has(normalizeProjectKey(project))}
                 activity={projectActivity.get(project)}
                 hovered={hoveredProject === project}
                 menuOpen={projectMenuOpen === project}
@@ -1512,6 +1558,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               </AnimatedDropdown>
                           </>
                         )}
+                        <ProjectPinMenuItem
+                          isPinned={pinnedProjectKeys.has(normalizeProjectKey(project))}
+                          onToggle={() => handleTogglePinnedProject(project)}
+                        />
                         {removeProjectConfirm?.project === project ? (
                           <div
                             style={{
