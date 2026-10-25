@@ -41,7 +41,11 @@ function persist(next: ReadonlySet<string>): void {
   }
 }
 
-/** 首次接触时补齐本机存储；服务端渲染永远看到空集合。 */
+/**
+ * 首次接触时补齐本机存储；服务端渲染永远看到空集合。
+ *
+ * 只有订阅与写入口调用它：快照读取必须是纯读取，渲染期不能产生副作用。
+ */
 function ensureHydrated(): void {
   if (hydrated || typeof window === "undefined") return;
   hydrated = true;
@@ -55,6 +59,7 @@ function commit(next: ReadonlySet<string>): void {
 }
 
 export function subscribeUnreadSessionIds(listener: () => void): () => void {
+  // 水合放在订阅里：订阅发生在渲染之后，快照读取因此保持纯函数。
   ensureHydrated();
   listeners.add(listener);
   return () => {
@@ -63,7 +68,6 @@ export function subscribeUnreadSessionIds(listener: () => void): () => void {
 }
 
 export function getUnreadSessionIds(): ReadonlySet<string> {
-  ensureHydrated();
   return unreadSessionIds;
 }
 

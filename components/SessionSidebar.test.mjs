@@ -164,10 +164,17 @@ test("keeps lifecycle markers out of the archived section", () => {
 });
 
 test("reconciles markers and running state when the page becomes visible again", () => {
-  assert.match(
-    source,
-    /if \(document\.visibilityState === "visible"\) \{[\s\S]*?void poll\(\);\s*loadSessions\(false, true\);/,
+  const visibilityHandler = source.slice(
+    source.indexOf("const onVisibilityChange = () => {"),
+    source.indexOf('document.addEventListener("visibilitychange", onVisibilityChange)'),
   );
+  assert.ok(visibilityHandler.length > 0, "onVisibilityChange must exist");
+  assert.match(visibilityHandler, /if \(document\.visibilityState === "visible"\) \{[\s\S]*?void poll\(\);/);
+  // 默认只轻量读取：只有失联过或隐藏期间确有运行在跑，才绕过缓存重扫。
+  assert.match(visibilityHandler, /loadSessions\(false, mayHaveFinished\)/);
+  assert.doesNotMatch(visibilityHandler, /loadSessions\(false, true\)/);
+  assert.match(visibilityHandler, /serverOutageSinceSnapshotRef\.current/);
+  assert.match(visibilityHandler, /previousActivitySnapshotRef\.current\.runningSessionIds\?\.length/);
 });
 
 test("remembers that the server went away while a session was running", () => {
@@ -190,6 +197,39 @@ test("skips the open session when reconciling runs lost across a restart", () =>
     source,
     /addUnreadSessionIds\(lostAcrossRestart\.unreadIds\.filter\(\(id\) => id !== selectedSessionId\)\);/,
   );
+});
+
+test("waits for the initial restore before reconciling runs lost across a restart", () => {
+  const reconcileStart = source.indexOf("服务失联或退出后页面看不到结束的那一刻");
+  assert.ok(reconcileStart >= 0, "重启对账必须留在侧栏里");
+  const reconcileSource = source.slice(
+    reconcileStart,
+    source.indexOf("savePersistedRunningSessionIds(runningSessionIds);", reconcileStart),
+  );
+  // 恢复中的会话还没成为选中会话，对账排在恢复之后才不会把它点亮。
+  assert.match(reconcileSource, /if \(!activityPolled \|\| !initialRestoreSettled\) return;/);
+  assert.match(reconcileSource, /lostAcrossRestart\.unreadIds\.filter\(\(id\) => id !== selectedSessionId\)/);
+});
+
+test("forces a full session re-read only when the finish produced unread results", () => {
+  const finishedStart = source.indexOf("const finished = resolveFinishedRuns({");
+  assert.ok(finishedStart >= 0, "结束归属计算必须留在侧栏里");
+  const finishedSource = source.slice(
+    finishedStart,
+    source.indexOf("onBackgroundTaskDone", finishedStart),
+  );
+  assert.match(finishedSource, /if \(finished\.unreadIds\.length > 0 \|\| hasUnlistedRunningSession\) \{/);
+  assert.doesNotMatch(finishedSource, /finished\.finishedIds\.length > 0/);
+});
+
+test("lights the refresh button only for cache-bypassing scans", () => {
+  const loadSessionsSource = source.slice(
+    source.indexOf("const loadSessions = useCallback"),
+    source.indexOf("// Bumped whenever a session is archived/restored"),
+  );
+  assert.ok(loadSessionsSource.length > 0, "loadSessions must exist");
+  assert.match(loadSessionsSource, /if \(force\) setSessionRefreshDone\(true\);/);
+  assert.doesNotMatch(loadSessionsSource, /if \(!showLoading\) \{/);
 });
 
 test("clears the watched session's marker once it is visible again", () => {

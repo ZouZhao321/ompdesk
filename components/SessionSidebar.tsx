@@ -443,6 +443,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
+  // 绿色完成提示点亮后自灭；计时器归 effect 管，卸载时清掉。
+  useEffect(() => {
+    if (!sessionRefreshDone) return;
+    const timer = setTimeout(() => setSessionRefreshDone(false), 2000);
+    return () => clearTimeout(timer);
+  }, [sessionRefreshDone]);
   const [activitySnapshot, setActivitySnapshot] = useState<SessionActivitySnapshotState>({});
   const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
   // 运行中但停在提问表单上、等待用户作答的会话。
@@ -470,7 +476,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // Once polling has delivered a snapshot it is the source of truth for
   // running state; late /api/sessions responses must not overwrite it.
   const runningPollAuthoritativeRef = useRef(false);
-  const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     setCollapsedProjects(loadCollapsedProjects());
     setRemovedProjects(loadRemovedProjects());
@@ -499,11 +504,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       // Drop unread markers for sessions that no longer exist (e.g. deleted).
       retainUnreadSessionIds(new Set(data.sessions.map((s) => s.id)));
       setError(null);
-      if (!showLoading) {
-        setSessionRefreshDone(true);
-        if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
-        sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
-      }
+      // 绿色完成提示只属于绕过缓存的扫描；后台读取不点亮刷新按钮。
+      if (force) setSessionRefreshDone(true);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -598,7 +600,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       if (document.visibilityState === "visible") {
         // 回到前台时同时核对运行快照与会话最后状态，标记才有正确的依据。
         void poll();
-        loadSessions(false, true);
+        // 只有隐藏期间确有运行在跑或与服务失联过，才需要绕过缓存重扫：
+        // 其余情况轻量读取列表即可，避免每次切回前台都全量扫描。
+        const mayHaveFinished =
+          serverOutageSinceSnapshotRef.current
+          || (previousActivitySnapshotRef.current.runningSessionIds?.length ?? 0) > 0;
+        loadSessions(false, mayHaveFinished);
         return;
       }
       pageVisibilitySinceSnapshotRef.current = "hidden";
@@ -647,8 +654,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     const hasUnlistedRunningSession = newlyRunning.some(
       (id) => !allSessions.some((session) => session.id === id),
     );
-    // 结束的运行要重读最后状态，静态标记才能按新结果出现。
-    if (finished.finishedIds.length > 0 || hasUnlistedRunningSession) {
+    // 只有确实产生了未读结果才重读最后状态：选中会话每轮结束都已读，不必全量刷新。
+    if (finished.unreadIds.length > 0 || hasUnlistedRunningSession) {
       loadSessions(false, true);
     }
     if (finished.backgroundIds.length > 0) {
@@ -667,7 +674,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // 服务失联或退出后页面看不到结束的那一刻，也无法区分哪次运行是被打断的。把上次
   // 页面看到过的运行集合与首轮轮询对比：消失的运行一律记为未读，之后持续记录当前集合。
   useEffect(() => {
-    if (!activityPolled) return;
+    // 恢复中的会话尚未成为选中会话，对账必须等初始恢复尘埃落定，否则会把它点亮。
+    if (!activityPolled || !initialRestoreSettled) return;
     if (startupRunningIdsRef.current === null) {
       startupRunningIdsRef.current = loadPersistedRunningSessionIds();
     }
@@ -683,7 +691,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       addUnreadSessionIds(lostAcrossRestart.unreadIds.filter((id) => id !== selectedSessionId));
     }
     savePersistedRunningSessionIds(runningSessionIds);
-  }, [activityPolled, runningSessionIds, selectedSessionId]);
+  }, [activityPolled, initialRestoreSettled, runningSessionIds, selectedSessionId]);
 
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
