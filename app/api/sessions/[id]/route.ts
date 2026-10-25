@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
@@ -18,7 +20,9 @@ import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security"
 import { projectTreeForResponse } from "@/lib/project-tree";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 
-export async function GET(
+export const GET = withRequestLog("/api/sessions/[id]", getRouteHandler);
+
+async function getRouteHandler(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -92,10 +96,10 @@ export async function GET(
 }
 
 // PATCH /api/sessions/[id]  body: { name: string }
-export async function PATCH(
+export const PATCH = withRequestLog("/api/sessions/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -104,38 +108,52 @@ export async function PATCH(
   }
 
   const { id } = await params;
+  let renameAttempted = false;
+  let archiveAttempted = false;
+  let renamed = false;
+  let archived = false;
   try {
-    const { name, archived } = await req.json() as { name?: string; archived?: boolean };
-    const hasName = typeof name === "string";
-    const hasArchived = typeof archived === "boolean";
-    if (!hasName && !hasArchived) {
+    const body = await req.json() as { name?: string; archived?: boolean };
+    const name = body.name;
+    const archivedFlag = body.archived;
+    renameAttempted = typeof name === "string";
+    archiveAttempted = typeof archivedFlag === "boolean";
+    if (!renameAttempted && !archiveAttempted) {
       return NextResponse.json({ error: "name or archived is required" }, { status: 400 });
     }
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
+      if (renameAttempted) auditFailure("session.rename", id, { status: 404 });
+      if (archiveAttempted) auditFailure("session.archive", id, { status: 404 });
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
-    if (hasName) {
+    if (typeof name === "string") {
       const sm = await SessionManager.open(filePath);
       await sm.setSessionName(name.trim(), "user");
+      renamed = true;
+      auditSuccess("session.rename", id);
     }
-    if (hasArchived) {
+    if (typeof archivedFlag === "boolean") {
       // Key the registry by the header id (what /api/sessions lists), not by
       // whatever alias the client addressed the session with.
-      setSessionArchived(readSessionHeader(filePath)?.id ?? id, archived);
+      setSessionArchived(readSessionHeader(filePath)?.id ?? id, archivedFlag);
+      archived = true;
+      auditSuccess("session.archive", id, { archived: archivedFlag });
     }
     invalidateSessionListCache();
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (renameAttempted && !renamed) auditFailure("session.rename", id, { status: 500, error });
+    if (archiveAttempted && !archived) auditFailure("session.archive", id, { status: 500, error });
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/sessions/[id]
-export async function DELETE(
+export const DELETE = withRequestLog("/api/sessions/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -144,6 +162,7 @@ export async function DELETE(
   try {
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
+      auditFailure("session.delete", id, { status: 404 });
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
@@ -182,8 +201,10 @@ export async function DELETE(
     unlinkSync(filePath);
     invalidateSessionPathCache(id);
     invalidateSessionListCache();
+    auditSuccess("session.delete", id);
     return NextResponse.json({ ok: true });
   } catch (error) {
+    auditFailure("session.delete", id, { status: 500, error });
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-}
+});

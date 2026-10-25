@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { startRpcSession, getRpcSession, getFinalRpcSessionId } from "@/lib/rpc-manager";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 // POST /api/agent/[id] - Send a command to an existing session
-export async function POST(
+export const POST = withRequestLog("/api/agent/[id]", async (
   req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
   }
@@ -63,10 +64,12 @@ export async function POST(
         : {}),
     }, { status: 500 });
   }
-}
+});
 
 // GET /api/agent/[id] - Get current agent state
-export async function GET(
+export const GET = withRequestLog("/api/agent/[id]", getRouteHandler);
+
+async function getRouteHandler(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
