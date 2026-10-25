@@ -33,6 +33,7 @@ import {
 } from "@/lib/browser-notifications";
 import { getInitialNavigation } from "@/lib/initial-navigation";
 import { sessionDisplayTitle } from "@/lib/session-title";
+import { clearUnreadSessionIds } from "@/lib/session-unread";
 import { clearLastOpen, getLastOpenSession, setLastOpenSession, getSessionContinuation, clearSessionContinuation, rememberSessionContinuation, restoreSessionContinuation } from "@/lib/workspace-memory";
 import {
   getDefaultRightPanelWidth,
@@ -465,6 +466,9 @@ export function AppShell() {
   }, [router, selectedSession, invalidateWorkspaceRestore, restoreWorkspaceContext]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    // 用户主动打开会话就算读过了：侧栏点击、命令面板、通知点击都走这里。
+    // 自动恢复（isRestore）不算点开，标记保留到用户真的点开为止。
+    if (!isRestore) clearUnreadSessionIds([session.id]);
     // Mark the target project before the cwd synchronization effect runs.
     // Otherwise selecting a session in another project looks like a manual
     // project switch and the just-selected session is cleared.

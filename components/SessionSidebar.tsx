@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
 import { STATIC_MARKER_APPEARANCE, initialMarkerUnreadIds, resolveFinishedRuns, resolveSessionMarker, type StaticMarkerStatus } from "@/lib/session-marker";
+import { addUnreadSessionIds, clearUnreadSessionIds, getServerUnreadSessionIds, getUnreadSessionIds, retainUnreadSessionIds, subscribeUnreadSessionIds } from "@/lib/session-unread";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -62,7 +63,6 @@ type SessionActivitySnapshotState = { [K in keyof SessionActivitySnapshot]?: Ses
 /** 会话列表接口的响应：会话数组加上同一份活动快照。 */
 type SessionsResponse = SessionActivitySnapshotState & { sessions: SessionInfo[] };
 
-const UNREAD_SESSIONS_STORAGE_KEY = "ompdesk:unread-session-ids";
 const MARKER_SEEDED_STORAGE_KEY = "ompdesk:session-marker-seeded";
 const RUNNING_SESSIONS_STORAGE_KEY = "ompdesk:running-session-ids";
 const RUNNING_SESSIONS_POLL_MS = 2500;
@@ -96,32 +96,6 @@ function saveRemovedProjects(projects: Set<string>): void {
     else window.localStorage.setItem(REMOVED_PROJECTS_STORAGE_KEY, JSON.stringify([...projects]));
   } catch {
     // Ignore storage quota and privacy-mode errors.
-  }
-}
-
-
-
-
-function loadUnreadSessionIds(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  try {
-    const raw = window.localStorage.getItem(UNREAD_SESSIONS_STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) return new Set(parsed.filter((id): id is string => typeof id === "string"));
-    return new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-function saveUnreadSessionIds(ids: Set<string>): void {
-  if (typeof window === "undefined") return;
-  try {
-    if (ids.size === 0) window.localStorage.removeItem(UNREAD_SESSIONS_STORAGE_KEY);
-    else window.localStorage.setItem(UNREAD_SESSIONS_STORAGE_KEY, JSON.stringify([...ids]));
-  } catch {
-    // ignore storage quota / privacy-mode errors
   }
 }
 
@@ -473,7 +447,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
   // 运行中但停在提问表单上、等待用户作答的会话。
   const waitingSessionIds = useMemo(() => new Set(activitySnapshot.waitingSessionIds ?? []), [activitySnapshot]);
-  const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
+  // 未读集合与打开路径共用同一份状态：这里只订阅，写入由 add/clear 完成。
+  const unreadSessionIds = useSyncExternalStore(
+    subscribeUnreadSessionIds,
+    getUnreadSessionIds,
+    getServerUnreadSessionIds,
+  );
   const previousActivitySnapshotRef = useRef(activitySnapshot);
   // 页面在相邻两份快照之间是否一直可见；隐藏期间结束的运行要亮标记。
   const pageVisibilitySinceSnapshotRef = useRef<DocumentVisibilityState>(
@@ -516,12 +495,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         });
       }
       // Drop unread markers for sessions that no longer exist (e.g. deleted).
-      const existingIds = new Set(data.sessions.map((s) => s.id));
-      setUnreadSessionIds((prev) => {
-        if (prev.size === 0) return prev;
-        const next = new Set([...prev].filter((id) => existingIds.has(id)));
-        return next.size === prev.size ? prev : next;
-      });
+      retainUnreadSessionIds(new Set(data.sessions.map((s) => s.id)));
       setError(null);
       if (!showLoading) {
         setSessionRefreshDone(true);
@@ -550,36 +524,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     loadSessions(isFirst, !isFirst);
   }, [loadSessions, refreshKey]);
 
-  // Persist unread markers so they survive a browser refresh before the user
-  // has actually opened the completed session.
-  useEffect(() => {
-    saveUnreadSessionIds(unreadSessionIds);
-  }, [unreadSessionIds]);
-
-  // 未读集合的增删只有这两个入口，播种、快照归属与服务失联对账都走同一条路径。
-  const addUnread = useCallback((ids: Iterable<string>) => {
-    const incoming = [...ids];
-    if (incoming.length === 0) return;
-    setUnreadSessionIds((prev) => {
-      const missing = incoming.filter((id) => !prev.has(id));
-      if (missing.length === 0) return prev;
-      const next = new Set(prev);
-      missing.forEach((id) => next.add(id));
-      return next;
-    });
-  }, []);
-
-  const clearUnread = useCallback((ids: Iterable<string>) => {
-    const removable = [...ids];
-    if (removable.length === 0) return;
-    setUnreadSessionIds((prev) => {
-      if (!removable.some((id) => prev.has(id))) return prev;
-      const next = new Set(prev);
-      removable.forEach((id) => next.delete(id));
-      return next;
-    });
-  }, []);
-
   // 首次加载时把浏览器的异常存量加入未读集合。播种只做一次：之后点开会话
   // 得到的已读结果不会被页面刷新重新点亮，清掉本机存储才会重新播种。
   // 当前打开且可见的会话按已读处理（看到即灭），首次播种只加异常存量。
@@ -588,8 +532,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     markInitialMarkerUnreadSeeded();
     const seededIds = initialMarkerUnreadIds(allSessions, runningSessionIds, waitingSessionIds)
       .filter((id) => id !== selectedSessionId);
-    addUnread(seededIds);
-  }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId, addUnread]);
+    addUnreadSessionIds(seededIds);
+  }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId]);
 
   useEffect(() => {
     let stopped = false;
@@ -686,8 +630,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     const newlyRunning = [...runningSessionIds].filter((id) => !previous.has(id));
 
     // 再次进入运行的会话先清掉旧标记，结束后按新结果重新亮。
-    clearUnread(runningSessionIds);
-    addUnread(finished.unreadIds);
+    clearUnreadSessionIds(runningSessionIds);
+    addUnreadSessionIds(finished.unreadIds);
     const hasUnlistedRunningSession = newlyRunning.some(
       (id) => !allSessions.some((session) => session.id === id),
     );
@@ -706,7 +650,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       pageVisibilitySinceSnapshotRef.current = document.visibilityState;
       serverOutageSinceSnapshotRef.current = false;
     }
-  }, [activitySnapshot, runningSessionIds, selectedSessionId, selectedRuntimeId, allSessions, loadSessions, onBackgroundTaskDone, addUnread, clearUnread]);
+  }, [activitySnapshot, runningSessionIds, selectedSessionId, selectedRuntimeId, allSessions, loadSessions, onBackgroundTaskDone]);
 
   // 服务失联或退出后页面看不到结束的那一刻，也无法区分哪次运行是被打断的。把上次
   // 页面看到过的运行集合与首轮轮询对比：消失的运行一律记为未读，之后持续记录当前集合。
@@ -723,10 +667,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         isPageVisible: true,
         isEndUnobserved: true,
       });
-      addUnread(lostAcrossRestart.unreadIds);
+      addUnreadSessionIds(lostAcrossRestart.unreadIds);
     }
     savePersistedRunningSessionIds(runningSessionIds);
-  }, [activityPolled, runningSessionIds, addUnread]);
+  }, [activityPolled, runningSessionIds]);
 
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
@@ -958,11 +902,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // works when the prop value won't change — e.g. re-clicking the already
   // open session after manually switching worktrees.
   const handleSelectSessionFromList = useCallback((s: SessionInfo) => {
-    // 静态标记只在用户点开会话时熄灭；自动恢复打开的会话不算点开。
-    clearUnread([s.id]);
     if (s.cwd) setSelectedCwd(s.cwd);
     onSelectSession(s);
-  }, [clearUnread, onSelectSession]);
+  }, [onSelectSession]);
 
   const handleNewSession = useCallback((project = selectedCwd) => {
     if (!project) return;
@@ -2047,7 +1989,7 @@ function SessionTreeItem({
   selectedSessionId: string | null;
   runningSessionIds: Set<string>;
   waitingSessionIds: Set<string>;
-  unreadSessionIds: Set<string>;
+  unreadSessionIds: ReadonlySet<string>;
   onSelectSession: (s: SessionInfo) => void;
   onRenamed?: () => void;
   onSessionDeleted?: (id: string) => void;
