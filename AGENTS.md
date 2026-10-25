@@ -455,8 +455,21 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
 Claude Code 因此读取同样的内容。
 
 本文档只写长期成立的规则、命令与结构。规模数字、索引时间、机器绝对路径、具体
-会话 id 这类随环境变化的内容不进正文：需要时现场读取（索引统计在
-`.gitnexus/gitnexus.json` 的 `stats`）。
+会话 id 这类随环境变化的内容不进正文：需要时现场读取。快照保留在索引里，索引
+只记稳定标识、一句话职责与权威来源，不记当时的值。
+
+| 快照 | 稳定标识 | 权威来源 | 读取方式 |
+| --- | --- | --- | --- |
+| 路由与接口方法 | `app/api/` 目录结构 | 各 `route.ts` 的导出 | `git ls-files 'app/api/**/route.ts'` |
+| 模块与组件的职责 | 文件路径 | 文件头注释与导出 | 打开文件 |
+| 会话文件格式 | `version: 3` | `@oh-my-pi/pi-coding-agent` 的 `session-entries.d.ts` | `grep -n CURRENT_SESSION_VERSION` |
+| 代码索引规模 | `.gitnexus/` | `gitnexus.json` 的 `stats` | 读 `stats.nodes` / `stats.edges` / `stats.processes` |
+| 模型角色清单 | `modelRoles` 记录 | SDK 的 `ModelRole` 类型 | `grep -n "export type ModelRole"` |
+| 主题色值 | `--bg` 等变量名 | `/api/theme` 与 `pi-tui/src/theme/*.json` | 请求接口或读主题 JSON |
+| 依赖与运行时版本 | `package.json` 的 `engines` | `package.json` 与 `bun.lock` | 读 `package.json` |
+| 测试样本会话 | 会话 id | `~/.omp/agent/sessions/` | 按 id 检索文件 |
+
+索引条目本身也会腐烂，但它的腐烂速度由目录改名决定，不由每次提交决定。
 
 索引重建用 `node .gitnexus/run.cjs analyze --index-only`：只更新索引，不写任何
 文档。要连带刷新下面这段生成内容，用 `analyze --no-stats`（不带规模数字），它会
