@@ -8,17 +8,22 @@
  * 日志里是否出现构建失败。
  *
  * 端口与产物目录都可以用环境变量覆盖，默认值相互独立于 `bun run dev` 使用的
- * 30141 与 `.next`，因此可以与本机正在运行的开发实例并存。
+ * 30141 与 `.next`，因此可以与本机正在运行的开发实例并存。启用密码锁的机器用
+ * `OMPDESK_SMOKE_AUTH=用户名:密码` 传入 Basic 认证，否则首页会固定返回 401。
  */
 
 import { spawn } from "node:child_process";
 import net from "node:net";
+import { fileURLToPath } from "node:url";
 
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.OMPDESK_SMOKE_PORT ?? 30199);
 const DIST_DIR = process.env.OMPDESK_DIST_DIR ?? ".next-smoke";
 const STARTUP_TIMEOUT_MS = Number(process.env.OMPDESK_SMOKE_STARTUP_MS ?? 240_000);
 const BASE_URL = `http://${HOST}:${PORT}`;
+const AUTH = process.env.OMPDESK_SMOKE_AUTH ?? "";
+const AUTH_HEADER = AUTH ? `Basic ${Buffer.from(AUTH).toString("base64")}` : null;
 
 /** 这些字符串出现在开发服务器日志里，说明这一轮不能算通过。 */
 const FAILURE_PATTERNS = [
@@ -38,6 +43,8 @@ const child = spawn(
   process.execPath,
   ["--bun", "next", "dev", "--webpack", "-H", HOST, "-p", String(PORT)],
   {
+    // 工程根固定在仓库根，调用者从哪个目录执行都不影响 next 找 app/ 与产物目录。
+    cwd: ROOT,
     env: { ...process.env, OMPDESK_DIST_DIR: DIST_DIR },
     stdio: ["ignore", "pipe", "pipe"],
     // POSIX 下建独立进程组，收尾时按组结束，避免 next 派生的子进程占着端口。
@@ -74,32 +81,40 @@ function probePort() {
   });
 }
 
+/**
+ * 按进程组收尾。直接子进程先退出、孙进程仍占着端口是常见情形，所以这里不看
+ * `childExit` 提前返回；Windows 用 taskkill /T 结束整棵树。
+ */
 async function stopServer() {
-  if (!child.pid || childExit) return;
-  const exited = new Promise((resolve) => child.once("exit", resolve));
-  if (process.platform === "win32") {
-    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
-  } else {
-    try {
-      process.kill(-child.pid, "SIGTERM");
-    } catch {
-      child.kill("SIGTERM");
+  if (!child.pid) return;
+  const send = (signal) => {
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      return;
     }
-  }
-  const force = setTimeout(() => {
     try {
-      child.kill("SIGKILL");
+      process.kill(-child.pid, signal);
     } catch {
-      // 已经退出
+      try {
+        child.kill(signal);
+      } catch {
+        // 已经退出
+      }
     }
-  }, 5_000);
+  };
+  const exited = childExit ? Promise.resolve() : new Promise((resolve) => child.once("exit", resolve));
+  send("SIGTERM");
+  const force = setTimeout(() => send("SIGKILL"), 5_000);
   await Promise.race([exited, Bun.sleep(6_000)]);
   clearTimeout(force);
 }
 
-process.on("SIGINT", () => {
-  void stopServer().then(() => process.exit(130));
-});
+function shutdown(code) {
+  void stopServer().then(() => process.exit(code));
+}
+
+process.on("SIGINT", () => shutdown(130));
+process.on("SIGTERM", () => shutdown(143));
 
 function logTail(limit = 80) {
   return output.join("").split(/\r?\n/).slice(-limit).join("\n");
@@ -108,7 +123,10 @@ function logTail(limit = 80) {
 async function request(path, timeoutMs) {
   const response = await fetch(`${BASE_URL}${path}`, {
     signal: AbortSignal.timeout(timeoutMs),
-    headers: { "user-agent": "ompdesk-smoke" },
+    headers: {
+      "user-agent": "ompdesk-smoke",
+      ...(AUTH_HEADER ? { authorization: AUTH_HEADER } : {}),
+    },
   });
   return { status: response.status, body: await response.text() };
 }
@@ -154,6 +172,12 @@ try {
 
   const home = await request("/api/home", 120_000);
   assertCheck(failures, "GET /api/home", home.status === 200, `status ${home.status}`);
+
+  // 崩溃往往发生在最后一个请求之后，给进程一点时间把错误写到日志再判定。
+  await Bun.sleep(1_000);
+  if (childExit) {
+    throw new Error(`dev server 在请求结束后退出：code=${childExit.code} signal=${childExit.signal}`);
+  }
 
   const logText = output.join("");
   const hits = FAILURE_PATTERNS.filter((pattern) => logText.includes(pattern));
