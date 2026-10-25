@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
+const rowSource = await readFile(new URL("./ProjectRow.tsx", import.meta.url), "utf8");
 const sessionItemSource = source.slice(source.indexOf("function SessionItem("));
 
 test("only Shift+click bypasses session deletion confirmation", () => {
@@ -31,11 +32,11 @@ test("keeps subagents out of the left session sidebar", () => {
 
 test("includes project activity counts in accessible labels", () => {
   assert.match(
-    source,
+    rowSource,
     /aria-label=\{`\$\{t\("sidebar\.agentRunning"\)\} \(\$\{activity\.running\}\)`\}/,
   );
   assert.match(
-    source,
+    rowSource,
     /aria-label=\{`\$\{t\("sidebar\.newSessionActivity"\)\} \(\$\{activity\.unread\}\)`\}/,
   );
 });
@@ -58,7 +59,7 @@ test("labels the inline waiting indicator without a count", () => {
 
 test("interpolates the project waiting badge label", () => {
   assert.match(
-    source,
+    rowSource,
     /aria-label=\{t\("sidebar\.agentWaitingForInputWithCount", \{ count: activity\.waiting \}\)\}/,
   );
   assert.doesNotMatch(source, /aria-label=\{`\$\{t\("sidebar\.agentWaitingForInput"\)\}/);
@@ -78,9 +79,9 @@ const indicatorSource = (startMarker, nextMarker) =>
 test("marks activity indicators as images for screen readers", () => {
   assert.match(indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()"), /role="img"/);
   assert.match(indicatorSource("function WaitingSessionIndicator()", "function UnreadSessionIndicator()"), /role="img"/);
-  assert.match(indicatorSource("function UnreadSessionIndicator()", "function showProjectActivity("), /role="img"/);
+  assert.match(indicatorSource("function UnreadSessionIndicator()", "function SessionItem("), /role="img"/);
 
-  const projectBadges = indicatorSource("function showProjectActivity(", "function SessionItem(");
+  const projectBadges = rowSource.slice(rowSource.indexOf("function showProjectActivity("));
   assert.equal((projectBadges.match(/role="img"/g) ?? []).length, 3);
 });
 
