@@ -420,7 +420,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
-  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [naturalSize, setNaturalSize] = useState<{ path: string; w: number; h: number } | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -428,7 +428,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
   useEffect(() => {
     setBust(0);
     setSize(null);
-    setNaturalSize(null);
     setWatching(false);
 
     if (esRef.current) {
@@ -459,6 +458,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
 
   const formatSizeStr = size != null ? formatSize(size) : null;
+  const naturalSizeOfCurrentFile = naturalSize?.path === filePath ? naturalSize : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -479,7 +479,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
           {getRelativeFilePath(filePath, cwd)}
         </span>
         <span style={{ marginLeft: "auto" }}>{ext || "image"}</span>
-        {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
+        {naturalSizeOfCurrentFile && <span>{naturalSizeOfCurrentFile.w} × {naturalSizeOfCurrentFile.h}</span>}
         {formatSizeStr && <span>{formatSizeStr}</span>}
         <span
           title={watching ? t("i18n.liveSync") : t("i18n.notWatching")}
@@ -503,7 +503,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
         key={filePath}
         src={src}
         alt={filePath}
-        onNaturalSize={setNaturalSize}
+        onNaturalSize={(size) => setNaturalSize({ path: filePath, ...size })}
       />
     </div>
   );
@@ -1192,10 +1192,8 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                     <ZoomableImage
                       src={imageSrc}
                       alt={alt}
-                      title={props.title}
-                      width={props.width}
-                      height={props.height}
                       className="markdown-image-zoomable"
+                      imgProps={props}
                     />
                   );
                 },

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ImgHTMLAttributes,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -91,7 +92,12 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     naturalSizeRef.current = size;
     setNatural(size);
     onNaturalSizeRef.current?.(size);
-  }, []);
+    // 尺寸与相机同一次更新里就位，避免首帧以 100% 贴在左上角再跳。
+    const viewport = viewportSizeRef.current;
+    if (!adjustedRef.current && viewport.w > 0 && viewport.h > 0) {
+      applyCamera(centerCamera(size, viewport, fitZoom(size, viewport)));
+    }
+  }, [applyCamera]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -276,6 +282,8 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // 带修饰键的组合交给浏览器（缩放页面、切换标签页等）。
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === "+" || event.key === "=") {
       event.preventDefault();
       zoomTo(cameraRef.current.scale * IMAGE_ZOOM_STEP);
@@ -474,16 +482,15 @@ interface ZoomableImageProps {
   imgStyle?: CSSProperties;
   /** 消息附件用的缩略图模式：外面包一层按钮。 */
   thumbnail?: boolean;
-  title?: string;
-  width?: number | string;
-  height?: number | string;
+  /** markdown 渲染器剩下的 img 属性（srcSet、style、自定义 class 等）原样转发。 */
+  imgProps?: ImgHTMLAttributes<HTMLImageElement> & { node?: unknown };
 }
 
 /**
  * 点击打开全屏预览的图片。
  * 位于链接内的图片、或按住修饰键时交回浏览器原有行为；行内模式补上键盘可达性。
  */
-export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false, title, width, height }: ZoomableImageProps) {
+export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false, imgProps }: ZoomableImageProps) {
   const { t } = useI18n();
   const openImagePreview = useImagePreview();
   const [insideLink, setInsideLink] = useState(false);
@@ -513,18 +520,19 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
     );
   }
 
+  const restProps: ImgHTMLAttributes<HTMLImageElement> & { node?: unknown } = { ...imgProps };
+  delete restProps.node;
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      {...restProps}
       ref={attachImage}
       src={src}
       alt={alt ?? ""}
-      title={title}
-      width={width}
-      height={height}
-      loading="lazy"
-      className={className}
-      style={imgStyle}
+      loading={restProps.loading ?? "lazy"}
+      className={[restProps.className, className].filter(Boolean).join(" ") || undefined}
+      style={imgStyle ?? restProps.style}
       role={insideLink ? undefined : "button"}
       tabIndex={insideLink ? undefined : 0}
       aria-label={insideLink ? undefined : label}
