@@ -142,6 +142,7 @@ lib/
   omp-types.ts         omp AgentSession 的结构化视图
   project-trust.ts     控制项目可执行资源的开关
   rpc-manager.ts       AgentSessionWrapper + 注册表 + startRpcSession
+  session-marker.ts    侧栏标记判定、播种集合与运行结束的归属（纯函数）
   session-reader.ts    会话列表 + 路径缓存 + buildSessionContext 适配器
   session-map.ts       .jsonl → 轮次树，并合并 fork 文件
   session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
@@ -320,7 +321,7 @@ omp 没有信任存储：它运行某个仓库的扩展，因为你选择在那�
   扩展 UI 请求（`ask` 表单、`select`、`confirm`、`input`、`editor`、`custom`）上、
   等待用户作答的会话：`AgentSessionWrapper.isAwaitingInput()` 按
   `pendingUiRequests` 是否为空判断，等待期间 `isRunning()` 仍为真。侧栏对这类
-  会话显示黄灯而不是旋转图标，项目行另行统计黄灯数量。
+  会话显示完整黄环（呼吸动画、不旋转），项目行另行统计等待数量。
 - `useAgentSession` 把每个会话的 SSE 作为聊天事件的主要来源，并在每次 prompt 前
   打开。`prompt_done` 立即结束当前 UI 阶段与通知，空闲 SSE 保持 30 秒宽限窗口
   并被下一个 prompt 复用。`agent_start` 取消该关闭计时器；`agent_settled` 结束
@@ -333,12 +334,19 @@ omp 没有信任存储：它运行某个仓库的扩展，因为你选择在那�
   否则会复活过期的流式气泡。
 - 生命周期标记的归属由 `lib/session-marker.ts` 的纯函数决定：运行结束时，当前选中
   且页面可见的会话算已读，不亮静态标记；页面隐藏期间或别的会话结束时写入未读集合并
-  亮标记。会话再次进入运行状态先清掉旧标记，结束后按新结果重新亮。
+  亮标记。跳过的只是归属判定：选中的运行同样算进结束列表并触发重读最后状态。
+  会话再次进入运行状态先清掉旧标记，结束后按新结果重新亮。
 - 页面回到前台时同时触发一次轮询与一次 `force` 会话列表刷新，标记与运行状态因此
-  各核对一次。可见时轮询失败（服务退出）会把这段时间内的结束当作不可观察的结束，
-  即使会话是当前选中的也亮标记。
+  各核对一次。可见时轮询失败（服务失联）会把这段时间内的结束当作不可观察的结束
+  （`isEndUnobserved`），即使会话是当前选中的也亮标记。
 - 运行集合写入 `ompdesk:running-session-ids`。首轮轮询到达时与上次页面记录的集合
-  对比，消失的会话按进程退出处理：重启服务后停在表单上的会话因此按最后结果亮标记。
+  对比，消失的运行按不可观察的结束处理：重启服务后停在表单上的会话因此按最后结果
+  亮标记。这次对账同样走 `resolveFinishedRuns()`，不另写一套判定；未读集合的增删
+  统一走侧栏的 `addUnread()` / `clearUnread()`。
+- 首次播种只加异常存量（中断、取消、报错、待回复），每个浏览器只做一次。当前打开
+  且可见的会话按已读处理，播种因此排除它：看到即灭，刷新不会重新点亮。
+- 项目行的未读角标统计的就是未读集合，静态标记会被一并计入。黄灯本身就是未读，
+  不按颜色拆分计数。
 - 静态标记只在用户点开会话时熄灭；自动恢复打开的会话（URL 中的 `?session=` 或
   工作区上次打开的会话）不算点开，标记保留到用户点开为止。
 
