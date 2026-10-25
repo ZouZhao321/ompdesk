@@ -679,8 +679,8 @@ export function AppShell() {
     const sessionId = selectedSession?.id;
     const runtimeId = selectedSession?.runtimeId;
     if (!sessionId || autoNameStatus.kind === "naming") return;
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
-    setActiveTopPanel(null);
+    clearTimeout(autoNameTimerRef.current ?? undefined);
+    // 面板不关：手机档的入口就在会话面板里，关掉后生成中/成功/失败都看不到。
     setAutoNameStatus({ kind: "naming" });
 
     try {
@@ -712,7 +712,7 @@ export function AppShell() {
   }, [autoNameStatus.kind, selectedSession?.id, selectedSession?.runtimeId, handleRuntimeIdentity]);
 
   useEffect(() => {
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
+    clearTimeout(autoNameTimerRef.current ?? undefined);
     setAutoNameStatus({ kind: "idle" });
   }, [selectedSession?.id]);
 
