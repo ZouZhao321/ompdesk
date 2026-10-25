@@ -5,9 +5,17 @@ import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
+import {
+  normalizeProjectKey,
+  orderProjectPaths,
+  projectDisplayName,
+  togglePinnedProject,
+  type ProjectSortMode,
+} from "@/lib/project-order";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import type { TranslationParams } from "@/lib/i18n/types";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OmpWordmark } from "./OmpWordmark";
@@ -66,10 +74,58 @@ const RUNNING_SESSIONS_POLL_MS = 2500;
 const PROJECT_SESSION_LIMIT = 5;
 const COLLAPSED_PROJECTS_STORAGE_KEY = "ompdesk:collapsed-projects";
 const REMOVED_PROJECTS_STORAGE_KEY = "ompdesk:removed-projects";
+const PROJECT_SORT_STORAGE_KEY = "ompdesk:project-sort";
+const PINNED_PROJECTS_STORAGE_KEY = "ompdesk:pinned-projects";
 
-function normalizeProjectKey(project: string): string {
-  const normalized = project.replace(/\\/g, "/");
-  return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+function loadProjectSortMode(): ProjectSortMode {
+  if (typeof window === "undefined") return "time";
+  try {
+    return window.localStorage.getItem(PROJECT_SORT_STORAGE_KEY) === "name" ? "name" : "time";
+  } catch {
+    return "time";
+  }
+}
+
+function saveProjectSortMode(mode: ProjectSortMode): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (mode === "time") window.localStorage.removeItem(PROJECT_SORT_STORAGE_KEY);
+    else window.localStorage.setItem(PROJECT_SORT_STORAGE_KEY, mode);
+  } catch {
+    // Ignore storage quota and privacy-mode errors.
+  }
+}
+
+function loadPinnedProjects(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PINNED_PROJECTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const seen = new Set<string>();
+    const pinned: string[] = [];
+    for (const project of parsed) {
+      if (typeof project !== "string" || !project) continue;
+      const key = normalizeProjectKey(project);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pinned.push(project);
+    }
+    return pinned;
+  } catch {
+    return [];
+  }
+}
+
+function savePinnedProjects(projects: string[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (projects.length === 0) window.localStorage.removeItem(PINNED_PROJECTS_STORAGE_KEY);
+    else window.localStorage.setItem(PINNED_PROJECTS_STORAGE_KEY, JSON.stringify(projects));
+  } catch {
+    // Ignore storage quota and privacy-mode errors.
+  }
 }
 
 function loadRemovedProjects(): Set<string> {
@@ -392,6 +448,7 @@ function PiWebTitle() {
 
 export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisticSession, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onBackgroundTaskDone }: Props) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const sessionsForDisplay = optimisticSession && !allSessions.some((session) => session.id === optimisticSession.id)
     ? [optimisticSession, ...allSessions]
@@ -405,6 +462,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
+  const [projectSortMode, setProjectSortMode] = useState<ProjectSortMode>("time");
+  const [pinnedProjects, setPinnedProjects] = useState<string[]>([]);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; count: number } | null>(null);
   const [removedProjects, setRemovedProjects] = useState<Set<string>>(() => new Set());
   const [wtFilter, setWtFilter] = useState("");
@@ -421,6 +481,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [wtConfirmRemove, setWtConfirmRemove] = useState<string | null>(null);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const [activitySnapshot, setActivitySnapshot] = useState<SessionActivitySnapshotState>({});
   const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
@@ -436,6 +497,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   useEffect(() => {
     setCollapsedProjects(loadCollapsedProjects());
     setRemovedProjects(loadRemovedProjects());
+    setProjectSortMode(loadProjectSortMode());
+    setPinnedProjects(loadPinnedProjects());
   }, []);
 
 
@@ -833,6 +896,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         dismissProjectMenu();
         setHoveredProject(null);
       }
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setSortMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -869,10 +935,17 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   }, []);
 
   const selectedProject = projectRootFor(selectedCwd);
-  const projectPaths = getRecentProjects(sessionsForDisplay)
-    .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
+  const projectPaths = orderProjectPaths(
+    getRecentProjects(sessionsForDisplay)
+      .filter((project) => !removedProjects.has(normalizeProjectKey(project))),
+    projectSortMode,
+    pinnedProjects,
+  );
+  const pinnedProjectKeys = new Set(pinnedProjects.map(normalizeProjectKey));
+  // 当前选中的项目可能没有任何会话；它仍要显示，但不得越过置顶项目。
   if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !projectPaths.includes(selectedProject)) {
-    projectPaths.unshift(selectedProject);
+    const firstUnpinned = projectPaths.findIndex((project) => !pinnedProjectKeys.has(normalizeProjectKey(project)));
+    projectPaths.splice(firstUnpinned === -1 ? projectPaths.length : firstUnpinned, 0, selectedProject);
   }
   // 每个工作区的 active / waiting / busy 计数一次遍历算出。等待集合与运行集合
   // 来源独立，所以「正在干活」必须用集合差、「移除前确认」必须用并集，
@@ -929,6 +1002,23 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     executeRemoveProject(project);
   };
 
+  const chooseProjectSortMode = (mode: ProjectSortMode) => {
+    setProjectSortMode(mode);
+    saveProjectSortMode(mode);
+    setSortMenuOpen(false);
+  };
+
+  // 置顶只改变项目行的位置：列表顺序就是点击置顶的先后顺序。
+  const toggleProjectPin = (project: string) => {
+    setPinnedProjects((current) => {
+      const next = togglePinnedProject(current, project);
+      savePinnedProjects(next);
+      return next;
+    });
+    dismissProjectMenu();
+    setHoveredProject(null);
+  };
+
   const sessionsByProject = new Map<string, SessionInfo[]>();
   for (const session of sessionsForDisplay) {
     const project = workspaceKeyOf(session);
@@ -940,10 +1030,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   const normalizedProjectFilter = projectFilter.trim().toLowerCase();
   const projectGroups = projectPaths.flatMap((project) => {
-    const segments = project.replace(/[\\/]+$/, "").split(/[\\/]/);
-    const name = segments.at(-1) || project;
+    const name = projectDisplayName(project);
+    const isPinned = pinnedProjectKeys.has(normalizeProjectKey(project));
     const sessions = sessionsByProject.get(project) ?? [];
-    if (!normalizedProjectFilter) return [{ project, name, sessions }];
+    if (!normalizedProjectFilter) return [{ project, name, sessions, isPinned }];
 
     const projectMatches = name.toLowerCase().includes(normalizedProjectFilter);
     const matchingSessions = sessions.filter((session) => {
@@ -951,7 +1041,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       return title.toLowerCase().includes(normalizedProjectFilter);
     });
     if (!projectMatches && matchingSessions.length === 0) return [];
-    return [{ project, name, sessions: projectMatches ? sessions : matchingSessions }];
+    return [{ project, name, sessions: projectMatches ? sessions : matchingSessions, isPinned }];
   });
 
   const showWorktreeSwitcher = Boolean(
@@ -1090,6 +1180,90 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         <h2 style={{ margin: 0, flex: 1, color: "var(--text-muted)", fontSize: 13, fontWeight: 600, letterSpacing: "0.01em" }}>
           {t("sidebar.projects")}
         </h2>
+        <div ref={sortMenuRef} style={{ position: "relative", display: "flex", marginRight: 6, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => setSortMenuOpen((open) => !open)}
+            title={t("sidebar.projectSort")}
+            aria-label={t("sidebar.projectSort")}
+            aria-haspopup="menu"
+            aria-expanded={sortMenuOpen}
+            className="sidebar-header-icon-button"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              padding: 0,
+              border: "none",
+              borderRadius: 6,
+              background: sortMenuOpen ? "var(--bg-selected)" : "var(--bg-hover)",
+              color: sortMenuOpen ? "var(--accent)" : "var(--text-muted)",
+              cursor: "pointer",
+              transition: "background 0.12s, color 0.12s",
+            }}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.color = "var(--text)";
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.color = sortMenuOpen ? "var(--accent)" : "var(--text-muted)";
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 6h9M4 12h6M4 18h3" />
+              <path d="M17 5v14M14 16l3 3 3-3" />
+            </svg>
+          </button>
+          <AnimatedDropdown
+            open={sortMenuOpen}
+            style={{
+              position: "absolute",
+              top: "calc(100% + 4px)",
+              right: 0,
+              width: 160,
+              zIndex: 120,
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              boxShadow: "0 6px 20px rgba(0,0,0,0.14)",
+              overflow: "hidden",
+            }}
+          >
+            {(["time", "name"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="menuitemradio"
+                aria-checked={projectSortMode === mode}
+                onClick={() => chooseProjectSortMode(mode)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  minHeight: isMobile ? MOBILE_HIT_TARGET_PX : 34,
+                  padding: "0 10px",
+                  border: "none",
+                  background: projectSortMode === mode ? "var(--bg-selected)" : "transparent",
+                  color: projectSortMode === mode ? "var(--text)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ display: "flex", width: 12, color: "var(--accent)", flexShrink: 0 }}>
+                  {projectSortMode === mode && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </span>
+                {t(mode === "time" ? "sidebar.sortByTime" : "sidebar.sortByName")}
+              </button>
+            ))}
+          </AnimatedDropdown>
+        </div>
         <button
           type="button"
           onClick={handleCustomPathClick}
@@ -1184,7 +1358,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             {normalizedProjectFilter ? t("sidebar.noMatchingProjects") : t("sidebar.noSessions")}
           </div>
         )}
-        {!loading && !error && projectGroups.map(({ project, name, sessions }) => {
+        {!loading && !error && projectGroups.map(({ project, name, sessions, isPinned }) => {
           const isSelectedProject = project === selectedProject;
           const isCollapsed = collapsedProjects.has(project) && !normalizedProjectFilter;
           const isExpanded = expandedProjects.has(project);
@@ -1271,6 +1445,19 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                     <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
                   </svg>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                  {isPinned && (
+                    <span
+                      title={t("sidebar.pinnedProject")}
+                      aria-label={t("sidebar.pinnedProject")}
+                      role="img"
+                      style={{ display: "flex", color: "var(--accent)", flexShrink: 0 }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M9 4h6v2l-1 4 3 3H7l3-3-1-4V4Z" />
+                        <path d="M12 13v7" />
+                      </svg>
+                    </span>
+                  )}
                   {showProjectActivity(projectActivity.get(project), t)}
                 </button>
 
@@ -1656,6 +1843,38 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               </AnimatedDropdown>
                           </>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => toggleProjectPin(project)}
+                          title={isPinned ? t("sidebar.unpinProject") : t("sidebar.pinProject")}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            width: "100%",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : 34,
+                            padding: "0 10px",
+                            border: "none",
+                            borderTop: showWorktreeSwitcher && worktreeState ? "1px solid var(--border)" : "none",
+                            background: "transparent",
+                            color: isPinned ? "var(--accent)" : "var(--text-muted)",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            fontSize: 11,
+                          }}
+                          onMouseEnter={(event) => {
+                            event.currentTarget.style.background = "var(--bg-hover)";
+                          }}
+                          onMouseLeave={(event) => {
+                            event.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M9 4h6v2l-1 4 3 3H7l3-3-1-4V4Z" />
+                            <path d="M12 13v7" />
+                          </svg>
+                          {isPinned ? t("sidebar.unpinProject") : t("sidebar.pinProject")}
+                        </button>
                         {removeProjectConfirm?.project === project ? (
                           <div
                             style={{
