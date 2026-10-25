@@ -7,9 +7,9 @@ import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { useI18n } from "@/hooks/useI18n";
-import type { TranslationParams } from "@/lib/i18n/types";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OmpWordmark } from "./OmpWordmark";
+import { ProjectRow } from "./ProjectRow";
 
 declare global {
   interface Window {
@@ -1189,158 +1189,27 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
           return (
             <section key={project} style={{ marginBottom: isCollapsed ? 3 : 9 }}>
-              <div
-                ref={projectMenuOpen === project ? wtDropdownRef : undefined}
-                onMouseEnter={() => setHoveredProject(project)}
-                onMouseLeave={() => setHoveredProject((current) => current === project && projectMenuOpen !== project ? null : current)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  minHeight: 34,
-                  position: "relative",
-                  borderRadius: 6,
-                  background: isSelectedProject ? "var(--bg-hover)" : "transparent",
+              <ProjectRow
+                project={project}
+                name={name}
+                isSelected={isSelectedProject}
+                isCollapsed={isCollapsed}
+                activity={projectActivity.get(project)}
+                hovered={hoveredProject === project}
+                menuOpen={projectMenuOpen === project}
+                menuRef={projectMenuOpen === project ? wtDropdownRef : undefined}
+                highlightActions={Boolean(isSelectedProject && currentWt && !currentWt.isMain)}
+                onToggleCollapse={() => toggleProjectCollapsed(project)}
+                onSelect={() => setSelectedCwd(project)}
+                onNewSession={() => handleNewSession(project)}
+                onToggleMenu={() => {
+                  const nextOpen = projectMenuOpen === project ? null : project;
+                  dismissProjectMenu();
+                  setProjectMenuOpen(nextOpen);
+                  if (!isSelectedProject) setSelectedCwd(project);
                 }}
+                onHoverChange={(next) => setHoveredProject((current) => (next ? project : current === project && projectMenuOpen !== project ? null : current))}
               >
-                <button
-                  type="button"
-                  onClick={() => toggleProjectCollapsed(project)}
-                  title={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
-                  aria-label={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
-                  aria-expanded={!isCollapsed}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 24,
-                    height: 28,
-                    marginLeft: 2,
-                    padding: 0,
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--text-dim)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                  }}
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.12s" }}
-                  >
-                    <polyline points="2.5 4 6 7.5 9.5 4" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCwd(project)}
-                  title={project}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flex: 1,
-                    minWidth: 0,
-                    height: 34,
-                    padding: "0 4px",
-                    border: "none",
-                    background: "transparent",
-                    color: isSelectedProject ? "var(--text)" : "var(--text-muted)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontSize: 12.5,
-                    fontWeight: isSelectedProject ? 600 : 500,
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: isSelectedProject ? "var(--accent)" : "var(--text-dim)" }}>
-                    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
-                  </svg>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                  {showProjectActivity(projectActivity.get(project), t)}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleNewSession(project)}
-                  title={t("sidebar.newSessionTitle", { path: project })}
-                  aria-label={t("sidebar.newSessionTitle", { path: project })}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 28,
-                    height: 28,
-                    padding: 0,
-                    border: "none",
-                    borderRadius: 5,
-                    background: "transparent",
-                    color: "var(--text-dim)",
-                    cursor: "pointer",
-                    opacity: hoveredProject === project ? 1 : 0,
-                    pointerEvents: hoveredProject === project ? "auto" : "none",
-                    transition: "opacity 0.12s, background 0.12s, color 0.12s",
-                    flexShrink: 0,
-                  }}
-                  onFocus={() => setHoveredProject(project)}
-                  onMouseEnter={(event) => {
-                    event.currentTarget.style.background = "var(--bg-selected)";
-                    event.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.background = "transparent";
-                    event.currentTarget.style.color = "var(--text-dim)";
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                    <line x1="6" y1="1.5" x2="6" y2="10.5" />
-                    <line x1="1.5" y1="6" x2="10.5" y2="6" />
-                  </svg>
-                </button>
-                {(
-                  <div style={{ position: "static", flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextOpen = projectMenuOpen === project ? null : project;
-                        dismissProjectMenu();
-                        setProjectMenuOpen(nextOpen);
-                        if (!isSelectedProject) setSelectedCwd(project);
-                      }}
-                      title={t("sidebar.projectActions")}
-                      aria-label={t("sidebar.projectActions")}
-                      aria-expanded={projectMenuOpen === project}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: 28,
-                        height: 28,
-                        marginRight: 3,
-                        padding: 0,
-                        border: "none",
-                        borderRadius: 5,
-                        background: projectMenuOpen === project ? "var(--bg-selected)" : "transparent",
-                        color: isSelectedProject && currentWt && !currentWt.isMain ? "var(--accent)" : "var(--text-dim)",
-                        cursor: "pointer",
-                        opacity: hoveredProject === project || projectMenuOpen === project ? 1 : 0,
-                        pointerEvents: hoveredProject === project || projectMenuOpen === project ? "auto" : "none",
-                        transition: "opacity 0.12s, background 0.12s, color 0.12s",
-                      }}
-                      onFocus={() => setHoveredProject(project)}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                        <circle cx="3" cy="7" r="1.1" />
-                        <circle cx="7" cy="7" r="1.1" />
-                        <circle cx="11" cy="7" r="1.1" />
-                      </svg>
-                    </button>
                     <AnimatedDropdown
                       open={projectMenuOpen === project}
                       style={{
@@ -1713,10 +1582,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             {t("sidebar.removeProject")}
                           </button>
                         )}
-                      </AnimatedDropdown>
-                  </div>
-                )}
-              </div>
+                    </AnimatedDropdown>
+              </ProjectRow>
 
               {!isCollapsed && sessions.length === 0 && isSelectedProject && (
                 <div style={{ padding: "6px 12px 7px 32px", color: "var(--text-dim)", fontSize: 11 }}>
@@ -2076,64 +1943,6 @@ function UnreadSessionIndicator() {
           <animate attributeName="opacity" values="0.32;0;0.32" dur="1.6s" repeatCount="indefinite" />
         </circle>
       </svg>
-    </span>
-  );
-}
-
-/**
- * Compact per-project activity badges for the workspace selector dropdown items:
- * a spinning running icon + count, a yellow waiting badge + count, and an unread
- * dot + count. Renders nothing when the project has no activity. Counts share
- * the accent / warning / unread colors of the per-session indicators so the two
- * stay visually consistent.
- */
-function showProjectActivity(
-  activity: { running: number; waiting: number; unread: number } | undefined,
-  t: (key: string, params?: TranslationParams) => string,
-): ReactNode {
-  if (!activity || (activity.running === 0 && activity.waiting === 0 && activity.unread === 0)) return null;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}>
-      {activity.running > 0 && (
-        <span
-          title={t("sidebar.agentRunning")}
-          aria-label={`${t("sidebar.agentRunning")} (${activity.running})`}
-          role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
-            <g>
-              <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
-              <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite" />
-            </g>
-          </svg>
-          {activity.running}
-        </span>
-      )}
-      {activity.waiting > 0 && (
-        <span
-          title={t("sidebar.agentWaitingForInput")}
-          aria-label={t("sidebar.agentWaitingForInputWithCount", { count: activity.waiting })}
-          role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--warning)", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
-            <circle cx="7" cy="7" r="4" fill="currentColor" />
-          </svg>
-          {activity.waiting}
-        </span>
-      )}
-      {activity.unread > 0 && (
-        <span
-          title={t("sidebar.newSessionActivity")}
-          aria-label={`${t("sidebar.newSessionActivity")} (${activity.unread})`}
-          role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
-          {activity.unread}
-        </span>
-      )}
     </span>
   );
 }
