@@ -10,8 +10,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -224,19 +224,25 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
 }
 
 /// Fails when the fixed port is already held, with the reason and the fix.
-/// The probe listener is dropped immediately; the sidecar binds the same
-/// loopback address moments later.
+/// A connect probe separates a live listener from a socket lingering in
+/// TIME_WAIT: the listener accepts the connection, the lingering socket
+/// refuses it, so a recently closed server never blocks the next launch.
 fn ensure_port_available(port: u16) -> Result<(), String> {
-    TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
-        .map(|_| ())
-        .map_err(|error| {
-            format!(
-                "port {port} on {HOST} is already in use ({error}). \
-                 Another ompdesk server may still be running — quit it, or free port {port}, \
-                 and relaunch. ompdesk never switches ports, because phone access and \
-                 `tailscale serve` forward this one."
-            )
-        })
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let reason = match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
+        // 连接被接受，说明端口确实有监听。
+        Ok(_) => String::from("the port accepts connections"),
+        // 只有明确的拒绝能证明端口空闲。
+        Err(error) if error.kind() == ErrorKind::ConnectionRefused => return Ok(()),
+        // 其他错误（权限、超时等）无法证明端口空闲，按占用处理。
+        Err(error) => error.to_string(),
+    };
+    Err(format!(
+        "port {port} on {HOST} is already in use ({reason}). \
+         Another ompdesk server may still be running — quit it, or free port {port}, \
+         and relaunch. ompdesk never switches ports, because phone access and \
+         `tailscale serve` forward this one."
+    ))
 }
 
 /// Locates the server payload (node_modules, .next, public, the bundled Bun,
@@ -377,15 +383,17 @@ fn loopback_no_proxy() -> Option<String> {
 mod tests {
     use super::*;
 
-    // A second bind on a held port must fail loudly instead of falling back to
-    // a different port; the same helper must pass once the holder is gone.
+    use std::net::TcpListener;
+
+    // A held port must be rejected loudly instead of falling back to a
+    // different port; the same probe must pass once the holder is gone.
     #[test]
     fn occupied_port_is_rejected_then_free_again() {
         let held = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .expect("bind an ephemeral port to stand in for a running server");
         let port = held.local_addr().expect("ephemeral address").port();
 
-        let error = ensure_port_available(port).expect_err("second bind must fail");
+        let error = ensure_port_available(port).expect_err("the probe must reject a listening port");
         assert!(
             error.contains(&port.to_string()),
             "error must name the port: {error}"
