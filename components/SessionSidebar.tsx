@@ -464,6 +464,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [activityPolled, setActivityPolled] = useState(false);
   const startupRunningIdsRef = useRef<Set<string> | null>(null);
   const restartReconciledRef = useRef(false);
+  // 初始恢复是否已经有机会选定会话；播种必须排在它之后。
+  const [initialRestoreSettled, setInitialRestoreSettled] = useState(!initialSessionId);
   const listedRuntimeIdsRef = useRef<Record<string, string>>({});
   // Once polling has delivered a snapshot it is the source of truth for
   // running state; late /api/sessions responses must not overwrite it.
@@ -526,14 +528,16 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   // 首次加载时把浏览器的异常存量加入未读集合。播种只做一次：之后点开会话
   // 得到的已读结果不会被页面刷新重新点亮，清掉本机存储才会重新播种。
-  // 当前打开且可见的会话按已读处理（看到即灭），首次播种只加异常存量。
+  // 播种排在初始恢复之后：恢复在首次加载时同步选定会话，早播种会把正在恢复
+  // 的会话播成未读。当前打开且可见的会话按已读处理（看到即灭）。
   useEffect(() => {
+    if (!initialRestoreSettled) return;
     if (allSessions.length === 0 || !shouldSeedInitialMarkerUnread()) return;
     markInitialMarkerUnreadSeeded();
     const seededIds = initialMarkerUnreadIds(allSessions, runningSessionIds, waitingSessionIds)
       .filter((id) => id !== selectedSessionId);
     addUnreadSessionIds(seededIds);
-  }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId]);
+  }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId, initialRestoreSettled]);
 
   useEffect(() => {
     let stopped = false;
@@ -632,6 +636,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     // 再次进入运行的会话先清掉旧标记，结束后按新结果重新亮。
     clearUnreadSessionIds(runningSessionIds);
     addUnreadSessionIds(finished.unreadIds);
+    // 隐藏期间结束的选中会话，回到前台时正看着它：看到即已读，不留标记。
+    if (
+      document.visibilityState === "visible"
+      && selectedSessionId
+      && finished.finishedIds.includes(selectedSessionId)
+    ) {
+      clearUnreadSessionIds([selectedSessionId]);
+    }
     const hasUnlistedRunningSession = newlyRunning.some(
       (id) => !allSessions.some((session) => session.id === id),
     );
@@ -667,10 +679,11 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         isPageVisible: true,
         isEndUnobserved: true,
       });
-      addUnreadSessionIds(lostAcrossRestart.unreadIds);
+      // 与播种规则一致：正在打开的会话（自动恢复）看到即已读，不记未读。
+      addUnreadSessionIds(lostAcrossRestart.unreadIds.filter((id) => id !== selectedSessionId));
     }
     savePersistedRunningSessionIds(runningSessionIds);
-  }, [activityPolled, runningSessionIds]);
+  }, [activityPolled, runningSessionIds, selectedSessionId]);
 
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
@@ -746,13 +759,20 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
-    if (allSessions.length === 0 || skipInitialProjectSelection) return;
+    if (skipInitialProjectSelection) {
+      // cwd 由 URL 接管，侧栏不做恢复，播种不必再等。
+      setInitialRestoreSettled(true);
+      return;
+    }
+    if (allSessions.length === 0) return;
 
     if (selectedCwd === null) {
       // If restoring a session, set cwd to match that session
       if (initialSessionId && !restoredRef.current) {
         restoredRef.current = true;
         const target = restoreSessionContinuation(initialSessionId, allSessions, listedRuntimeIdsRef.current);
+        // 恢复目标已经确定，播种从这里开始，并按本次选中的会话过滤。
+        setInitialRestoreSettled(true);
         if (target) {
           setSelectedCwd(target.cwd);
           onSelectSession(target, true);
