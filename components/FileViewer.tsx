@@ -22,6 +22,7 @@ import { resolveLocalFileHref } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "./MermaidBlock";
+import { ImageZoomSurface, ZoomableImage } from "./ImageZoom";
 import { FrontmatterCard } from "./FrontmatterCard";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
@@ -500,42 +501,19 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
         </span>
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
-      <div
-        style={{
-          flex: 1,
-          overflow: "auto",
-          background: "var(--bg-panel)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 16,
-          backgroundImage:
-            "linear-gradient(45deg, var(--bg) 25%, transparent 25%), linear-gradient(-45deg, var(--bg) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--bg) 75%), linear-gradient(-45deg, transparent 75%, var(--bg) 75%)",
-          backgroundSize: "16px 16px",
-          backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
-        }}
-      >
-        {error ? (
-          <div style={{ color: "#f87171", fontSize: 13 }}>{error}</div>
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={src}
-            alt={filePath}
-            onLoad={(e) => {
-              const img = e.currentTarget;
-              setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
-            }}
-            onError={() => setError("Failed to load image")}
-            style={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              objectFit: "contain",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            }}
-          />
-        )}
-      </div>
+      {error ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#f87171", fontSize: 13 }}>
+          {error}
+        </div>
+      ) : (
+        <ImageZoomSurface
+          key={filePath}
+          src={src}
+          alt={filePath}
+          onNaturalSize={setNaturalSize}
+          onError={() => setError("Failed to load image")}
+        />
+      )}
     </div>
   );
 }
@@ -1217,9 +1195,18 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                   const imageSrc = imagePath
                     ? getFileApiUrl(imagePath, "read", sourceSessionId)
                     : src;
+                  if (typeof imageSrc !== "string") return null;
                   // Dynamic local paths are served directly by the file API.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  return <img src={imageSrc} alt={alt ?? ""} loading="lazy" {...props} />;
+                  return (
+                    <ZoomableImage
+                      src={imageSrc}
+                      alt={alt}
+                      title={props.title}
+                      width={props.width}
+                      height={props.height}
+                      className="markdown-image-zoomable"
+                    />
+                  );
                 },
               }}
             >
