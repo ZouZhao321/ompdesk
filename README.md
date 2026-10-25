@@ -363,8 +363,11 @@ components/
   ModelRolesPanel.tsx # per-role model assignment
   SkillsConfig.tsx    # skill management panel
   FileExplorer.tsx    # file tree
-  FileExplorerPanel.tsx # explorer section inside the right file panel
-  FileViewer.tsx      # source, diff, image, audio, PDF, DOCX preview
+  FileExplorerPanel.tsx # explorer view of the right panel tab page
+  FileViewer.tsx      # file tab content: source, diff, image, audio, PDF, DOCX preview
+  TabBar.tsx          # right panel tab strip
+  SubagentPanel.tsx   # subagent view: running and finished lists, execution details
+  PanelViewIcon.tsx   # shared icons for the panel view tabs
 lib/
   directory-browser.ts # directory normalization and safe listing helpers
   http-dispatcher.ts  # HTTP(S) proxy setup for server-side fetch
@@ -376,6 +379,7 @@ lib/
   rpc-manager.ts      # AgentSessionWrapper lifecycle and global registry
   session-reader.ts   # parses .jsonl session files and branch contexts
   normalize.ts        # normalizes toolCall field names
+  panel-tabs.ts       # right panel tab types, ids and label keys
   file-access.ts      # file read safety boundary
   file-paths.ts       # path encoding and relative path helpers
   markdown.ts         # Markdown/Mermaid/KaTeX plugin configuration

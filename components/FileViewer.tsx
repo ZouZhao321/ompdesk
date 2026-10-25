@@ -424,6 +424,8 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  // 只有「隐藏后再显示」才补读一次；初次挂载由数据加载负责。
+  const visibilityRef = useRef<"never" | "hidden" | "shown">("never");
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -441,8 +443,15 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
       esRef.current.close();
       esRef.current = null;
     }
-    if (!active) return;
-    setBust((b) => b + 1);
+    if (!active) {
+      visibilityRef.current = "hidden";
+      return;
+    }
+    if (visibilityRef.current === "hidden") {
+      setError(null);
+      setBust((b) => b + 1);
+    }
+    visibilityRef.current = "shown";
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
@@ -563,6 +572,8 @@ function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const [duration, setDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  // 只有「隐藏后再显示」才补读一次；初次挂载由数据加载负责。
+  const visibilityRef = useRef<"never" | "hidden" | "shown">("never");
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -580,8 +591,15 @@ function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
       esRef.current.close();
       esRef.current = null;
     }
-    if (!active) return;
-    setBust((b) => b + 1);
+    if (!active) {
+      visibilityRef.current = "hidden";
+      return;
+    }
+    if (visibilityRef.current === "hidden") {
+      setError(null);
+      setBust((b) => b + 1);
+    }
+    visibilityRef.current = "shown";
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
@@ -684,6 +702,8 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props
   const [size, setSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  // 只有「隐藏后再显示」才补读一次；初次挂载由数据加载负责。
+  const visibilityRef = useRef<"never" | "hidden" | "shown">("never");
 
   const ext = getFileExt(filePath);
   const isPdf = ext === "pdf";
@@ -717,8 +737,15 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props
       esRef.current.close();
       esRef.current = null;
     }
-    if (!active) return;
-    setBust((b) => b + 1);
+    if (!active) {
+      visibilityRef.current = "hidden";
+      return;
+    }
+    if (visibilityRef.current === "hidden") {
+      setError(null);
+      setBust((b) => b + 1);
+    }
+    visibilityRef.current = "shown";
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
@@ -829,6 +856,8 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const [wrapLines, setWrapLines] = useState(false);
   const [watching, setWatching] = useState(false);
   const esRef = useRef<EventSource | null>(null);
+  // 只有「隐藏后再显示」才补读一次；初次挂载由数据加载负责。
+  const visibilityRef = useRef<"never" | "hidden" | "shown">("never");
   const gitDiffRequestRef = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [selectedLineRange, setSelectedLineRange] = useState<SelectedLineRange | null>(null);
@@ -893,10 +922,14 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
       esRef.current.close();
       esRef.current = null;
     }
-    if (!active) return;
-
-    void fetchContent(filePath);
-    void fetchGitDiff(filePath);
+    if (!active) {
+      visibilityRef.current = "hidden";
+      return;
+    }
+    if (visibilityRef.current === "hidden") {
+      void fetchContent(filePath);
+    }
+    visibilityRef.current = "shown";
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
     esRef.current = es;
@@ -925,8 +958,9 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   }, [active, fetchContent, fetchGitDiff, filePath, sourceSessionId]);
 
   useEffect(() => {
+    if (!active) return;
     void fetchGitDiff(filePath);
-  }, [fetchGitDiff, filePath, gitRefreshKey]);
+  }, [active, fetchGitDiff, filePath, gitRefreshKey]);
 
   useEffect(() => {
     // HTML gets the same rendered-first treatment as markdown: a generated page

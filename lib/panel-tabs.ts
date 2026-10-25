@@ -1,17 +1,26 @@
-/** 右侧面板的标签类型；`file` 展示文件，其余是固定视图。 */
+/** 右侧面板的固定视图；`file` 之外的两种视图共用同一套入口。 */
 export type PanelViewKind = "explorer" | "subagents";
-export type TabKind = "file" | PanelViewKind;
 
-export interface Tab {
+interface TabBase {
   id: string;
-  label: string;
-  kind: TabKind;
-  filePath?: string;
   sourceSessionId?: string | null;
-  initialDisplayMode?: "source" | "preview" | "diff";
   /** 视图标签携带的计数，例如运行中的子代理数量。 */
   badge?: number;
 }
+
+export interface FileTab extends TabBase {
+  kind: "file";
+  label: string;
+  filePath: string;
+  initialDisplayMode?: "source" | "preview" | "diff";
+}
+
+export interface ViewTab extends TabBase {
+  kind: PanelViewKind;
+}
+
+export type Tab = FileTab | ViewTab;
+export type TabKind = Tab["kind"];
 
 export const PANEL_VIEW_TAB_IDS: Record<PanelViewKind, string> = {
   explorer: "view:explorer",
@@ -27,6 +36,6 @@ export const PANEL_VIEW_LABEL_KEYS: Record<PanelViewKind, string> = {
 /** 空页入口的展示顺序。 */
 export const PANEL_VIEW_KINDS: PanelViewKind[] = ["explorer", "subagents"];
 
-export function panelViewTab(kind: PanelViewKind): Tab {
-  return { id: PANEL_VIEW_TAB_IDS[kind], label: "", kind };
+export function panelViewTab(kind: PanelViewKind): ViewTab {
+  return { id: PANEL_VIEW_TAB_IDS[kind], kind };
 }

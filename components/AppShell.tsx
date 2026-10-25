@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect, type CSSProperties, type Reac
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
-import { SubagentPanel } from "./SubagentPanel";
+import { SubagentPanel, isSubagentActive } from "./SubagentPanel";
 import { ChatWindow } from "./ChatWindow";
 import { FileExplorerPanel } from "./FileExplorerPanel";
 import { FileViewer } from "./FileViewer";
@@ -25,7 +25,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { canApplySessionIdentity, type SessionIdentity } from "@/lib/agent-client";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
-import { PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
+import { PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type FileTab, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -79,6 +79,11 @@ const FILE_PANEL_TOGGLE_STYLE = {
   transition: "color 0.12s",
 } satisfies CSSProperties;
 const LANGUAGE_MENU_WIDTH = 176;
+
+/** 穷举分支的兜底：新增标签类型却漏了分支时，编译期在调用处报错。 */
+function assertNever(value: never): never {
+  throw new Error(`Unexpected panel tab: ${String(value)}`);
+}
 
 /** 面板头部的视图入口：点击把对应视图作为标签页打开或关闭。 */
 function PanelViewButton({
@@ -782,23 +787,24 @@ export function AppShell() {
       if (!existing) {
         return [...prev, {
           id: tabId,
-          label: fileName,
           kind: "file",
+          label: fileName,
           filePath,
           sourceSessionId,
           initialDisplayMode: modeHint,
-        }];
+        } satisfies FileTab];
       }
+      if (existing.kind !== "file") return prev;
       const sourceUnchanged = !sourceSessionId || existing.sourceSessionId === sourceSessionId;
       const modeUnchanged = !modeHint || existing.initialDisplayMode === modeHint;
       if (sourceUnchanged && modeUnchanged) return prev;
-      return prev.map((t) => {
-        if (t.id !== tabId) return t;
-        const next: Tab = { ...t };
-        if (sourceSessionId) next.sourceSessionId = sourceSessionId;
-        if (modeHint) next.initialDisplayMode = modeHint;
-        return next;
-      });
+      return prev.map((t) => t.id === tabId && t.kind === "file"
+        ? {
+            ...t,
+            ...(sourceSessionId ? { sourceSessionId } : {}),
+            ...(modeHint ? { initialDisplayMode: modeHint } : {}),
+          }
+        : t);
     });
     setActivePanelTabId(tabId);
     setRightPanelOpen(true);
@@ -897,9 +903,7 @@ export function AppShell() {
   }, [projectTrustBusy, projectTrustCwd]);
 
   const activePanelTab = panelTabs.find((t) => t.id === activePanelTabId) ?? null;
-  const runningSubagentCount = subagents.filter(
-    (s) => s.status === "pending" || s.status === "running",
-  ).length;
+  const runningSubagentCount = subagents.filter(isSubagentActive).length;
   const renderedPanelTabs = runningSubagentCount > 0
     ? panelTabs.map((tab) => tab.kind === "subagents" ? { ...tab, badge: runningSubagentCount } : tab)
     : panelTabs;
@@ -910,12 +914,12 @@ export function AppShell() {
   const panelTabBody = (tab: Tab) => {
     switch (tab.kind) {
       case "file":
-        return tab.filePath ? (
+        return (
           <FileViewer
             filePath={tab.filePath}
             cwd={activeCwd ?? undefined}
             sourceSessionId={tab.sourceSessionId}
-            active={tab.id === activePanelTabId}
+            active={tab.id === activePanelTabId && rightPanelOpen}
             gitRefreshKey={explorerRefreshKey}
             initialDisplayMode={tab.initialDisplayMode}
             onMentionLines={handleFileLineMention}
@@ -926,7 +930,7 @@ export function AppShell() {
               { sourceSessionId: tab.sourceSessionId },
             )}
           />
-        ) : null;
+        );
       case "explorer":
         return activeCwd ? (
           <FileExplorerPanel
@@ -950,12 +954,11 @@ export function AppShell() {
             onRuntimeIdentity={handleRuntimeIdentity}
             cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
             subagents={subagents}
+            active={tab.id === activePanelTabId && rightPanelOpen}
           />
         );
-      default: {
-        const exhaustive: never = tab.kind;
-        return exhaustive;
-      }
+      default:
+        return assertNever(tab);
     }
   };
 
