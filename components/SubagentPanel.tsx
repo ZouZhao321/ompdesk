@@ -95,6 +95,7 @@ function SubagentDetail({
   const nextByteRef = useRef(0);
   const inFlightRef = useRef(false);
   const requestRef = useRef(0);
+  const prevVisibleRef = useRef(visible);
 
   const loadTranscript = useCallback(async () => {
     if (inFlightRef.current) return;
@@ -125,8 +126,10 @@ function SubagentDetail({
         setTranscriptError(error instanceof Error ? error.message : String(error));
       }
     } finally {
-      if (requestId === requestRef.current) setLoadingTranscript(false);
-      inFlightRef.current = false;
+      if (requestId === requestRef.current) {
+        setLoadingTranscript(false);
+        inFlightRef.current = false;
+      }
     }
   }, [sessionId, runtimeId, onRuntimeIdentity, subagent.id]);
 
@@ -143,9 +146,13 @@ function SubagentDetail({
 
   useEffect(() => () => { requestRef.current += 1; }, []);
 
-  // 只有运行中的子代理且标签可见时才轮询记录，隐藏的标签不产生请求。
+  // 可见时运行中每秒补拉；重新可见或运行结束时补读一次尾部，隐藏的标签不发请求。
   useEffect(() => {
-    if (!visible || !active) return;
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (!visible) return;
+    if (!wasVisible || !active) void loadTranscript();
+    if (!active) return;
     const interval = setInterval(() => void loadTranscript(), 1000);
     return () => clearInterval(interval);
   }, [active, loadTranscript, visible]);

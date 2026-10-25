@@ -1024,7 +1024,9 @@ export function AppShell() {
        aria-controls="file-panel"
        aria-expanded={rightPanelOpen}
        title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-       aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+       aria-label={runningSubagentCount > 0
+         ? `${rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")} · ${translate("subagents.runningCount", { count: runningSubagentCount })}`
+         : (rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel"))}
       style={{
         ...FILE_PANEL_TOGGLE_STYLE,
         ...(isMobile
@@ -1050,6 +1052,28 @@ export function AppShell() {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
       </svg>
+      {runningSubagentCount > 0 && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: isMobile ? 4 : 2,
+            right: isMobile ? 4 : 2,
+            minWidth: 15,
+            height: 15,
+            padding: "0 4px",
+            borderRadius: 8,
+            background: "var(--accent)",
+            color: "var(--bg)",
+            fontSize: 9,
+            fontWeight: 700,
+            lineHeight: "15px",
+            textAlign: "center",
+          }}
+        >
+          {runningSubagentCount}
+        </span>
+      )}
     </button>
   );
 
@@ -1943,6 +1967,7 @@ export function AppShell() {
       <div
         ref={rightPanelResizer.panelRef}
         id="file-panel"
+        inert={!rightPanelOpen}
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
