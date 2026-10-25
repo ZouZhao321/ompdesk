@@ -14,7 +14,7 @@
 
 ## Driving it with the browser harness
 
-1. 点顶栏的文件面板开关，断言 `#file-panel` 带 `right-panel-open`。
+1. 点 `button[aria-controls="file-panel"]`，断言 `#file-panel` 带 `right-panel-open`。同一个属性也在拖拽分隔条上，选择器必须带 `button`。
 2. 没有打开文件时，`.panel-tab-header` 显示项目名或 `files.explorer` 文案。
 3. 在文件树里点一个文件：`.panel-tab-bar` 出现页签，同时内容区渲染文件正文。
 4. 关闭页签，断言回到项目名表头。

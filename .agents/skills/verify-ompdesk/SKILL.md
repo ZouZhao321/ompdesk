@@ -64,14 +64,19 @@ await tab.waitForSelector(".sidebar-container", { timeout: 60000 });
 
 稳定句柄（优先用类名与 data 属性，文案与 aria-label 会随界面语言变化）：
 
-- 侧栏：`.sidebar-container`、`.sidebar-project-row`、`.sidebar-session-row`、`.sidebar-brand-button`、
-  搜索框 `input[type=search]`、`.sidebar-new-session-button`
-- 右侧文件面板：`#file-panel`、`.panel-tab-header`、`.right-panel-open`、`.right-panel-closed`
+- 侧栏：`.sidebar-container`、`[data-project-path]`、`[data-session-id]`、搜索框 `input[type=search]`、
+  侧栏开关 `[data-toggle="sidebar"]`。
+  `.sidebar-session-row` / `.sidebar-project-row` 这类类名先在手机适配里出现，跨分支不稳定，判断行数用 data 属性。
+- 右侧文件面板：`#file-panel`、`.panel-tab-header`、`.right-panel-open`、`.right-panel-closed`、
+  面板开关 `button[aria-controls="file-panel"]`（同一个属性也出现在宽度为 0 的拖拽分隔条上，要带 `button`）
 - 输入区：`textarea`、`[data-context-available]`、`[data-context-level]`、`[data-resize-handle="sidebar"]`、
   `[data-resize-handle="right-panel"]`
 - 顶栏按钮没有统一类名，用 `aria-label` 时先把语言固定下来，或改用面板类名的出现与消失判断结果。
 
 与改动相关的用户路径写在 `features/`：先读 `features/README.md` 选一条，再按其中的步骤执行。
+
+手机档下面板与抽屉都是全屏覆盖层，打开时会盖住顶栏按钮；操作顶栏前先关掉当前覆盖层，否则点击会被判为
+被遮挡。
 
 ## Evidence
 
