@@ -19,11 +19,11 @@ function buttonTags(html) {
   return html.match(/<button\b[^>]*>/g) ?? [];
 }
 
-function renderItem(overrides = {}) {
+function renderItem(overrides = {}, locale) {
   return renderToStaticMarkup(
     React.createElement(
       I18nProvider,
-      null,
+      { initialLocale: locale },
       React.createElement(ProjectPinMenuItem, { isPinned: false, onToggle() {}, ...overrides }),
     ),
   );
@@ -55,4 +55,14 @@ test("render does not invoke onToggle or change markup", () => {
 
   assert.deepEqual(calls, []);
   assert.equal(html, renderItem({ isPinned: true }));
+});
+
+test("shows the localized pin labels in zh-CN", () => {
+  const unpinned = renderItem({ isPinned: false }, "zh-CN");
+  assert.ok(unpinned.includes(">置顶项目<"), "expected the zh-CN pin label");
+  assert.ok(!unpinned.includes(PIN_LABEL), "expected the English pin label to be absent");
+
+  const pinned = renderItem({ isPinned: true }, "zh-CN");
+  assert.ok(pinned.includes(">取消置顶<"), "expected the zh-CN unpin label");
+  assert.ok(!pinned.includes(UNPIN_LABEL), "expected the English unpin label to be absent");
 });

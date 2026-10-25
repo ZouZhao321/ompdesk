@@ -4,7 +4,8 @@ import type { ReactNode, RefObject } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { TranslationParams } from "@/lib/i18n/types";
 
-export interface ProjectActivity {
+/** 项目行展示的活动计数：运行中、等待回答与未读会话数。 */
+interface ProjectActivity {
   running: number;
   waiting: number;
   unread: number;
@@ -241,7 +242,7 @@ function showProjectActivity(
       {activity.running > 0 && (
         <span
           title={t("sidebar.agentRunning")}
-          aria-label={`${t("sidebar.agentRunning")} (${activity.running})`}
+          aria-label={t("sidebar.agentRunningWithCount", { count: activity.running })}
           role="img"
           style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
         >
@@ -270,7 +271,7 @@ function showProjectActivity(
       {activity.unread > 0 && (
         <span
           title={t("sidebar.newSessionActivity")}
-          aria-label={`${t("sidebar.newSessionActivity")} (${activity.unread})`}
+          aria-label={t("sidebar.newSessionActivityWithCount", { count: activity.unread })}
           role="img"
           style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
         >

@@ -20,10 +20,10 @@ function escapeRegExp(value) {
 }
 
 /** 返回带有指定 aria-label 的 button 起始标签，属性顺序无关。 */
-function triggerTag(html) {
-  const pattern = new RegExp(`<button\\b[^>]*aria-label="${escapeRegExp(TRIGGER_LABEL)}"[^>]*>`);
+function triggerTag(html, label = TRIGGER_LABEL) {
+  const pattern = new RegExp(`<button\\b[^>]*aria-label="${escapeRegExp(label)}"[^>]*>`);
   const match = html.match(pattern);
-  assert.ok(match, `expected a button with aria-label "${TRIGGER_LABEL}"`);
+  assert.ok(match, `expected a button with aria-label "${label}"`);
   return match[0];
 }
 
@@ -53,11 +53,11 @@ function ariaCheckedOf(snippet) {
   return match[1];
 }
 
-function renderControl(overrides = {}) {
+function renderControl(overrides = {}, locale) {
   return renderToStaticMarkup(
     React.createElement(
       I18nProvider,
-      null,
+      { initialLocale: locale },
       React.createElement(ProjectSortControl, {
         mode: "time",
         open: false,
@@ -115,4 +115,23 @@ test("render does not invoke callbacks or change markup", () => {
 
   assert.deepEqual(calls, []);
   assert.equal(html, renderControl({ open: true, mode: "name" }));
+});
+
+test("wraps the open menu items in a menu container", () => {
+  const html = renderControl({ open: true });
+
+  assert.match(html, /<div\b[^>]*\brole="menu"/, "expected a menu container around the menu items");
+  assert.ok(
+    html.indexOf('role="menu"') < html.indexOf('role="menuitemradio"'),
+    "expected the menu container to open before the menu items",
+  );
+});
+
+test("renders the menu labels in zh-CN", () => {
+  const html = renderControl({ open: true, mode: "name" }, "zh-CN");
+
+  assert.ok(triggerTag(html, "项目排序").includes('aria-label="项目排序"'), "expected the localized trigger label");
+  assert.equal(menuItemSnippets(html).length, 2, "expected one menu item per sort mode");
+  assert.equal(ariaCheckedOf(menuItemFor(html, "按最近活动")), "false");
+  assert.equal(ariaCheckedOf(menuItemFor(html, "按名称")), "true");
 });

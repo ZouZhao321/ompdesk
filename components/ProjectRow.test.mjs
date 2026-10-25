@@ -10,6 +10,7 @@ const jiti = createJiti(import.meta.url, {
 });
 const { ProjectRow } = await jiti.import("./ProjectRow.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
+const { orderProjectPaths, projectDisplayName } = await jiti.import("../lib/project-order.ts");
 
 const PROJECT_PATH = "C:/Users/dev/my-app";
 const PIN_MARK_LABEL = "Pinned project";
@@ -37,11 +38,11 @@ function ariaExpandedOf(tag) {
   return match[1];
 }
 
-function renderRow(overrides = {}) {
+function renderRow(overrides = {}, locale) {
   return renderToStaticMarkup(
     React.createElement(
       I18nProvider,
-      null,
+      { initialLocale: locale },
       React.createElement(ProjectRow, {
         project: PROJECT_PATH,
         name: "my-app",
@@ -56,6 +57,33 @@ function renderRow(overrides = {}) {
         onHoverChange() {},
         ...overrides,
       }),
+    ),
+  );
+}
+
+/** 按给定路径顺序渲染一组项目行，置顶集合决定图钉标记。 */
+function renderRows(paths, pinned, locale) {
+  const rows = paths.map((path) => React.createElement(ProjectRow, {
+    key: path,
+    project: path,
+    name: projectDisplayName(path),
+    isSelected: false,
+    isCollapsed: false,
+    isPinned: pinned.includes(path),
+    hovered: false,
+    menuOpen: false,
+    onToggleCollapse() {},
+    onSelect() {},
+    onNewSession() {},
+    onToggleMenu() {},
+    onHoverChange() {},
+  }));
+
+  return renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      { initialLocale: locale },
+      React.createElement(React.Fragment, null, ...rows),
     ),
   );
 }
@@ -196,4 +224,33 @@ test("keeps the activity badges alongside the pin mark", () => {
   for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "New session activity (3)"]) {
     assert.ok(pinned.includes(`aria-label="${label}"`), `expected the badge labelled "${label}" while pinned`);
   }
+});
+
+test("renders the pinned project ahead of the unpinned one in the ordered project list", () => {
+  const pinnedProjects = ["/w/beta"];
+  const paths = orderProjectPaths(["/w/alpha", "/w/beta"], "name", pinnedProjects);
+  assert.deepEqual(paths, ["/w/beta", "/w/alpha"], "expected the pinned project first");
+
+  const html = renderRows(paths, pinnedProjects);
+  const pinMarkAt = html.indexOf(`aria-label="${PIN_MARK_LABEL}"`);
+  const unpinnedProjectAt = html.indexOf(">alpha<");
+
+  assert.ok(pinMarkAt >= 0, "expected the pin mark to be rendered");
+  assert.ok(unpinnedProjectAt >= 0, "expected the unpinned project name to be rendered");
+  assert.ok(pinMarkAt < unpinnedProjectAt, "expected the pin mark before the unpinned project");
+});
+
+test("renders the localized pin mark label in zh-CN", () => {
+  const html = renderRow({ isPinned: true }, "zh-CN");
+  const marks = roleImgTags(html).filter((tag) => tag.includes('aria-label="已置顶"'));
+
+  assert.equal(marks.length, 1, "expected exactly one localized pin mark");
+  assert.ok(!html.includes(PIN_MARK_LABEL), "expected the English pin label to be absent");
+});
+
+test("renders full-width parentheses in the zh-CN activity labels", () => {
+  const html = renderRow({ activity: { running: 2, waiting: 0, unread: 3 } }, "zh-CN");
+
+  assert.ok(html.includes('aria-label="Agent 运行中…（2）"'), "expected the localized running count label");
+  assert.ok(html.includes('aria-label="会话有新活动（3）"'), "expected the localized unread count label");
 });

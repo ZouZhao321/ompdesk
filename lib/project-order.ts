@@ -16,7 +16,7 @@ export function projectDisplayName(project: string): string {
   return segments.at(-1) || project;
 }
 
-// 名称比较忽略大小写与数字写法差异，同名时的完整路径比较沿用同一规则。
+// 显示名比较忽略大小写与数字写法差异；同名时改用完整路径的码元顺序，结果只取决于输入。
 const projectNameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /**
@@ -35,7 +35,9 @@ export function orderProjectPaths(
   if (mode === "name") {
     ordered.sort((left, right) => {
       const byName = projectNameCollator.compare(projectDisplayName(left), projectDisplayName(right));
-      return byName !== 0 ? byName : projectNameCollator.compare(left, right);
+      if (byName !== 0) return byName;
+      // 完整路径按码元比较：collator 会忽略大小写与数字写法，无法决定先后。
+      return left < right ? -1 : left > right ? 1 : 0;
     });
   }
   if (pinned.length === 0) return ordered;
@@ -59,6 +61,58 @@ export function orderProjectPaths(
   if (head.length === 0) return ordered;
 
   return [...head, ...ordered.filter((project) => !pinnedKeys.has(normalizeProjectKey(project)))];
+}
+
+/**
+ * 把「当前选中但还没有会话」的项目放进已排好的列表：
+ * 已置顶的项目落在它自己的置顶位次，否则排在全部置顶项之后、其余未置顶项目之前。
+ * 列表里已有同一项目（按归一化键判断）时原样返回。
+ */
+export function placeSelectedProject(
+  ordered: readonly string[],
+  selected: string,
+  pinned: readonly string[] = [],
+): string[] {
+  const selectedKey = normalizeProjectKey(selected);
+  const orderedKeys = ordered.map(normalizeProjectKey);
+  if (orderedKeys.includes(selectedKey)) return [...ordered];
+
+  const pinOrder: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of pinned) {
+    const key = normalizeProjectKey(entry);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pinOrder.push(key);
+  }
+
+  const selectedPinIndex = pinOrder.indexOf(selectedKey);
+  let insertAt: number;
+  if (selectedPinIndex >= 0) {
+    // 置顶位次只数列表里真实存在的置顶项，缺失的置顶记录不占位置。
+    const present = new Set(orderedKeys);
+    insertAt = pinOrder.slice(0, selectedPinIndex).filter((key) => present.has(key)).length;
+  } else {
+    insertAt = orderedKeys.findIndex((key) => !seen.has(key));
+    if (insertAt < 0) insertAt = ordered.length;
+  }
+
+  return [...ordered.slice(0, insertAt), selected, ...ordered.slice(insertAt)];
+}
+
+/**
+ * 清洗置顶序列：按归一化键去重，保留首次出现的位置与原始写法。
+ */
+export function dedupePinnedProjects(pinned: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const project of pinned) {
+    const key = normalizeProjectKey(project);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(project);
+  }
+  return deduped;
 }
 
 /**
