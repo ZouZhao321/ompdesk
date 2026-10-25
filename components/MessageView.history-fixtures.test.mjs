@@ -3,7 +3,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
 
-import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent";
+import { loadEntriesFromFile, migrateToCurrentVersion } from "@oh-my-pi/pi-coding-agent";
 
 import { renderMessage, visibleText } from "../lib/testing/render-harness.mjs";
 
@@ -40,11 +40,19 @@ function isInside(dir, filePath) {
  * 用例因此不会写入或修改任何会话文件，也不会和正在写文件的会话进程抢锁。
  */
 async function selectFixture() {
-  invalidateSessionListCache();
-  const sessions = await listAllSessions({ force: true });
+  let sessions;
+  try {
+    invalidateSessionListCache();
+    sessions = await listAllSessions({ force: true });
+  } catch (error) {
+    return {
+      fixture: null,
+      reason: `读取本机会话列表失败，跳过历史会话夹具：${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
   const overrideDir = process.env[SESSION_DIR_ENV]?.trim();
   const candidates = sessions
-    .filter((session) => !session.transient && typeof session.path === "string" && session.path.length > 0)
+    .filter((session) => typeof session.path === "string" && session.path.length > 0)
     .filter((session) => !overrideDir || isInside(overrideDir, session.path))
     .sort((a, b) => b.modified.localeCompare(a.modified) || a.path.localeCompare(b.path));
 
@@ -59,10 +67,21 @@ async function selectFixture() {
 
   const inspected = candidates.slice(0, CANDIDATE_LIMIT);
   for (const session of inspected) {
-    const entries = await loadEntriesFromFile(session.path);
-    const { messages } = buildSessionContext(entries);
-    if (messages.length > 0) {
-      return { fixture: { session, messages: messages.slice(0, MESSAGE_LIMIT) }, reason: null };
+    try {
+      const parsed = await loadEntriesFromFile(session.path);
+      // 与产品加载路径一致：先迁移到当前版本，再去掉 session header。
+      // `loadEntriesFromFile()` 不取单写者锁，因此迁移只发生在内存里。
+      migrateToCurrentVersion(parsed);
+      const entries = parsed.filter((entry) => entry.type !== "session");
+      const { messages } = buildSessionContext(entries, entries.at(-1)?.id ?? null);
+      if (messages.length > 0) {
+        return { fixture: { session, messages: messages.slice(0, MESSAGE_LIMIT) }, reason: null };
+      }
+    } catch (error) {
+      console.log(
+        `[history-fixtures] 跳过无法读取的会话 ${session.path}: `
+          + `${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -86,11 +105,50 @@ function rendersNothingStandalone(message) {
   return getDisplayableAssistantBlocks(message).length === 0;
 }
 
-const { fixture, reason } = await selectFixture();
+const FRAGMENT_PATTERN = /[\p{L}\p{N}_]{2,}/gu;
+const IMAGE_FRAGMENT = "\u0000image";
+
+/**
+ * 从消息自身取出可用于断言的内容片段：正文、思考、工具名、错误原因、命令输出。
+ * 复制按钮、时间戳、模型名这类固定外框文案不属于消息内容，不能用来证明渲染成功。
+ */
+function contentFragments(message) {
+  const fragments = new Set();
+  const addText = (value) => {
+    if (typeof value !== "string") return;
+    for (const match of value.matchAll(FRAGMENT_PATTERN)) fragments.add(match[0]);
+  };
+
+  addText(message.content);
+  if (Array.isArray(message.content)) {
+    for (const block of message.content) {
+      if (!block || typeof block !== "object") continue;
+      if (block.type === "text") addText(block.text);
+      else if (block.type === "thinking") addText(block.thinking);
+      else if (block.type === "toolCall") addText(block.toolName ?? block.name);
+      else if (block.type === "image") fragments.add(IMAGE_FRAGMENT);
+    }
+  }
+  addText(message.errorMessage);
+  addText(message.command);
+  addText(message.output);
+  return [...fragments];
+}
+
+let selection;
+try {
+  selection = await selectFixture();
+} catch (error) {
+  selection = {
+    fixture: null,
+    reason: `选择历史会话夹具失败，跳过：${error instanceof Error ? error.message : String(error)}`,
+  };
+}
+const { fixture, reason } = selection;
 // Bun 的 reporter 只打印 skip 计数，不显示 skip 选项里的原因；这里把它写进输出。
 if (reason) console.log(`[history-fixtures] ${reason}`);
 
-test("真实历史会话的消息（至多 20 条）都能渲染出非空可见文本", { skip: reason ?? false }, () => {
+test("真实历史会话的消息（至多 20 条）都能渲染出消息自身内容", { skip: reason ?? false }, () => {
   assert.ok(fixture, "夹具选择结果与跳过原因不一致");
   const { session, messages } = fixture;
 
@@ -109,6 +167,19 @@ test("真实历史会话的消息（至多 20 条）都能渲染出非空可见�
       continue;
     }
 
-    assert.ok(visibleText(html).trim().length > 0, `${label} 的可见文本为空，来源 ${session.path}`);
+    const text = visibleText(html);
+    const fragments = contentFragments(message);
+    if (fragments.length === 0) {
+      assert.ok(text.trim().length > 0, `${label} 的可见文本为空，来源 ${session.path}`);
+      continue;
+    }
+    const rendered = fragments.some((fragment) => (
+      fragment === IMAGE_FRAGMENT ? /<img\b/.test(html) : text.includes(fragment)
+    ));
+    assert.ok(
+      rendered,
+      `${label} 的可见文本没有包含消息自身内容`
+        + `（片段：${fragments.slice(0, 5).join("、")}），来源 ${session.path}`,
+    );
   }
 });
