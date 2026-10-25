@@ -3,16 +3,16 @@
 // In release builds the bundled Bun runtime starts the ompdesk Next.js server
 // as a sidecar on the fixed loopback port 30141, then the main window navigates
 // to http://127.0.0.1:30141. If another process already holds the port the
-// shell logs why and exits instead of picking a different one, so a tailnet
-// forward to 30141 keeps working across launches. In dev mode
-// (`bun run tauri dev`) the server is already running via beforeDevCommand and
-// the webview loads devUrl.
+// shell shows why in the window and quits once that window is closed, instead
+// of picking a different port, so a tailnet forward to 30141 keeps working
+// across launches. In dev mode (`bun run tauri dev`) the server is already
+// running via beforeDevCommand and the webview loads devUrl.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
@@ -36,11 +36,16 @@ fn desktop_log(line: &str) {
     if let Ok(mut file) = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(std::env::temp_dir().join("omp-desktop.log"))
+        .open(desktop_log_path())
     {
         let _ = writeln!(file, "{line}");
     }
     eprintln!("{line}");
+}
+
+/// Location of the desktop log; the failure screen points the user at it.
+fn desktop_log_path() -> PathBuf {
+    std::env::temp_dir().join("omp-desktop.log")
 }
 
 /// Spawns a reader that forwards a child stream line-by-line to the log.
@@ -83,27 +88,105 @@ fn bun_binary_name() -> &'static str {
 /// torn down when the app exits.
 struct ServerChild(Mutex<Option<Child>>);
 
+/// How long the sidecar gets to exit after the group signal. The port is
+/// fixed, so an orphan that keeps listening would refuse the next launch.
+const SIDECAR_EXIT_TIMEOUT: Duration = Duration::from_secs(3);
+
 impl ServerChild {
-    fn kill(&self) {
+    /// Stops the sidecar's process group and waits for it to exit, force
+    /// killing the child once the grace period runs out.
+    ///
+    /// The wait matters because the port is fixed: a relaunch right after a
+    /// failure must not find the previous child still holding it.
+    fn terminate(&self) {
         let child = self.0.lock().ok().and_then(|mut guard| guard.take());
-        if let Some(child) = child {
-            kill_process_group(child.id());
+        let Some(mut child) = child else { return };
+        kill_process_group(child.id());
+        let deadline = Instant::now() + SIDECAR_EXIT_TIMEOUT;
+        while Instant::now() < deadline {
+            match child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) => thread::sleep(Duration::from_millis(50)),
+                Err(error) => {
+                    desktop_log(&format!("[omp-desktop] could not reap the sidecar: {error}"));
+                    break;
+                }
+            }
         }
+        let _ = child.kill();
+        let _ = child.wait();
     }
 }
 
-/// Leaves the process with `code` after stopping the sidecar.
+/// Reports a failure the user can see, then leaves the exit to them.
 ///
-/// `AppHandle::exit(code)` is not usable here: it sets `ControlFlow::Exit`,
-/// which tao turns into exit code 0, so a refused launch would look like a
-/// clean exit to launchers and scripts. `std::process::exit` keeps the code,
-/// and the sidecar is torn down first because process exit skips the
-/// `RunEvent::Exit` cleanup.
-fn fail_exit(handle: &AppHandle, code: i32) -> ! {
+/// A GUI launch has no terminal, so exiting silently hides every predictable
+/// failure behind a window that just disappears. The reason goes into the main
+/// window, the app stays up, and closing the window exits with `code` so
+/// launchers and scripts still see the refusal.
+fn report_failure(handle: &AppHandle, code: i32, message: &str) {
     if let Some(server) = handle.try_state::<ServerChild>() {
-        server.kill();
+        server.terminate();
     }
-    std::process::exit(code)
+    let log_path = desktop_log_path();
+    desktop_log(&format!("[omp-desktop] {message}"));
+    let Some(window) = handle.get_webview_window(WINDOW_LABEL) else {
+        std::process::exit(code);
+    };
+    window.on_window_event(move |event| {
+        if matches!(
+            event,
+            tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+        ) {
+            std::process::exit(code);
+        }
+    });
+    let script = failure_page_script(message, &log_path);
+    thread::spawn(move || {
+        // The placeholder page owns the window only once its navigation has
+        // committed; painting into the previous document would be wiped.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if window.url().is_ok_and(|url| url.as_str().contains("index.html")) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        if let Err(error) = window.eval(&script) {
+            desktop_log(&format!("[omp-desktop] could not paint the failure screen: {error}"));
+        }
+    });
+}
+
+/// Builds the script that replaces the splash with the failure reason and the
+/// log path, so the window itself explains why ompdesk refused to start.
+fn failure_page_script(message: &str, log_path: &Path) -> String {
+    const SCRIPT: &str = r#"
+(() => {
+  const paint = () => {
+    document.title = "ompdesk - startup failed";
+    const panel = document.createElement("div");
+    panel.style.cssText = "max-width:760px;margin:14vh auto;padding:28px 32px;border:1px solid #2a2e37;border-radius:12px;background:#14161b;color:#e8e9ec;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6";
+    const heading = document.createElement("h1");
+    heading.textContent = "ompdesk could not start";
+    heading.style.cssText = "font-size:18px;margin-bottom:14px";
+    const detail = document.createElement("pre");
+    detail.textContent = __REASON__;
+    detail.style.cssText = "white-space:pre-wrap;word-break:break-word;margin-bottom:18px;font-size:13px;color:#ffb4b4";
+    const hint = document.createElement("p");
+    hint.textContent = "Full log: " + __LOG_PATH__ + ". Close this window to quit.";
+    hint.style.cssText = "font-size:12px;color:#8a8f9a";
+    panel.append(heading, detail, hint);
+    document.body.replaceChildren(panel);
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", paint);
+  else paint();
+})();
+"#;
+    let reason = serde_json::to_string(message).unwrap_or_else(|_| String::from("\"startup failed\""));
+    let log_path = serde_json::to_string(&log_path.display().to_string())
+        .unwrap_or_else(|_| String::from("\"omp-desktop.log\""));
+    SCRIPT.replace("__REASON__", &reason).replace("__LOG_PATH__", &log_path)
 }
 
 fn main() {
@@ -132,8 +215,7 @@ fn main() {
             }
             if !tauri::is_dev() {
                 if let Err(error) = start_server(app) {
-                    desktop_log(&format!("[omp-desktop] failed to start the bundled server: {error}"));
-                    fail_exit(app.handle(), 1);
+                    report_failure(app.handle(), 1, &format!("failed to start the bundled server: {error}"));
                 }
             }
             Ok(())
@@ -146,7 +228,7 @@ fn main() {
                 tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }
             ) {
                 if let Some(server) = app.try_state::<ServerChild>() {
-                    server.kill();
+                    server.terminate();
                 }
             }
         });
@@ -214,8 +296,7 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
             navigate_main(&handle, port);
         }
         Err(error) => {
-            desktop_log(&format!("[omp-desktop] bundled server failed to become ready: {error}"));
-            fail_exit(&handle, 1);
+            report_failure(&handle, 1, &format!("the bundled server failed to become ready: {error}"));
         }
     });
 
@@ -297,22 +378,15 @@ fn http_get(port: u16) -> std::io::Result<bool> {
 fn navigate_main(handle: &AppHandle, port: u16) {
     let url = match Url::parse(&format!("http://{HOST}:{port}/")) {
         Ok(url) => url,
-        Err(error) => {
-            desktop_log(&format!("[omp-desktop] invalid server URL: {error}"));
-            fail_exit(handle, 1);
-        }
+        Err(error) => return report_failure(handle, 1, &format!("invalid server URL: {error}")),
     };
     match handle.get_webview_window(WINDOW_LABEL) {
         Some(window) => {
             if let Err(error) = window.navigate(url) {
-                desktop_log(&format!("[omp-desktop] failed to navigate to the ompdesk server: {error}"));
-                fail_exit(handle, 1);
+                report_failure(handle, 1, &format!("failed to navigate to the ompdesk server: {error}"));
             }
         }
-        None => {
-            desktop_log("[omp-desktop] main window not found");
-            fail_exit(handle, 1);
-        }
+        None => report_failure(handle, 1, "the main window is missing"),
     }
 }
 
