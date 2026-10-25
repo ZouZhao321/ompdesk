@@ -3,23 +3,20 @@
 import { useSyncExternalStore } from "react";
 import { MOBILE_LAYOUT_QUERY } from "../lib/mobile-layout";
 
-// 模块级单例：订阅与快照共用同一个 MediaQueryList，避免每次渲染新建查询对象。
-let mobileMediaQuery: MediaQueryList | null = null;
-
-function subscribe(cb: () => void): () => void {
+// 查询对象由订阅方自己持有并在退订时释放；快照读取不做任何创建或缓存。
+function subscribe(onChange: () => void): () => void {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};
-  mobileMediaQuery ??= window.matchMedia(MOBILE_LAYOUT_QUERY);
-  mobileMediaQuery.addEventListener("change", cb);
+  const query = window.matchMedia(MOBILE_LAYOUT_QUERY);
+  query.addEventListener("change", onChange);
   return () => {
-    mobileMediaQuery?.removeEventListener("change", cb);
+    query.removeEventListener("change", onChange);
   };
 }
 
 function getSnapshot(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return false;
-  mobileMediaQuery ??= window.matchMedia(MOBILE_LAYOUT_QUERY);
   // 直接读整条媒体查询：与 CSS 同源，缩放与聚焦放大只改视觉视口也不会错位。
-  return mobileMediaQuery.matches;
+  return window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
 }
 
 function getServerSnapshot(): boolean {
@@ -27,9 +24,8 @@ function getServerSnapshot(): boolean {
 }
 
 /**
- * Returns true when the viewport belongs to the mobile layout tier.
- * SSR-safe: renders as desktop (false) on the server and first client paint,
- * then syncs to the real viewport after hydration.
+ * 视口是否属于移动档。
+ * 服务端与首次客户端绘制返回 false（桌面档），水合后跟随真实视口。
  */
 export function useIsMobile(): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

@@ -2219,6 +2219,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   style={{
                                     display: "flex", alignItems: "center", gap: 8,
                                     width: "100%", padding: "7px 12px",
+                                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                                     background: isActive ? "var(--bg-selected)" : "none",
                                     border: "none",
                                     color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -2301,6 +2302,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   style={{
                                     display: "flex", alignItems: "center", gap: 8,
                                     width: "100%", padding: "7px 12px",
+                                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                                     background: isActive ? "var(--bg-selected)" : "none",
                                     border: "none",
                                     color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -2477,6 +2479,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
                             width: "100%", padding: "7px 12px",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             background: isActive ? "var(--bg-selected)" : "none",
                             border: "none",
                             color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -2563,6 +2566,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
                             width: "100%", padding: "7px 12px",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             background: isActive ? "var(--bg-selected)" : "none",
                             border: "none",
                             color: isActive ? "var(--text)" : "var(--text-muted)",

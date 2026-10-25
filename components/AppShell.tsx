@@ -17,7 +17,7 @@ import { ConversationMap } from "./ConversationMap";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
+import { MOBILE_HIT_TARGET_PX, MOBILE_LAYOUT_QUERY } from "@/lib/mobile-layout";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useAudio } from "@/hooks/useAudio";
@@ -1053,7 +1053,7 @@ export function AppShell() {
       }
       /* 手机档顶栏的分支入口与图标按钮保持同一命中区。 */
       .mobile-topbar-branch-button {
-        min-width: 44px;
+        min-width: ${MOBILE_HIT_TARGET_PX}px;
         justify-content: center;
       }
       @media (prefers-reduced-motion: reduce) {
@@ -1062,7 +1062,7 @@ export function AppShell() {
           animation: none;
         }
       }
-      @media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
+      @media ${MOBILE_LAYOUT_QUERY} {
         .sidebar-overlay-backdrop.sidebar-mobile-pending {
           opacity: 0 !important;
           pointer-events: none !important;
@@ -1768,12 +1768,35 @@ export function AppShell() {
                         title={autoNameUi.title}
                         style={{
                           ...MOBILE_SESSION_ACTION_STYLE,
+                          gap: 6,
                           opacity: autoNameUi.disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
                           cursor: autoNameUi.disabled ? "not-allowed" : "pointer",
+                          color: autoNameUi.isError ? "#dc2626" : undefined,
                         }}
                       >
+                        {autoNameStatus.kind === "naming" && (
+                          <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+                            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                          </svg>
+                        )}
                         {autoNameUi.label}
                       </button>
+                      {/* 手机档没有悬停提示，生成失败的原因必须直接写在面板里。 */}
+                      {autoNameStatus.kind === "error" && (
+                        <div
+                          role="status"
+                          style={{
+                            flexBasis: "100%",
+                            fontSize: 11,
+                            lineHeight: 1.5,
+                            color: "#dc2626",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {autoNameStatus.message}
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={() => {

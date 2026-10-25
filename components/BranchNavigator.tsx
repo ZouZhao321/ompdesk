@@ -133,6 +133,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
     <div>
       {/* This node row */}
       <div
+        className="branch-tree-row"
         style={{
           display: "flex",
           alignItems: "center",
