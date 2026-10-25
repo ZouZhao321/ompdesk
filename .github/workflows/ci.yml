@@ -20,6 +20,9 @@ jobs:
   verify:
     name: Verify build
     runs-on: ubuntu-latest
+    # 冒烟步骤自己会起 dev server，最坏情况下要在启动超时与两次请求超时后收尾；
+    # 给 job 一个上限，避免挂起的进程一直占着 runner。
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
