@@ -1205,7 +1205,7 @@ pre, code {
   color: var(--text);
 }
 
-@media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
+@media (max-width: 768px), (pointer: coarse) {
   .image-zoom-controls {
     bottom: 12px;
     height: 52px;

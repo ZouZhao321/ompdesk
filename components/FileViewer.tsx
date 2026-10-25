@@ -421,7 +421,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -430,7 +429,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
     setBust(0);
     setSize(null);
     setNaturalSize(null);
-    setError(null);
     setWatching(false);
 
     if (esRef.current) {
@@ -501,19 +499,12 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
         </span>
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
-      {error ? (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#f87171", fontSize: 13 }}>
-          {error}
-        </div>
-      ) : (
-        <ImageZoomSurface
-          key={filePath}
-          src={src}
-          alt={filePath}
-          onNaturalSize={setNaturalSize}
-          onError={() => setError("Failed to load image")}
-        />
-      )}
+      <ImageZoomSurface
+        key={filePath}
+        src={src}
+        alt={filePath}
+        onNaturalSize={setNaturalSize}
+      />
     </div>
   );
 }

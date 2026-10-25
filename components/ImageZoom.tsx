@@ -39,14 +39,13 @@ interface ImageZoomSurfaceProps {
   alt?: string;
   className?: string;
   onNaturalSize?: (size: Size) => void;
-  onError?: () => void;
 }
 
 /**
  * 可缩放、可拖动的图片画面。
  * 滚轮对准光标缩放，按住拖动，双击在适配与 1:1 之间切换，键盘 +/-/0/1 同样可用。
  */
-export function ImageZoomSurface({ src, alt, className, onNaturalSize, onError }: ImageZoomSurfaceProps) {
+export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZoomSurfaceProps) {
   const { t } = useI18n();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState<Size>({ w: 0, h: 0 });
@@ -325,10 +324,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize, onError }
           draggable={false}
           className="image-zoom-image"
           onLoad={(event) => syncNaturalSize(event.currentTarget)}
-          onError={() => {
-            setLoadFailed(true);
-            onError?.();
-          }}
+          onError={() => setLoadFailed(true)}
           style={{
             width: natural.w || undefined,
             height: natural.h || undefined,
@@ -419,6 +415,10 @@ export function ImagePreviewDialog({ request, onClose }: { request: ImagePreview
       onCancel={(event) => {
         event.preventDefault();
         onClose();
+      }}
+      onKeyDown={(event) => {
+        // 全局 Esc 会中止正在运行的会话；预览层的 Esc 只负责关闭自己。
+        if (event.key === "Escape") event.stopPropagation();
       }}
     >
       <div className="image-preview-bar">

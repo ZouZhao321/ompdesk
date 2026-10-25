@@ -438,6 +438,9 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
 - 聊天里任何图片——用户附件、扩展消息、markdown 内联、文件预览内联——点击都由
   `ImagePreviewProvider` 打开同一个全屏预览层。Provider 挂在 `app/page.tsx`；未挂载
   时 `useImagePreview()` 返回空操作，渲染不会中断。
+- 预览层是全屏模态层：Esc 只关闭自己，`stopPropagation` 挡住全局 Esc 中止会话；
+  四边按 `env(safe-area-inset-*)` 留白。控制条在粗指针设备（含 iPad 横屏）按 44px
+  触摸目标渲染，不跟随移动档断点。
 - 图片文件被外部覆盖时（`live` 监听的 `bust` 变化）保留当前比例与位置，只把相机
   拉回合法范围；只有窗口尺寸变化且用户没手动缩放过才重新适配。切换文件靠
   `key={filePath}` 重挂载回到适配。
