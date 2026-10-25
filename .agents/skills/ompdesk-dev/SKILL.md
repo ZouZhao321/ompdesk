@@ -77,6 +77,38 @@ bun run smoke:dev  # 起 dev server，请求 / 与 /api/home，扫描构建失�
 4. 涉及手机档时补一次 390×844 复核。
 5. 有副作用的改动核对副作用本身（新建的会话、写入的文件、打开的面板）。
 
+## 代码质量门禁：OCR 审核
+
+合并前必须过一轮机器审核，流程与 `~/.omp/agent/prompts/prompt-ocr-review-merge.md` 一致。审核对象是
+`base..head` 的提交差异，不是工作区。
+
+**审核**：每轮新起一个只读子代理，不要复用上一轮结论。子代理先读 `skill://open-code-review`，按其命令跑：
+
+```bash
+ocr review --audience agent --format json --from main --to <分支> \
+  --background "<这次改动解决什么问题>"
+```
+
+结果写到仓库内已忽略的 `.ocr/`（不要用 `/tmp`），读完删除。子代理只审不改，返回清单：路径、行号、
+severity、category、问题描述、修改建议；Low 不返回。先用 `ocr review --preview --from main --to <分支>`
+确认这次范围：它只收源码扩展名，`.md`（包括 skill 文件）默认不进审核，文档改动要另外人工过一遍。
+
+`ocr review` 因未配置 LLM 失败时，改读 `skill://open-code-review-delegate`，用 `ocr delegate preview` 与
+`ocr delegate rule` 取文件与规则后自行审，合并门槛不变。审核规则自动套用 `~/.opencodereview/rule.json`；
+仓库还没有 `.opencodereview/rule.json`，要加仓库级规则就放这里。
+
+**修复**：只修 Critical（视同 High）、High、Medium。每条要么改掉，要么判定误报并给出代码证据，不允许用
+「影响不大」降级。修完跑 `bun test`、`bun run typecheck` 与改动范围的 eslint，记下命令与结果。
+
+**复审**：推送后重新起一个只读子代理再跑一轮。同一条发现在两轮修复后仍在，停下报告，交用户决定。
+
+**合并**：零 High、零 Medium、CI 通过、无未解决对话、非草稿，才执行 `gh pr merge <编号> --merge`。
+合并前把 PR 从草稿转正式，并去掉 `[WIP]` 前缀与 `in-progress` 标签。
+
+**清理**：合并后读 `skill://cleaning-up-worktrees`，用 `wt_audit.py --repo <仓库> --online --plan` 取证据，
+只处理这个 PR 的 worktree 与同名分支，顺序是 worktree remove → 本地分支 → 远端分支 → prune。脏 worktree
+先把未提交与未跟踪文件列出来，`--force` 需要用户单独同意；同目录下别的分支一条都不动。
+
 ## 提交与 PR
 
 - 在独立 worktree 里开发（`.worktrees/<分支名>`），主检出保持干净。
