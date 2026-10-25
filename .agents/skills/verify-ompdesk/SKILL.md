@@ -22,10 +22,10 @@ OMPDESK_DIST_DIR=.next-smoke bun --bun next dev --webpack -H 127.0.0.1 -p 30199
 ```
 
 端口 30199 与产物目录 `.next-smoke` 刻意和日常开发（`bun run dev`，30141 与 `.next`）分开，因此可以
-在本机已有开发实例时并存。启动后记下 PID，收尾时只结束这个 PID。
+在本机已有开发实例时并存。收尾时按端口确认监听进程再结束，见 Cleanup。
 
-就绪判定：日志出现 `✓ Ready` 还不算可用，要等第一次页面请求编译完成。首次请求一般需要 15–25 秒，
-所以用长超时请求首页：
+就绪判定：日志出现 `✓ Ready` 还不算可用，要等第一次页面请求编译完成。产物目录为空时首次请求一般
+需要 15–25 秒（`.next-smoke` 已经有缓存时只要几秒），所以用长超时请求首页：
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" --max-time 120 http://127.0.0.1:30199/
@@ -92,11 +92,18 @@ await tab.waitForSelector(".sidebar-container", { timeout: 60000 });
 
 ## Cleanup
 
-只结束自己启动的进程，不要按进程名批量结束。
+只结束自己启动的进程，不要按进程名批量结束。启动命令回显的 PID 不一定是真正监听端口的进程（包装进程与
+服务进程可能不同），按端口找监听者：
 
 ```bash
-kill <启动时记下的 PID>
+# macOS / Linux
+lsof -i :30199 -t
+# Windows
+netstat -ano | findstr :30199
 ```
+
+也可以读服务日志里的 `process.start` 记录，其中的 `pid` 就是监听进程。结束它之后再确认端口已释放：
+`curl` 首页失败或连接被拒即说明已退出。
 
 `.next-smoke/` 已进入忽略列表，可留可删；`.verify/` 下的证据不要删，它是这次验证的结论。
 
