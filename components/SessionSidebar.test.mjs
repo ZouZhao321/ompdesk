@@ -173,3 +173,28 @@ test("reconciles markers and running state when the page becomes visible again",
 test("remembers that the server went away while a session was running", () => {
   assert.match(source, /serverOutageSinceSnapshotRef\.current = true;/);
 });
+
+test("seeds the marker backlog only after the initial restore picked a session", () => {
+  const seedEffect = source.slice(
+    source.indexOf("// 首次加载时把浏览器的异常存量加入未读集合"),
+    source.indexOf("useEffect(() => {\n    let stopped = false;"),
+  );
+  assert.match(seedEffect, /if \(!initialRestoreSettled\) return;\s*if \(allSessions\.length === 0/);
+  assert.match(seedEffect, /\.filter\(\(id\) => id !== selectedSessionId\)/);
+  // 恢复路径负责放行播种，播种因此排在它之后。
+  assert.match(source, /setInitialRestoreSettled\(true\);\s*if \(target\) \{/);
+});
+
+test("skips the open session when reconciling runs lost across a restart", () => {
+  assert.match(
+    source,
+    /addUnreadSessionIds\(lostAcrossRestart\.unreadIds\.filter\(\(id\) => id !== selectedSessionId\)\);/,
+  );
+});
+
+test("clears the watched session's marker once it is visible again", () => {
+  assert.match(
+    source,
+    /if \(\s*document\.visibilityState === "visible"\s*&& selectedSessionId\s*&& finished\.finishedIds\.includes\(selectedSessionId\)\s*\) \{\s*clearUnreadSessionIds\(\[selectedSessionId\]\);/,
+  );
+});
