@@ -145,8 +145,11 @@ Keep these constraints in mind:
   `https://<tailnet address>/`) or a reverse proxy that terminates HTTPS.
 - **Run one ompdesk server per port.** The desktop shell cannot bind a port
   another process already holds: the window shows `port 30141 on 127.0.0.1 is
-  already in use`, and closing it exits with a non-zero status instead of
-  picking another port. The CLI launcher passes the requested port through
+  already in use: the port accepts connections`, and closing it exits with a
+  non-zero status instead of picking another port. When the probe cannot prove
+  the port is free (timeout, permission), the window says the port could not be
+  confirmed free and names the probe error instead of claiming another server is
+  running. The CLI launcher passes the requested port through
   unchanged, so a taken port fails there too instead of moving to a free one.
 
 The desktop shell writes its startup lines (including the port it serves) to
