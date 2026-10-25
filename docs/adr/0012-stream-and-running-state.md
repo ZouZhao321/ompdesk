@@ -1,3 +1,8 @@
+---
+name: stream-and-running-state
+description: 30 秒宽限与两套集合独立，旧 run id 的迟到事件要丢弃；改流式、轮询或运行状态时读。
+---
+
 # 流式与运行状态
 
 每个会话的 SSE 是聊天事件的主要来源，在每次 prompt 前打开。`prompt_done` 立即结束当前 UI 阶段与通知；空闲 SSE 保持 30 秒宽限窗口，并被下一个 prompt 复用。`agent_start` 取消关闭计时器；`agent_settled` 结束由扩展注入、没有 wrapper 级 `prompt_done` 的运行，并开始新的宽限窗口。第一个 `agent_end` 不关闭流，因为重试、压缩与扩展排队的消息可能继续同一个逻辑 prompt。

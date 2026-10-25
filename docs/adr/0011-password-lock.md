@@ -1,3 +1,8 @@
+---
+name: password-lock
+description: 密码只存 scrypt 摘要，`proxy.ts` 在 Node 运行时校验；改访问控制或恢复流程时读。
+---
+
 # 密码锁在 proxy 中校验
 
 `bin/web-auth-store.js` 是密码锁的唯一来源，它位于 `bin/` 且使用 CommonJS：启动器在解析 Bun 之前就需要它，而发布到 npm 的 `files` 只包含 `bin`、`.next`、`public`、`next.config.ts` 与 `package.json`，`lib/` 无法承载。`bin/web-auth-store.d.ts` 是类型检查依据，两者需要同步。

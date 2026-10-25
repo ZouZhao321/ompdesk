@@ -79,22 +79,26 @@ JSON 记录，当前 `version: 3`。记录语义与顺序见 ADR-0004，字段�
 指针必须自带结论：每行先给必须记住的判断，再去给出处；只有要改那段代码、或要推翻
 结论时才读原文。
 
+索引条目一律写名字、用途与来源三样。只写名字的条目不成立：读者为了判断要不要用，
+就得把目标整个读一遍。ADR 文件头部带 `name` 与 `description` 两个字段，`description`
+说明它约束什么、什么时候读。
+
 | 改什么 | 结论 | 出处 |
 | --- | --- | --- |
-| 会话生命周期、fork | fork 原地改写 sessionId；返回新 id 前销毁 wrapper，下一次请求从原文件重建 | `adr/0001` |
-| 运行时接线 | 进程内只有一个 Settings + AuthStorage + ModelRegistry，缓存挂 globalThis；第二个 AuthStorage 会分裂凭据事件 | `adr/0002` |
-| 选模型、改角色 | 角色清单以 SDK 的 `ModelRole` 为准；`enabledModels` 委托 `resolveModelScope()`，解析为空回退全部 | `adr/0003` |
-| 读会话记录、拼上下文 | 顺序跟随 omp 的 transcript 语义，摘要渲染在压缩位置；`entryIds` 本地生成；`SessionManager` 全是异步 | `adr/0004` |
-| 分支功能 | fork 写新文件，`parentSession` 可写 id 或路径；会话内分支走 `navigate_tree` | `adr/0005` |
-| 会话地图 | 按轮现算，按 mtime 与大小缓存；子代理会话不入图；切点取无悬空工具调用的条目 | `adr/0006` |
-| 建或删工作副本 | 手建在 `.worktrees/`，界面建在同级 `<repo>-worktrees/`；删除后的会话推断只认后者 | `adr/0007` |
-| 改文件浏览 | `/api/files` 只开放允许根：会话 cwd、项目根、`~/omp-cwd-*`、显式添加的根 | `adr/0008` |
-| 改插件与 skills | 五类 skills 来源；开关只改 `disable-model-invocation`；安装用 `--agent claude-code` | `adr/0009` |
-| 改凭据、`models.yml` | 凭据在 `agent.db`，写走 `credentials.*` 与 `oauth.login`；写后必须失效运行时与模型两个缓存 | `adr/0010` |
-| 改访问控制 | 密码只存 scrypt 摘要；`proxy.ts` 在 Node 运行时且不引 SDK；文件缺失与不可读必须区别对待 | `adr/0011` |
-| 改流式、运行状态 | `prompt_done` 收尾、空闲 30 秒宽限；等待集合独立于运行集合；旧 run id 的迟到事件必须忽略 | `adr/0012` |
-| 改项目信任 | 未信任项目过滤项目内扩展与工具并禁用 MCP；skills 与 rules 始终加载 | `adr/0013` |
-| 改样式、主题 | 主题来自 omp，`globals.css` 是首屏回退，运行期由 `/api/theme` 覆盖；字体只用系统列表 | `adr/0014` |
+| 会话生命周期、fork | fork 原地改写 sessionId；返回新 id 前销毁 wrapper，下一次请求从原文件重建 | `adr/0001-session-wrapper-lifecycle.md` |
+| 运行时接线 | 进程内只有一个 Settings + AuthStorage + ModelRegistry，缓存挂 globalThis；第二个 AuthStorage 会分裂凭据事件 | `adr/0002-single-omp-runtime.md` |
+| 选模型、改角色 | 角色清单以 SDK 的 `ModelRole` 为准；`enabledModels` 委托 `resolveModelScope()`，解析为空回退全部 | `adr/0003-model-roles.md` |
+| 读会话记录、拼上下文 | 顺序跟随 omp 的 transcript 语义，摘要渲染在压缩位置；`entryIds` 本地生成；`SessionManager` 全是异步 | `adr/0004-session-record-and-context.md` |
+| 分支功能 | fork 写新文件，`parentSession` 可写 id 或路径；会话内分支走 `navigate_tree` | `adr/0005-two-kinds-of-branch.md` |
+| 会话地图 | 按轮现算，按 mtime 与大小缓存；子代理会话不入图；切点取无悬空工具调用的条目 | `adr/0006-conversation-map.md` |
+| 建或删工作副本 | 手建在 `.worktrees/`，界面建在同级 `<repo>-worktrees/`；删除后的会话推断只认后者 | `adr/0007-worktree-path.md` |
+| 改文件浏览 | `/api/files` 只开放允许根：会话 cwd、项目根、`~/omp-cwd-*`、显式添加的根 | `adr/0008-file-access-roots.md` |
+| 改插件与 skills | 五类 skills 来源；开关只改 `disable-model-invocation`；安装用 `--agent claude-code` | `adr/0009-skills-and-plugins.md` |
+| 改凭据、`models.yml` | 凭据在 `agent.db`，写走 `credentials.*` 与 `oauth.login`；写后必须失效运行时与模型两个缓存 | `adr/0010-credentials-and-models-yml.md` |
+| 改访问控制 | 密码只存 scrypt 摘要；`proxy.ts` 在 Node 运行时且不引 SDK；文件缺失与不可读必须区别对待 | `adr/0011-password-lock.md` |
+| 改流式、运行状态 | `prompt_done` 收尾、空闲 30 秒宽限；等待集合独立于运行集合；旧 run id 的迟到事件必须忽略 | `adr/0012-stream-and-running-state.md` |
+| 改项目信任 | 未信任项目过滤项目内扩展与工具并禁用 MCP；skills 与 rules 始终加载 | `adr/0013-project-trust.md` |
+| 改样式、主题 | 主题来自 omp，`globals.css` 是首屏回退，运行期由 `/api/theme` 覆盖；字体只用系统列表 | `adr/0014-theme-and-css.md` |
 
 `docs/file-map.md` 按目录列出每个文件的职责（路径加一句话），用于确认某个文件
 属于哪一块；文件是否存在以 `git ls-files` 为准。
@@ -104,13 +108,13 @@ JSON 记录，当前 `version: 3`。记录语义与顺序见 ADR-0004，字段�
 
 ## 快照索引
 
-| 快照 | 稳定标识 | 权威来源 | 读取方式 |
+| 索引 | 用来查什么 | 权威来源 | 读取方式 |
 | --- | --- | --- | --- |
-| 路由与接口方法 | `app/api/` 目录结构 | 各 `route.ts` 的导出 | `git ls-files 'app/api/**/route.ts'` |
-| 模块与组件职责 | 文件路径 | 文件头注释与导出 | 读 `docs/file-map.md` 或直接打开 |
-| 会话文件格式 | `version: 3` | `session-entries.d.ts` | `grep -n CURRENT_SESSION_VERSION` |
-| 代码索引规模 | `.gitnexus/` | `gitnexus.json` 的 `stats` | 读 `stats.nodes` / `stats.edges` / `stats.processes` |
-| 模型角色清单 | `modelRoles` 记录 | SDK 的 `ModelRole` 类型 | `grep -n "export type ModelRole"` |
-| 主题色值 | CSS 变量名 | `/api/theme` 与 `pi-tui/src/theme/*.json` | 请求接口或读主题 JSON |
-| 依赖与运行时版本 | `package.json` 的 `engines` | `package.json` 与 `bun.lock` | 读 `package.json` |
-| 测试样本会话 | 会话 id | `~/.omp/agent/sessions/` | 按 id 检索文件 |
+| 路由与接口方法 | 某个网址由哪个文件处理、支持哪些方法 | `app/api/` 目录结构 | `git ls-files 'app/api/**/route.ts'` |
+| 模块与组件职责 | 某个文件属于哪一块、大致做什么 | `docs/file-map.md` | 打开该文件 |
+| 会话文件格式 | 读写 `.jsonl` 时的字段、顺序与版本 | `session-entries.d.ts`（`version: 3`） | `grep -n CURRENT_SESSION_VERSION` |
+| 代码索引规模 | 判断代码地图是否过期、覆盖多少 | `.gitnexus/gitnexus.json` 的 `stats` | 读 `stats.nodes` / `stats.edges` / `stats.processes` |
+| 模型角色清单 | 新增或改角色时对齐 SDK 定义 | SDK 的 `ModelRole` 类型 | `grep -n "export type ModelRole"` |
+| 主题色值 | 改配色时找变量名与真实取值 | `/api/theme` 与 `pi-tui/src/theme/*.json` | 请求接口或读主题 JSON |
+| 依赖与运行时版本 | 判断 Bun、Node 与 Next 的版本约束 | `package.json` 的 `engines` 与 `bun.lock` | 读 `package.json` |
+| 测试样本会话 | 复现界面测试时定位数据 | 会话 id | `~/.omp/agent/sessions/` 按 id 检索 |

@@ -10,6 +10,8 @@ git ls-files lib components hooks     # 其余目录
 
 ## app/api/
 
+每个网址对应一个 `route.ts`，支持的方法由该文件导出的 `GET`、`POST` 等决定。
+
 ```
 sessions/route.ts               GET  列出全部会话
 sessions/[id]/route.ts          GET/PATCH/DELETE 会话（PATCH 同时管归档）
@@ -63,6 +65,8 @@ worktrees/route.ts              GET/POST/DELETE git worktree
 
 ## lib/
 
+服务端与客户端共用的模块。名称是导出前缀，职责是这一块管什么。
+
 ```
 agent-client.ts      为 /api/agent 命令提供带类型的 fetch 辅助
 api-request-log.ts   withRequestLog：统一请求日志与耗时
@@ -104,6 +108,8 @@ worktree.ts          项目与 worktree 解析，以及 git worktree 操作
 
 ## components/
 
+界面组件。一个组件对应屏幕上一块可见区域，职责写它渲染什么。
+
 ```
 AccessConfig.tsx    设置面板内的密码锁
 SettingsConfig.tsx  设置面板宿主，内嵌模型、skills、插件、密码锁与日志
@@ -135,6 +141,8 @@ TurnWrittenFiles.tsx 单轮写入文件列表
 
 ## hooks/
 
+浏览器侧状态与副作用封装。职责写它订阅或维护哪份状态。
+
 ```
 useAgentSession.ts  消息 + 流式 + SSE + fork/navigate/核对逻辑
 useAudio.ts         完成提示音 + 浏览器 AudioContext 解锁
@@ -148,6 +156,8 @@ useTheme.ts         主题状态
 ```
 
 ## 根目录
+
+不在上述四组里、但改代码时会碰到的入口与配置。
 
 ```
 proxy.ts            访问控制：密码校验、主机与跨站检查

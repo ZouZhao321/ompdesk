@@ -1,3 +1,8 @@
+---
+name: theme-and-css
+description: 主题来自 omp，`globals.css` 只是首屏回退；改配色、字体或主题同步时读。
+---
+
 # 主题来自 omp，CSS 只是首屏回退
 
 两套主题是 omp 自己的 `titanium`（默认深色）与 `light`，浏览器与 TUI 因此读起来是同一个产品。`lib/omp-theme.ts` 从 Settings 取 `theme.dark` / `theme.light`，再经 `@oh-my-pi/pi-tui` 的主题解析得出调色板，`/api/theme` 把它发给浏览器。

@@ -1,3 +1,8 @@
+---
+name: worktree-path
+description: 手建的工作副本在 `.worktrees/`，界面建在同级 `<repo>-worktrees/`；建或删工作副本时读。
+---
+
 # 工作副本的两条创建路径
 
 开发用的工作副本由人在仓库根手建，位置是 `<repo>/.worktrees/<branch>`，`.gitignore` 忽略该目录。ompdesk 界面里的「新建工作副本」由 `lib/worktree.ts` 的 `addWorktree()` 创建，位置是仓库同级的 `<repo>-worktrees/<sanitized-branch>`，分支名里的 `/` 会被压成 `-`。

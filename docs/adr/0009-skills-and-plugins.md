@@ -1,3 +1,8 @@
+---
+name: skills-and-plugins
+description: skills 有五个来源，开关只改一个 frontmatter 键；改插件或 skills 安装时读。
+---
+
 # 插件与 skills 的来源
 
 `/api/plugins` 驱动 omp 的 `PluginManager`（`~/.omp/plugins`），提供安装、卸载、启用与禁用，并把 `doctor()` 输出作为诊断。omp 没有原地更新，所以「更新」是用 `force` 重装该 spec。

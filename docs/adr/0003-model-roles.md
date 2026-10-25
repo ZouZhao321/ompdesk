@@ -1,3 +1,8 @@
+---
+name: model-roles
+description: 角色清单以 SDK 的 ModelRole 为准，enabledModels 委托 resolveModelScope；改模型选择或角色时读。
+---
+
 # 模型角色就是模型选择器
 
 omp 按工作范围分配模型，角色记录在 `config.yml` 的 `modelRoles` 里，权威清单来自 SDK 的 `ModelRole` 类型（`default`、`smol`、`slow`、`vision`、`plan`、`commit`、`tiny`、`memory`、`task`、`advisor`，另有 `image`、`web`、`speech`、`dictation`、`judge` 作为种类角色）。`GET /api/models` 返回解析后的整张表，`ChatInput` 因此在扁平模型列表上方列出角色；`set_role_model` 切换会话并把角色写进会话记录，与 TUI 的 `/model` 写入同一位置。

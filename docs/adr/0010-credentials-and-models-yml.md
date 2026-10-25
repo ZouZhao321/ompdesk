@@ -1,3 +1,8 @@
+---
+name: credentials-and-models-yml
+description: 凭据在 `agent.db`，写后必须失效运行时与模型两个缓存；改登录、密钥或 `models.yml` 时读。
+---
+
 # 凭据与模型配置的写入
 
 凭据存放在 omp 的 SQLite `agent.db` 中，通过 `AuthStorage` 访问，不在 `auth.json`。写入走命名空间方法：`authStorage.credentials.set()` / `credentials.remove()` 与 `authStorage.oauth.login()`，使 CLI 与 ompdesk 共享一个存储与一把锁。API-key 状态端点绝不返回原始 key。
