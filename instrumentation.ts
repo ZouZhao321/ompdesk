@@ -5,9 +5,18 @@ import { importRuntimeModule } from "@/lib/runtime-import";
 type DispatcherModule = { configureHttpDispatcher: typeof ConfigureHttpDispatcher };
 type LoggingModule = { startLogging: typeof StartLogging };
 
-/** 本地 TypeScript 源码的 file URL；正斜杠让 Windows 盘符留在路径里而不是主机名。 */
+/**
+ * 本地 TypeScript 源码的 file URL。
+ *
+ * 逐段编码，但保留 Windows 盘符里的冒号：`#`、`?`、`%` 出现在路径里会被 URL 解析吃掉或
+ * 在解码阶段失败，整段交给 `new URL()` 只能兜住空格。路径不存在时调用方自己处理。
+ */
 function localModuleUrl(relativePath: string): string {
-  return new URL(`file:///${process.cwd().replace(/\\/g, "/")}/${relativePath}`).href;
+  const encodeSegments = (value: string) => {
+    const [head, ...rest] = value.split("/");
+    return [head, ...rest.map(encodeURIComponent)].join("/");
+  };
+  return `file:///${encodeSegments(process.cwd().replace(/\\/g, "/"))}/${encodeSegments(relativePath)}`;
 }
 
 export async function register(): Promise<void> {
@@ -18,8 +27,15 @@ export async function register(): Promise<void> {
   // A statically visible specifier would pull `node:async_hooks` / `node:fs`
   // into the Edge and browser instrumentation bundles, which Next also
   // compiles; loading it by URL keeps it out of every graph but nodejs.
-  const { startLogging } = await importRuntimeModule<LoggingModule>(localModuleUrl("lib/logging-startup.ts"));
-  await startLogging();
+  //
+  // 这份源码只存在于仓库检出里：npm 包与桌面壳只分发构建产物，没有 `lib/`。因此加载失败
+  // 只能降级成“这次没有启动日志”，不能挡住后面的 dispatcher 配置与整个进程。
+  try {
+    const { startLogging } = await importRuntimeModule<LoggingModule>(localModuleUrl("lib/logging-startup.ts"));
+    await startLogging();
+  } catch (error) {
+    console.error(`[ompdesk] 启动日志未初始化：${error instanceof Error ? error.message : String(error)}`);
+  }
 
   if (typeof process.versions.bun === "string") return;
 
