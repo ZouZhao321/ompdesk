@@ -16,6 +16,9 @@
 # verification evidence (see .agents/skills/ompdesk-verify)
 /.verify/
 
+# OCR 审核输出（见 .agents/skills/ompdesk-dev 的审核门禁）
+/.ocr/
+
 # next.js
 /.next/
 /.next-smoke/
