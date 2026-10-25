@@ -63,6 +63,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const dragRef = useRef<{ x: number; y: number } | null>(null);
   const pinchRef = useRef<{ distance: number; x: number; y: number } | null>(null);
+  const previousNaturalRef = useRef<Size | null>(null);
 
   useEffect(() => {
     viewportSizeRef.current = viewport;
@@ -92,6 +93,18 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     naturalSizeRef.current = size;
     setNatural(size);
     onNaturalSizeRef.current?.(size);
+    // 尺寸相近的刷新保留当前比例；换成悬殊的另一张图时重新适配，否则会缩成看不见的大小。
+    const previous = previousNaturalRef.current;
+    if (previous && previous.w > 0 && previous.h > 0) {
+      const ratio = Math.max(
+        size.w / previous.w,
+        previous.w / size.w,
+        size.h / previous.h,
+        previous.h / size.h,
+      );
+      if (ratio > 2) adjustedRef.current = false;
+    }
+    previousNaturalRef.current = size;
     // 尺寸与相机同一次更新里就位，避免首帧以 100% 贴在左上角再跳。
     const viewport = viewportSizeRef.current;
     if (!adjustedRef.current && viewport.w > 0 && viewport.h > 0) {
@@ -101,6 +114,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
 
   useEffect(() => {
     // 换源（live 刷新或换文件）后先回到加载占位，避免新图按旧尺寸拉伸，也避免失败时留下旧画面。
+    if (naturalSizeRef.current.w > 0) previousNaturalRef.current = naturalSizeRef.current;
     naturalSizeRef.current = { w: 0, h: 0 };
     setNatural({ w: 0, h: 0 });
     setLoadFailed(false);
@@ -324,6 +338,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
+        onLostPointerCapture={handlePointerEnd}
         onDoubleClick={handleDoubleClick}
         onKeyDown={handleKeyDown}
       >
