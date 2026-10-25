@@ -11,10 +11,12 @@
 2. 在普通检出中确认 `.worktrees/` 已被忽略：`git check-ignore -q .worktrees/`
    必须退出 `0`。未忽略时先把 `.worktrees/` 写入 `.gitignore` 并提交这次改动，
    再创建 worktree。
-3. 在仓库根同时创建分支与 worktree：`git worktree add .worktrees/<branch> -b <branch>`。
-   分支名格式为 `type/description`，`type` 取 `feat`、`fix`、`refactor`、`test`、
-   `docs`、`chore`、`perf`。检出目录为 `<repo>/.worktrees/<branch>`，这是所有任务
-   的默认位置。
+3. 在仓库根同时创建分支与 worktree：
+   `git worktree add .worktrees/<branch> -b <branch> origin/main`。起点固定为
+   `origin/main`，不用本地 `main`：本地 `main` 可能带着未推送到远端的合并，
+   以它为起点会让这些提交一起进入 PR。分支名格式为 `type/description`，`type`
+   取 `feat`、`fix`、`refactor`、`test`、`docs`、`chore`、`perf`。检出目录为
+   `<repo>/.worktrees/<branch>`，这是所有任务的默认位置。
 4. 依赖缺失时执行 `bun install`。编辑前在当前 worktree 内执行一次 `bun test`，
    把出现过的失败记录为既有基线；之后的检查只要求不新增失败。
 5. 所有编辑、提交、推送都在该 worktree 内完成。主检出留在 `main` 分支上，它的
