@@ -391,6 +391,15 @@ export interface SessionTreeNode {
   branchPreview?: BranchPreview;
 }
 
+/** omp 按会话文件末尾算出的最后状态；`unknown` 表示判断不出来。 */
+export type SessionStatus =
+  | "complete"
+  | "interrupted"
+  | "aborted"
+  | "error"
+  | "pending"
+  | "unknown";
+
 export interface SessionInfo {
   /** Client continuation handle; never a persisted transcript ID or history alias. */
   runtimeId?: string;
@@ -412,6 +421,8 @@ export interface SessionInfo {
   /** True while the runtime session exists only in memory and its JSONL file
    *  has not been created yet. Disk-backed actions must wait until this clears. */
   transient?: boolean;
+  /** 会话文件末尾推导出的最后状态；运行中的内存会话与旧响应没有这个字段。 */
+  status?: SessionStatus;
 }
 
 /**

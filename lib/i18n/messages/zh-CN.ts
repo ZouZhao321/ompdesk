@@ -162,6 +162,7 @@ export const zhCNLocale: LocalePlugin = {
     "sidebar.agentWaitingForInputWithCount": "等待你的回答（{count}）",
     "sidebar.newActivity": "有新活动",
     "sidebar.newSessionActivity": "会话有新活动",
+    "sidebar.sessionInterrupted": "已中断",
     "sidebar.deleteSession": "删除 {title}？",
     "sidebar.rename": "重命名",
     "sidebar.delete": "删除",

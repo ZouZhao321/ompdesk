@@ -5,6 +5,7 @@ import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
+import { initialMarkerUnreadIds, resolveSessionMarker } from "@/lib/session-marker";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -62,6 +63,7 @@ type SessionActivitySnapshotState = { [K in keyof SessionActivitySnapshot]?: Ses
 type SessionsResponse = SessionActivitySnapshotState & { sessions: SessionInfo[] };
 
 const UNREAD_SESSIONS_STORAGE_KEY = "ompdesk:unread-session-ids";
+const MARKER_SEEDED_STORAGE_KEY = "ompdesk:session-marker-seeded";
 const RUNNING_SESSIONS_POLL_MS = 2500;
 const PROJECT_SESSION_LIMIT = 5;
 const COLLAPSED_PROJECTS_STORAGE_KEY = "ompdesk:collapsed-projects";
@@ -117,6 +119,25 @@ function saveUnreadSessionIds(ids: Set<string>): void {
   try {
     if (ids.size === 0) window.localStorage.removeItem(UNREAD_SESSIONS_STORAGE_KEY);
     else window.localStorage.setItem(UNREAD_SESSIONS_STORAGE_KEY, JSON.stringify([...ids]));
+  } catch {
+    // ignore storage quota / privacy-mode errors
+  }
+}
+
+/** 本浏览器是否还没做过「异常存量加入未读」的一次性播种。 */
+function shouldSeedInitialMarkerUnread(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(MARKER_SEEDED_STORAGE_KEY) === null;
+  } catch {
+    return false;
+  }
+}
+
+function markInitialMarkerUnreadSeeded(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(MARKER_SEEDED_STORAGE_KEY, "1");
   } catch {
     // ignore storage quota / privacy-mode errors
   }
@@ -498,6 +519,22 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   useEffect(() => {
     saveUnreadSessionIds(unreadSessionIds);
   }, [unreadSessionIds]);
+
+  // 首次加载时把浏览器的异常存量加入未读集合。播种只做一次：之后点开会话
+  // 得到的已读结果不会被页面刷新重新点亮，清掉本机存储才会重新播种。
+  // 当前打开的会话视为已读，不播种。
+  useEffect(() => {
+    if (allSessions.length === 0 || !shouldSeedInitialMarkerUnread()) return;
+    markInitialMarkerUnreadSeeded();
+    const seededIds = initialMarkerUnreadIds(allSessions, runningSessionIds, waitingSessionIds)
+      .filter((id) => id !== selectedSessionId);
+    if (seededIds.length === 0) return;
+    setUnreadSessionIds((prev) => {
+      const next = new Set(prev);
+      seededIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId]);
 
   useEffect(() => {
     let stopped = false;
@@ -2065,6 +2102,31 @@ function WaitingSessionIndicator() {
   );
 }
 
+/** 静态生命周期标记：实心圆点，没有动画。目前只接入「中断」这一种结果。 */
+function StaticSessionMarker() {
+  const { t } = useI18n();
+  return (
+    <span
+      title={t("sidebar.sessionInterrupted")}
+      aria-label={t("sidebar.sessionInterrupted")}
+      role="img"
+      style={{
+        width: 14,
+        height: 14,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        color: "var(--warning)",
+      }}
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
+        <circle cx="7" cy="7" r="4" fill="currentColor" />
+      </svg>
+    </span>
+  );
+}
+
 function UnreadSessionIndicator() {
   const { t } = useI18n();
   return (
@@ -2203,6 +2265,14 @@ function SessionItem({
   // sessionDisplayTitle collapses it to the compact command form, so the
   // fallback title matches the one the top bar renders.
   const title = sessionDisplayTitle(session);
+
+  // 一行只保留一个标记槽位：动态标记优先，静态标记在点开会话后熄灭。
+  const marker = resolveSessionMarker({
+    status: session.status,
+    isRunning,
+    isWaiting,
+    isUnread: isUnread === true,
+  });
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2417,7 +2487,7 @@ function SessionItem({
               {title}
             </span>
             {isWaiting ? <WaitingSessionIndicator /> : isRunning && <RunningSessionIndicator />}
-            {!isRunning && isUnread && <UnreadSessionIndicator />}
+            {marker ? <StaticSessionMarker /> : !isRunning && isUnread && <UnreadSessionIndicator />}
             {session.worktreeBranch && (
               <span title={t("sidebar.worktreePath", { path: session.cwd })} style={{ display: "flex", color: "var(--accent)", flexShrink: 0 }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

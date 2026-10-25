@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createJiti } from "jiti";
 
 const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
 const sessionItemSource = source.slice(source.indexOf("function SessionItem("));
@@ -195,3 +196,114 @@ for (const scenario of activityCases) {
     assert.equal(previousRef.current, scenario.current);
   });
 }
+
+const archivedSectionSource = source.slice(
+  source.indexOf("function ArchivedSessionsSection("),
+  source.indexOf("function SessionTreeItem("),
+);
+
+test("keeps exactly one lifecycle marker slot on a session row", () => {
+  assert.match(sessionItemSource, /const marker = resolveSessionMarker\(\{/);
+  assert.equal((sessionItemSource.match(/<StaticSessionMarker\b/g) ?? []).length, 1);
+  assert.equal((sessionItemSource.match(/<UnreadSessionIndicator \/>/g) ?? []).length, 1);
+});
+
+test("renders the static lifecycle marker as an animated-free labelled dot", () => {
+  const staticMarkerSource = indicatorSource(
+    "function StaticSessionMarker(",
+    "function UnreadSessionIndicator()",
+  );
+  assert.match(staticMarkerSource, /role="img"/);
+  assert.match(staticMarkerSource, /aria-label=\{t\("sidebar\.sessionInterrupted"\)\}/);
+  assert.match(staticMarkerSource, /var\(--warning\)/);
+  assert.doesNotMatch(staticMarkerSource, /<animate/);
+});
+
+test("keeps lifecycle markers out of the archived section", () => {
+  assert.ok(archivedSectionSource.length > 0);
+  assert.doesNotMatch(archivedSectionSource, /SessionMarker|UnreadSessionIndicator|resolveSessionMarker/);
+});
+
+// Execute the real first-load seeding effect with storage/state doubles, so the
+// once-per-browser guarantee is locked down instead of copied into the test.
+const seedEffectStart = source.indexOf(
+  "    if (allSessions.length === 0 || !shouldSeedInitialMarkerUnread()) return;",
+);
+const seedEffectEnd = source.indexOf(
+  "\n  }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId]);",
+  seedEffectStart,
+);
+assert.ok(seedEffectStart >= 0 && seedEffectEnd > seedEffectStart);
+const { initialMarkerUnreadIds } = await createJiti(import.meta.url).import(
+  "../lib/session-marker.ts",
+);
+const runSeedEffect = new Function(
+  "allSessions", "runningSessionIds", "waitingSessionIds", "selectedSessionId", "setUnreadSessionIds",
+  "shouldSeedInitialMarkerUnread", "markInitialMarkerUnreadSeeded", "initialMarkerUnreadIds",
+  source.slice(seedEffectStart, seedEffectEnd),
+);
+
+function runSeed({ sessions, seeded = false, running = [], waiting = [], selected = null, unread = [] }) {
+  let unreadIds = new Set(unread);
+  const state = { seeded };
+  runSeedEffect(
+    sessions,
+    new Set(running),
+    new Set(waiting),
+    selected,
+    (update) => { unreadIds = update(unreadIds); },
+    () => !state.seeded,
+    () => { state.seeded = true; },
+    initialMarkerUnreadIds,
+  );
+  return { unread: [...unreadIds], seeded: state.seeded };
+}
+
+test("seeds interrupted sessions into the unread set on first load", () => {
+  const result = runSeed({
+    sessions: [
+      { id: "interrupted", status: "interrupted" },
+      { id: "complete", status: "complete" },
+      { id: "unread-complete", status: "complete" },
+    ],
+    unread: ["unread-complete"],
+  });
+
+  assert.deepEqual(result.unread.sort(), ["interrupted", "unread-complete"]);
+  assert.equal(result.seeded, true);
+});
+
+test("does not re-seed a browser that already went through first load", () => {
+  const result = runSeed({
+    sessions: [{ id: "interrupted", status: "interrupted" }],
+    seeded: true,
+    unread: [],
+  });
+
+  assert.deepEqual(result.unread, []);
+  assert.equal(result.seeded, true);
+});
+
+test("skips sessions that are still running when seeding", () => {
+  const result = runSeed({
+    sessions: [
+      { id: "running", status: "interrupted" },
+      { id: "read", status: "interrupted" },
+    ],
+    running: ["running"],
+  });
+
+  assert.deepEqual(result.unread, ["read"]);
+});
+
+test("does not seed the session the user already has open", () => {
+  const result = runSeed({
+    sessions: [
+      { id: "open", status: "interrupted" },
+      { id: "other", status: "interrupted" },
+    ],
+    selected: "open",
+  });
+
+  assert.deepEqual(result.unread, ["other"]);
+});

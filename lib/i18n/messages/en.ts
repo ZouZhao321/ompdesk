@@ -162,6 +162,7 @@ export const enLocale: LocalePlugin = {
     "sidebar.agentWaitingForInputWithCount": "Waiting for your answer ({count})",
     "sidebar.newActivity": "New activity",
     "sidebar.newSessionActivity": "New session activity",
+    "sidebar.sessionInterrupted": "Interrupted",
     "sidebar.deleteSession": "Delete {title}?",
     "sidebar.rename": "Rename",
     "sidebar.delete": "Delete",
