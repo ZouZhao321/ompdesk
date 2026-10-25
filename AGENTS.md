@@ -148,12 +148,17 @@ lib/
   tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
   types.ts             共享 TypeScript 类型
   normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
+  project-order.ts     项目键与显示名、排序、置顶序列与选中项目落位
   worktree.ts          项目与 worktree 解析，以及 git worktree 操作
 
 components/
   AccessConfig.tsx    设置弹窗内的密码锁面板
   AppShell.tsx        布局 + URL 状态 + 标签页管理
   SessionSidebar.tsx  会话树
+  ProjectRow.tsx      会话树里的项目行（折叠、活动徽标、置顶标记）
+  ProjectSortControl.tsx 项目标题右侧的排序控件
+  ProjectPinMenuItem.tsx 项目操作菜单里的置顶项
+  AnimatedDropdown.tsx 弹层的进场/退场动画容器
   ChatWindow.tsx      聊天组合 + 完成提示音封装
   ChatInput.tsx       输入栏 + 模型/角色/思考/tools/compact 控件
   MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
@@ -340,6 +345,20 @@ omp 没有信任存储：它运行某个仓库的扩展，因为你选择在那�
 - 删除有未提交改动的 worktree 返回 `409` 与 `{ dirty: true }`，UI 询问后再以
   `force` 重试。
 - cwd 指向已删除 worktree 的会话会被推断回主项目，不产生多余的项目行。
+
+### 项目排序与置顶
+- 排序方式由 `components/ProjectSortControl.tsx` 提供，默认按最近活动时间；选择
+  结果按浏览器存在 `localStorage` 的 `ompdesk:project-sort`。
+- `lib/project-order.ts` 的 `orderProjectPaths()` 决定项目行顺序：`time` 保留
+  会话列表给出的最近活动倒序，`name` 先比路径最后一段；显示名相同时改用完整路径的
+  码元顺序比较，因此结果只取决于输入。
+- 置顶序列按点击置顶的先后排列，按浏览器存在 `localStorage` 的
+  `ompdesk:pinned-projects`。置顶项目始终排在最前，其后才是未置顶项目；置顶项按
+  归一化键匹配（Windows 路径折叠反斜杠与盘符大小写），重复记录只算一次，读取时
+  按首次出现的顺序去重。
+- 置顶只改变项目行的顺序，项目内部会话的顺序与展示不受影响。
+- 当前选中但还没有会话的项目由 `placeSelectedProject()` 落位：已置顶的按置顶位次
+  插入，否则排在全部置顶项之后、其他未置顶项目之前。
 
 ### 文件访问允许列表
 - `/api/files` 刻意不是通用文件系统浏览器。允许的根来自会话 cwd、其解析后的项目

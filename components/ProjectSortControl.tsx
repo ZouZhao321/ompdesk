@@ -34,7 +34,6 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode
         aria-label={t("sidebar.projectSort")}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="sidebar-header-icon-button"
         style={{
           display: "flex",
           alignItems: "center",
@@ -65,6 +64,7 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode
       </button>
       <AnimatedDropdown
         open={open}
+        role="menu"
         style={{
           position: "absolute",
           top: "calc(100% + 4px)",

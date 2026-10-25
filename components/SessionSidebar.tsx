@@ -7,7 +7,14 @@ import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import type { ProjectSortMode } from "@/lib/project-order";
-import { normalizeProjectKey, orderProjectPaths, projectDisplayName, togglePinnedProject } from "@/lib/project-order";
+import {
+  dedupePinnedProjects,
+  normalizeProjectKey,
+  orderProjectPaths,
+  placeSelectedProject,
+  projectDisplayName,
+  togglePinnedProject,
+} from "@/lib/project-order";
 import { useI18n } from "@/hooks/useI18n";
 import { AnimatedDropdown } from "./AnimatedDropdown";
 import { DirectoryPicker } from "./DirectoryPicker";
@@ -172,9 +179,8 @@ function loadPinnedProjects(): string[] {
     const raw = window.localStorage.getItem(PINNED_PROJECTS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed)
-      ? parsed.filter((project): project is string => typeof project === "string")
-      : [];
+    if (!Array.isArray(parsed)) return [];
+    return dedupePinnedProjects(parsed.filter((project): project is string => typeof project === "string"));
   } catch {
     return [];
   }
@@ -894,20 +900,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const selectedProject = projectRootFor(selectedCwd);
   const recentProjectPaths = getRecentProjects(sessionsForDisplay)
     .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
-  const projectPaths = orderProjectPaths(recentProjectPaths, projectSortMode, pinnedProjects);
+  const orderedProjectPaths = orderProjectPaths(recentProjectPaths, projectSortMode, pinnedProjects);
   const pinnedProjectKeys = new Set(pinnedProjects.map(normalizeProjectKey));
-  // 当前选中但还没有会话的项目排在全部置顶项之后、其余未置顶项目之前。
-  if (
-    selectedProject
-    && !removedProjects.has(normalizeProjectKey(selectedProject))
-    && !recentProjectPaths.includes(selectedProject)
-  ) {
-    let insertAt = 0;
-    while (insertAt < projectPaths.length && pinnedProjectKeys.has(normalizeProjectKey(projectPaths[insertAt]))) {
-      insertAt++;
-    }
-    projectPaths.splice(insertAt, 0, selectedProject);
-  }
+  // 当前选中但还没有会话的项目也要出现在列表里：已置顶的按置顶位次落位，
+  // 其余排在全部置顶项之后、其他未置顶项目之前。
+  const projectPaths = selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject))
+    ? placeSelectedProject(orderedProjectPaths, selectedProject, pinnedProjects)
+    : orderedProjectPaths;
   // 每个工作区的 active / waiting / busy 计数一次遍历算出。等待集合与运行集合
   // 来源独立，所以「正在干活」必须用集合差、「移除前确认」必须用并集，
   // 不能从运行总数里直接减等待数。
