@@ -2017,10 +2017,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
              {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
           </div>
         )}
-        {/* Mobile: the space freed by the hidden center meter is reused only
-            while the more-controls panel is open, above the bottom bar. */}
-        {isMobile && controlsMenuOpen && (
-          <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+        {/* Mobile: 上下文用量常驻在底栏上方，与桌面档顶栏读数一致；
+            会话还没有 token 时组件自身不渲染，不会留下空行。 */}
+        {isMobile && (
+          <div style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            minWidth: 0,
+            marginTop: 6,
+          }}>
             <ContextUsageMeter usage={contextUsage} t={t} />
           </div>
         )}
