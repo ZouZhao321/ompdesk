@@ -113,9 +113,24 @@ test("renders local markdown images as zoomable images served by the file API", 
   assert.doesNotMatch(html, /\snode=/);
 });
 
-test("keeps linked images free of button semantics in server markup", () => {
+test("keeps linked images inside their anchor", () => {
   const html = renderMarkdown("[![shot](/home/me/project/assets/shot.png)](https://example.com)");
 
-  assert.match(html, /<a [^>]*href="https:\/\/example\.com"/);
-  assert.doesNotMatch(html, /role="button"/);
+  assert.match(
+    html,
+    /<a [^>]*href="https:\/\/example\.com"[^>]*><img [^>]*class="markdown-image-zoomable"[^>]*\/><\/a>/,
+  );
+});
+
+test("resolves relative markdown images against the working directory", () => {
+  const html = renderMarkdown("![shot](./assets/shot.png)");
+
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+});
+
+test("leaves remote markdown images on their own URL", () => {
+  const html = renderMarkdown("![shot](https://cdn.example.com/shot.png)");
+
+  assert.match(html, /src="https:\/\/cdn\.example\.com\/shot\.png"/);
+  assert.doesNotMatch(html, /\/api\/files\//);
 });

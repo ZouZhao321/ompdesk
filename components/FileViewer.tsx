@@ -420,7 +420,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
-  const [naturalSize, setNaturalSize] = useState<{ path: string; w: number; h: number } | null>(null);
+  const [naturalSize, setNaturalSize] = useState<{ src: string; w: number; h: number } | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -458,7 +458,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
 
   const formatSizeStr = size != null ? formatSize(size) : null;
-  const naturalSizeOfCurrentFile = naturalSize?.path === filePath ? naturalSize : null;
+  const naturalSizeOfCurrentFile = naturalSize?.src === src ? naturalSize : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -500,10 +500,10 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
       <ImageZoomSurface
-        key={filePath}
+        key={`${sourceSessionId ?? ""}:${filePath}`}
         src={src}
         alt={filePath}
-        onNaturalSize={(size) => setNaturalSize({ path: filePath, ...size })}
+        onNaturalSize={(size) => setNaturalSize({ src, ...size })}
       />
     </div>
   );
