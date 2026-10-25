@@ -1441,7 +1441,10 @@ export function AppShell() {
                tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString(locale)}`);
               if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
             }
-            const tooltip = tooltipParts.join("  |  ");
+            const tooltip = [
+              sessionStats.sessionId ? `${translate("session.id")}: ${sessionStats.sessionId}` : null,
+              ...tooltipParts,
+            ].filter(Boolean).join("  |  ");
 
             return (
               <button
