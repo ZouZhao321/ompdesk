@@ -1162,8 +1162,8 @@ export function AppShell() {
             )}
            </button>
           )}
-          {!isMobile && (
-           <button
+          {/* 语言切换在两个档位都保留；主题在手机档走 Settings 入口。 */}
+          <button
              ref={languageBtnRef}
              type="button"
              onClick={() => toggleTopPanel("language")}
@@ -1204,7 +1204,6 @@ export function AppShell() {
                <path d="M14 18h6" />
              </svg>
            </button>
-          )}
           {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
               type="button"
@@ -1545,7 +1544,7 @@ export function AppShell() {
                       aria-checked={locale === plugin.id}
                       style={{
                         display: "flex", alignItems: "center",
-                        width: "100%", height: 34, padding: "0 10px",
+                        width: "100%", height: isMobile ? MOBILE_HIT_TARGET_PX : 34, padding: "0 10px",
                         border: "none", borderRadius: 4,
                         background: locale === plugin.id ? "var(--bg-selected)" : "transparent",
                         color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
