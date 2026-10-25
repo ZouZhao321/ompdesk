@@ -15,11 +15,17 @@
    分支名格式为 `type/description`，`type` 取 `feat`、`fix`、`refactor`、`test`、
    `docs`、`chore`、`perf`。检出目录为 `<repo>/.worktrees/<branch>`，这是所有任务
    的默认位置。
-4. 依赖缺失时执行 `bun install`，编辑前执行 `bun test` 确认基线干净。
+4. 依赖缺失时执行 `bun install`。编辑前在当前 worktree 内执行一次 `bun test`，
+   把出现过的失败记录为既有基线；之后的检查只要求不新增失败。
 5. 所有编辑、提交、推送都在该 worktree 内完成。主检出保持在 `main` 且保持干净。
 6. 用 `gh pr create` 向 `main` 提 PR。创建 PR 与向 PR 推送无需询问；合并 PR 需要
    用户明确授权。
 7. PR 合并且用户同意清理后，才删除 worktree 与分支。
+
+检查范围是本 worktree 的代码，不含主检出。`bun run typecheck`、`bun run lint`、
+`bun test`、合并前的自检与 CI 都以该 worktree 为准：主检出上的失败不构成阻塞，
+不要求先修主检出，也不得因此停下 worktree 内的工作或拒绝合并。失败与本次改动
+无关时，在 PR 描述里写明并附上在 worktree 内的复现命令。
 
 提交标题遵循 `type(scope): 中文描述`，`type` 取上述 7 个之一。每个提交只对应一个
 逻辑变更。
