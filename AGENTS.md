@@ -81,7 +81,8 @@ JSON 记录，当前 `version: 3`。记录语义与顺序见 ADR-0004，字段�
 
 索引条目一律写名字、用途与来源三样。只写名字的条目不成立：读者为了判断要不要用，
 就得把目标整个读一遍。ADR 文件头部带 `name` 与 `description` 两个字段，`description`
-说明它约束什么、什么时候读。
+说明它约束什么、什么时候读。新增规则、决策或快照时按 `docs/agents-md-method.md`
+的步骤做。
 
 ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `description`。下面按 omp
 加载 skill 的格式列成清单：一行一条，先给路径，冒号后是该条约束与读取时机，与文件
@@ -110,13 +111,11 @@ ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `descri
 
 ## 快照索引
 
-| 索引 | 用来查什么 | 权威来源 | 读取方式 |
-| --- | --- | --- | --- |
-| 路由与接口方法 | 某个网址由哪个文件处理、支持哪些方法 | `app/api/` 目录结构 | `git ls-files 'app/api/**/route.ts'` |
-| 模块与组件职责 | 某个文件属于哪一块、大致做什么 | `docs/file-map.md` | 打开该文件 |
-| 会话文件格式 | 读写 `.jsonl` 时的字段、顺序与版本 | `session-entries.d.ts`（`version: 3`） | `grep -n CURRENT_SESSION_VERSION` |
-| 代码索引规模 | 判断代码地图是否过期、覆盖多少 | `.gitnexus/gitnexus.json` 的 `stats` | 读 `stats.nodes` / `stats.edges` / `stats.processes` |
-| 模型角色清单 | 新增或改角色时对齐 SDK 定义 | SDK 的 `ModelRole` 类型 | `grep -n "export type ModelRole"` |
-| 主题色值 | 改配色时找变量名与真实取值 | `/api/theme` 与 `pi-tui/src/theme/*.json` | 请求接口或读主题 JSON |
-| 依赖与运行时版本 | 判断 Bun、Node 与 Next 的版本约束 | `package.json` 的 `engines` 与 `bun.lock` | 读 `package.json` |
-| 测试样本会话 | 复现界面测试时定位数据 | 会话 id | `~/.omp/agent/sessions/` 按 id 检索 |
+- `路由与接口方法`: 查某个网址由哪个文件处理、支持哪些方法；来源 `app/api/` 目录结构，`git ls-files 'app/api/**/route.ts'`
+- `模块与组件职责`: 查某个文件属于哪一块、大致做什么；来源 `docs/file-map.md`，打开该文件
+- `会话文件格式`: 读写 `.jsonl` 时确认字段、顺序与版本；来源 `session-entries.d.ts`（`version: 3`），`grep -n CURRENT_SESSION_VERSION`
+- `代码索引规模`: 判断代码地图是否过期、覆盖多少；来源 `.gitnexus/gitnexus.json` 的 `stats`，读 `stats.nodes` / `stats.edges` / `stats.processes`
+- `模型角色清单`: 新增或改角色时对齐 SDK 定义；来源 SDK 的 `ModelRole` 类型，`grep -n "export type ModelRole"`
+- `主题色值`: 改配色时找变量名与真实取值；来源 `/api/theme` 与 `pi-tui/src/theme/*.json`，请求接口或读主题 JSON
+- `依赖与运行时版本`: 判断 Bun、Node 与 Next 的版本约束；来源 `package.json` 的 `engines` 与 `bun.lock`，读 `package.json`
+- `测试样本会话`: 复现界面测试时定位数据；来源 `~/.omp/agent/sessions/`，按会话 id 检索
