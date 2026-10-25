@@ -153,7 +153,7 @@ lib/
 components/
   AccessConfig.tsx    设置弹窗内的密码锁面板
   AppShell.tsx        布局 + URL 状态 + 标签页管理
-  SessionSidebar.tsx  会话树 + FileExplorer
+  SessionSidebar.tsx  会话树
   ChatWindow.tsx      聊天组合 + 完成提示音封装
   ChatInput.tsx       输入栏 + 模型/角色/思考/tools/compact 控件
   MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
@@ -165,7 +165,8 @@ components/
   ModelRolesPanel.tsx 该弹窗内按角色分配模型
   PluginsConfig.tsx   已安装 omp 插件的弹窗
   SkillsConfig.tsx    已加载、可搜索、可安装 skills 的弹窗
-  FileExplorer.tsx    侧栏内的文件树
+  FileExplorer.tsx    文件树
+  FileExplorerPanel.tsx 右侧文件面板内的文件树区（标题、上传、刷新、折叠）
   FileIcons.tsx       文件图标辅助
   FileViewer.tsx      标签页内的文件内容
   TabBar.tsx          标签栏（聊天 + 已打开文件标签）

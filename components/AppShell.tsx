@@ -6,6 +6,7 @@ import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { SubagentPanel } from "./SubagentPanel";
 import { ChatWindow } from "./ChatWindow";
+import { FileExplorerPanel } from "./FileExplorerPanel";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
 import { SettingsConfig } from "./SettingsConfig";
@@ -22,6 +23,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { canApplySessionIdentity, type SessionIdentity } from "@/lib/agent-client";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
+import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -34,7 +36,10 @@ import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
   getSidebarMaxWidth,
+  RIGHT_PANEL_EXPLORER_MIN_HEIGHT,
+  RIGHT_PANEL_EXPLORER_SHARE_PERCENT,
   RIGHT_PANEL_FALLBACK_WIDTH,
+  RIGHT_PANEL_HEADER_RESERVED_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   SIDEBAR_DEFAULT_WIDTH,
@@ -92,6 +97,7 @@ export function AppShell() {
   const [projectTrustError, setProjectTrustError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [explorerOpen, setExplorerOpen] = useState(true);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
@@ -153,6 +159,11 @@ export function AppShell() {
   }, [isMobile]);
   useEffect(() => {
     setMobileSidebarReady(true);
+  }, []);
+  // Browser storage is unavailable during server rendering, so the explorer
+  // preference is restored after hydration.
+  useEffect(() => {
+    setExplorerOpen(loadExplorerOpen());
   }, []);
   useEffect(() => {
     if (!rightPanelOpen) return;
@@ -259,7 +270,7 @@ export function AppShell() {
     return () => ro.disconnect();
   }, [activeTopPanel, isMobile]);
 
-  // Right panel — file tabs only
+  // Right panel — file tabs and explorer
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
 
@@ -422,11 +433,10 @@ export function AppShell() {
     // File tabs are keyed by absolute path, so tabs opened in the previous
     // project would otherwise linger after switching to a different project.
     // Reached only past the same-project early return above, so worktrees of
-    // one repo keep their open tabs. Mirror handleCloseFileTab and close the
-    // now-empty right panel.
+    // one repo keep their open tabs. The panel stays open: the explorer inside
+    // it follows the new cwd.
     setFileTabs([]);
     setActiveFileTabId(null);
-    setRightPanelOpen(false);
     // Restore the workspace we switched to: its last open session, or keep
     // the default welcome page when none is remembered.
     restoreWorkspaceContext(newProject);
@@ -670,6 +680,14 @@ export function AppShell() {
     setExplorerRefreshKey((k) => k + 1);
   }, []);
 
+  const handleToggleExplorer = useCallback(() => {
+    setExplorerOpen((open) => {
+      const next = !open;
+      saveExplorerOpen(next);
+      return next;
+    });
+  }, []);
+
   const handleInitialRestoreDone = useCallback(() => {
     setInitialSessionRestored(true);
   }, []);
@@ -730,11 +748,8 @@ export function AppShell() {
   }, [handleOpenFile, selectedSession?.id]);
 
   const handleCloseFileTab = useCallback((tabId: string) => {
-    setFileTabs((prev) => {
-      const next = prev.filter((t) => t.id !== tabId);
-      if (next.length === 0) setRightPanelOpen(false);
-      return next;
-    });
+    // The panel also hosts the explorer, so closing the last tab leaves it open.
+    setFileTabs((prev) => prev.filter((t) => t.id !== tabId));
     setActiveFileTabId((cur) => {
       if (cur !== tabId) return cur;
       const remaining = fileTabs.filter((t) => t.id !== tabId);
@@ -807,6 +822,16 @@ export function AppShell() {
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ompdesk` : "ompdesk";
+  // Explorer section geometry: header only when collapsed, the full panel when
+  // no file is open, and a fixed share of the panel height when a file is open.
+  const explorerSectionFlex = !explorerOpen
+    ? "0 0 auto"
+    : activeFileTab
+      ? `0 0 ${RIGHT_PANEL_EXPLORER_SHARE_PERCENT}%`
+      : "1 1 auto";
+  const explorerSectionMinHeight = explorerOpen && activeFileTab
+    ? RIGHT_PANEL_EXPLORER_MIN_HEIGHT
+    : 0;
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -834,11 +859,6 @@ export function AppShell() {
         onSessionDeleted={handleSessionDeleted}
         selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
-        onOpenFile={handleOpenFile}
-        explorerRefreshKey={explorerRefreshKey}
-        onExplorerRefresh={handleExplorerRefresh}
-        onAtMention={handleAtMention}
-        onAtMentions={handleAtMentions}
         onBackgroundTaskDone={handleBackgroundTaskDone}
       />
       <div style={{ padding: "0 8px", flexShrink: 0 }}>
@@ -1747,7 +1767,7 @@ export function AppShell() {
           background: "var(--bg)",
         } as React.CSSProperties}
       >
-        {/* Right panel tab bar */}
+        {/* Right panel header: open file tabs, or the project name when none are open */}
         <div style={{
           display: "flex",
           alignItems: "center",
@@ -1757,20 +1777,54 @@ export function AppShell() {
           background: "var(--bg-panel)",
           borderBottom: "1px solid var(--border)",
         }}>
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <TabBar
-              tabs={fileTabs}
-              activeTabId={activeFileTabId ?? ""}
-              onSelectTab={setActiveFileTabId}
-              onCloseTab={handleCloseFileTab}
-            />
-          </div>
-
+          {fileTabs.length > 0 ? (
+            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+              <TabBar
+                tabs={fileTabs}
+                activeTabId={activeFileTabId ?? ""}
+                onSelectTab={setActiveFileTabId}
+                onCloseTab={handleCloseFileTab}
+              />
+            </div>
+          ) : (
+            <div style={{
+              flex: 1, minWidth: 0, padding: "0 12px",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
+              textTransform: "uppercase", color: "var(--text-dim)",
+            }}>
+              {activeCwdName ?? translate("files.explorer")}
+            </div>
+          )}
+          {/* The fixed panel toggle sits in this corner. */}
+          <div style={{ width: RIGHT_PANEL_HEADER_RESERVED_WIDTH, flexShrink: 0 }} aria-hidden="true" />
         </div>
 
+        {rightPanelOpen && activeCwd && (
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: explorerSectionFlex,
+            minHeight: explorerSectionMinHeight,
+            overflow: "hidden",
+            borderBottom: activeFileTab ? "1px solid var(--border)" : "none",
+          }}>
+            <FileExplorerPanel
+              cwd={activeCwd}
+              open={explorerOpen}
+              onToggleOpen={handleToggleExplorer}
+              onOpenFile={handleOpenFile}
+              refreshKey={explorerRefreshKey}
+              onRefresh={handleExplorerRefresh}
+              onAtMention={handleAtMention}
+              onAtMentions={handleAtMentions}
+            />
+          </div>
+        )}
+
         {/* File content */}
-        <div style={{ flex: 1, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {activeFileTab?.filePath ? (
+        {activeFileTab?.filePath ? (
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
             <FileViewer
               filePath={activeFileTab.filePath}
               cwd={activeCwd ?? undefined}
@@ -1785,12 +1839,12 @@ export function AppShell() {
                 { sourceSessionId: activeFileTab.sourceSessionId },
               )}
             />
-          ) : (
-            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-               {translate("files.noneOpen")}
-            </div>
-          )}
-        </div>
+          </div>
+        ) : !explorerOpen || !activeCwd ? (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
+            {translate("files.noneOpen")}
+          </div>
+        ) : null}
       </div>
     </div>
     {/* File panel toggle — always visible at top-right */}
