@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { completeSimple, type AssistantMessage } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent";
+import { withRequestLog } from "@/lib/api-request-log";
 import { getOmpRuntime } from "@/lib/omp-runtime";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
@@ -26,7 +27,7 @@ function getAssistantText(message: AssistantMessage): string {
     .join("");
 }
 
-export async function POST(req: Request) {
+export const POST = withRequestLog("/api/models-config/test", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ ok: false, error: "Untrusted API request" }, { status: 403 });
   }
@@ -127,4 +128,4 @@ export async function POST(req: Request) {
   } finally {
     if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   }
-}
+});

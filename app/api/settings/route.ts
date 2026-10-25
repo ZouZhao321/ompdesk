@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
+import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import {
   getDefault,
   getEnumValues,
@@ -121,7 +123,9 @@ function validateSettingValue(path: SettingPath, value: unknown): SettingsValue 
   throw new Error("Unsupported setting type");
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/settings", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   try {
     const cwd = await validateCwd(new URL(req.url).searchParams.get("cwd"));
     const settings = await getSettingsForCwd(cwd);
@@ -168,10 +172,13 @@ export async function GET(req: Request) {
   }
 }
 
-export async function PATCH(req: Request) {
+export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
+  let target: string | undefined;
   try {
     const body = await req.json() as { path?: string; value?: unknown };
+    target = typeof body.path === "string" ? body.path : undefined;
     if (!body.path || !findSetting(body.path) || !hasUi(body.path as SettingPath)) {
+      auditFailure("settings.write", target, { status: 400, reason: "unknown-setting" });
       return NextResponse.json({ error: "Unknown setting" }, { status: 400 });
     }
     const path = body.path as SettingPath;
@@ -185,8 +192,10 @@ export async function PATCH(req: Request) {
     const { settings } = await getOmpRuntime();
     setSetting(settings, path, value);
     await settings.flush();
+    auditSuccess("settings.write", path);
     return NextResponse.json({ success: true, value: serializableValue(getSetting(settings, path)) });
   } catch (error) {
+    auditFailure("settings.write", target, { status: 400, error });
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
-}
+});

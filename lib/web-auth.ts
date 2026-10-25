@@ -80,13 +80,28 @@ export function authorizeWebRequest(
   authorization: string | null,
   options: WebAuthStoreOptions = {},
 ): WebAuthDecision {
+  return authorizeWebRequestWithActor(authorization, options).decision;
+}
+
+export type WebAuthAuthorization =
+  | { decision: "allow"; actor: "local" | "password" }
+  | { decision: "unauthorized" }
+  | { decision: "unavailable" };
+
+/** Same decision as `authorizeWebRequest`, plus the actor an audit record needs. */
+export function authorizeWebRequestWithActor(
+  authorization: string | null,
+  options: WebAuthStoreOptions = {},
+): WebAuthAuthorization {
   const policy = resolveWebAuthPolicy(options);
-  if (policy.mode === "open") return "allow";
-  if (policy.mode === "unavailable") return "unavailable";
+  if (policy.mode === "open") return { decision: "allow", actor: "local" };
+  if (policy.mode === "unavailable") return { decision: "unavailable" };
 
   const credentials = parseBasicCredentials(authorization);
   if (!credentials || !secretsEqual(credentials.username, OMPDESK_AUTH_USERNAME)) {
-    return "unauthorized";
+    return { decision: "unauthorized" };
   }
-  return verifyWebPassword(credentials.password, { ...options, policy }) ? "allow" : "unauthorized";
+  return verifyWebPassword(credentials.password, { ...options, policy })
+    ? { decision: "allow", actor: "password" }
+    : { decision: "unauthorized" };
 }

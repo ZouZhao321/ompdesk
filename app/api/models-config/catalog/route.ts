@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/api-request-log";
 import {
   flattenModelsDevCatalog,
   recommendModelCatalogPreset,
@@ -59,7 +60,9 @@ async function loadCatalog(): Promise<ModelCatalogEntry[]> {
   }
 }
 
-export async function GET(req: Request) {
+export const GET = withRequestLog("/api/models-config/catalog", getRouteHandler);
+
+async function getRouteHandler(req: Request) {
   const { searchParams } = new URL(req.url);
   const query = (searchParams.get("q") ?? "").slice(0, 120);
   const provider = (searchParams.get("provider") ?? "").slice(0, 120);
