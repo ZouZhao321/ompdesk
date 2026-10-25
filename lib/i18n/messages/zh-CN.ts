@@ -194,6 +194,7 @@ export const zhCNLocale: LocalePlugin = {
     "files.refreshExplorer": "刷新文件浏览器",
     "files.changedFiles": "{count} 个变更文件",
     "files.explorer": "文件浏览器",
+    "files.noProject": "未选择项目目录",
     "files.changedCount": "{count} 个文件",
     "files.changeStats": "{count} 个变更文件，新增 {additions} 行，删除 {deletions} 行",
     "files.conflictSummary": "已有 {count} 个文件：{files}",

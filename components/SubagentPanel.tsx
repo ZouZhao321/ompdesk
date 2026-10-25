@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentMessage, SubagentSnapshot, ToolResultMessage } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { normalizeToolCalls } from "@/lib/normalize";
@@ -291,6 +291,37 @@ export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, su
     if (selectedId && !selected) setSelectedId(null);
   }, [selected, selectedId]);
 
+  let body: ReactNode;
+  if (!sessionId || subagents.length === 0) {
+    body = <div style={{ padding: "12px 11px", color: "var(--text-dim)", fontSize: 12 }}>{t("subagents.none")}</div>;
+  } else if (selected) {
+    body = <SubagentDetail sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} cwd={cwd} subagent={selected} onBack={() => setSelectedId(null)} />;
+  } else {
+    body = (
+      <>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexShrink: 0, minHeight: 28, padding: "0 11px", fontSize: 9.5, fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ color: running.length > 0 ? "var(--accent)" : "var(--text-dim)" }}>{t("subagents.runningCount", { count: running.length })}</span>
+          <span style={{ color: "var(--text-dim)" }}>{t("subagents.finishedCount", { count: finished.length })}</span>
+        </div>
+
+        <div style={{ minHeight: 0, overflowY: "auto", padding: "7px 6px 8px" }}>
+          {running.length > 0 && (
+            <div role="list" aria-label={t("subagents.running")}>
+              <div style={{ padding: "0 7px 4px", color: "var(--accent)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.running")}</div>
+              {running.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
+            </div>
+          )}
+          {finished.length > 0 && (
+            <div role="list" aria-label={t("subagents.history")} style={{ marginTop: running.length > 0 ? 8 : 0, paddingTop: running.length > 0 ? 8 : 0, borderTop: running.length > 0 ? "1px solid var(--border)" : "none" }}>
+              <div style={{ padding: "0 7px 4px", color: "var(--text-dim)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.history")}</div>
+              {finished.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
   return (
     <aside
       className="subagent-panel"
@@ -307,33 +338,7 @@ export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, su
         background: "var(--bg-panel)",
       }}
     >
-      {!sessionId || subagents.length === 0 ? (
-        <div style={{ padding: "12px 11px", color: "var(--text-dim)", fontSize: 12 }}>{t("subagents.none")}</div>
-      ) : selected ? (
-        <SubagentDetail sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} cwd={cwd} subagent={selected} onBack={() => setSelectedId(null)} />
-      ) : (
-        <>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexShrink: 0, minHeight: 28, padding: "0 11px", fontSize: 9.5, fontVariantNumeric: "tabular-nums" }}>
-            <span style={{ color: running.length > 0 ? "var(--accent)" : "var(--text-dim)" }}>{t("subagents.runningCount", { count: running.length })}</span>
-            <span style={{ color: "var(--text-dim)" }}>{t("subagents.finishedCount", { count: finished.length })}</span>
-          </div>
-
-          <div style={{ minHeight: 0, overflowY: "auto", padding: "7px 6px 8px" }}>
-            {running.length > 0 && (
-              <div role="list" aria-label={t("subagents.running")}>
-                <div style={{ padding: "0 7px 4px", color: "var(--accent)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.running")}</div>
-                {running.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
-              </div>
-            )}
-            {finished.length > 0 && (
-              <div role="list" aria-label={t("subagents.history")} style={{ marginTop: running.length > 0 ? 8 : 0, paddingTop: running.length > 0 ? 8 : 0, borderTop: running.length > 0 ? "1px solid var(--border)" : "none" }}>
-                <div style={{ padding: "0 7px 4px", color: "var(--text-dim)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.history")}</div>
-                {finished.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
-              </div>
-            )}
-          </div>
-        </>
-      )}
+      {body}
     </aside>
   );
 }
