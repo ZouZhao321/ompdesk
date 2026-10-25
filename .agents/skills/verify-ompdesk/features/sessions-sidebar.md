@@ -14,10 +14,10 @@
 
 ## Driving it with the browser harness
 
-1. 断言 `.sidebar-project-row` 至少一个，`.sidebar-session-row` 至少一个（前提是本机有历史会话）。
-2. 在 `input[type=search]` 输入一个项目名片段，`.sidebar-session-row` 数量应当减少；清空后恢复。
-3. 点任意 `.sidebar-session-row`，中间聊天区应当出现该会话内容，顶栏出现分支按钮。
-4. 手机档复核：viewport 设为 390×844，初始 `.sidebar-container` 带 `sidebar-closed`；点顶栏的侧栏按钮后带 `sidebar-open`，并且行高不低于 44px（`.sidebar-session-row` 计算高度）。
+1. 断言 `[data-project-path]` 至少一个，`[data-session-id]` 至少一个。首次打开页面要等 `/api/sessions` 返回，本机 745 个会话约 10–25 秒，行数为 0 时先等再判。
+2. 在 `input[type=search]` 输入一个项目名片段，`[data-session-id]` 数量应当减少；清空后恢复。清空用 `Control` 加 `a` 再 `Backspace`，`fill("")` 不会触发 React 的输入事件，列表会停在过滤状态。
+3. 点任意 `[data-session-id]`，中间聊天区应当出现该会话内容，输入区出现 `textarea`（加载会话需要几秒）。
+4. 手机档复核：viewport 设为 390×844，初始 `.sidebar-container` 带 `sidebar-closed`；点 `[data-toggle="sidebar"]` 后带 `sidebar-open`。行高 44px 是包含手机适配（`lib/mobile-layout.ts`）的分支上的期望；未合入该改动的分支仍是 40px，按实际值记录并在结论里写明分支。
 
 ## Gotchas
 
