@@ -1,0 +1,159 @@
+# 文件表
+
+按路径记录各目录里有什么。这一页是快照：新增、删除或改名文件后同步更新，判定权威
+始终是代码本身。完整清单现场取：
+
+```
+git ls-files 'app/api/**/route.ts'   # 全部路由
+git ls-files lib components hooks     # 其余目录
+```
+
+## app/api/
+
+```
+sessions/route.ts               GET  列出全部会话
+sessions/[id]/route.ts          GET/PATCH/DELETE 会话（PATCH 同时管归档）
+sessions/[id]/context/route.ts  GET ?leafId= 指定叶节点的上下文
+sessions/[id]/state/route.ts    GET 轻量运行态 { running, state }
+sessions/[id]/map/route.ts      GET 会话地图（轮次树）；?turn= 取单轮全文
+sessions/[id]/auto-name/route.ts POST 生成会话标题
+sessions/[id]/export/route.ts   GET 导出会话 HTML
+agent/new/route.ts              POST { cwd, ...command } 建会话并执行首条命令
+agent/[id]/route.ts             GET 状态 | POST 任意命令
+agent/[id]/events/route.ts      GET SSE 流
+agent/[id]/bash-output/route.ts GET 命令输出
+agent/running/route.ts          GET 运行中与等待输入的会话 id
+agent/running/events/route.ts   GET 同一份活动快照的 SSE 流
+auth/all-providers/route.ts     GET API-key 提供方列表
+auth/api-key/[provider]/route.ts GET/POST/DELETE 提供方 API key 状态与存储
+auth/login/[provider]/route.ts  GET OAuth 登录 SSE | POST 手动 code
+auth/logout/[provider]/route.ts POST OAuth 登出
+auth/providers/route.ts         GET OAuth 提供方列表
+cwd/validate/route.ts           POST 校验/选择 cwd
+cwd/browse/route.ts             GET 目录选择器
+default-cwd/route.ts            POST 创建 ~/omp-cwd-YYYYMMDD
+files/[...path]/route.ts        GET 文件内容 | POST 上传
+file-index/route.ts             GET 文件模糊索引
+git/status/route.ts             GET 工作区改动状态
+git/diff/route.ts               GET 单文件差异
+home/route.ts                   GET 用户主目录
+logs/route.ts                   GET 服务端日志
+client-logs/route.ts            POST 浏览器日志上报
+mcp/route.ts                    GET/PATCH/PUT MCP 配置
+model-roles/route.ts            GET/PUT omp 的 modelRoles 记录
+models/route.ts                 GET { models, modelList, defaultModel, roles }
+models-config/route.ts          GET/PUT 读写 ~/.omp/agent/models.yml
+models-config/catalog/route.ts  GET models.dev 价格预设
+models-config/discover/route.ts POST 获取已配置提供方的上游模型列表
+models-config/test/route.ts     POST 测试已配置的模型与提供方
+plugins/route.ts                GET/POST omp 插件管理
+project-trust/route.ts          GET/POST/DELETE 项目信任
+settings/route.ts               GET/PATCH 设置面板数据
+display-settings/route.ts       GET 渲染相关设置
+skills/route.ts                 GET/PATCH 已加载 skills 与 disable-model-invocation
+skills/install/route.ts         POST 通过 npx skills add 安装 skills
+skills/update/route.ts          POST 升级 skill
+skills/search/route.ts          POST 搜索 skill
+theme/route.ts                  GET Web 主题调色板
+updates/route.ts                GET/POST ompdesk 更新检查与触发
+web-access/route.ts             GET/PUT 密码锁（设置 -> 访问）
+web-access/recovery/route.ts    POST 恢复码申请与兑换（未认证）
+worktrees/route.ts              GET/POST/DELETE git worktree
+```
+
+## lib/
+
+```
+agent-client.ts      为 /api/agent 命令提供带类型的 fetch 辅助
+api-request-log.ts   withRequestLog：统一请求日志与耗时
+request-security.ts  请求来源与主机校验
+logging.ts           服务端日志入口
+sse-lifecycle.ts     两条 SSE 路由共用的连接生命周期
+http-dispatcher.ts   代理环境变量接线的运行时分支
+web-auth.ts          密码锁的读取方
+allowed-roots.ts     allowFileRoot() 与额外允许根
+path-security.ts     路径越界判定
+draft-store.ts       内存草稿表（刷新即失效）
+file-access.ts       /api/files 与 worktree 允许的文件根
+file-paths.ts        客户端与服务端的路径编码辅助
+map-layout.ts        按轮树的布局计算（lane + 主干优先）
+map-types.ts         会话地图的共享类型
+markdown.ts          共享 markdown 辅助
+model-roles.ts       omp 的模型角色，供浏览器读写
+model-scope.ts       UI 与启动共享的 enabledModels 解析
+model-catalog.ts     models.dev 目录与价格
+npx.ts               skill 安装使用的 npx 运行器
+omp-runtime.ts       共享的 Settings + AuthStorage + ModelRegistry
+omp-types.ts         omp AgentSession 的结构化视图
+project-trust.ts     控制项目可执行资源的开关
+rpc-manager.ts       AgentSessionWrapper + 注册表 + startRpcSession
+session-reader.ts    会话列表 + 路径缓存 + buildSessionContext 适配器
+session-map.ts       .jsonl → 轮次树，并合并 fork 文件
+session-archive.ts   归档标记读写
+session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
+session-title.ts     omp 自带标题生成器的薄封装
+skills-service.ts    loadSkills 与会话一致性的封装
+goal-mode.ts         目标模式状态机
+git-changes.ts       工作区改动状态与单文件差异
+workspace-memory.ts  标签页续接
+tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
+types.ts             共享 TypeScript 类型
+normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
+worktree.ts          项目与 worktree 解析，以及 git worktree 操作
+```
+
+## components/
+
+```
+AccessConfig.tsx    设置面板内的密码锁
+SettingsConfig.tsx  设置面板宿主，内嵌模型、skills、插件、密码锁与日志
+AppShell.tsx        布局 + URL 状态 + 标签页 + 完成提示音
+SessionSidebar.tsx  会话树
+ChatWindow.tsx      聊天组合
+ChatInput.tsx       输入栏 + 模型/角色/思考/tools/compact 控件
+MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
+BranchNavigator.tsx 会话内分支切换器
+ConversationMap.tsx 会话地图：卡片、连线、缩放、分叉与切换
+SubagentPanel.tsx   子代理面板
+RewindDialog.tsx    回退选点对话框
+ProjectTrustDialog.tsx 项目信任确认
+ExtensionStatusBar.tsx 扩展状态栏
+LogsPanel.tsx       服务端日志面板
+MermaidBlock.tsx    mermaid 与代码块渲染
+MarkdownBody.tsx    markdown 渲染器
+ModelsConfig.tsx    设置面板内的提供方与认证
+ModelRolesPanel.tsx 设置面板内按角色分配模型
+PluginsConfig.tsx   设置面板内的插件管理
+SkillsConfig.tsx    设置面板内的 skills 列表与安装
+FileExplorer.tsx    文件树
+FileExplorerPanel.tsx 右侧文件面板内的文件树区（标题、上传、刷新、折叠）
+FileIcons.tsx       文件图标辅助
+FileViewer.tsx      标签页内的文件内容
+TabBar.tsx          标签栏（聊天 + 已打开文件标签）
+TurnWrittenFiles.tsx 单轮写入文件列表
+```
+
+## hooks/
+
+```
+useAgentSession.ts  消息 + 流式 + SSE + fork/navigate/核对逻辑
+useAudio.ts         完成提示音 + 浏览器 AudioContext 解锁
+useDragDrop.ts      共享拖放状态
+useIsMobile.ts      响应式断点 hook
+useResizablePanel.ts 面板拖拽宽度
+useKeyboardShortcuts.ts 全局快捷键
+useDisplaySettings.ts 渲染设置
+useI18n.tsx         全站翻译上下文
+useTheme.ts         主题状态
+```
+
+## 根目录
+
+```
+proxy.ts            访问控制：密码校验、主机与跨站检查
+instrumentation.ts  启动时接线（代理、日志）
+next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
+bin/                启动器、密码存储、Bun 定位
+scripts/            构建与打包（stage-desktop、build-desktop、fetch-bun、sync-version）
+src-tauri/          桌面外壳
+```
