@@ -29,17 +29,6 @@ test("keeps subagents out of the left session sidebar", () => {
   assert.doesNotMatch(source, /SubagentRail|SubagentPanel|subagents/);
 });
 
-test("includes project activity counts in accessible labels", () => {
-  assert.match(
-    source,
-    /aria-label=\{`\$\{t\("sidebar\.agentRunning"\)\} \(\$\{activity\.running\}\)`\}/,
-  );
-  assert.match(
-    source,
-    /aria-label=\{`\$\{t\("sidebar\.newSessionActivity"\)\} \(\$\{activity\.unread\}\)`\}/,
-  );
-});
-
 test("shows the waiting indicator ahead of the running spinner", () => {
   assert.match(
     sessionItemSource,
@@ -56,14 +45,6 @@ test("labels the inline waiting indicator without a count", () => {
   assert.match(waitingIndicatorSource, /aria-label=\{t\("sidebar\.agentWaitingForInput"\)\}/);
 });
 
-test("interpolates the project waiting badge label", () => {
-  assert.match(
-    source,
-    /aria-label=\{t\("sidebar\.agentWaitingForInputWithCount", \{ count: activity\.waiting \}\)\}/,
-  );
-  assert.doesNotMatch(source, /aria-label=\{`\$\{t\("sidebar\.agentWaitingForInput"\)\}/);
-});
-
 test("confirms removal of a workspace with running or waiting sessions", () => {
   assert.match(
     source,
@@ -78,10 +59,7 @@ const indicatorSource = (startMarker, nextMarker) =>
 test("marks activity indicators as images for screen readers", () => {
   assert.match(indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()"), /role="img"/);
   assert.match(indicatorSource("function WaitingSessionIndicator()", "function UnreadSessionIndicator()"), /role="img"/);
-  assert.match(indicatorSource("function UnreadSessionIndicator()", "function showProjectActivity("), /role="img"/);
-
-  const projectBadges = indicatorSource("function showProjectActivity(", "function SessionItem(");
-  assert.equal((projectBadges.match(/role="img"/g) ?? []).length, 3);
+  assert.match(indicatorSource("function UnreadSessionIndicator()", "function SessionItem("), /role="img"/);
 });
 
 test("does not persist an unchanged fallback title ending in whitespace", () => {
