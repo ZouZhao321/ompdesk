@@ -148,6 +148,7 @@ lib/
   session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
   session-title.ts     会话显示标题回退与标题文本工具
   session-title-generator.ts  omp 标题生成器封装（仅服务端）
+  session-unread.ts    未读会话集合的共享状态、订阅与本机持久化
   tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
   types.ts             共享 TypeScript 类型
   normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
@@ -341,14 +342,19 @@ omp 没有信任存储：它运行某个仓库的扩展，因为你选择在那�
   （`isEndUnobserved`），即使会话是当前选中的也亮标记。
 - 运行集合写入 `ompdesk:running-session-ids`。首轮轮询到达时与上次页面记录的集合
   对比，消失的运行按不可观察的结束处理：重启服务后停在表单上的会话因此按最后结果
-  亮标记。这次对账同样走 `resolveFinishedRuns()`，不另写一套判定；未读集合的增删
-  统一走侧栏的 `addUnread()` / `clearUnread()`。
+  亮标记。这次对账同样走 `resolveFinishedRuns()`，不另写一套判定。
+- 未读集合由 `lib/session-unread.ts` 持有并写入本机存储：侧栏用
+  `useSyncExternalStore` 订阅，任何写入都走 `addUnreadSessionIds()` /
+  `clearUnreadSessionIds()` / `retainUnreadSessionIds()`。
 - 首次播种只加异常存量（中断、取消、报错、待回复），每个浏览器只做一次。当前打开
   且可见的会话按已读处理，播种因此排除它：看到即灭，刷新不会重新点亮。
 - 项目行的未读角标统计的就是未读集合，静态标记会被一并计入。黄灯本身就是未读，
   不按颜色拆分计数。
-- 静态标记只在用户点开会话时熄灭；自动恢复打开的会话（URL 中的 `?session=` 或
-  工作区上次打开的会话）不算点开，标记保留到用户点开为止。
+- 静态标记在用户主动打开会话时熄灭：侧栏点击、会话地图的命令面板（
+  `handleOpenSessionById`）、通知点击都汇合到 `AppShell` 的 `handleSelectSession()`，
+  由它统一清未读，且清除排在「同一会话重复点击直接返回」之前。自动恢复（URL 中的
+  `?session=`、工作区上次打开的会话、`isRestore` 分支）不算点开，标记保留到用户
+  点开为止。
 
 ### worktree 与项目分组
 - `lib/worktree.ts` 把 linked worktree 的顶层路径解析回主仓库的 `projectRoot`；

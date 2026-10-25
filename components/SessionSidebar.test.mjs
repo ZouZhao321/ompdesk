@@ -149,9 +149,13 @@ test("renders the static lifecycle marker as an animated-free labelled dot", () 
   assert.doesNotMatch(staticMarkerSource, /<animate|animateTransform|@keyframes|animation:/);
 });
 
-test("keeps the marker when the app only restores the session instead of opening it", () => {
-  assert.match(source, /const handleSelectSessionFromList[\s\S]*?clearUnread\(\[s\.id\]\)/);
-  assert.doesNotMatch(source, /if \(!selectedSessionId\) return;\s*setUnreadSessionIds/);
+test("leaves marking a clicked session read to the shared open path", () => {
+  assert.match(
+    source,
+    /const handleSelectSessionFromList = useCallback\(\(s: SessionInfo\) => \{\s*if \(s\.cwd\) setSelectedCwd\(s\.cwd\);\s*onSelectSession\(s\);/,
+  );
+  assert.match(source, /onClick=\{\(\) => onSelectSession\(s\)\}/);
+  assert.doesNotMatch(source, /setUnreadSessionIds/);
 });
 
 test("keeps lifecycle markers out of the archived section", () => {
