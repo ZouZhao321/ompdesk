@@ -35,6 +35,9 @@ export interface ImagePreviewRequest {
 /** 滚轮每像素位移对应的缩放灵敏度。 */
 const IMAGE_WHEEL_SENSITIVITY = 0.0015;
 
+/** 无固有尺寸的图片（如只有 viewBox 的 SVG）退回的替换元素默认尺寸。 */
+const DEFAULT_IMAGE_SIZE: Size = { w: 300, h: 150 };
+
 interface ImageZoomSurfaceProps {
   src: string;
   alt?: string;
@@ -54,6 +57,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   const [camera, setCamera] = useState<ZoomCamera>({ scale: 1, x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const cameraRef = useRef(camera);
   const viewportSizeRef = useRef(viewport);
@@ -86,13 +90,17 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
 
   // 缓存命中的图片可能在 onLoad 挂上之前就完成加载，挂载后必须主动核对一次尺寸。
   const syncNaturalSize = useCallback((image: HTMLImageElement) => {
-    if (image.naturalWidth <= 0) return;
-    const size = { w: image.naturalWidth, h: image.naturalHeight };
+    // 只有 viewBox 的 SVG 在部分引擎里 naturalWidth 为 0，退回元素尺寸与替换元素默认尺寸。
+    const hasIntrinsicSize = image.naturalWidth > 0 && image.naturalHeight > 0;
+    const size = hasIntrinsicSize
+      ? { w: image.naturalWidth, h: image.naturalHeight }
+      : { w: image.clientWidth || DEFAULT_IMAGE_SIZE.w, h: image.clientHeight || DEFAULT_IMAGE_SIZE.h };
     const current = naturalSizeRef.current;
+    setLoaded(true);
     if (current.w === size.w && current.h === size.h) return;
     naturalSizeRef.current = size;
     setNatural(size);
-    onNaturalSizeRef.current?.(size);
+    if (hasIntrinsicSize) onNaturalSizeRef.current?.(size);
     // 尺寸相近的刷新保留当前比例；换成悬殊的另一张图时重新适配，否则会缩成看不见的大小。
     const previous = previousNaturalRef.current;
     if (previous && previous.w > 0 && previous.h > 0) {
@@ -118,11 +126,12 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     naturalSizeRef.current = { w: 0, h: 0 };
     setNatural({ w: 0, h: 0 });
     setLoadFailed(false);
+    setLoaded(false);
   }, [src]);
 
   useEffect(() => {
     const image = imageRef.current;
-    if (image?.complete && image.naturalWidth > 0) syncNaturalSize(image);
+    if (image?.complete) syncNaturalSize(image);
   }, [src, syncNaturalSize]);
 
   useEffect(() => {
@@ -354,7 +363,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
           style={{
             width: natural.w || undefined,
             height: natural.h || undefined,
-            visibility: natural.w > 0 ? "visible" : "hidden",
+            visibility: loaded && !loadFailed ? "visible" : "hidden",
             transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
             imageRendering: camera.scale >= 2 ? "pixelated" : "auto",
           }}
@@ -362,7 +371,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
         {loadFailed ? (
           <div className="image-zoom-status is-error">{t("i18n.imageLoadFailed")}</div>
         ) : (
-          natural.w <= 0 && <div className="image-zoom-status">{t("i18n.loading")}</div>
+          !loaded && <div className="image-zoom-status">{t("i18n.loading")}</div>
         )}
       </div>
       <div className="image-zoom-controls">
