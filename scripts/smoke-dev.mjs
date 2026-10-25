@@ -151,7 +151,7 @@ async function request(path, timeoutMs) {
   return { status: response.status, body: await response.text() };
 }
 
-/** 首页第一次请求会触发整页编译；单次请求用剩余预算，避免总耗时翻倍。 */
+/** 首页第一次请求会触发整页编译；请求按 30 秒切片重试，预算用尽时带上最后一次错误。 */
 async function waitForPage() {
   const startedAt = Date.now();
   let lastError = null;
@@ -162,14 +162,15 @@ async function waitForPage() {
     if (childError) throw new Error(`dev server 启动失败：${childError.message}`);
     const remaining = STARTUP_TIMEOUT_MS - (Date.now() - startedAt);
     if (remaining <= 0) {
-      const suffix = lastError instanceof Error ? `；最后一次请求失败：${lastError.message}` : "";
-      throw new Error(`dev server 在 ${STARTUP_TIMEOUT_MS}ms 内没有响应 ${BASE_URL}${suffix}`);
+      const detail = lastError instanceof Error ? lastError.message : String(lastError ?? "无");
+      throw new Error(`dev server 在 ${STARTUP_TIMEOUT_MS}ms 内没有响应 ${BASE_URL}；最后一次请求失败：${detail}`);
     }
     try {
-      return await request("/", Math.max(1, remaining));
+      // 单次请求不超过预算，也不超过 30 秒：编译可能持续更久，让循环回到预算检查，
+      // 这样超时诊断来自这里，而不是被一次长请求吞掉。
+      return await request("/", Math.max(1, Math.min(remaining, 30_000)));
     } catch (error) {
       lastError = error;
-      if (error instanceof DOMException && error.name === "TimeoutError") throw error;
       await Bun.sleep(1_000);
     }
   }
