@@ -1191,6 +1191,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             <section key={project} style={{ marginBottom: isCollapsed ? 3 : 9 }}>
               <div
                 ref={projectMenuOpen === project ? wtDropdownRef : undefined}
+                data-project-path={project}
                 onMouseEnter={() => setHoveredProject(project)}
                 onMouseLeave={() => setHoveredProject((current) => current === project && projectMenuOpen !== project ? null : current)}
                 style={{
@@ -1867,6 +1868,7 @@ function ArchivedSessionsSection({
             return (
               <div
                 key={s.id}
+                data-session-id={s.id}
                 onClick={() => onSelectSession(s)}
                 style={{
                   height: 40, display: "flex", alignItems: "center",
@@ -2285,6 +2287,7 @@ function SessionItem({
 
   return (
     <div
+      data-session-id={session.id}
       onClick={confirmDelete || renaming ? undefined : onClick}
       onContextMenu={confirmDelete || renaming ? undefined : handleContextMenu}
       onMouseEnter={() => setHovered(true)}
