@@ -145,7 +145,7 @@ export function FileExplorerPanel({
           </svg>
           {t("files.explorer")}
         </button>
-        {changesCount > 0 && (
+        {open && changesCount > 0 && (
           <PanelIconButton
             onClick={() => setChangesCollapsed((v) => !v)}
             title={t("files.changedFiles", { count: changesCount })}
@@ -160,18 +160,20 @@ export function FileExplorerPanel({
             </svg>
           </PanelIconButton>
         )}
-        <PanelIconButton
-          onClick={() => fileExplorerRef.current?.openUploadPicker()}
-          disabled={uploadBusy}
-          title={t("files.uploadFilesTitle")}
-          color="var(--text-dim)"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <path d="m17 8-5-5-5 5" />
-            <path d="M12 3v12" />
-          </svg>
-        </PanelIconButton>
+        {open && (
+          <PanelIconButton
+            onClick={() => fileExplorerRef.current?.openUploadPicker()}
+            disabled={uploadBusy}
+            title={t("files.uploadFilesTitle")}
+            color="var(--text-dim)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m17 8-5-5-5 5" />
+              <path d="M12 3v12" />
+            </svg>
+          </PanelIconButton>
+        )}
         <PanelIconButton
           onClick={handleRefresh}
           title={t("files.refreshExplorer")}
@@ -192,25 +194,21 @@ export function FileExplorerPanel({
           )}
         </PanelIconButton>
       </div>
-      <div style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        overflowX: "hidden",
-        display: open ? "block" : "none",
-      }}>
-        <FileExplorer
-          ref={fileExplorerRef}
-          cwd={cwd}
-          onOpenFile={onOpenFile}
-          refreshKey={refreshKey}
-          onAtMention={onAtMention}
-          onAtMentions={onAtMentions}
-          onUploadBusyChange={setUploadBusy}
-          changesCollapsed={changesCollapsed}
-          onChangesCountChange={setChangesCount}
-        />
-      </div>
+      {open && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
+          <FileExplorer
+            ref={fileExplorerRef}
+            cwd={cwd}
+            onOpenFile={onOpenFile}
+            refreshKey={refreshKey}
+            onAtMention={onAtMention}
+            onAtMentions={onAtMentions}
+            onUploadBusyChange={setUploadBusy}
+            changesCollapsed={changesCollapsed}
+            onChangesCountChange={setChangesCount}
+          />
+        </div>
+      )}
     </div>
   );
 }
