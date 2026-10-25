@@ -1457,7 +1457,7 @@ export function AppShell() {
                   marginLeft: "auto",
                   display: "flex", alignItems: "center", gap: 10,
                   paddingLeft: 12,
-                  paddingRight: isMobile ? 12 : rightPanelOpen ? 12 : 48,
+                  paddingRight: isMobile || rightPanelOpen ? 12 : 48,
                   minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                   height: "100%",
                   background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
