@@ -18,7 +18,8 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Manager, Url};
+use tauri::webview::PageLoadEvent;
+use tauri::{AppHandle, Manager, Url, Webview};
 
 const WINDOW_LABEL: &str = "main";
 const HOST: &str = "127.0.0.1";
@@ -91,31 +92,66 @@ struct ServerChild(Mutex<Option<Child>>);
 /// How long the sidecar gets to exit after the group signal. The port is
 /// fixed, so an orphan that keeps listening would refuse the next launch.
 const SIDECAR_EXIT_TIMEOUT: Duration = Duration::from_secs(3);
+/// How long the fixed port gets to become bindable again after the sidecar
+/// exited, before the refusal is logged for the next launch to explain. Only a
+/// real leftover listener waits this out: a closed one refuses immediately.
+const SIDECAR_PORT_RELEASE_TIMEOUT: Duration = Duration::from_secs(1);
 
 impl ServerChild {
-    /// Stops the sidecar's process group and waits for it to exit, force
-    /// killing the child once the grace period runs out.
+    /// Stops the sidecar's process group and waits for it to exit, escalating
+    /// to KILL for the whole group once the grace period runs out.
     ///
     /// The wait matters because the port is fixed: a relaunch right after a
     /// failure must not find the previous child still holding it.
     fn terminate(&self) {
         let child = self.0.lock().ok().and_then(|mut guard| guard.take());
         let Some(mut child) = child else { return };
-        kill_process_group(child.id());
-        let deadline = Instant::now() + SIDECAR_EXIT_TIMEOUT;
-        while Instant::now() < deadline {
-            match child.try_wait() {
-                Ok(Some(_)) => return,
-                Ok(None) => thread::sleep(Duration::from_millis(50)),
-                Err(error) => {
-                    desktop_log(&format!("[omp-desktop] could not reap the sidecar: {error}"));
-                    break;
-                }
+        let pid = child.id();
+        kill_process_group(pid, GroupSignal::Terminate);
+        if !wait_for_exit(&mut child, SIDECAR_EXIT_TIMEOUT) {
+            // The child and its descendants still hold the port: escalate the
+            // whole group instead of only reaping the leader.
+            kill_process_group(pid, GroupSignal::Kill);
+            let _ = child.kill();
+            let _ = child.wait();
+            desktop_log("[omp-desktop] sidecar outlived its grace period; killed the process group");
+        }
+        confirm_port_released();
+    }
+}
+
+/// Waits for the child to exit; reports whether it did.
+fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            Ok(None) => thread::sleep(Duration::from_millis(50)),
+            Err(error) => {
+                desktop_log(&format!("[omp-desktop] could not reap the sidecar: {error}"));
+                return false;
             }
         }
-        let _ = child.kill();
-        let _ = child.wait();
     }
+    false
+}
+
+/// Confirms the fixed port became bindable again after the sidecar exited.
+///
+/// A listener that survives the kill would make the next launch refuse to
+/// start, so the leftover is logged instead of being discovered silently.
+fn confirm_port_released() {
+    let deadline = Instant::now() + SIDECAR_PORT_RELEASE_TIMEOUT;
+    while Instant::now() < deadline {
+        if matches!(probe_port(SERVER_PORT), PortStatus::Free) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    desktop_log(&format!(
+        "[omp-desktop] port {SERVER_PORT} is still held after the sidecar exited; \
+         the next launch will refuse to start until it is freed"
+    ));
 }
 
 /// Reports a failure the user can see, then leaves the exit to them.
@@ -142,20 +178,42 @@ fn report_failure(handle: &AppHandle, code: i32, message: &str) {
         }
     });
     let script = failure_page_script(message, &log_path);
-    thread::spawn(move || {
-        // The placeholder page owns the window only once its navigation has
-        // committed; painting into the previous document would be wiped.
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while Instant::now() < deadline {
-            if window.url().is_ok_and(|url| url.as_str().contains("index.html")) {
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
-        if let Err(error) = window.eval(&script) {
-            desktop_log(&format!("[omp-desktop] could not paint the failure screen: {error}"));
-        }
-    });
+    let already_committed = {
+        let mut screen = lock_failure_screen();
+        screen.script = Some(script.clone());
+        screen.committed
+    };
+    if already_committed {
+        // The current document is known to be committed, so it can take the
+        // panel right away. The script stays queued: the next Finished signal
+        // repaints over a navigation that was still in flight.
+        paint_failure_screen(window.as_ref(), &script);
+    }
+}
+
+/// The failure screen to paint and the last page load that committed.
+///
+/// The panel may only be painted into a committed document: painting over the
+/// previous one is wiped by the navigation that is still running. `on_page_load`
+/// reports every Finished load, so a pending script is painted from there.
+struct FailureScreen {
+    committed: bool,
+    script: Option<String>,
+}
+
+static FAILURE_SCREEN: Mutex<FailureScreen> = Mutex::new(FailureScreen {
+    committed: false,
+    script: None,
+});
+
+fn lock_failure_screen() -> std::sync::MutexGuard<'static, FailureScreen> {
+    FAILURE_SCREEN.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn paint_failure_screen(webview: &Webview, script: &str) {
+    if let Err(error) = webview.eval(script) {
+        desktop_log(&format!("[omp-desktop] could not paint the failure screen: {error}"));
+    }
 }
 
 /// Builds the script that replaces the splash with the failure reason and the
@@ -191,6 +249,20 @@ fn failure_page_script(message: &str, log_path: &Path) -> String {
 
 fn main() {
     tauri::Builder::default()
+        // The failure panel belongs to a committed document only; every
+        // finished page load repaints the script that is still queued.
+        .on_page_load(|webview, payload| {
+            if payload.event() != PageLoadEvent::Finished {
+                return;
+            }
+            let mut screen = lock_failure_screen();
+            screen.committed = true;
+            let script = screen.script.take();
+            drop(screen);
+            if let Some(script) = script {
+                paint_failure_screen(webview, &script);
+            }
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -236,7 +308,9 @@ fn main() {
 
 fn start_server(app: &mut tauri::App) -> Result<(), String> {
     let port = SERVER_PORT;
-    ensure_port_available(port)?;
+    if let Some(error) = port_error(port, probe_port(port)) {
+        return Err(error);
+    }
     let root = server_root(app)?;
 
     let bun = root.join(bun_binary_name());
@@ -304,26 +378,50 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
     Ok(())
 }
 
-/// Fails when the fixed port is already held, with the reason and the fix.
-/// A connect probe separates a live listener from a socket lingering in
-/// TIME_WAIT: the listener accepts the connection, the lingering socket
-/// refuses it, so a recently closed server never blocks the next launch.
-fn ensure_port_available(port: u16) -> Result<(), String> {
+/// What a connect probe proved about the port.
+///
+/// A probe separates a live listener from a socket lingering in TIME_WAIT: the
+/// listener accepts the connection, the lingering socket refuses it, so a
+/// recently closed server never blocks the next launch.
+enum PortStatus {
+    /// Nothing listens: the port can be bound.
+    Free,
+    /// A listener accepted the connection: the port is definitely taken.
+    Occupied,
+    /// The probe proved nothing (permissions, timeout, ...), so the port is
+    /// treated as taken without claiming it is.
+    Unconfirmed(String),
+}
+
+fn probe_port(port: u16) -> PortStatus {
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    let reason = match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
-        // 连接被接受，说明端口确实有监听。
-        Ok(_) => String::from("the port accepts connections"),
-        // 只有明确的拒绝能证明端口空闲。
-        Err(error) if error.kind() == ErrorKind::ConnectionRefused => return Ok(()),
-        // 其他错误（权限、超时等）无法证明端口空闲，按占用处理。
-        Err(error) => error.to_string(),
-    };
-    Err(format!(
-        "port {port} on {HOST} is already in use ({reason}). \
-         Another ompdesk server may still be running — quit it, or free port {port}, \
-         and relaunch. ompdesk never switches ports, because phone access and \
-         `tailscale serve` forward this one."
-    ))
+    match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
+        Ok(_) => PortStatus::Occupied,
+        Err(error) if error.kind() == ErrorKind::ConnectionRefused => PortStatus::Free,
+        Err(error) => PortStatus::Unconfirmed(error.to_string()),
+    }
+}
+
+/// Why the fixed port cannot be used, or `None` when the probe proved it free.
+///
+/// An occupied port and a port the probe could not clear get different reasons:
+/// only the first one tells the user another server is running.
+fn port_error(port: u16, status: PortStatus) -> Option<String> {
+    const RULE: &str = "ompdesk never switches ports, because phone access and \
+                        `tailscale serve` forward this one.";
+    match status {
+        PortStatus::Free => None,
+        PortStatus::Occupied => Some(format!(
+            "port {port} on {HOST} is already in use: the port accepts connections. \
+             Another ompdesk server may still be running — quit it, or free port {port}, \
+             and relaunch. {RULE}"
+        )),
+        PortStatus::Unconfirmed(reason) => Some(format!(
+            "could not confirm that port {port} on {HOST} is free ({reason}). \
+             Another ompdesk server may still be holding it — quit it, or check port {port}, \
+             and relaunch. {RULE}"
+        )),
+    }
 }
 
 /// Locates the server payload (node_modules, .next, public, the bundled Bun,
@@ -406,16 +504,31 @@ fn make_process_group(command: &mut Command) {
     }
 }
 
-/// Fire-and-forget termination of the sidecar's process group.
-fn kill_process_group(pid: u32) {
+/// Signal sent to the sidecar's process group.
+#[derive(Clone, Copy)]
+enum GroupSignal {
+    /// Graceful stop; the sidecar closes its listeners and exits.
+    Terminate,
+    /// Escalation after the grace period; the whole group is killed.
+    Kill,
+}
+
+/// Fire-and-forget signal to the sidecar's process group.
+fn kill_process_group(pid: u32, signal: GroupSignal) {
     #[cfg(unix)]
     {
+        let flag = match signal {
+            GroupSignal::Terminate => "-TERM",
+            GroupSignal::Kill => "-KILL",
+        };
         let _ = Command::new("kill")
-            .args(["-TERM", &format!("-{pid}")])
+            .args([flag, &format!("-{pid}")])
             .spawn();
     }
     #[cfg(windows)]
     {
+        // taskkill /T /F already kills the tree, so both signals are the same.
+        let _ = signal;
         let _ = Command::new("taskkill")
             .args(["/pid", &pid.to_string(), "/T", "/F"])
             .spawn();
@@ -467,14 +580,40 @@ mod tests {
             .expect("bind an ephemeral port to stand in for a running server");
         let port = held.local_addr().expect("ephemeral address").port();
 
-        let error = ensure_port_available(port).expect_err("the probe must reject a listening port");
+        let error = port_error(port, probe_port(port)).expect("a listening port must be rejected");
         assert!(
             error.contains(&port.to_string()),
             "error must name the port: {error}"
         );
+        assert!(
+            error.contains("already in use"),
+            "a listener proves the port is taken: {error}"
+        );
 
         drop(held);
-        ensure_port_available(port).expect("port is free again after the holder is dropped");
+        // The next launch only needs the port to be bindable again; a connect
+        // probe right after the drop can still answer with a reset on Windows.
+        TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
+            .expect("port is free again after the holder is dropped");
+    }
+
+    // A probe that proves nothing must not claim another server is running.
+    #[test]
+    fn unconfirmed_probe_says_the_port_could_not_be_checked() {
+        let error = port_error(
+            30141,
+            PortStatus::Unconfirmed(String::from("connection timed out")),
+        )
+        .expect("an unconfirmed probe must block the launch");
+        assert!(error.contains("could not confirm"), "{error}");
+        assert!(
+            error.contains("connection timed out"),
+            "the probe failure must be kept: {error}"
+        );
+        assert!(
+            !error.contains("already in use"),
+            "an unconfirmed probe must not claim the port is occupied: {error}"
+        );
     }
 
     // The README phone-access steps, tauri.conf.json's devUrl and the CLI
