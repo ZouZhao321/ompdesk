@@ -451,18 +451,25 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
 
 ## Agent 入口
 
-`AGENTS.md` 是项目说明的唯一维护来源。`CLAUDE.md` 只包含 `@AGENTS.md` 导入，
-Claude Code 因此读取同样的内容。新内容写在这里，并使用
-`node .gitnexus/run.cjs analyze --index-only` 重新索引，避免生成块被写回
-`CLAUDE.md`。`<!-- gitnexus:start -->` 与 `<!-- gitnexus:end -->` 之间的区段由
-GitNexus 生成，重新生成时会恢复为工具输出的英文原文。
+`AGENTS.md` 是项目说明的唯一维护来源。`CLAUDE.md` 只保留 `@AGENTS.md` 导入，
+Claude Code 因此读取同样的内容。
+
+本文档只写长期成立的规则、命令与结构。规模数字、索引时间、机器绝对路径、具体
+会话 id 这类随环境变化的内容不进正文：需要时现场读取（索引统计在
+`.gitnexus/gitnexus.json` 的 `stats`）。
+
+索引重建用 `node .gitnexus/run.cjs analyze --index-only`：只更新索引，不写任何
+文档。要连带刷新下面这段生成内容，用 `analyze --no-stats`（不带规模数字），它会
+把整段恢复为工具输出的英文原文，并同时写进 `CLAUDE.md`，事后需要把 `CLAUDE.md`
+还原为 `@AGENTS.md`。`<!-- gitnexus:start -->` 与 `<!-- gitnexus:end -->` 之间
+的区段由 GitNexus 生成，长期规则不写在该区段内。
 
 <!-- gitnexus:start -->
 # GitNexus 代码索引
 
-本项目由 GitNexus 索引为 **ompdesk**（2786 个 symbol，7305 条关系，233 条执行流程）。使用 GitNexus MCP 工具理解代码、评估影响、安全导航。
+本项目由 GitNexus 索引为 **ompdesk**。使用 GitNexus MCP 工具理解代码、评估影响、安全导航。
 
-> 索引过期？在项目根执行 `node .gitnexus/run.cjs analyze`，它会自动选择可用的运行器。还没有 `.gitnexus/run.cjs`？执行 `npx gitnexus analyze`（npm 11 崩溃时执行 `npm i -g gitnexus`；#1939）。
+> 索引过期？在项目根执行 `node .gitnexus/run.cjs analyze --index-only`：只重建索引，不改文档，它会自动选择可用的运行器。还没有 `.gitnexus/run.cjs`？执行 `npx gitnexus analyze`（npm 11 崩溃时执行 `npm i -g gitnexus`；#1939）。
 
 ## 必须做到
 
