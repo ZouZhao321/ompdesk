@@ -1,5 +1,5 @@
 ---
-name: verify-ompdesk
+name: ompdesk-verify
 description: 驱动本地 ompdesk，证明改动在开发模式下真能启动并渲染——拉起 dev server、按用户路径点开侧栏、右侧文件面板与输入区、截图留证、收尾。只要在 ompdesk 上改了 UI、路由、启动期代码（instrumentation.ts、next.config.ts、proxy.ts、SESSION.md 相关），或用户说“验证一下”“怎么确认没坏”“页面打不开”“运行看看”，就先走这里；即使只想确认首页还能不能渲染，也不要用 bun test 的绿灯代替这一步。
 disable-model-invocation: true
 ---
@@ -55,7 +55,7 @@ Basic 认证，服务端日志里的 `authEnabled` 会是 true；验证时不要
 
 ```js
 const tab = await browser.open({
-  name: "verify-ompdesk",
+  name: "ompdesk-verify",
   url: "http://127.0.0.1:30199/",
   viewport: { width: 1440, height: 900 },
 });
