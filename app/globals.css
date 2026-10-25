@@ -1457,7 +1457,7 @@ span.linenumber {
   }
 }
 
-/* 移动档：判定规则与 lib/mobile-layout.ts 中的 isMobileLayout() 保持一致。 */
+/* 移动档：判定规则与 lib/mobile-layout.ts 中的 MOBILE_LAYOUT_QUERY 保持一致。 */
 /* Mobile sidebar: slide in/out as overlay */
 @media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
   .chat-stats-center {
