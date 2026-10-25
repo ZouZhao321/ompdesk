@@ -12,6 +12,7 @@
  */
 
 import { spawn } from "node:child_process";
+import net from "node:net";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.OMPDESK_SMOKE_PORT ?? 30199);
@@ -19,16 +20,19 @@ const DIST_DIR = process.env.OMPDESK_DIST_DIR ?? ".next-smoke";
 const STARTUP_TIMEOUT_MS = Number(process.env.OMPDESK_SMOKE_STARTUP_MS ?? 240_000);
 const BASE_URL = `http://${HOST}:${PORT}`;
 
-/** 这些字符串出现在开发服务器日志里，说明页面即使返回 200 也是坏构建的产物。 */
+/** 这些字符串出现在开发服务器日志里，说明这一轮不能算通过。 */
 const FAILURE_PATTERNS = [
   "Module build failed",
   "UnhandledSchemeError",
   "Failed to compile",
   "Cannot find module",
+  "EADDRINUSE",
+  "address already in use",
 ];
 
 const output = [];
 let childExit = null;
+let childError = null;
 
 const child = spawn(
   process.execPath,
@@ -36,6 +40,8 @@ const child = spawn(
   {
     env: { ...process.env, OMPDESK_DIST_DIR: DIST_DIR },
     stdio: ["ignore", "pipe", "pipe"],
+    // POSIX 下建独立进程组，收尾时按组结束，避免 next 派生的子进程占着端口。
+    detached: process.platform !== "win32",
   },
 );
 
@@ -47,18 +53,52 @@ function record(chunk) {
 
 child.stdout.on("data", record);
 child.stderr.on("data", record);
+child.on("error", (error) => {
+  childError = error;
+});
 child.on("exit", (code, signal) => {
   childExit = { code, signal };
 });
 
-function stopServer() {
-  if (childExit) return;
-  child.kill();
+/** 端口被占用时不能继续：否则请求会打到旧服务上，冒烟结果失真。 */
+function probePort() {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: HOST, port: PORT });
+    const finish = (inUse) => {
+      socket.destroy();
+      resolve(inUse);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(1_000, () => finish(false));
+  });
+}
+
+async function stopServer() {
+  if (!child.pid || childExit) return;
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {
+      child.kill("SIGTERM");
+    }
+  }
+  const force = setTimeout(() => {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // 已经退出
+    }
+  }, 5_000);
+  await Promise.race([exited, Bun.sleep(6_000)]);
+  clearTimeout(force);
 }
 
 process.on("SIGINT", () => {
-  stopServer();
-  process.exit(130);
+  void stopServer().then(() => process.exit(130));
 });
 
 function logTail(limit = 80) {
@@ -80,6 +120,7 @@ async function waitForPage() {
     if (childExit) {
       throw new Error(`dev server 提前退出：code=${childExit.code} signal=${childExit.signal}`);
     }
+    if (childError) throw new Error(`dev server 启动失败：${childError.message}`);
     if (Date.now() - startedAt > STARTUP_TIMEOUT_MS) {
       throw new Error(`dev server 在 ${STARTUP_TIMEOUT_MS}ms 内没有响应 ${BASE_URL}`);
     }
@@ -97,10 +138,19 @@ function assertCheck(failures, name, ok, detail) {
   if (!ok) failures.push(`${name}: ${detail}`);
 }
 
-let failures = [];
+const failures = [];
 try {
+  if (await probePort()) {
+    throw new Error(`端口 ${PORT} 已被占用，先结束占用它的进程再跑冒烟`);
+  }
+
   const page = await waitForPage();
   assertCheck(failures, "GET /", page.status === 200, `status ${page.status}`);
+
+  // 服务可能在首页与 API 之间崩掉；断言前再确认一次它仍然活着。
+  if (childExit) {
+    throw new Error(`dev server 在请求过程中退出：code=${childExit.code} signal=${childExit.signal}`);
+  }
 
   const home = await request("/api/home", 120_000);
   assertCheck(failures, "GET /api/home", home.status === 200, `status ${home.status}`);
@@ -111,7 +161,7 @@ try {
 } catch (error) {
   failures.push(error instanceof Error ? error.message : String(error));
 } finally {
-  stopServer();
+  await stopServer();
 }
 
 if (failures.length > 0) {
