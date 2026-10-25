@@ -46,7 +46,32 @@ const FAILURE_PATTERNS = [
   "Cannot find module",
   "EADDRINUSE",
   "address already in use",
+  "using available port",
 ];
+
+function logTail(limit = 80) {
+  return output.join("").split(/\r?\n/).slice(-limit).join("\n");
+}
+
+/** 端口被占用时不能继续：否则请求可能打到别的实例上，冒烟结果失真。 */
+function probePort() {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: HOST, port: PORT });
+    const finish = (inUse) => {
+      socket.destroy();
+      resolve(inUse);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(1_000, () => finish(false));
+  });
+}
+
+// 先确认端口空闲再拉起服务：next dev 遇到端口冲突会顺延到下一个端口，不会退出。
+if (await probePort()) {
+  console.error(`[ompdesk] 端口 ${PORT} 已被占用，先结束占用它的进程再跑冒烟`);
+  process.exit(1);
+}
 
 const output = [];
 let childExit = null;
@@ -79,20 +104,6 @@ child.on("error", (error) => {
 child.on("exit", (code, signal) => {
   childExit = { code, signal };
 });
-
-/** 端口被占用时不能继续：否则请求会打到旧服务上，冒烟结果失真。 */
-function probePort() {
-  return new Promise((resolve) => {
-    const socket = net.connect({ host: HOST, port: PORT });
-    const finish = (inUse) => {
-      socket.destroy();
-      resolve(inUse);
-    };
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-    socket.setTimeout(1_000, () => finish(false));
-  });
-}
 
 /**
  * 按进程组收尾。直接子进程先退出、孙进程仍占着端口是常见情形，所以这里不看
@@ -129,10 +140,6 @@ function shutdown(code) {
 process.on("SIGINT", () => shutdown(130));
 process.on("SIGTERM", () => shutdown(143));
 
-function logTail(limit = 80) {
-  return output.join("").split(/\r?\n/).slice(-limit).join("\n");
-}
-
 async function request(path, timeoutMs) {
   const response = await fetch(`${BASE_URL}${path}`, {
     signal: AbortSignal.timeout(timeoutMs),
@@ -144,20 +151,24 @@ async function request(path, timeoutMs) {
   return { status: response.status, body: await response.text() };
 }
 
-/** 首页第一次请求会触发整页编译，所以单次请求给足时间，重试只用于连接被拒。 */
+/** 首页第一次请求会触发整页编译；单次请求用剩余预算，避免总耗时翻倍。 */
 async function waitForPage() {
   const startedAt = Date.now();
+  let lastError = null;
   for (;;) {
     if (childExit) {
       throw new Error(`dev server 提前退出：code=${childExit.code} signal=${childExit.signal}`);
     }
     if (childError) throw new Error(`dev server 启动失败：${childError.message}`);
-    if (Date.now() - startedAt > STARTUP_TIMEOUT_MS) {
-      throw new Error(`dev server 在 ${STARTUP_TIMEOUT_MS}ms 内没有响应 ${BASE_URL}`);
+    const remaining = STARTUP_TIMEOUT_MS - (Date.now() - startedAt);
+    if (remaining <= 0) {
+      const suffix = lastError instanceof Error ? `；最后一次请求失败：${lastError.message}` : "";
+      throw new Error(`dev server 在 ${STARTUP_TIMEOUT_MS}ms 内没有响应 ${BASE_URL}${suffix}`);
     }
     try {
-      return await request("/", STARTUP_TIMEOUT_MS);
+      return await request("/", Math.max(1, remaining));
     } catch (error) {
+      lastError = error;
       if (error instanceof DOMException && error.name === "TimeoutError") throw error;
       await Bun.sleep(1_000);
     }
@@ -171,10 +182,6 @@ function assertCheck(failures, name, ok, detail) {
 
 const failures = [];
 try {
-  if (await probePort()) {
-    throw new Error(`端口 ${PORT} 已被占用，先结束占用它的进程再跑冒烟`);
-  }
-
   const page = await waitForPage();
   assertCheck(failures, "GET /", page.status === 200, `status ${page.status}`);
 
@@ -193,6 +200,8 @@ try {
   }
 
   const logText = output.join("");
+  const addressOk = logText.includes(`${HOST}:${PORT}`);
+  assertCheck(failures, "监听地址是本次启动的端口", addressOk, addressOk ? "" : `日志里找不到 ${HOST}:${PORT}`);
   const hits = FAILURE_PATTERNS.filter((pattern) => logText.includes(pattern));
   assertCheck(failures, "构建日志无失败标记", hits.length === 0, hits.join(", "));
 } catch (error) {
