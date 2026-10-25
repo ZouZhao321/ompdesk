@@ -63,6 +63,19 @@ Bun 上运行；`bin/ompdesk.js` 找到 Bun 二进制并通过它重新执行 `n
 - 用 `bun test`，不用 `node --test`。测试文件基于 `node:test`，Bun 能运行它们；
   Node 无法 import 测试所验证的 SDK。
 
+## UI 改动的验收材料
+
+界面改动必须附截图，能录视频的再附一段不超过一分钟的短视频，只演示这次的交互。
+证据上传到 PR 评论的附件区，正文引用那条评论：
+
+```
+gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
+```
+
+`--attach` 需要 gh 2.99 以上；它把文件收进 GitHub 的附件存储，视频单独成段时渲染成
+播放器。截图与视频不进仓库，避免长期占用 git 历史。截图至少覆盖默认状态、改动后
+的关键状态与手机档（判定见 `lib/mobile-layout.ts`）。
+
 ---
 
 ## 架构
@@ -131,6 +144,7 @@ lib/
   draft-store.ts       本地草稿持久化辅助
   file-access.ts       /api/files 与 worktree 允许的文件根
   file-paths.ts        客户端与服务端的路径编码辅助
+  image-zoom.ts        图片缩放的几何计算（适配、锚点缩放、边界收敛）
   map-layout.ts        按轮树的布局计算（lane + 主干优先）
   map-types.ts         会话地图的共享类型
   markdown.ts          共享 markdown 辅助
@@ -169,6 +183,7 @@ components/
   FileExplorerPanel.tsx 右侧文件面板内的文件树区（标题、上传、刷新、折叠）
   FileIcons.tsx       文件图标辅助
   FileViewer.tsx      标签页内的文件内容
+  ImageZoom.tsx       图片缩放画面、全屏预览层与打开入口
   TabBar.tsx          标签栏（聊天 + 已打开文件标签）
 
 hooks/
@@ -413,6 +428,19 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
 开发服务器存在，因为 Bun 把 `undici` 解析为自己的 shim，其中
 `setGlobalDispatcher` 不影响 `fetch`，`install` 不存在。
 
+### 图片缩放（`components/ImageZoom.tsx`）
+- 图片文件标签页与全屏预览共用 `ImageZoomSurface`；相机是 `translate + scale`，
+  几何计算在 `lib/image-zoom.ts`，不碰 DOM。比例范围 10%–800%，超过 200% 用
+  `image-rendering: pixelated`，看清像素而不做插值。
+- 「适配窗口」取 `min(视口宽/图宽, 视口高/图高, 1)`：小图不放大超过 100%。滚轮与
+  双指捏合以光标或双指中点为锚点缩放；平移按内容尺寸收敛，图小于视口时居中，
+  大于视口时边缘贴住视口，拖不出空白。
+- 聊天里任何图片——用户附件、扩展消息、markdown 内联、文件预览内联——点击都由
+  `ImagePreviewProvider` 打开同一个全屏预览层。Provider 挂在 `app/page.tsx`；未挂载
+  时 `useImagePreview()` 返回空操作，渲染不会中断。
+- 图片文件被外部覆盖时（`live` 监听的 `bust` 变化）保留当前比例与位置，只把相机
+  拉回合法范围；只有窗口尺寸变化且用户没手动缩放过才重新适配。切换文件靠
+  `key={filePath}` 重挂载回到适配。
 ## omp 会话文件格式
 
 位置：`~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`
