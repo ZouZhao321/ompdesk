@@ -822,6 +822,16 @@ export function AppShell() {
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ompdesk` : "ompdesk";
+  // Explorer section geometry: header only when collapsed, the full panel when
+  // no file is open, and a fixed share of the panel height when a file is open.
+  const explorerSectionFlex = !explorerOpen
+    ? "0 0 auto"
+    : activeFileTab
+      ? `0 0 ${RIGHT_PANEL_EXPLORER_SHARE_PERCENT}%`
+      : "1 1 auto";
+  const explorerSectionMinHeight = explorerOpen && activeFileTab
+    ? RIGHT_PANEL_EXPLORER_MIN_HEIGHT
+    : 0;
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -1794,10 +1804,8 @@ export function AppShell() {
           <div style={{
             display: "flex",
             flexDirection: "column",
-            flex: explorerOpen
-              ? (activeFileTab ? `0 0 ${RIGHT_PANEL_EXPLORER_SHARE_PERCENT}%` : "1 1 auto")
-              : "0 0 auto",
-            minHeight: explorerOpen && activeFileTab ? RIGHT_PANEL_EXPLORER_MIN_HEIGHT : 0,
+            flex: explorerSectionFlex,
+            minHeight: explorerSectionMinHeight,
             overflow: "hidden",
             borderBottom: activeFileTab ? "1px solid var(--border)" : "none",
           }}>
