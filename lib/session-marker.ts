@@ -87,3 +87,86 @@ export function initialMarkerUnreadIds(
     })
     .map((session) => session.id);
 }
+
+/** 一次运行结束时的归属条件：决定这次结束是否写进未读集合。 */
+export interface TaskEndAttribution {
+  /** 结束的是不是当前选中的会话。 */
+  isSelected: boolean;
+  /** 结束发生时页面是否可见。 */
+  isPageVisible: boolean;
+  /** 结束是否由 omp 进程退出造成：进程退出没有可观察的完成时刻。 */
+  isProcessExit?: boolean;
+}
+
+/**
+ * 任务结束时是否把会话记为未读。
+ *
+ * 用户正看着的会话算已读；页面在后台、或结束的是别的会话时要亮标记。
+ * 进程退出属于例外：页面没有机会看到结束的那一刻，一律记为未读。
+ */
+export function shouldMarkSessionUnread(input: TaskEndAttribution): boolean {
+  if (input.isProcessExit) return true;
+  return !input.isSelected || !input.isPageVisible;
+}
+
+/** 相邻两份活动快照的对比输入。 */
+export interface FinishedRunsInput {
+  /** 上一份快照里正在运行的会话。 */
+  previousRunningSessionIds: readonly string[];
+  /** 当前快照里仍在运行的会话。 */
+  runningSessionIds: ReadonlySet<string>;
+  /** 上一份快照的 runtime → 会话 id 映射。 */
+  previousSessionIdsByRuntimeId?: Record<string, string>;
+  /** 当前快照的 runtime → 会话 id 映射。 */
+  sessionIdsByRuntimeId?: Record<string, string>;
+  selectedSessionId?: string | null;
+  selectedRuntimeId?: string;
+  /** 本次对比覆盖的时间段内页面是否始终可见。 */
+  isPageVisible: boolean;
+  /** 本次对比覆盖的时间段内是否与服务失去过联系。 */
+  isProcessExit?: boolean;
+}
+
+/** 两份快照之间结束的运行，以及每个结束各自的归属。 */
+export interface FinishedRuns {
+  /** 按当前会话 id 表示并去重后的结束列表。 */
+  finishedIds: string[];
+  /** 其中要写入未读集合的会话。 */
+  unreadIds: string[];
+  /** 其中不是当前选中的会话，用于后台完成提醒。 */
+  backgroundIds: string[];
+}
+
+/**
+ * 对比相邻两份活动快照，算出哪些运行结束了、这次结束归谁。
+ *
+ * 会话 id 可能在运行中变化，所以用 runtime id 把上一份快照的运行换算成当前 id，
+ * 并以 runtime id 判断它是不是选中的那次运行。
+ */
+export function resolveFinishedRuns(input: FinishedRunsInput): FinishedRuns {
+  const selectedCanonicalId = input.selectedRuntimeId
+    ? input.sessionIdsByRuntimeId?.[input.selectedRuntimeId] ?? input.selectedSessionId ?? null
+    : input.selectedSessionId ?? null;
+  const previousRuntimeIds = new Map(
+    Object.entries(input.previousSessionIdsByRuntimeId ?? {})
+      .map(([runtimeId, sessionId]) => [sessionId, runtimeId]),
+  );
+
+  const finishedIds: string[] = [];
+  for (const id of input.previousRunningSessionIds) {
+    const runtimeId = previousRuntimeIds.get(id);
+    if (runtimeId !== undefined && runtimeId === input.selectedRuntimeId) continue;
+    const currentId = (runtimeId === undefined ? undefined : input.sessionIdsByRuntimeId?.[runtimeId]) ?? id;
+    if (input.runningSessionIds.has(currentId) || finishedIds.includes(currentId)) continue;
+    finishedIds.push(currentId);
+  }
+
+  const unreadIds = finishedIds.filter((id) => shouldMarkSessionUnread({
+    isSelected: id === selectedCanonicalId,
+    isPageVisible: input.isPageVisible,
+    isProcessExit: input.isProcessExit,
+  }));
+  const backgroundIds = finishedIds.filter((id) => id !== selectedCanonicalId);
+
+  return { finishedIds, unreadIds, backgroundIds };
+}

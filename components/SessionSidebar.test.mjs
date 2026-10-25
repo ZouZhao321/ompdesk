@@ -134,10 +134,15 @@ test("does not expose disk-backed actions for transient sessions", () => {
 const activityEffectStart = source.indexOf("    const previousSnapshot = previousActivitySnapshotRef.current;");
 const activityEffectEnd = source.indexOf("\n  }, [activitySnapshot,", activityEffectStart);
 assert.ok(activityEffectStart >= 0 && activityEffectEnd > activityEffectStart);
+const { resolveFinishedRuns, resolveSessionMarker } = await createJiti(import.meta.url).import(
+  "../lib/session-marker.ts",
+);
 const runActivityEffect = new Function(
   "previousActivitySnapshotRef", "activitySnapshot", "runningSessionIds",
   "selectedSessionId", "selectedRuntimeId", "allSessions", "setUnreadSessionIds",
   "loadSessions", "onBackgroundTaskDone",
+  "pageVisibilitySinceSnapshotRef", "serverOutageSinceSnapshotRef", "resolveFinishedRuns",
+  "document",
   source.slice(activityEffectStart, activityEffectEnd),
 );
 
@@ -148,73 +153,139 @@ const activityCases = [
     previous: snapshot(["a"], { "runtime:selected": "a" }),
     current: snapshot([]),
     selectedSessionId: "b", selectedRuntimeId: "runtime:selected",
-    expectedUnread: [],
+    expectedUnread: [], expectedRefresh: false, expectedCompletion: false,
   },
   {
     name: "still reports another runtime completing in the same restart snapshot",
     previous: snapshot(["a", "other"], { "runtime:selected": "a", "runtime:other": "other" }),
     current: snapshot([]),
     selectedSessionId: "b", selectedRuntimeId: "runtime:selected",
-    expectedUnread: ["other"],
+    expectedUnread: ["other"], expectedRefresh: true, expectedCompletion: true,
   },
   {
     name: "does not suppress background completion when both runtime IDs are absent",
     previous: snapshot(["a"]),
     current: snapshot([]),
     selectedSessionId: "b",
-    expectedUnread: ["a"],
+    expectedUnread: ["a"], expectedRefresh: true, expectedCompletion: true,
   },
   {
     name: "keeps ordinary selected transcript completion out of background notifications",
     previous: snapshot(["a"]),
     current: snapshot([]),
     selectedSessionId: "a",
-    expectedUnread: [],
+    expectedUnread: [], expectedRefresh: true, expectedCompletion: false,
   },
   {
     name: "matches selected completion through the current runtime mapping",
     previous: snapshot(["a"], { "runtime:selected": "a" }),
     current: snapshot([], { "runtime:selected": "b" }),
     selectedSessionId: "a", selectedRuntimeId: "runtime:selected",
-    expectedUnread: [],
+    expectedUnread: [], expectedRefresh: false, expectedCompletion: false,
   },
   {
     name: "does not complete a relocated runtime that is still running",
     previous: snapshot(["a"], { "runtime:other": "a" }),
     current: snapshot(["b"], { "runtime:other": "b" }),
     selectedSessionId: "selected", selectedRuntimeId: "runtime:selected",
-    initialUnread: ["b"], expectedUnread: [],
+    initialUnread: ["b"], expectedUnread: [], expectedRefresh: false, expectedCompletion: false,
   },
   {
     name: "marks the current transcript unread when a background runtime finishes",
     previous: snapshot(["a"], { "runtime:other": "a" }),
     current: snapshot([], { "runtime:other": "b" }),
     selectedSessionId: "selected", selectedRuntimeId: "runtime:selected",
-    expectedUnread: ["b"],
+    expectedUnread: ["b"], expectedRefresh: true, expectedCompletion: true,
+  },
+  {
+    name: "marks the watched session when it finishes while the page was in the background",
+    previous: snapshot(["watched"]),
+    current: snapshot([]),
+    selectedSessionId: "watched",
+    pageVisible: false,
+    expectedUnread: ["watched"], expectedRefresh: true, expectedCompletion: false,
+  },
+  {
+    name: "marks the watched session when the run ended while the server was gone",
+    previous: snapshot(["waiting"]),
+    current: snapshot([]),
+    selectedSessionId: "waiting",
+    serverOutage: true,
+    expectedUnread: ["waiting"], expectedRefresh: true, expectedCompletion: false,
+  },
+  {
+    name: "clears the previous marker when the session starts running again",
+    previous: snapshot([]),
+    current: snapshot(["rerun"]),
+    selectedSessionId: "selected",
+    initialUnread: ["rerun"],
+    expectedUnread: [], expectedRefresh: false, expectedCompletion: false,
   },
 ];
 
+function runActivity(scenario) {
+  const previousRef = { current: scenario.previous };
+  const pageVisibilityRef = { current: scenario.pageVisible === false ? "hidden" : "visible" };
+  const serverOutageRef = { current: scenario.serverOutage === true };
+  const documentDouble = { visibilityState: pageVisibilityRef.current };
+  let unread = new Set(scenario.initialUnread ?? []);
+  let completionCount = 0;
+  const refreshes = [];
+  runActivityEffect(
+    previousRef, scenario.current, new Set(scenario.current.runningSessionIds),
+    scenario.selectedSessionId, scenario.selectedRuntimeId,
+    ["a", "b", "other", "selected", "watched", "waiting", "rerun"].map((id) => ({ id })),
+    (update) => { unread = update(unread); },
+    (...args) => { refreshes.push(args); },
+    () => { completionCount += 1; },
+    pageVisibilityRef, serverOutageRef, resolveFinishedRuns,
+    documentDouble,
+  );
+  return { previousRef, unread, refreshes, completionCount, pageVisibilityRef, serverOutageRef };
+}
+
 for (const scenario of activityCases) {
   test(scenario.name, () => {
-    const previousRef = { current: scenario.previous };
-    let unread = new Set(scenario.initialUnread ?? []);
-    let completionCount = 0;
-    const refreshes = [];
-    runActivityEffect(
-      previousRef, scenario.current, new Set(scenario.current.runningSessionIds),
-      scenario.selectedSessionId, scenario.selectedRuntimeId,
-      ["a", "b", "other", "selected"].map((id) => ({ id })),
-      (update) => { unread = update(unread); },
-      (...args) => { refreshes.push(args); },
-      () => { completionCount += 1; },
-    );
+    const { previousRef, unread, refreshes, completionCount, pageVisibilityRef, serverOutageRef } =
+      runActivity(scenario);
     assert.deepEqual([...unread], scenario.expectedUnread);
-    const completed = scenario.expectedUnread.length > 0;
-    assert.equal(completionCount, completed ? 1 : 0);
-    assert.deepEqual(refreshes, completed ? [[false, true]] : []);
+    assert.deepEqual(refreshes, scenario.expectedRefresh ? [[false, true]] : []);
+    assert.equal(completionCount, scenario.expectedCompletion ? 1 : 0);
     assert.equal(previousRef.current, scenario.current);
+    assert.equal(pageVisibilityRef.current, scenario.pageVisible === false ? "hidden" : "visible");
+    assert.equal(serverOutageRef.current, false);
   });
 }
+
+test("keeps the attribution window open when only the session list refreshes", () => {
+  const current = snapshot([]);
+  const previousRef = { current: snapshot(["watched"]) };
+  const pageVisibilityRef = { current: "hidden" };
+  const serverOutageRef = { current: true };
+  let unread = new Set();
+  const runEffect = () => runActivityEffect(
+    previousRef, current, new Set(),
+    "watched", undefined, [],
+    (update) => { unread = update(unread); },
+    () => {}, () => {},
+    pageVisibilityRef, serverOutageRef, resolveFinishedRuns,
+    { visibilityState: "visible" },
+  );
+
+  runEffect();
+  assert.deepEqual([...unread], ["watched"]);
+  assert.equal(pageVisibilityRef.current, "visible");
+  assert.equal(serverOutageRef.current, false);
+
+  // 快照没变时页面再次隐藏、服务再次失联；无关重跑不能提前关掉窗口。
+  pageVisibilityRef.current = "hidden";
+  serverOutageRef.current = true;
+  runEffect();
+
+  assert.equal(pageVisibilityRef.current, "hidden");
+  assert.equal(serverOutageRef.current, true);
+  assert.deepEqual([...unread], ["watched"]);
+});
 
 const archivedSectionSource = source.slice(
   source.indexOf("function ArchivedSessionsSection("),
@@ -241,22 +312,30 @@ test("renders the static lifecycle marker as an animated-free labelled dot", () 
   assert.doesNotMatch(staticMarkerSource, /<animate|animateTransform|@keyframes|animation:/);
 });
 
-test("drops the marker of any static result when its session is opened", async () => {
-  const readEffectStart = source.indexOf("    if (!selectedSessionId) return;");
-  const readEffectEnd = source.indexOf("\n  }, [selectedSessionId]);", readEffectStart);
-  assert.ok(readEffectStart >= 0 && readEffectEnd > readEffectStart);
-  const runReadEffect = new Function(
-    "selectedSessionId", "setUnreadSessionIds",
-    source.slice(readEffectStart, readEffectEnd),
-  );
-  const markerModule = await createJiti(import.meta.url).import("../lib/session-marker.ts");
+// 静态标记只在用户点开会话时熄灭；自动恢复打开的会话不算点开。
+const markReadStart = source.indexOf(
+  "    setUnreadSessionIds((prev) => {",
+  source.indexOf("const markSessionRead"),
+);
+const markReadEnd = source.indexOf("\n  }, []);", markReadStart);
+assert.ok(markReadStart >= 0 && markReadEnd > markReadStart);
+const runMarkSessionRead = new Function(
+  "sessionId", "setUnreadSessionIds",
+  source.slice(markReadStart, markReadEnd),
+);
 
+test("drops the marker of any static result when the user opens its session", () => {
   for (const status of ["complete", "interrupted", "aborted", "error", "pending"]) {
     let unread = new Set(["opened"]);
-    runReadEffect("opened", (update) => { unread = update(unread); });
+    runMarkSessionRead("opened", (update) => { unread = update(unread); });
     assert.deepEqual([...unread], [], status);
-    assert.equal(markerModule.resolveSessionMarker({ status, isUnread: unread.has("opened") }), null, status);
+    assert.equal(resolveSessionMarker({ status, isUnread: unread.has("opened") }), null, status);
   }
+});
+
+test("keeps the marker when the app only restores the session instead of opening it", () => {
+  assert.match(source, /const handleSelectSessionFromList[\s\S]*?markSessionRead\(s\.id\)/);
+  assert.doesNotMatch(source, /if \(!selectedSessionId\) return;\s*setUnreadSessionIds/);
 });
 
 test("keeps lifecycle markers out of the archived section", () => {
@@ -346,4 +425,78 @@ test("does not seed the session the user already has open", () => {
   });
 
   assert.deepEqual(result.unread, ["other"]);
+});
+
+// 进程退出不是可观察的完成：加载后把上次页面看到的运行集合与首轮轮询对账。
+const reconcileStart = source.indexOf("    if (!activityPolled) return;");
+const reconcileEnd = source.indexOf("\n  }, [activityPolled, runningSessionIds]);", reconcileStart);
+assert.ok(reconcileStart >= 0 && reconcileEnd > reconcileStart);
+const runReconcileEffect = new Function(
+  "activityPolled", "runningSessionIds", "setUnreadSessionIds",
+  "startupRunningIdsRef", "processExitReconciledRef",
+  "loadPersistedRunningSessionIds", "savePersistedRunningSessionIds",
+  source.slice(reconcileStart, reconcileEnd),
+);
+
+function createReconcileRun({ persisted = [], unread = [] } = {}) {
+  const startupRef = { current: null };
+  const reconciledRef = { current: false };
+  const saved = [];
+  const loads = [];
+  let unreadIds = new Set(unread);
+  const run = (running, polled = true) => runReconcileEffect(
+    polled, new Set(running), (update) => { unreadIds = update(unreadIds); },
+    startupRef, reconciledRef,
+    () => { loads.push([...persisted]); return new Set(persisted); },
+    (ids) => { saved.push([...ids]); },
+  );
+  return { run, saved, loads, startupRef, reconciledRef, unread: () => [...unreadIds] };
+}
+
+test("marks the session that disappeared while the page was not looking", () => {
+  const reconcile = createReconcileRun({ persisted: ["waiting", "kept"] });
+  reconcile.run(["kept"]);
+
+  assert.deepEqual(reconcile.unread(), ["waiting"]);
+  assert.deepEqual(reconcile.saved, [["kept"]]);
+  assert.equal(reconcile.reconciledRef.current, true);
+});
+
+test("does not attribute a process exit before the first running snapshot arrives", () => {
+  const reconcile = createReconcileRun({ persisted: ["waiting"] });
+  reconcile.run([], false);
+
+  assert.deepEqual(reconcile.unread(), []);
+  assert.deepEqual(reconcile.saved, []);
+  assert.equal(reconcile.loads.length, 0);
+});
+
+test("remembers the running set without re-attributing the same exit", () => {
+  const reconcile = createReconcileRun({ persisted: ["waiting"] });
+  reconcile.run([]);
+  reconcile.run([]);
+
+  assert.deepEqual(reconcile.unread(), ["waiting"]);
+  assert.deepEqual(reconcile.saved, [[], []]);
+  assert.equal(reconcile.loads.length, 1);
+});
+
+test("attributes only the first snapshot to the previous page load", () => {
+  const reconcile = createReconcileRun({ persisted: ["first"] });
+  reconcile.run([]);
+  reconcile.run(["second"]);
+
+  assert.deepEqual(reconcile.unread(), ["first"]);
+  assert.deepEqual(reconcile.saved, [[], ["second"]]);
+});
+
+test("reconciles markers and running state when the page becomes visible again", () => {
+  assert.match(
+    source,
+    /if \(document\.visibilityState === "visible"\) \{[\s\S]*?void poll\(\);\s*loadSessions\(false, true\);/,
+  );
+});
+
+test("remembers that the server went away while a session was running", () => {
+  assert.match(source, /serverOutageSinceSnapshotRef\.current = true;/);
 });
