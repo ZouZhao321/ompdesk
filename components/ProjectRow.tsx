@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode, RefObject } from "react";
+import { MOBILE_HIT_TARGET_PX, useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import type { TranslationParams } from "@/lib/i18n/types";
 
@@ -60,7 +61,11 @@ export function ProjectRow({
   children,
 }: Props) {
   const { t } = useI18n();
-  const actionsVisible = hovered || menuOpen;
+  const isMobile = useIsMobile();
+  const rowHeight = isMobile ? MOBILE_HIT_TARGET_PX : 34;
+  // 手机没有悬停态，新建会话与项目操作按钮必须常驻且可点。
+  const newSessionVisible = isMobile || hovered;
+  const actionsVisible = isMobile || hovered || menuOpen;
 
   return (
     <div
@@ -71,7 +76,7 @@ export function ProjectRow({
       style={{
         display: "flex",
         alignItems: "center",
-        minHeight: 34,
+        minHeight: rowHeight,
         position: "relative",
         borderRadius: 6,
         background: isSelected ? "var(--bg-hover)" : "transparent",
@@ -87,8 +92,8 @@ export function ProjectRow({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: 24,
-          height: 28,
+          width: isMobile ? MOBILE_HIT_TARGET_PX : 24,
+          height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
           marginLeft: 2,
           padding: 0,
           border: "none",
@@ -124,7 +129,7 @@ export function ProjectRow({
           gap: 8,
           flex: 1,
           minWidth: 0,
-          height: 34,
+          height: rowHeight,
           padding: "0 4px",
           border: "none",
           background: "transparent",
@@ -164,16 +169,16 @@ export function ProjectRow({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: 28,
-          height: 28,
+          width: isMobile ? MOBILE_HIT_TARGET_PX : 28,
+          height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
           padding: 0,
           border: "none",
           borderRadius: 5,
           background: "transparent",
           color: "var(--text-dim)",
           cursor: "pointer",
-          opacity: hovered ? 1 : 0,
-          pointerEvents: hovered ? "auto" : "none",
+          opacity: newSessionVisible ? 1 : 0,
+          pointerEvents: newSessionVisible ? "auto" : "none",
           transition: "opacity 0.12s, background 0.12s, color 0.12s",
           flexShrink: 0,
         }}
@@ -203,8 +208,8 @@ export function ProjectRow({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 28,
-            height: 28,
+            width: isMobile ? MOBILE_HIT_TARGET_PX : 28,
+            height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
             marginRight: 3,
             padding: 0,
             border: "none",

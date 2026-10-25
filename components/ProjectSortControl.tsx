@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useCallback, useEffect, useRef, type KeyboardEventHandler, type RefObject } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { MOBILE_HIT_TARGET_PX, useIsMobile } from "@/hooks/useIsMobile";
 import type { ProjectSortMode } from "@/lib/project-order";
@@ -17,6 +17,36 @@ interface Props {
 
 const SORT_MODES: readonly ProjectSortMode[] = ["time", "name"];
 
+/** 排序菜单里一次按键要做的动作：把焦点移到某一项，或关闭菜单。 */
+export type SortMenuKeyAction =
+  | { kind: "focus"; index: number }
+  | { kind: "close"; returnFocus: boolean };
+
+/**
+ * 排序菜单的键盘映射：方向键在选项间循环、Home/End 跳到首尾、
+ * Escape 关闭并把焦点交回触发按钮、Tab 关闭并让焦点按顺序离开菜单。
+ * 其他按键返回 null，保留浏览器默认行为。
+ */
+export function sortMenuKeyAction(key: string, currentIndex: number, count: number): SortMenuKeyAction | null {
+  if (count === 0) return null;
+  switch (key) {
+    case "ArrowDown":
+      return { kind: "focus", index: currentIndex < 0 ? 0 : (currentIndex + 1) % count };
+    case "ArrowUp":
+      return { kind: "focus", index: currentIndex <= 0 ? count - 1 : currentIndex - 1 };
+    case "Home":
+      return { kind: "focus", index: 0 };
+    case "End":
+      return { kind: "focus", index: count - 1 };
+    case "Escape":
+      return { kind: "close", returnFocus: true };
+    case "Tab":
+      return { kind: "close", returnFocus: false };
+    default:
+      return null;
+  }
+}
+
 /**
  * 侧边栏「项目」标题右侧的排序控件：只消费当前排序方式与开关状态，
  * 本地存储与列表排序都由调用方处理。
@@ -24,10 +54,47 @@ const SORT_MODES: readonly ProjectSortMode[] = ["time", "name"];
 export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  // 打开后把焦点交给已选中的排序方式，键盘用户可以从当前位置继续。
+  // 双 rAF 与 AnimatedDropdown 的挂载时机对齐：首次打开时菜单项在下一帧才存在。
+  useEffect(() => {
+    if (!open) return;
+    const checked = SORT_MODES.indexOf(mode);
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        itemRefs.current[checked >= 0 ? checked : 0]?.focus();
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, mode]);
+
+  const handleMenuKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>((event) => {
+    const items = itemRefs.current;
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+    const action = sortMenuKeyAction(event.key, currentIndex, items.length);
+    if (action === null) return;
+    // Tab 保留浏览器默认的焦点移动，只把菜单关掉；其余按键自己接管焦点。
+    if (event.key !== "Tab") event.preventDefault();
+    if (action.kind === "focus") {
+      items[action.index]?.focus();
+      return;
+    }
+    onToggle();
+    if (action.returnFocus) triggerRef.current?.focus();
+  }, [onToggle]);
+
+  // 选中即关闭菜单，焦点回到触发按钮，避免焦点随关闭的菜单项一起消失。
+  const selectMode = useCallback((option: ProjectSortMode) => {
+    onSelectMode(option);
+    triggerRef.current?.focus();
+  }, [onSelectMode]);
 
   return (
     <div ref={menuRef} style={{ position: "relative", display: "flex", flexShrink: 0, marginRight: 6 }}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={onToggle}
         title={t("sidebar.projectSort")}
@@ -65,6 +132,7 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode
       <AnimatedDropdown
         open={open}
         role="menu"
+        onKeyDown={handleMenuKeyDown}
         style={{
           position: "absolute",
           top: "calc(100% + 4px)",
@@ -78,13 +146,16 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode
           overflow: "hidden",
         }}
       >
-        {SORT_MODES.map((option) => (
+        {SORT_MODES.map((option, index) => (
           <button
             key={option}
+            ref={(element) => {
+              itemRefs.current[index] = element;
+            }}
             type="button"
             role="menuitemradio"
             aria-checked={mode === option}
-            onClick={() => onSelectMode(option)}
+            onClick={() => selectMode(option)}
             style={{
               display: "flex",
               alignItems: "center",

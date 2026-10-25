@@ -23,7 +23,6 @@ export function ProjectPinMenuItem({ isPinned, onToggle }: Props) {
       type="button"
       onClick={onToggle}
       title={label}
-      aria-pressed={isPinned}
       style={{
         display: "flex",
         alignItems: "center",
