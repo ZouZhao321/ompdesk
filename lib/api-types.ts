@@ -203,3 +203,57 @@ export interface OmpdeskUpdateResponse {
  * browser bundle.
  */
 export type { WebAuthStatus as WebAccessStatus } from "@/bin/web-auth-store.js";
+
+/** Severity levels omp's process logger persists. */
+export type LogLevelName = "error" | "warn" | "info" | "debug";
+
+/** One log file owned by the current server process, or one of its rotations. */
+export interface LogFileInfo {
+  /** Basename only, e.g. `omp.2026-10-24.1528.log.1`. */
+  name: string;
+  size: number;
+  /** ISO timestamp of the last write. */
+  modifiedAt: string;
+  /** The file the SDK sink is currently appending to, when it can be identified. */
+  current: boolean;
+}
+
+/** One parsed JSONL record, or an unparseable line preserved verbatim. */
+export interface LogEntry {
+  /** Byte offset of the line start in the file. */
+  offset: number;
+  /** Byte length of the line, excluding its terminator. */
+  length: number;
+  /** Source line without its terminator. */
+  raw: string;
+  level: string | null;
+  timestamp: string | null;
+  /** `ompdesk` for records written by this server, `sdk` when the record has no source. */
+  source: string;
+  subsystem: string | null;
+  message: string;
+  /** The whole parsed record, so the panel can show every field. */
+  fields: Record<string, unknown>;
+  /** Present when the line is not a JSON object. */
+  parseError?: string;
+}
+
+/** `GET /api/logs` response: the process file set plus one cursor page. */
+export interface LogsResponse {
+  pid: number;
+  files: LogFileInfo[];
+  file: LogFileInfo | null;
+  entries: LogEntry[];
+  /** Raw byte offset to pass as `cursor` for the next page. */
+  nextCursor: number;
+  /** More bytes remain after `nextCursor` (either filtered out or above the page cap). */
+  truncated: boolean;
+  /** The requested cursor was past the file's end (same-name rotation); entries restart at byte 0. */
+  reset: boolean;
+  /**
+   * Identity of the file this page came from. Send it back with the cursor so
+   * the reader notices a same-name file that was recreated and grew past the
+   * old position; `null` when no file is selected.
+   */
+  fingerprint: string | null;
+}

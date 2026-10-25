@@ -42,11 +42,19 @@ import type {
   ExtensionUiRequest,
   ExtensionUiResponse,
   ExtensionWidgetItem,
+  SessionActivitySnapshot,
   SessionInfo,
   SessionMessageEntry,
   SubagentSnapshot,
 } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
+import {
+  AgentRunTracker,
+  currentRequestId,
+  resolveSessionModelRole,
+  writeAgentRunRecords,
+  type AgentRunStart,
+} from "./agent-run-log";
 
 // ============================================================================
 // Types
@@ -300,6 +308,7 @@ export class AgentSessionWrapper {
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
   private readonly subagents: RpcSubagentRegistry;
+  private readonly runLog: AgentRunTracker;
   // The SDK registry removes terminal entries after emitting their lifecycle frame.
   // Keep a bounded per-session copy so state requests can still expose history.
   private readonly subagentHistory = new Map<string, SubagentSnapshot>();
@@ -310,6 +319,10 @@ export class AgentSessionWrapper {
     public readonly inner: AgentSessionLike,
     eventBus: ConstructorParameters<typeof RpcSubagentRegistry>[0],
   ) {
+    this.runLog = new AgentRunTracker({
+      sessionId: () => this.inner.sessionId,
+      contextTokens: () => this.inner.getContextUsage?.()?.tokens,
+    });
     this.subagents = new RpcSubagentRegistry(eventBus, (frame) => {
       const event = frame as unknown as AgentEvent;
       this.rememberSubagentFrame(event);
@@ -426,6 +439,16 @@ export class AgentSessionWrapper {
       || this.inner.isBashRunning
       || this.subagents.getSubagents().length > 0
     );
+  }
+
+  /**
+   * 是否有阻塞式 UI 请求正在等待浏览器作答。
+   *
+   * 等待集合与 `isRunning()` 相互独立：等待集合不是运行集合的子集，
+   * 空闲会话也可能挂着阻塞请求。这个标志让界面区分「正在干活」与「卡在用户这里」。
+   */
+  isAwaitingInput(): boolean {
+    return this._alive && this.pendingUiRequests.size > 0;
   }
   bindToolUiContext(setter: (uiContext: ExtensionUiContextLike, hasUI: boolean) => void): void {
     setter(this.createExtensionUiContext(), true);
@@ -552,6 +575,31 @@ export class AgentSessionWrapper {
     } finally {
       this.resetIdleTimer();
       notifyRunningChange();
+    }
+  }
+
+  /**
+   * 执行一次喂给或取消当前 run 的命令并记录结果；命令文本不会进入记录。
+   */
+  private async withRunCommand<T>(
+    command: "steer" | "follow_up" | "abort" | "compact",
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const startedAt = performance.now();
+    try {
+      const result = await operation();
+      writeAgentRunRecords(this.runLog.command(command, {
+        ok: true,
+        durationMs: performance.now() - startedAt,
+      }));
+      return result;
+    } catch (error) {
+      writeAgentRunRecords(this.runLog.command(command, {
+        ok: false,
+        durationMs: performance.now() - startedAt,
+        error,
+      }));
+      throw error;
     }
   }
 
@@ -744,8 +792,25 @@ export class AgentSessionWrapper {
   }
 
   private emit(event: AgentEvent): void {
+    writeAgentRunRecords(this.runLog.push(event));
     this.syncSessionIdentity();
     for (const l of this.listeners) l(event);
+  }
+
+  /** 发送 prompt 前捕获的模型元数据，此时信息仍然准确。 */
+  private runStart(): AgentRunStart {
+    const model = this.inner.model;
+    const configured = this.inner.configuredThinkingLevel();
+    const thinkingLevel = this.inner.agent.state?.thinkingLevel ?? configured ?? "off";
+    return {
+      sessionId: this.inner.sessionId,
+      provider: model?.provider,
+      model: model?.id,
+      role: resolveSessionModelRole(this.inner.sessionManager.getEntries()),
+      thinkingLevel,
+      configuredThinkingLevel: configured && configured !== thinkingLevel ? configured : undefined,
+      requestId: currentRequestId(),
+    };
   }
 
   private resetIdleTimer(): void {
@@ -821,35 +886,78 @@ export class AgentSessionWrapper {
         // Fire and forget — events come via subscribe
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         const streamingBehavior = command.streamingBehavior as "steer" | "followUp" | undefined;
+        // 只排入当前轮次的 prompt 属于这次运行，记为 steer/follow_up 结果，不再另开 run。
+        const queuedCommand = streamingBehavior === "steer"
+          ? "steer"
+          : streamingBehavior === "followUp" ? "follow_up" : undefined;
+        const startedAt = performance.now();
         this.promptRunning = true;
         notifyRunningChange();
-        this.inner.prompt(command.message as string, {
-          ...(promptImages?.length ? { images: promptImages } : {}),
-          ...(streamingBehavior ? { streamingBehavior } : {}),
-          userInitiated: true,
-        }).then(() => {
-          this.promptRunning = false;
-          this.resetIdleTimer();
-          if (!streamingBehavior) this.emit({ type: "prompt_done" });
-          notifyRunningChange();
-        }).catch((error) => {
+        if (!queuedCommand) writeAgentRunRecords(this.runLog.begin(this.runStart()));
+
+        // A rejected `prompt()` and a rejected promise both leave the run opened
+        // above in flight; close it and tell the browser the turn failed.
+        const failPrompt = (error: unknown) => {
           this.promptRunning = false;
           this.resetIdleTimer();
           invalidateSessionListCache();
+          writeAgentRunRecords(queuedCommand
+            ? this.runLog.command(queuedCommand, {
+              ok: false,
+              durationMs: performance.now() - startedAt,
+              error,
+            })
+            : this.runLog.finish({ stopReason: "error", error }));
           this.emit({
             type: "prompt_error",
             errorMessage: error instanceof Error ? error.message : String(error),
           });
           if (!streamingBehavior) this.emit({ type: "prompt_done" });
           notifyRunningChange();
-        });
+        };
+
+        let running: Promise<boolean>;
+        try {
+          running = this.inner.prompt(command.message as string, {
+            ...(promptImages?.length ? { images: promptImages } : {}),
+            ...(streamingBehavior ? { streamingBehavior } : {}),
+            userInitiated: true,
+          });
+        } catch (error) {
+          // The SDK rejected the prompt before returning a promise, so there is
+          // no handler below to close the run record it just opened.
+          failPrompt(error);
+          throw error;
+        }
+        running.then(() => {
+          this.promptRunning = false;
+          this.resetIdleTimer();
+          writeAgentRunRecords(queuedCommand
+            ? this.runLog.command(queuedCommand, { ok: true, durationMs: performance.now() - startedAt })
+            : this.runLog.finish());
+          if (!streamingBehavior) this.emit({ type: "prompt_done" });
+          notifyRunningChange();
+        }).catch(failPrompt);
         return null;
       }
 
-      case "abort":
+      case "abort": {
         this.goalMode.onAbort();
-        await this.withFinalRunningNotification(() => this.inner.abort());
+        // Only a prompt in flight owns an active run; aborting an idle session
+        // must not manufacture a run to end. The guard is captured before the
+        // call because `abort()` may release the prompt while it awaits.
+        const hadRun = this.promptRunning;
+        try {
+          await this.withRunCommand("abort", () =>
+            this.withFinalRunningNotification(() => this.inner.abort())
+          );
+        } finally {
+          // A failing `abort()` still ends the run it targeted, or that run
+          // would stay open for the rest of the process.
+          if (hadRun) writeAgentRunRecords(this.runLog.finish({ stopReason: "aborted" }));
+        }
         return null;
+      }
 
       case "get_state": {
         const model = this.inner.model;
@@ -927,42 +1035,74 @@ export class AgentSessionWrapper {
       }
 
       case "fork": {
-        if (this.inner.isBashRunning) {
-          throw new Error("Cannot fork while a shell command is running");
-        }
-        const sessionManager = this.inner.sessionManager;
-        const entryId = resolveForkEntryId(
-          sessionManager.getBranch() as ForkBranchEntry[],
-          command.entryId,
-        );
-        if (!entryId) throw new Error("No user message to fork from yet");
-        const currentSessionFile = this.inner.sessionFile;
+        const startedAt = performance.now();
+        let newSessionId: string;
+        try {
+          if (this.inner.isBashRunning) {
+            throw new Error("Cannot fork while a shell command is running");
+          }
+          const sessionManager = this.inner.sessionManager;
+          const entryId = resolveForkEntryId(
+            sessionManager.getBranch() as ForkBranchEntry[],
+            command.entryId,
+          );
+          if (!entryId) throw new Error("No user message to fork from yet");
+          const currentSessionFile = this.inner.sessionFile;
 
-        if (!currentSessionFile) return { cancelled: true };
+          if (!currentSessionFile) {
+            writeAgentRunRecords(this.runLog.command("fork", {
+              ok: true,
+              cancelled: true,
+              durationMs: performance.now() - startedAt,
+            }));
+            return { cancelled: true };
+          }
 
-        const entry = sessionManager.getEntry(entryId);
-        if (!entry) throw new Error("Invalid entry ID for forking");
+          const entry = sessionManager.getEntry(entryId);
+          if (!entry) throw new Error("Invalid entry ID for forking");
 
-        const sessionDir = sessionManager.getSessionDir();
-        let newSessionFile: string;
+          const sessionDir = sessionManager.getSessionDir();
+          let newSessionFile: string;
 
-        if (!entry.parentId) {
+        // The map forks after a whole turn (includeEntry), the chat Fork button
+        // before the selected message (entry.parentId).
+        const cutEntryId = command.includeEntry === true ? entryId : entry.parentId;
+        if (!cutEntryId) {
           // Fork before the first message: create an empty session linked to this one
           const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
           await newManager.newSession({ parentSession: currentSessionFile });
           await newManager.ensureOnDisk();
           newSessionFile = newManager.getSessionFile() as string;
         } else {
-          // Fork after some history: copy path up to (but not including) the fork point
+          // Copy the path up to and including the cut entry.
           const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
-          const forkedPath = sourceManager.createBranchedSession(entry.parentId);
+          const forkedPath = sourceManager.createBranchedSession(cutEntryId);
           if (!forkedPath) throw new Error("Failed to create forked session");
           newSessionFile = forkedPath;
         }
 
-        const newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
+        newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
         cacheSessionPath(newSessionId, newSessionFile);
         invalidateSessionListCache();
+      } catch (error) {
+        writeAgentRunRecords(this.runLog.command("fork", {
+          ok: false,
+          durationMs: performance.now() - startedAt,
+          error,
+        }));
+        throw error;
+        }
+
+        // The fork is committed from here on: its result is recorded before the
+        // wrapper teardown, so a shutdown failure can never turn the same fork
+        // into a contradictory failure record.
+        writeAgentRunRecords(this.runLog.command("fork", {
+          ok: true,
+          durationMs: performance.now() - startedAt,
+          newSessionId,
+        }));
+        // 旧包装器正在关闭，它仍持有的运行无法继续。
+        writeAgentRunRecords(this.runLog.finish({ stopReason: "fork" }));
         await this.shutdownAfterCommittedFork(newSessionId);
         return { cancelled: false, newSessionId };
       }
@@ -1025,8 +1165,10 @@ export class AgentSessionWrapper {
 
       case "compact": {
         try {
-          return await this.withFinalRunningNotification(() =>
-            this.inner.compact(command.customInstructions as string | undefined)
+          return await this.withRunCommand("compact", () =>
+            this.withFinalRunningNotification(() =>
+              this.inner.compact(command.customInstructions as string | undefined)
+            )
           );
         } finally {
           invalidateSessionListCache();
@@ -1071,13 +1213,17 @@ export class AgentSessionWrapper {
 
       case "steer": {
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+        await this.withRunCommand("steer", () =>
+          this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined)
+        );
         return null;
       }
 
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+        await this.withRunCommand("follow_up", () =>
+          this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined)
+        );
         return null;
       }
 
@@ -1293,7 +1439,10 @@ export class AgentSessionWrapper {
       method: "custom",
       lines,
     } as ExtensionUiRequest as AgentEvent;
+    // 等待状态只在 id 首次进入待答集合时变化；后续每帧渲染不再广播。
+    const becamePending = !this.pendingUiRequests.has(id);
     this.pendingUiRequests.set(id, event);
+    if (becamePending) notifyRunningChange();
     this.emit(event);
   }
 
@@ -1303,6 +1452,7 @@ export class AgentSessionWrapper {
     custom.settled = true;
     this.activeCustomUis.delete(id);
     this.pendingUiRequests.delete(id);
+    notifyRunningChange();
     try {
       custom.component.dispose?.();
     } catch {
@@ -1427,6 +1577,7 @@ export class AgentSessionWrapper {
         signal?.removeEventListener("abort", onAbort);
         this.pendingUiRequests.delete(id);
         this.pendingUiResponses.delete(id);
+        notifyRunningChange();
       };
       const settle = (value: T) => {
         cleanup();
@@ -1442,6 +1593,7 @@ export class AgentSessionWrapper {
         resolve: (response) => settle(parseResponse(response)),
         cancel: () => settle(defaultValue),
       });
+      notifyRunningChange();
       this.emit(fullRequest as AgentEvent);
     });
   }
@@ -1586,7 +1738,7 @@ declare global {
   var __ompFinalSessionIds: Map<string, string> | undefined;
   var __ompStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
   var __ompStartingSessionCwds: Map<string, number> | undefined;
-  var __ompRunningListeners: Set<(ids: string[]) => void> | undefined;
+  var __ompRunningListeners: Set<(activity: SessionActivitySnapshot) => void> | undefined;
 }
 
 function getRegistry(): Map<string, AgentSessionWrapper> {
@@ -1744,41 +1896,40 @@ export async function destroyRpcSessionsForCwd(cwd: string): Promise<number> {
 
 // Include idle wrappers so a run that changes ID and finishes between polls
 // is attributed to its final transcript rather than its historical ID.
-export function getRpcSessionActivitySnapshot() {
+export function getRpcSessionActivitySnapshot(): SessionActivitySnapshot {
   const runningSessionIds = new Set<string>();
+  const waitingSessionIds = new Set<string>();
   const sessionIdsByRuntimeId: Record<string, string> = Object.fromEntries(globalThis.__ompFinalSessionIds ?? []);
   for (const session of getRegistry().values()) {
     if (!session.isAlive()) continue;
     sessionIdsByRuntimeId[session.runtimeId] = session.sessionId;
     if (session.isRunning()) runningSessionIds.add(session.sessionId);
+    if (session.isAwaitingInput()) waitingSessionIds.add(session.sessionId);
   }
-  return { runningSessionIds: [...runningSessionIds], sessionIdsByRuntimeId };
-}
-
-export function getRunningRpcSessionIds(): string[] {
-  const ids = new Set<string>();
-  for (const [sessionId, session] of getRegistry()) {
-    if (session.isRunning()) ids.add(session.sessionId || sessionId);
-  }
-  return [...ids];
+  return {
+    runningSessionIds: [...runningSessionIds],
+    waitingSessionIds: [...waitingSessionIds],
+    sessionIdsByRuntimeId,
+  };
 }
 
 // ----------------------------------------------------------------------------
 // Running-status broadcaster
 //
-// Pushes the current set of running session ids to subscribers whenever any
-// session's running state may have changed. This lets the sidebar receive live
-// updates over SSE instead of polling. Listeners live on globalThis so they
+// Pushes the activity snapshot — running ids, ids waiting on a user answer, and
+// the runtime→session mapping — to subscribers whenever anything may have
+// changed. This lets the sidebar receive live updates over SSE instead of
+// polling with the same payload shape. Listeners live on globalThis so they
 // survive Next.js hot-reload.
 // ----------------------------------------------------------------------------
 
-function getRunningListeners(): Set<(ids: string[]) => void> {
+function getRunningListeners(): Set<(activity: SessionActivitySnapshot) => void> {
   if (!globalThis.__ompRunningListeners) globalThis.__ompRunningListeners = new Set();
   return globalThis.__ompRunningListeners;
 }
 
-/** Subscribe to running-session-id changes. Returns an unsubscribe function. */
-export function subscribeRunningSessions(listener: (ids: string[]) => void): () => void {
+/** Subscribe to running/waiting changes. Returns an unsubscribe function. */
+export function subscribeRunningSessions(listener: (activity: SessionActivitySnapshot) => void): () => void {
   const listeners = getRunningListeners();
   listeners.add(listener);
   return () => { listeners.delete(listener); };
@@ -1787,8 +1938,8 @@ export function subscribeRunningSessions(listener: (ids: string[]) => void): () 
 let lastRunningSnapshot = "";
 
 /**
- * Recompute the running-session-id set and, if it changed since the last
- * notification, broadcast it to subscribers.
+ * Recompute the activity sets and, if they changed since the last
+ * notification, broadcast them to subscribers.
  */
 export function notifyRunningChange(): void {
   const listeners = getRunningListeners();
@@ -1798,12 +1949,16 @@ export function notifyRunningChange(): void {
     lastRunningSnapshot = "";
     return;
   }
-  const ids = getRunningRpcSessionIds();
-  const snapshot = JSON.stringify([...ids].sort());
+  const activity = getRpcSessionActivitySnapshot();
+  const snapshot = JSON.stringify([
+    activity.runningSessionIds.slice().sort(),
+    activity.waitingSessionIds.slice().sort(),
+    Object.entries(activity.sessionIdsByRuntimeId).sort(),
+  ]);
   if (snapshot === lastRunningSnapshot) return;
   lastRunningSnapshot = snapshot;
   for (const listener of listeners) {
-    try { listener(ids); } catch { /* ignore listener errors */ }
+    try { listener(activity); } catch { /* ignore listener errors */ }
   }
 }
 
