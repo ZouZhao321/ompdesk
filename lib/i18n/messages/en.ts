@@ -194,6 +194,7 @@ export const enLocale: LocalePlugin = {
     "files.refreshExplorer": "Refresh explorer",
     "files.changedFiles": "{count} changed files",
     "files.explorer": "Explorer",
+    "files.noProject": "No project directory selected",
     "files.changedCount": "{count} files",
     "files.changeStats": "{count} changed files, {additions} lines added, {deletions} lines deleted",
     "files.conflictSummary": "{count} file{countSuffix} already exist: {files}",

@@ -2,21 +2,9 @@
 
 import { useState } from "react";
 import { getFileIcon } from "./FileIcons";
+import { PanelViewIcon } from "./PanelViewIcon";
 import { useI18n } from "@/hooks/useI18n";
-
-/** `file` 标签展示文件内容；`explorer` 与 `subagents` 是面板的固定视图。 */
-export type TabKind = "file" | "explorer" | "subagents";
-
-export interface Tab {
-  id: string;
-  label: string;
-  kind: TabKind;
-  filePath?: string;
-  sourceSessionId?: string | null;
-  initialDisplayMode?: "source" | "preview" | "diff";
-  /** 视图标签携带的计数，例如运行中的子代理数量。 */
-  badge?: number;
-}
+import { PANEL_VIEW_LABEL_KEYS, type Tab } from "@/lib/panel-tabs";
 
 interface Props {
   tabs: Tab[];
@@ -26,24 +14,8 @@ interface Props {
 }
 
 function TabGlyph({ tab }: { tab: Tab }) {
-  if (tab.kind === "explorer") {
-    return (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      </svg>
-    );
-  }
-  if (tab.kind === "subagents") {
-    return (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="4" y="8" width="16" height="12" rx="3" />
-        <path d="M12 8V4" />
-        <circle cx="9" cy="14" r="1" />
-        <circle cx="15" cy="14" r="1" />
-      </svg>
-    );
-  }
-  return getFileIcon(tab.label, 13);
+  if (tab.kind === "file") return getFileIcon(tab.label, 13);
+  return <PanelViewIcon kind={tab.kind} size={13} />;
 }
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
@@ -64,11 +36,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
     >
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
-        const label = tab.kind === "explorer"
-          ? t("files.explorer")
-          : tab.kind === "subagents"
-            ? t("subagents.title")
-            : tab.label;
+        const label = tab.kind === "file" ? tab.label : t(PANEL_VIEW_LABEL_KEYS[tab.kind]);
         return (
           <div
             key={tab.id}

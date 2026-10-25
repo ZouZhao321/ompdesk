@@ -8,7 +8,8 @@ import { SubagentPanel } from "./SubagentPanel";
 import { ChatWindow } from "./ChatWindow";
 import { FileExplorerPanel } from "./FileExplorerPanel";
 import { FileViewer } from "./FileViewer";
-import { TabBar, type Tab } from "./TabBar";
+import { TabBar } from "./TabBar";
+import { PanelViewIcon } from "./PanelViewIcon";
 import { SettingsConfig } from "./SettingsConfig";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { OmpUpdateIndicator } from "./OmpUpdateIndicator";
@@ -24,6 +25,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { canApplySessionIdentity, type SessionIdentity } from "@/lib/agent-client";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
+import { PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -77,27 +79,6 @@ const FILE_PANEL_TOGGLE_STYLE = {
   transition: "color 0.12s",
 } satisfies CSSProperties;
 const LANGUAGE_MENU_WIDTH = 176;
-/** 右侧面板的固定视图标签；文件标签的 id 是 `file:<绝对路径>`。 */
-const EXPLORER_TAB_ID = "view:explorer";
-const SUBAGENTS_TAB_ID = "view:subagents";
-
-function PanelViewIcon({ kind }: { kind: "explorer" | "subagents" }) {
-  if (kind === "explorer") {
-    return (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="4" y="8" width="16" height="12" rx="3" />
-      <path d="M12 8V4" />
-      <circle cx="9" cy="14" r="1" />
-      <circle cx="15" cy="14" r="1" />
-    </svg>
-  );
-}
 
 /** 面板头部的视图入口：点击把对应视图作为标签页打开或关闭。 */
 function PanelViewButton({
@@ -839,10 +820,8 @@ export function AppShell() {
   }, [panelTabs]);
 
   // 视图入口按钮：未打开时加入标签页并切过去，已是当前标签时再点一次收起。
-  const handleToggleViewTab = useCallback((kind: "explorer" | "subagents") => {
-    const tab: Tab = kind === "explorer"
-      ? { id: EXPLORER_TAB_ID, label: "", kind }
-      : { id: SUBAGENTS_TAB_ID, label: "", kind };
+  const handleToggleViewTab = useCallback((kind: PanelViewKind) => {
+    const tab = panelViewTab(kind);
     if (activePanelTabId === tab.id) {
       handleClosePanelTab(tab.id);
       return;
@@ -926,6 +905,59 @@ export function AppShell() {
     : panelTabs;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ompdesk` : "ompdesk";
+
+  // 标签正文按 kind 穷举；新增类型时 default 分支的 never 赋值会编译报错。
+  const panelTabBody = (tab: Tab) => {
+    switch (tab.kind) {
+      case "file":
+        return tab.filePath ? (
+          <FileViewer
+            filePath={tab.filePath}
+            cwd={activeCwd ?? undefined}
+            sourceSessionId={tab.sourceSessionId}
+            active={tab.id === activePanelTabId}
+            gitRefreshKey={explorerRefreshKey}
+            initialDisplayMode={tab.initialDisplayMode}
+            onMentionLines={handleFileLineMention}
+            onAtMention={handleAtMention}
+            onOpenFile={(filePath) => handleOpenFile(
+              filePath,
+              getFileName(filePath),
+              { sourceSessionId: tab.sourceSessionId },
+            )}
+          />
+        ) : null;
+      case "explorer":
+        return activeCwd ? (
+          <FileExplorerPanel
+            cwd={activeCwd}
+            onOpenFile={handleOpenFile}
+            refreshKey={explorerRefreshKey}
+            onRefresh={handleExplorerRefresh}
+            onAtMention={handleAtMention}
+            onAtMentions={handleAtMentions}
+          />
+        ) : (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
+            {translate("files.noProject")}
+          </div>
+        );
+      case "subagents":
+        return (
+          <SubagentPanel
+            sessionId={selectedSession?.id ?? null}
+            runtimeId={selectedSession?.runtimeId}
+            onRuntimeIdentity={handleRuntimeIdentity}
+            cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
+            subagents={subagents}
+          />
+        );
+      default: {
+        const exhaustive: never = tab.kind;
+        return exhaustive;
+      }
+    }
+  };
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -1973,41 +2005,7 @@ export function AppShell() {
               paddingBottom: "env(safe-area-inset-bottom)",
             }}
           >
-            {tab.kind === "file" && tab.filePath ? (
-              <FileViewer
-                filePath={tab.filePath}
-                cwd={activeCwd ?? undefined}
-                sourceSessionId={tab.sourceSessionId}
-                gitRefreshKey={explorerRefreshKey}
-                initialDisplayMode={tab.initialDisplayMode}
-                onMentionLines={handleFileLineMention}
-                onAtMention={handleAtMention}
-                onOpenFile={(filePath) => handleOpenFile(
-                  filePath,
-                  getFileName(filePath),
-                  { sourceSessionId: tab.sourceSessionId },
-                )}
-              />
-            ) : tab.kind === "explorer" ? (
-              activeCwd ? (
-                <FileExplorerPanel
-                  cwd={activeCwd}
-                  onOpenFile={handleOpenFile}
-                  refreshKey={explorerRefreshKey}
-                  onRefresh={handleExplorerRefresh}
-                  onAtMention={handleAtMention}
-                  onAtMentions={handleAtMentions}
-                />
-              ) : null
-            ) : (
-              <SubagentPanel
-                sessionId={selectedSession?.id ?? null}
-                runtimeId={selectedSession?.runtimeId}
-                onRuntimeIdentity={handleRuntimeIdentity}
-                cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
-                subagents={subagents}
-              />
-            )}
+            {panelTabBody(tab)}
           </div>
         ))}
         {renderedPanelTabs.length === 0 && (
@@ -2021,7 +2019,7 @@ export function AppShell() {
             padding: "10px 8px",
             paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
           }}>
-            {(["explorer", "subagents"] as const).map((kind) => (
+            {PANEL_VIEW_KINDS.map((kind) => (
               <button
                 key={kind}
                 onClick={() => handleToggleViewTab(kind)}
@@ -2050,7 +2048,7 @@ export function AppShell() {
                 }}
               >
                 <PanelViewIcon kind={kind} />
-                {kind === "explorer" ? translate("files.explorer") : translate("subagents.title")}
+                {translate(PANEL_VIEW_LABEL_KEYS[kind])}
                 {kind === "subagents" && runningSubagentCount > 0 && (
                   <span style={{
                     marginLeft: "auto",
