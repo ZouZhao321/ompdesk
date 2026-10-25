@@ -1,0 +1,67 @@
+name: Bug 报告
+description: 报告可复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 发生了什么
+      description: 描述看到的现象与触发时机，不要只贴报错。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开页面开始，逐步写到问题出现为止。
+      placeholder: |
+        1. 打开 ...
+        2. 点击 ...
+        3. 看到 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 运行方式
+      options:
+        - 浏览器访问 dev 服务
+        - 桌面应用
+        - 通过 npx / npm 安装的包
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: package.json、桌面应用关于页或安装包标签里显示的版本号
+      placeholder: "例如 0.6.2"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 报错或日志
+      description: 浏览器控制台、终端输出或会话日志，注意先去掉密钥与个人路径。
+      render: shell
