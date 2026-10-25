@@ -1,0 +1,9 @@
+# 安装：pre-commit install --hook-type commit-msg
+repos:
+  - repo: local
+    hooks:
+      - id: commit-msg-format
+        name: 校验提交标题格式
+        entry: python scripts/check-commit-msg.py
+        language: system
+        stages: [commit-msg]
