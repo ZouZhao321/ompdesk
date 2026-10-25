@@ -5,6 +5,9 @@ import { useSyncExternalStore } from "react";
 // Mobile breakpoint shared with app/globals.css (max-width: 640px).
 const MOBILE_QUERY = "(max-width: 640px)";
 
+/** 手机档可点控件的最小边长（px）。 */
+export const MOBILE_HIT_TARGET_PX = 44;
+
 function subscribe(cb: () => void): () => void {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};
   const mql = window.matchMedia(MOBILE_QUERY);

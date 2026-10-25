@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties } from "react";
 import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
 import { skillExpansionToCommand } from "@/lib/slash-display";
+import type { ProjectSortMode } from "@/lib/project-order";
+import { orderProjectPaths, projectDisplayName } from "@/lib/project-order";
 import { useI18n } from "@/hooks/useI18n";
+import { AnimatedDropdown } from "./AnimatedDropdown";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OmpWordmark } from "./OmpWordmark";
 import { ProjectRow } from "./ProjectRow";
+import { ProjectSortControl } from "./ProjectSortControl";
 
 declare global {
   interface Window {
@@ -65,6 +69,7 @@ const RUNNING_SESSIONS_POLL_MS = 2500;
 const PROJECT_SESSION_LIMIT = 5;
 const COLLAPSED_PROJECTS_STORAGE_KEY = "ompdesk:collapsed-projects";
 const REMOVED_PROJECTS_STORAGE_KEY = "ompdesk:removed-projects";
+const PROJECT_SORT_STORAGE_KEY = "ompdesk:project-sort";
 
 function normalizeProjectKey(project: string): string {
   const normalized = project.replace(/\\/g, "/");
@@ -144,6 +149,25 @@ function saveCollapsedProjects(projects: Set<string>): void {
   }
 }
 
+function loadProjectSortMode(): ProjectSortMode {
+  if (typeof window === "undefined") return "time";
+  try {
+    return window.localStorage.getItem(PROJECT_SORT_STORAGE_KEY) === "name" ? "name" : "time";
+  } catch {
+    return "time";
+  }
+}
+
+function saveProjectSortMode(mode: ProjectSortMode): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (mode === "time") window.localStorage.removeItem(PROJECT_SORT_STORAGE_KEY);
+    else window.localStorage.setItem(PROJECT_SORT_STORAGE_KEY, "name");
+  } catch {
+    // Ignore storage quota and privacy-mode errors.
+  }
+}
+
 
 
 /**
@@ -197,53 +221,6 @@ function PathLabel({ text, style }: { text: string; style?: CSSProperties }) {
     </span>
   );
 }
-
-const DROPDOWN_ANIMATION_MS = 140;
-
-function AnimatedDropdown({ open, children, style }: { open: boolean; children: ReactNode; style: CSSProperties }) {
-  const [mounted, setMounted] = useState(open);
-  const [visible, setVisible] = useState(open);
-
-  useEffect(() => {
-    let frame: number | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    if (open) {
-      setMounted(true);
-      setVisible(false);
-      frame = window.requestAnimationFrame(() => {
-        frame = window.requestAnimationFrame(() => setVisible(true));
-      });
-    } else {
-      setVisible(false);
-      timeout = setTimeout(() => setMounted(false), DROPDOWN_ANIMATION_MS);
-    }
-
-    return () => {
-      if (frame !== undefined) window.cancelAnimationFrame(frame);
-      if (timeout) clearTimeout(timeout);
-    };
-  }, [open]);
-
-  if (!mounted) return null;
-
-  return (
-    <div
-      style={{
-        ...style,
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0) scale(1)" : "translateY(-8px) scale(0.96)",
-        transformOrigin: "top center",
-        transition: `opacity ${DROPDOWN_ANIMATION_MS}ms ease, transform ${DROPDOWN_ANIMATION_MS}ms ease`,
-        pointerEvents: open ? "auto" : "none",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-
 
 interface SessionTreeNode {
   session: SessionInfo;
@@ -403,6 +380,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
+  const [projectSortMode, setProjectSortMode] = useState<ProjectSortMode>("time");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; count: number } | null>(null);
   const [removedProjects, setRemovedProjects] = useState<Set<string>>(() => new Set());
   const [wtFilter, setWtFilter] = useState("");
@@ -419,6 +398,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [wtConfirmRemove, setWtConfirmRemove] = useState<string | null>(null);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const [activitySnapshot, setActivitySnapshot] = useState<SessionActivitySnapshotState>({});
   const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
@@ -434,6 +414,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   useEffect(() => {
     setCollapsedProjects(loadCollapsedProjects());
     setRemovedProjects(loadRemovedProjects());
+    setProjectSortMode(loadProjectSortMode());
   }, []);
 
 
@@ -831,6 +812,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         dismissProjectMenu();
         setHoveredProject(null);
       }
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setSortMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -866,12 +850,19 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     });
   }, []);
 
+  const chooseProjectSortMode = useCallback((mode: ProjectSortMode) => {
+    setProjectSortMode(mode);
+    saveProjectSortMode(mode);
+    setSortMenuOpen(false);
+  }, []);
+
   const selectedProject = projectRootFor(selectedCwd);
-  const projectPaths = getRecentProjects(sessionsForDisplay)
+  const recentProjectPaths = getRecentProjects(sessionsForDisplay)
     .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
-  if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !projectPaths.includes(selectedProject)) {
-    projectPaths.unshift(selectedProject);
+  if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !recentProjectPaths.includes(selectedProject)) {
+    recentProjectPaths.unshift(selectedProject);
   }
+  const projectPaths = orderProjectPaths(recentProjectPaths, projectSortMode);
   // 每个工作区的 active / waiting / busy 计数一次遍历算出。等待集合与运行集合
   // 来源独立，所以「正在干活」必须用集合差、「移除前确认」必须用并集，
   // 不能从运行总数里直接减等待数。
@@ -938,8 +929,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   const normalizedProjectFilter = projectFilter.trim().toLowerCase();
   const projectGroups = projectPaths.flatMap((project) => {
-    const segments = project.replace(/[\\/]+$/, "").split(/[\\/]/);
-    const name = segments.at(-1) || project;
+    const name = projectDisplayName(project);
     const sessions = sessionsByProject.get(project) ?? [];
     if (!normalizedProjectFilter) return [{ project, name, sessions }];
 
@@ -1086,6 +1076,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         <h2 style={{ margin: 0, flex: 1, color: "var(--text-muted)", fontSize: 13, fontWeight: 600, letterSpacing: "0.01em" }}>
           {t("sidebar.projects")}
         </h2>
+        <ProjectSortControl
+          mode={projectSortMode}
+          open={sortMenuOpen}
+          menuRef={sortMenuRef}
+          onToggle={() => setSortMenuOpen((open) => !open)}
+          onSelectMode={chooseProjectSortMode}
+        />
         <button
           type="button"
           onClick={handleCustomPathClick}
