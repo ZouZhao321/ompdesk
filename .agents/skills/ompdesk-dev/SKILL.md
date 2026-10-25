@@ -29,6 +29,13 @@ description: 在本仓库（ompdesk）里开发的入口——代码在哪、改
 **加或改 API**：在 `app/api/` 找对应路由，读写逻辑优先复用 `lib/` 里已有函数。会话相关的写入走
 `invalidateSessionListCache()`。测试与被测代码同目录，命名 `*.test.mjs`。
 
+两个清点测试会拦住不合规的新路由：`lib/api-route-inventory-read.test.mjs` 要求非 SSE 的 GET 以
+`withRequestLog("<由目录推导的模板>", …)` 开头，SSE 路由要进文件里的 `SSE_ROUTES` 名单；
+`lib/api-route-inventory-write.test.mjs` 要求 POST/PUT/PATCH/DELETE 同样包装，并维护
+`MIN_WRITE_HANDLERS` 下限。路由内部统一前置：拿不准来源时先 `isApiRequestAllowed`（失败 403），
+写请求再查 `hasJsonContentType`（失败 415）。`proxy.ts` 的 matcher 已覆盖 `/api/:path*`，
+新路由自动继承主机与密码锁校验，不需要改它。
+
 **改界面**：组件在 `components/`，共享状态在 `hooks/`。手机档是一个独立分支：断点定义在
 `lib/mobile-layout.ts`（`isMobileLayout()`、`MOBILE_HIT_TARGET_PX = 44`），CSS 里必须同步。
 改完必须按下面的验证阶梯跑到浏览器那一层。
