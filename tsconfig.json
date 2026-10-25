@@ -35,6 +35,8 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     ".next/dev/dev/types/**/*.ts",
+    ".next-smoke/types/**/*.ts",
+    ".next-smoke/dev/types/**/*.ts",
     "src-tauri/server/.next/types/**/*.ts",
     "src-tauri/server/.next/dev/types/**/*.ts"
   ],
