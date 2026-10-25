@@ -45,13 +45,14 @@ test("renders one marker slot driven by the resolved marker kind", () => {
   assert.equal((sessionItemSource.match(/marker\?\.kind === "awaiting"/g) ?? []).length, 1);
   assert.equal((sessionItemSource.match(/marker\?\.kind === "running"/g) ?? []).length, 1);
   assert.equal((sessionItemSource.match(/marker\?\.kind === "static"/g) ?? []).length, 1);
-  assert.match(sessionItemSource, /!marker && isUnread && <UnreadSessionIndicator \/>/);
+  assert.match(sessionItemSource, /marker\?\.kind === "static" && <StaticSessionMarker status=\{marker\.status\} \/>/);
+  assert.doesNotMatch(sessionItemSource, /UnreadSessionIndicator/);
 });
 
 test("labels the inline waiting indicator without a count", () => {
-  const waitingIndicatorSource = source.slice(
-    source.indexOf("function WaitingSessionIndicator()"),
-    source.indexOf("function UnreadSessionIndicator()"),
+  const waitingIndicatorSource = indicatorSource(
+    "function WaitingSessionIndicator()",
+    "function StaticSessionMarker(",
   );
   assert.match(waitingIndicatorSource, /title=\{t\("sidebar\.agentWaitingForInput"\)\}/);
   assert.match(waitingIndicatorSource, /aria-label=\{t\("sidebar\.agentWaitingForInput"\)\}/);
@@ -78,8 +79,8 @@ const indicatorSource = (startMarker, nextMarker) =>
 
 test("marks activity indicators as images for screen readers", () => {
   assert.match(indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()"), /role="img"/);
-  assert.match(indicatorSource("function WaitingSessionIndicator()", "function UnreadSessionIndicator()"), /role="img"/);
-  assert.match(indicatorSource("function UnreadSessionIndicator()", "function showProjectActivity("), /role="img"/);
+  assert.match(indicatorSource("function WaitingSessionIndicator()", "function StaticSessionMarker("), /role="img"/);
+  assert.match(indicatorSource("function StaticSessionMarker(", "function showProjectActivity("), /role="img"/);
 
   const projectBadges = indicatorSource("function showProjectActivity(", "function SessionItem(");
   assert.equal((projectBadges.match(/role="img"/g) ?? []).length, 3);
@@ -223,18 +224,39 @@ const archivedSectionSource = source.slice(
 test("keeps exactly one lifecycle marker slot on a session row", () => {
   assert.match(sessionItemSource, /const marker = resolveSessionMarker\(\{/);
   assert.equal((sessionItemSource.match(/<StaticSessionMarker\b/g) ?? []).length, 1);
-  assert.equal((sessionItemSource.match(/<UnreadSessionIndicator \/>/g) ?? []).length, 1);
+  assert.doesNotMatch(sessionItemSource, /UnreadSessionIndicator|#0891b2/);
 });
 
 test("renders the static lifecycle marker as an animated-free labelled dot", () => {
   const staticMarkerSource = indicatorSource(
     "function StaticSessionMarker(",
-    "function UnreadSessionIndicator()",
+    "function showProjectActivity(",
   );
+  assert.match(staticMarkerSource, /function StaticSessionMarker\(\{ status \}: \{ status: StaticMarkerStatus \}\)/);
+  assert.match(staticMarkerSource, /STATIC_MARKER_APPEARANCE\[status\]/);
   assert.match(staticMarkerSource, /role="img"/);
-  assert.match(staticMarkerSource, /aria-label=\{t\("sidebar\.sessionInterrupted"\)\}/);
-  assert.match(staticMarkerSource, /var\(--warning\)/);
-  assert.doesNotMatch(staticMarkerSource, /<animate/);
+  assert.match(staticMarkerSource, /title=\{t\(labelKey\)\}/);
+  assert.match(staticMarkerSource, /aria-label=\{t\(labelKey\)\}/);
+  assert.match(staticMarkerSource, /<circle cx="7" cy="7" r="4" fill="currentColor" \/>/);
+  assert.doesNotMatch(staticMarkerSource, /<animate|animateTransform|@keyframes|animation:/);
+});
+
+test("drops the marker of any static result when its session is opened", async () => {
+  const readEffectStart = source.indexOf("    if (!selectedSessionId) return;");
+  const readEffectEnd = source.indexOf("\n  }, [selectedSessionId]);", readEffectStart);
+  assert.ok(readEffectStart >= 0 && readEffectEnd > readEffectStart);
+  const runReadEffect = new Function(
+    "selectedSessionId", "setUnreadSessionIds",
+    source.slice(readEffectStart, readEffectEnd),
+  );
+  const markerModule = await createJiti(import.meta.url).import("../lib/session-marker.ts");
+
+  for (const status of ["complete", "interrupted", "aborted", "error", "pending"]) {
+    let unread = new Set(["opened"]);
+    runReadEffect("opened", (update) => { unread = update(unread); });
+    assert.deepEqual([...unread], [], status);
+    assert.equal(markerModule.resolveSessionMarker({ status, isUnread: unread.has("opened") }), null, status);
+  }
 });
 
 test("keeps lifecycle markers out of the archived section", () => {
