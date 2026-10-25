@@ -5,7 +5,7 @@ import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
-import { initialMarkerUnreadIds, resolveSessionMarker } from "@/lib/session-marker";
+import { STATIC_MARKER_APPEARANCE, initialMarkerUnreadIds, resolveSessionMarker, type StaticMarkerStatus } from "@/lib/session-marker";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -2101,13 +2101,14 @@ function WaitingSessionIndicator() {
   );
 }
 
-/** 静态生命周期标记：实心圆点，没有动画。目前只接入「中断」这一种结果。 */
-function StaticSessionMarker() {
+/** 静态生命周期标记：实心圆点，没有动画；五种结果靠颜色与无障碍文字区分。 */
+function StaticSessionMarker({ status }: { status: StaticMarkerStatus }) {
   const { t } = useI18n();
+  const { color, labelKey } = STATIC_MARKER_APPEARANCE[status];
   return (
     <span
-      title={t("sidebar.sessionInterrupted")}
-      aria-label={t("sidebar.sessionInterrupted")}
+      title={t(labelKey)}
+      aria-label={t(labelKey)}
       role="img"
       style={{
         width: 14,
@@ -2116,39 +2117,11 @@ function StaticSessionMarker() {
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
-        color: "var(--warning)",
+        color,
       }}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
         <circle cx="7" cy="7" r="4" fill="currentColor" />
-      </svg>
-    </span>
-  );
-}
-
-function UnreadSessionIndicator() {
-  const { t } = useI18n();
-  return (
-    <span
-      title={t("sidebar.newActivity")}
-      aria-label={t("sidebar.newSessionActivity")}
-      role="img"
-      style={{
-        width: 14,
-        height: 14,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        color: "#0891b2",
-      }}
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
-        <circle cx="7" cy="7" r="2.5" fill="currentColor" />
-        <circle cx="7" cy="7" r="3" stroke="currentColor" strokeWidth="1.4" opacity="0.32">
-          <animate attributeName="r" values="3;6;3" dur="1.6s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.32;0;0.32" dur="1.6s" repeatCount="indefinite" />
-        </circle>
       </svg>
     </span>
   );
@@ -2487,8 +2460,7 @@ function SessionItem({
             </span>
             {marker?.kind === "awaiting" && <WaitingSessionIndicator />}
             {marker?.kind === "running" && <RunningSessionIndicator />}
-            {marker?.kind === "static" && <StaticSessionMarker />}
-            {!marker && isUnread && <UnreadSessionIndicator />}
+            {marker?.kind === "static" && <StaticSessionMarker status={marker.status} />}
             {session.worktreeBranch && (
               <span title={t("sidebar.worktreePath", { path: session.cwd })} style={{ display: "flex", color: "var(--accent)", flexShrink: 0 }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
