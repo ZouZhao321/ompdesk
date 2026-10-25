@@ -39,15 +39,25 @@ function isInside(dir, filePath) {
  * 不触发迁移写回（`getSessionEntries()` 背后的 `SessionManager.open()` 会取锁）。
  * 用例因此不会写入或修改任何会话文件，也不会和正在写文件的会话进程抢锁。
  */
+const FIXTURE_IO_ERROR_CODES = new Set(["ENOENT", "EACCES", "EPERM", "EBUSY", "ENOTDIR", "EISDIR"]);
+
+/** 只有本机会话库不可读才算可跳过的环境问题；harness 与 SDK 的契约变化必须失败。 */
+function isFixtureEnvironmentError(error) {
+  return Boolean(
+    error && typeof error === "object" && FIXTURE_IO_ERROR_CODES.has(error.code),
+  );
+}
+
 async function selectFixture() {
   let sessions;
   try {
     invalidateSessionListCache();
     sessions = await listAllSessions({ force: true });
   } catch (error) {
+    if (!isFixtureEnvironmentError(error)) throw error;
     return {
       fixture: null,
-      reason: `读取本机会话列表失败，跳过历史会话夹具：${error instanceof Error ? error.message : String(error)}`,
+      reason: `读取本机会话列表失败，跳过历史会话夹具：${error.message}`,
     };
   }
   const overrideDir = process.env[SESSION_DIR_ENV]?.trim();
@@ -78,9 +88,9 @@ async function selectFixture() {
         return { fixture: { session, messages: messages.slice(0, MESSAGE_LIMIT) }, reason: null };
       }
     } catch (error) {
+      if (!isFixtureEnvironmentError(error)) throw error;
       console.log(
-        `[history-fixtures] 跳过无法读取的会话 ${session.path}: `
-          + `${error instanceof Error ? error.message : String(error)}`,
+        `[history-fixtures] 跳过无法读取的会话 ${session.path}: ${error.message}`,
       );
     }
   }
@@ -125,8 +135,24 @@ function contentFragments(message) {
       if (!block || typeof block !== "object") continue;
       if (block.type === "text") addText(block.text);
       else if (block.type === "thinking") addText(block.thinking);
-      else if (block.type === "toolCall") addText(block.toolName ?? block.name);
-      else if (block.type === "image") fragments.add(IMAGE_FRAGMENT);
+      else if (block.type === "toolCall") {
+        const name = block.toolName ?? block.name;
+        if (typeof name !== "string") continue;
+        const normalized = name.toLowerCase();
+        const input = block.input ?? block.arguments;
+        if (normalized === "bash" || normalized.startsWith("bash ")
+          || normalized.endsWith(".bash") || normalized.endsWith("_bash")) {
+          // bash 走 ConsoleOutputPreview，只渲染命令与输出，不渲染工具名。
+          addText(input?.command);
+        } else if (normalized === "todo" || normalized.endsWith(".todo")
+          || normalized.endsWith("_todo")) {
+          // 无结果时走通用头部（显示工具名）；有 phases 时标题为 Todo。
+          addText(name);
+          addText("Todo");
+        } else {
+          addText(name);
+        }
+      } else if (block.type === "image") fragments.add(IMAGE_FRAGMENT);
     }
   }
   addText(message.errorMessage);
@@ -135,16 +161,7 @@ function contentFragments(message) {
   return [...fragments];
 }
 
-let selection;
-try {
-  selection = await selectFixture();
-} catch (error) {
-  selection = {
-    fixture: null,
-    reason: `选择历史会话夹具失败，跳过：${error instanceof Error ? error.message : String(error)}`,
-  };
-}
-const { fixture, reason } = selection;
+const { fixture, reason } = await selectFixture();
 // Bun 的 reporter 只打印 skip 计数，不显示 skip 选项里的原因；这里把它写进输出。
 if (reason) console.log(`[history-fixtures] ${reason}`);
 
