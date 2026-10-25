@@ -1143,12 +1143,13 @@ pre, code {
 }
 
 .image-preview-dialog {
+  box-sizing: border-box;
   width: 100vw;
   max-width: none;
   height: 100dvh;
   max-height: none;
   margin: 0;
-  padding: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   border: 0;
   background: var(--bg);
   color: var(--text);

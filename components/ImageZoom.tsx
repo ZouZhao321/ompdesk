@@ -150,7 +150,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize, onError }
       naturalSizeRef.current,
       size,
     );
-    if (next.scale !== cameraRef.current.scale) adjustedRef.current = true;
+    if (naturalSizeRef.current.w > 0 && next.scale !== cameraRef.current.scale) adjustedRef.current = true;
     applyCamera(next);
   }, [applyCamera]);
 
@@ -223,7 +223,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize, onError }
           image,
           size,
         );
-        if (zoomed.scale !== cameraRef.current.scale) adjustedRef.current = true;
+        if (image.w > 0 && zoomed.scale !== cameraRef.current.scale) adjustedRef.current = true;
         applyCamera(
           panCamera(zoomed, midpoint.x - previous.x, midpoint.y - previous.y, image, size),
         );
@@ -239,7 +239,9 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize, onError }
     if (dx === 0 && dy === 0) return;
     dragRef.current = { x: event.clientX, y: event.clientY };
     const next = panCamera(cameraRef.current, dx, dy, naturalSizeRef.current, viewportSizeRef.current);
-    if (next.x !== cameraRef.current.x || next.y !== cameraRef.current.y) adjustedRef.current = true;
+    if (naturalSizeRef.current.w > 0 && (next.x !== cameraRef.current.x || next.y !== cameraRef.current.y)) {
+      adjustedRef.current = true;
+    }
     applyCamera(next);
   };
 
@@ -266,7 +268,9 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize, onError }
     const image = naturalSizeRef.current;
     const size = viewportSizeRef.current;
     if (isFitCamera(cameraRef.current, image, size)) {
-      zoomTo(1, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+      // 小图「适配」就是 100%，再按 1:1 不会有变化，所以切到 200% 才看得出反馈。
+      const next = fitZoom(image, size) >= 1 ? Math.min(IMAGE_ZOOM_MAX, 2) : 1;
+      zoomTo(next, { x: event.clientX - rect.left, y: event.clientY - rect.top });
       return;
     }
     fitToWindow();
@@ -294,7 +298,8 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize, onError }
     }
   };
 
-  const atFit = natural.w > 0 && isFitCamera(camera, natural, viewport);
+  const fitScale = natural.w > 0 && viewport.w > 0 ? fitZoom(natural, viewport) : 1;
+  const atFit = natural.w > 0 && fitScale < 1 && isFitCamera(camera, natural, viewport);
   const percent = Math.round(camera.scale * 100);
 
   return (
@@ -481,6 +486,12 @@ interface ZoomableImageProps {
 export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false, title, width, height }: ZoomableImageProps) {
   const { t } = useI18n();
   const openImagePreview = useImagePreview();
+  const [insideLink, setInsideLink] = useState(false);
+
+  // 图片被 markdown 包在链接里时，可聚焦的应该是那个链接；图片本身不再冒充按钮。
+  const attachImage = useCallback((node: HTMLImageElement | null) => {
+    setInsideLink(Boolean(node?.closest("a")));
+  }, []);
 
   if (!src) return null;
 
@@ -505,6 +516,7 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      ref={attachImage}
       src={src}
       alt={alt ?? ""}
       title={title}
@@ -513,11 +525,11 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
       loading="lazy"
       className={className}
       style={imgStyle}
-      role="button"
-      tabIndex={0}
-      aria-label={label}
+      role={insideLink ? undefined : "button"}
+      tabIndex={insideLink ? undefined : 0}
+      aria-label={insideLink ? undefined : label}
       onClick={open}
-      onKeyDown={(event) => {
+      onKeyDown={insideLink ? undefined : (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         open(event);
       }}
