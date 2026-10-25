@@ -134,7 +134,7 @@ lib/
   map-layout.ts        按轮树的布局计算（lane + 主干优先）
   map-types.ts         会话地图的共享类型
   markdown.ts          共享 markdown 辅助
-  mobile-layout.ts     移动档断点常量与 isMobileLayout() 判定
+  mobile-layout.ts     移动档断点常量与共用的媒体查询串
   model-roles.ts       omp 的模型角色，供浏览器读写
   model-scope.ts       UI 与启动共享的 enabledModels 解析
   npx.ts               skill 安装使用的 npx 运行器
@@ -336,18 +336,23 @@ omp 没有信任存储：它运行某个仓库的扩展，因为你选择在那�
 - 生命周期标记的归属由 `lib/session-marker.ts` 的纯函数决定：运行结束时，当前选中
   且页面可见的会话算已读，不亮静态标记；页面隐藏期间或别的会话结束时写入未读集合并
   亮标记。跳过的只是归属判定：选中的运行同样算进结束列表并触发重读最后状态。
-  会话再次进入运行状态先清掉旧标记，结束后按新结果重新亮。
+  会话再次进入运行状态先清掉旧标记，结束后按新结果重新亮。多次运行换算到同一个
+  会话（运行中换了会话 id）时只保留一条结束记录，归属按「任一次属于选中」合并。
+  最后状态按 `STATIC_MARKER_APPEARANCE` 的实际键收窄，联合类型之外的值不产生标记。
 - 页面回到前台时同时触发一次轮询与一次 `force` 会话列表刷新，标记与运行状态因此
   各核对一次。可见时轮询失败（服务失联）会把这段时间内的结束当作不可观察的结束
-  （`isEndUnobserved`），即使会话是当前选中的也亮标记。
+  （`isEndUnobserved`），即使会话是当前选中的也亮标记。回到前台后若该会话仍然
+  选中，这段隐藏期间记下的未读会随即清掉：看到即已读。
 - 运行集合写入 `ompdesk:running-session-ids`。首轮轮询到达时与上次页面记录的集合
   对比，消失的运行按不可观察的结束处理：重启服务后停在表单上的会话因此按最后结果
-  亮标记。这次对账同样走 `resolveFinishedRuns()`，不另写一套判定。
+  亮标记。这次对账同样走 `resolveFinishedRuns()`，不另写一套判定；与播种规则一致，
+  当前打开（自动恢复）的会话不记未读。
 - 未读集合由 `lib/session-unread.ts` 持有并写入本机存储：侧栏用
   `useSyncExternalStore` 订阅，任何写入都走 `addUnreadSessionIds()` /
   `clearUnreadSessionIds()` / `retainUnreadSessionIds()`。
 - 首次播种只加异常存量（中断、取消、报错、待回复），每个浏览器只做一次。当前打开
-  且可见的会话按已读处理，播种因此排除它：看到即灭，刷新不会重新点亮。
+  且可见的会话按已读处理，播种因此排除它：看到即灭，刷新不会重新点亮。播种排在
+  初始恢复之后：恢复在首次加载时同步选定会话，早播种会把正在恢复的会话播成未读。
 - 项目行的未读角标统计的就是未读集合，静态标记会被一并计入。黄灯本身就是未读，
   不按颜色拆分计数。
 - 静态标记在用户主动打开会话时熄灭：侧栏点击、会话地图的命令面板（
@@ -440,12 +445,13 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
 `setGlobalDispatcher` 不影响 `fetch`，`install` 不存在。
 
 ### 移动档布局（`lib/mobile-layout.ts`）
-- 判定移动档只有一个来源：`lib/mobile-layout.ts` 的 `isMobileLayout()`。宽度
+- 判定移动档只有一个来源：`lib/mobile-layout.ts` 的 `MOBILE_LAYOUT_QUERY`。宽度
   ≤ `MOBILE_MAX_WIDTH`（768），或粗指针且高度 ≤ `MOBILE_MAX_COARSE_HEIGHT`
-  （480）。`hooks/useIsMobile.ts` 只订阅视口变化并调用它，不再自带判断。
+  （480）。`hooks/useIsMobile.ts` 直接取这条媒体查询的 `matches` 当快照，不再
+  自己读视口宽高：缩放与聚焦放大只改视觉视口，JS 与 CSS 因此不会错位。
 - `app/globals.css` 的移动查询 `(max-width: 768px), (pointer: coarse) and
-  (max-height: 480px)` 与上述函数语义一致；改断点时两处同时改，否则 React 侧与
-  CSS 侧会分叉。
+  (max-height: 480px)` 必须与 `MOBILE_LAYOUT_QUERY` 逐字一致（查询串由两个常量
+  拼出，CSS 里是字面量）；改断点时两处同时改，否则 React 侧与 CSS 侧会分叉。
 - 手机档的四个界面——顶栏、输入区（含扩展弹窗）、侧栏抽屉、消息操作——的可点
   控件按 `MOBILE_HIT_TARGET_PX`（44px）给命中区。TSX 中的尺寸直接引用该常量，
   不要重写 `44`；CSS 无法导入 TS 常量，`app/globals.css` 内的手机查询使用等值
