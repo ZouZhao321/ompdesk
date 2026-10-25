@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
-const rowSource = await readFile(new URL("./ProjectRow.tsx", import.meta.url), "utf8");
 const sessionItemSource = source.slice(source.indexOf("function SessionItem("));
 
 test("only Shift+click bypasses session deletion confirmation", () => {
@@ -30,17 +29,6 @@ test("keeps subagents out of the left session sidebar", () => {
   assert.doesNotMatch(source, /SubagentRail|SubagentPanel|subagents/);
 });
 
-test("includes project activity counts in accessible labels", () => {
-  assert.match(
-    rowSource,
-    /aria-label=\{`\$\{t\("sidebar\.agentRunning"\)\} \(\$\{activity\.running\}\)`\}/,
-  );
-  assert.match(
-    rowSource,
-    /aria-label=\{`\$\{t\("sidebar\.newSessionActivity"\)\} \(\$\{activity\.unread\}\)`\}/,
-  );
-});
-
 test("shows the waiting indicator ahead of the running spinner", () => {
   assert.match(
     sessionItemSource,
@@ -55,14 +43,6 @@ test("labels the inline waiting indicator without a count", () => {
   );
   assert.match(waitingIndicatorSource, /title=\{t\("sidebar\.agentWaitingForInput"\)\}/);
   assert.match(waitingIndicatorSource, /aria-label=\{t\("sidebar\.agentWaitingForInput"\)\}/);
-});
-
-test("interpolates the project waiting badge label", () => {
-  assert.match(
-    rowSource,
-    /aria-label=\{t\("sidebar\.agentWaitingForInputWithCount", \{ count: activity\.waiting \}\)\}/,
-  );
-  assert.doesNotMatch(source, /aria-label=\{`\$\{t\("sidebar\.agentWaitingForInput"\)\}/);
 });
 
 test("confirms removal of a workspace with running or waiting sessions", () => {
@@ -80,9 +60,6 @@ test("marks activity indicators as images for screen readers", () => {
   assert.match(indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()"), /role="img"/);
   assert.match(indicatorSource("function WaitingSessionIndicator()", "function UnreadSessionIndicator()"), /role="img"/);
   assert.match(indicatorSource("function UnreadSessionIndicator()", "function SessionItem("), /role="img"/);
-
-  const projectBadges = rowSource.slice(rowSource.indexOf("function showProjectActivity("));
-  assert.equal((projectBadges.match(/role="img"/g) ?? []).length, 3);
 });
 
 test("does not persist an unchanged fallback title ending in whitespace", () => {

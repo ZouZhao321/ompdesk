@@ -80,6 +80,20 @@ test("renders accessible labels and counts for running, waiting and unread activ
   assert.ok(html.includes('aria-label="New session activity (3)"'), "expected the unread count label");
 });
 
+test("renders exactly one labelled badge per non-zero activity count", () => {
+  const html = renderRow({ activity: { running: 2, waiting: 1, unread: 3 } });
+
+  const badges = html.match(/<span\b[^>]*role="img"[^>]*>/g) ?? [];
+  assert.equal(badges.length, 3, "expected one badge per non-zero count");
+
+  for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "New session activity (3)"]) {
+    assert.ok(
+      badges.some((tag) => tag.includes(`aria-label="${label}"`)),
+      `expected a badge labelled "${label}"`,
+    );
+  }
+});
+
 test("renders only the activity badges that have a positive count", () => {
   const html = renderRow({ activity: { running: 0, waiting: 0, unread: 2 } });
 
