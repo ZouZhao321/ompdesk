@@ -18,13 +18,18 @@ async function localModuleUrl(relativePath: string): Promise<string> {
   return pathToFileURL(`${process.cwd()}/${relativePath}`).href;
 }
 
-/** 加载仓库内的本地模块并执行它；失败只写一行错误，不阻断进程后续启动。 */
+/** 加载仓库内的本地模块并执行它；源码缺失按预期降级，其它错误保留堆栈。 */
 async function runLocalModule<T>(relativePath: string, label: string, run: (loaded: T) => Promise<void> | void): Promise<void> {
   try {
     const loaded = await importRuntimeModule<T>(await localModuleUrl(relativePath));
     await run(loaded);
   } catch (error) {
-    console.error(`[ompdesk] ${label}未加载：${error instanceof Error ? error.message : String(error)}`);
+    // 源码缺失是可预期的情况（npm 包与桌面壳只分发构建产物）；其它错误说明模块本身有问题。
+    if ((error as NodeJS.ErrnoException).code === "ERR_MODULE_NOT_FOUND") {
+      console.warn(`[ompdesk] ${label}源码不存在，已跳过`);
+      return;
+    }
+    console.error(`[ompdesk] ${label}执行失败：`, error);
   }
 }
 
