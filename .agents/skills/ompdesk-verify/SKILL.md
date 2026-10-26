@@ -65,7 +65,7 @@ await tab.waitForSelector(".sidebar-container", { timeout: 60000 });
 
 - 侧栏：`.sidebar-container`、`[data-project-path]`、`[data-session-id]`、搜索框 `input[type=search]`、
   侧栏开关 `[data-toggle="sidebar"]`。
-  `.sidebar-session-row` / `.sidebar-project-row` 这类类名先在手机适配里出现，跨分支不稳定，判断行数用 data 属性。
+  `.sidebar-session-row` / `.sidebar-project-row` 与上面的 data 属性同时存在；判断行数用 data 属性。
 - 右侧文件面板：`#file-panel`、`.panel-tab-header`、`.right-panel-open`、`.right-panel-closed`、
   面板开关 `button[aria-controls="file-panel"]`（同一个属性也出现在宽度为 0 的拖拽分隔条上，要带 `button`）
 - 输入区：`textarea`、`[data-context-available]`、`[data-context-level]`、`[data-resize-handle="sidebar"]`、
