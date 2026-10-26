@@ -1407,11 +1407,10 @@ export class AgentSessionWrapper {
         }
         await this.inner.extensionRunner?.emit?.({ type: "session_shutdown", reason: "quit" });
       } finally {
-        // Sessions are torn down long before process exit (fork, delete), so
-        // flush here; the bound keeps an unreachable collector from holding
-        // shutdown for the exporter's own timeout.
-        await flushSessionTelemetry(SHUTDOWN_FLUSH_TIMEOUT_MS);
+        // Destroy first so a slow collector cannot keep a dismantled session
+        // reachable; flushing afterwards is process-wide and loses nothing.
         this.destroy();
+        await flushSessionTelemetry(SHUTDOWN_FLUSH_TIMEOUT_MS);
       }
     })();
     return this.shutdownPromise;
