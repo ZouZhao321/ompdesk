@@ -29,12 +29,12 @@ async function localModuleExists(relativePath: string): Promise<boolean> {
 /** 加载仓库内的本地模块并执行它；入口缺失按预期降级，其余失败保留堆栈。 */
 async function runLocalModule<T>(relativePath: string, label: string, run: (loaded: T) => Promise<void> | void): Promise<void> {
   // 判定入口文件是否存在，不看错误码：模块自身的依赖缺失同样是 `ERR_MODULE_NOT_FOUND`，
-  // 那种情况要留下堆栈，不能被当成“没有这份源码”。
-  if (!(await localModuleExists(relativePath))) {
-    console.warn(`[ompdesk] ${label}源码不存在，已跳过`);
-    return;
-  }
+  // 那种情况要留下堆栈，不能被当成“没有这份源码”。探测本身失败也走同一条降级。
   try {
+    if (!(await localModuleExists(relativePath))) {
+      console.warn(`[ompdesk] ${label}源码不存在，已跳过`);
+      return;
+    }
     const loaded = await importRuntimeModule<T>(await localModuleUrl(relativePath));
     await run(loaded);
   } catch (error) {
