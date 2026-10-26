@@ -192,6 +192,27 @@ test("seeds the marker backlog only after the initial restore picked a session",
   assert.match(source, /setInitialRestoreSettled\(true\);\s*if \(target\) \{/);
 });
 
+test("settles the initial restore when the ready session list is empty", () => {
+  const restoreEffect = source.slice(
+    source.indexOf("// Auto-select cwd and restore session from URL on first load"),
+    source.indexOf("const commitCustomPath"),
+  );
+  assert.ok(restoreEffect.length > 0, "初始恢复的 effect 必须存在");
+  // 列表还在到达时为空只代表尚未加载，不能当作恢复失败。
+  assert.match(restoreEffect, /if \(loading\) return;/);
+  // 列表就绪且为空：先落定并通知父组件，再退出，否则播种、重启对账与运行集合
+  // 持久化会一直等一次不会到来的恢复。
+  const emptyStart = restoreEffect.indexOf("if (allSessions.length === 0) {");
+  assert.ok(emptyStart >= 0, "空列表分支必须存在");
+  const emptyBranch = restoreEffect.slice(
+    emptyStart,
+    restoreEffect.indexOf("\n    }", emptyStart),
+  );
+  assert.match(emptyBranch, /setInitialRestoreSettled\(true\);/);
+  assert.match(emptyBranch, /onInitialRestoreDone\?\.\(\);/);
+  assert.match(emptyBranch, /return;/);
+});
+
 test("skips the open session when reconciling runs lost across a restart", () => {
   assert.match(
     source,

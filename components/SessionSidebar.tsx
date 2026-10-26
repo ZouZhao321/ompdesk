@@ -772,7 +772,15 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       setInitialRestoreSettled(true);
       return;
     }
-    if (allSessions.length === 0) return;
+    // 列表还在加载时为空只代表尚未到达，不能据此判定恢复结果。
+    if (loading) return;
+    if (allSessions.length === 0) {
+      // 列表就绪但为空：恢复目标不存在，播种、重启对账与运行集合持久化都不能
+      // 等一次永远不会到来的恢复。父组件也在这里收到通知，把占位画出来。
+      setInitialRestoreSettled(true);
+      onInitialRestoreDone?.();
+      return;
+    }
 
     if (selectedCwd === null) {
       // If restoring a session, set cwd to match that session
@@ -793,7 +801,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
       if (projects.length > 0) setSelectedCwd(projects[0]);
     }
-  }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone, removedProjects]);
+  }, [allSessions, loading, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone, removedProjects]);
 
   const commitCustomPath = useCallback(async (candidate: string) => {
     const path = candidate.trim();
