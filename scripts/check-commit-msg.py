@@ -1,13 +1,14 @@
 import re
 import sys
+from typing import Optional
 
-ALLOWED_TYPES = ("feat", "fix", "refactor", "test", "docs", "chore", "perf")
-SKIP_PREFIXES = ("Merge ", "Revert ", "fixup! ", "squash! ", "amend! ")
-SUBJECT_PATTERN = re.compile(r"^(?P<type>[a-z]+)(?P<scope>\([^()\s]+\))?: (?P<description>.+)$")
-MAX_SUBJECT_LENGTH = 72
+ALLOWED_TYPES: tuple[str, ...] = ("feat", "fix", "refactor", "test", "docs", "chore", "perf")
+SKIP_PREFIXES: tuple[str, ...] = ("Merge ", "Revert ", "fixup! ", "squash! ", "amend! ")
+SUBJECT_PATTERN: re.Pattern[str] = re.compile(r"^(?P<type>[a-z]+)(?P<scope>\([^()\s]+\))?: (?P<description>.+)$")
+MAX_SUBJECT_LENGTH: int = 72
 
 
-def read_subject(path):
+def read_subject(path: str) -> str:
     with open(path, encoding="utf-8") as message_file:
         for line in message_file:
             stripped = line.rstrip("\r\n")
@@ -16,7 +17,7 @@ def read_subject(path):
     return ""
 
 
-def validate(subject):
+def validate(subject: str) -> Optional[str]:
     if not subject:
         return "提交标题为空"
     if any(subject.startswith(prefix) for prefix in SKIP_PREFIXES):
@@ -35,7 +36,7 @@ def validate(subject):
     return None
 
 
-def main():
+def main() -> int:
     if len(sys.argv) != 2:
         print("用法：python scripts/check-commit-msg.py <提交信息文件>", file=sys.stderr)
         return 2
