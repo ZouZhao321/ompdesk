@@ -886,6 +886,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     setSortMenuOpen(false);
   }, []);
 
+  const closeProjectSortMenu = useCallback(() => setSortMenuOpen(false), []);
+
   // 切换置顶后菜单立即收起，行高亮也随之清掉，避免菜单悬在移动过的项目上。
   const handleTogglePinnedProject = useCallback((project: string) => {
     const next = togglePinnedProject(pinnedProjects, project);
@@ -1123,6 +1125,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           open={sortMenuOpen}
           menuRef={sortMenuRef}
           onToggle={() => setSortMenuOpen((open) => !open)}
+          onDismiss={closeProjectSortMenu}
           onSelectMode={chooseProjectSortMode}
         />
         <button

@@ -38,6 +38,21 @@ function ariaExpandedOf(tag) {
   return match[1];
 }
 
+/** 把起始标签的 style 属性拆成声明表，用于断言可见性相关的内联样式。 */
+function stylesOf(tag) {
+  const match = tag.match(/style="([^"]*)"/);
+  assert.ok(match, `expected a style attribute on ${tag}`);
+  return Object.fromEntries(
+    match[1]
+      .split(";")
+      .filter((declaration) => declaration.includes(":"))
+      .map((declaration) => {
+        const separator = declaration.indexOf(":");
+        return [declaration.slice(0, separator).trim(), declaration.slice(separator + 1).trim()];
+      }),
+  );
+}
+
 function renderRow(overrides = {}, locale) {
   return renderToStaticMarkup(
     React.createElement(
@@ -156,6 +171,36 @@ test("new-session button label contains the full project path", () => {
 test("actions button mirrors menuOpen through aria-expanded", () => {
   assert.equal(ariaExpandedOf(buttonTag(renderRow({ menuOpen: false }), "Project actions")), "false");
   assert.equal(ariaExpandedOf(buttonTag(renderRow({ menuOpen: true }), "Project actions")), "true");
+});
+
+test("shows the new-session button while the row is hovered", () => {
+  const tag = buttonTag(renderRow({ hovered: true }), `New session in ${PROJECT_PATH}`);
+  const style = stylesOf(tag);
+
+  assert.equal(style.opacity, "1");
+  assert.equal(style["pointer-events"], "auto");
+});
+
+test("shows the actions button while its menu is open and keeps new-session hidden", () => {
+  const html = renderRow({ menuOpen: true });
+
+  const actions = stylesOf(buttonTag(html, "Project actions"));
+  assert.equal(actions.opacity, "1", "expected the open menu to keep its trigger visible");
+  assert.equal(actions["pointer-events"], "auto");
+
+  const newSession = stylesOf(buttonTag(html, `New session in ${PROJECT_PATH}`));
+  assert.equal(newSession.opacity, "0", "expected new-session to stay hidden without hover");
+  assert.equal(newSession["pointer-events"], "none");
+});
+
+test("hides both row actions when the row is neither hovered nor menu-open", () => {
+  const html = renderRow();
+
+  for (const label of [`New session in ${PROJECT_PATH}`, "Project actions"]) {
+    const style = stylesOf(buttonTag(html, label));
+    assert.equal(style.opacity, "0", `expected "${label}" to be transparent by default`);
+    assert.equal(style["pointer-events"], "none", `expected "${label}" to ignore pointers by default`);
+  }
 });
 
 test("renders children inside the row as the project menu slot", () => {
