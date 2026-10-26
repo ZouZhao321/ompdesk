@@ -53,12 +53,22 @@ export async function sessionTelemetry(
   modelRegistry: ModelRegistry,
 ): Promise<AgentTelemetryConfig | undefined> {
   if (!(await startTelemetryExport(settings))) return undefined;
-  // Same rule as the CLI: report the provider-computed cost only for models
-  // whose rate card is known, instead of exporting a bogus $0.
-  return createTelemetryExportConfig(undefined, (providerId, modelId) => {
-    const model = modelRegistry.find(providerId, modelId);
-    return model !== undefined && getModelPricingStatus(model) !== "unknown";
-  });
+  try {
+    // Same rule as the CLI: report the provider-computed cost only for models
+    // whose rate card is known, instead of exporting a bogus $0.
+    return createTelemetryExportConfig(undefined, (providerId, modelId) => {
+      const model = modelRegistry.find(providerId, modelId);
+      return model !== undefined && getModelPricingStatus(model) !== "unknown";
+    });
+  } catch (error) {
+    // Optional observability again: a broken export config must not fail the
+    // session that was about to start.
+    console.error(
+      "[ompdesk] telemetry config failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return undefined;
+  }
 }
 
 /**
