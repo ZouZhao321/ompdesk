@@ -547,8 +547,13 @@ async function getRouteHandler(
               // client disconnected
             }
           };
-          // Send initial ping so client knows connection is live
-          send("connected", { filePath });
+          // Send initial ping so client knows connection is live. The mtime and
+          // size let a client that hid this file detect changes it missed.
+          send("connected", {
+            filePath,
+            mtime: stat.mtime.toISOString(),
+            size: stat.size,
+          });
           try {
             watcher = fs.watch(filePath, () => {
               try {

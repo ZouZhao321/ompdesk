@@ -6,8 +6,6 @@ import { useI18n } from "@/hooks/useI18n";
 
 interface Props {
   cwd: string;
-  open: boolean;
-  onToggleOpen: () => void;
   onOpenFile: (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => void;
   refreshKey: number;
   onRefresh: () => void;
@@ -22,7 +20,6 @@ function PanelIconButton({
   skipHover,
   color,
   background = "none",
-  marginRight,
   ariaPressed,
   children,
 }: {
@@ -32,7 +29,6 @@ function PanelIconButton({
   skipHover?: boolean;
   color: string;
   background?: string;
-  marginRight?: number;
   ariaPressed?: boolean;
   children: ReactNode;
 }) {
@@ -56,7 +52,7 @@ function PanelIconButton({
       style={{
         position: "relative",
         display: "flex", alignItems: "center", justifyContent: "center",
-        width: 26, height: 26, padding: 0, marginRight,
+        width: 26, height: 26, padding: 0,
         background,
         border: "none",
         color,
@@ -75,14 +71,11 @@ function PanelIconButton({
 }
 
 /**
- * File explorer inside the right file panel. Keeping it next to the viewer
- * means picking a file and reading it happen in the same surface, and the
- * sidebar stays dedicated to sessions.
+ * Explorer view of the right panel tab page. The tab owns visibility, so the
+ * panel itself only carries the tree toolbar and the tree.
  */
 export function FileExplorerPanel({
   cwd,
-  open,
-  onToggleOpen,
   onOpenFile,
   refreshKey,
   onRefresh,
@@ -112,40 +105,8 @@ export function FileExplorerPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", flexShrink: 0, paddingLeft: 4 }}>
-        <button
-          onClick={onToggleOpen}
-          aria-expanded={open}
-          title={open ? t("files.hideExplorer") : t("files.showExplorer")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            flex: 1,
-            minWidth: 0,
-            padding: "6px 10px",
-            background: "none",
-            border: "none",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: "0.05em",
-            textTransform: "uppercase",
-            textAlign: "left",
-          }}
-        >
-          <svg
-            width="9" height="9" viewBox="0 0 10 10" fill="none"
-            stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-            style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}
-            aria-hidden="true"
-          >
-            <polyline points="3 2 7 5 3 8" />
-          </svg>
-          {t("files.explorer")}
-        </button>
-        {open && changesCount > 0 && (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flexShrink: 0, gap: 2, padding: "2px 6px 2px 4px" }}>
+        {changesCount > 0 && (
           <PanelIconButton
             onClick={() => setChangesCollapsed((v) => !v)}
             title={t("files.changedFiles", { count: changesCount })}
@@ -160,27 +121,24 @@ export function FileExplorerPanel({
             </svg>
           </PanelIconButton>
         )}
-        {open && (
-          <PanelIconButton
-            onClick={() => fileExplorerRef.current?.openUploadPicker()}
-            disabled={uploadBusy}
-            title={t("files.uploadFilesTitle")}
-            color="var(--text-dim)"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <path d="m17 8-5-5-5 5" />
-              <path d="M12 3v12" />
-            </svg>
-          </PanelIconButton>
-        )}
+        <PanelIconButton
+          onClick={() => fileExplorerRef.current?.openUploadPicker()}
+          disabled={uploadBusy}
+          title={t("files.uploadFilesTitle")}
+          color="var(--text-dim)"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="m17 8-5-5-5 5" />
+            <path d="M12 3v12" />
+          </svg>
+        </PanelIconButton>
         <PanelIconButton
           onClick={handleRefresh}
           title={t("files.refreshExplorer")}
           skipHover={refreshDone}
           color={refreshDone ? "#4ade80" : "var(--text-dim)"}
           background={refreshDone ? "rgba(74,222,128,0.18)" : "none"}
-          marginRight={6}
         >
           {refreshDone ? (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -194,21 +152,19 @@ export function FileExplorerPanel({
           )}
         </PanelIconButton>
       </div>
-      {open && (
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
-          <FileExplorer
-            ref={fileExplorerRef}
-            cwd={cwd}
-            onOpenFile={onOpenFile}
-            refreshKey={refreshKey}
-            onAtMention={onAtMention}
-            onAtMentions={onAtMentions}
-            onUploadBusyChange={setUploadBusy}
-            changesCollapsed={changesCollapsed}
-            onChangesCountChange={setChangesCount}
-          />
-        </div>
-      )}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
+        <FileExplorer
+          ref={fileExplorerRef}
+          cwd={cwd}
+          onOpenFile={onOpenFile}
+          refreshKey={refreshKey}
+          onAtMention={onAtMention}
+          onAtMentions={onAtMentions}
+          onUploadBusyChange={setUploadBusy}
+          changesCollapsed={changesCollapsed}
+          onChangesCountChange={setChangesCount}
+        />
+      </div>
     </div>
   );
 }
