@@ -11,9 +11,13 @@ interface Props {
   open: boolean;
   /** 父组件用它在菜单打开期间判断外部点击。 */
   menuRef?: RefObject<HTMLDivElement | null>;
+  /** 触发按钮的开关回调，只有触发按钮会调用它。 */
   onToggle: () => void;
-  /** 焦点离开整个控件时调用：菜单只在这里收起，Tab 键留给浏览器处理。 */
-  onDismiss?: () => void;
+  /**
+   * 收起菜单的唯一出口：Escape、选中某一项、焦点离开控件都走这里，
+   * 因此它必须与父组件的关闭逻辑幂等。父组件的外部点击收起另走 menuRef。
+   */
+  onDismiss: () => void;
   onSelectMode: (mode: ProjectSortMode) => void;
 }
 
@@ -82,21 +86,23 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
     }
     // Escape 只收起菜单：阻止冒泡，避免全局 Esc 快捷键连带中止正在运行的 agent。
     event.stopPropagation();
-    onToggle();
+    onDismiss();
     triggerRef.current?.focus();
-  }, [onToggle]);
+  }, [onDismiss]);
 
   // 选中即关闭菜单，焦点回到触发按钮，避免焦点随关闭的菜单项一起消失。
+  // 收起统一走 onDismiss，即使父组件在选中时已经自己关过，重复调用也是幂等的。
   const selectMode = useCallback((option: ProjectSortMode) => {
     onSelectMode(option);
+    onDismiss();
     triggerRef.current?.focus();
-  }, [onSelectMode]);
+  }, [onDismiss, onSelectMode]);
 
   // 焦点离开整个控件时才收起菜单：此时浏览器已经完成 Tab 的焦点移动，
   // 菜单项退出占位不会再把焦点甩到 body 上。
   const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
     if (!open || event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-    onDismiss?.();
+    onDismiss();
   }, [open, onDismiss]);
 
   return (

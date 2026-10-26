@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -10,6 +11,9 @@ const jiti = createJiti(import.meta.url, {
 });
 const { ProjectSortControl, sortMenuKeyAction } = await jiti.import("./ProjectSortControl.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
+
+// 静态渲染不会触发事件处理函数，关闭路径的接线直接读源码断言。
+const source = readFileSync(new URL("./ProjectSortControl.tsx", import.meta.url), "utf8");
 
 const TRIGGER_LABEL = "Sort projects";
 const BY_ACTIVITY = "By recent activity";
@@ -62,6 +66,7 @@ function renderControl(overrides = {}, locale) {
         mode: "time",
         open: false,
         onToggle() {},
+        onDismiss() {},
         onSelectMode() {},
         ...overrides,
       }),
@@ -181,4 +186,38 @@ test("leaves unrelated keys and an empty menu to the browser", () => {
   }
   assert.equal(sortMenuKeyAction("ArrowDown", -1, 0), null);
   assert.equal(sortMenuKeyAction("Escape", -1, 0), null);
+});
+
+/** 返回组件里某个 useCallback 回调的源码，用来断言关闭路径的接线。 */
+function callbackBody(name) {
+  const start = source.indexOf(`const ${name} = useCallback`);
+  assert.ok(start >= 0, `expected a ${name} callback`);
+  const end = source.indexOf("}, [", start);
+  assert.ok(end > start, `expected ${name} to end with a dependency list`);
+  return source.slice(start, end);
+}
+
+test("closes the menu through onDismiss on every close path", () => {
+  for (const name of ["handleMenuKeyDown", "selectMode", "handleBlur"]) {
+    assert.match(callbackBody(name), /onDismiss\(\);/, `expected ${name} to close through onDismiss`);
+    assert.doesNotMatch(callbackBody(name), /onToggle\(/, `expected ${name} to leave toggling to the trigger`);
+  }
+});
+
+test("selects the mode before closing the menu", () => {
+  const body = callbackBody("selectMode");
+
+  assert.ok(
+    body.indexOf("onSelectMode(option)") < body.indexOf("onDismiss()"),
+    "expected the selection to land before the menu closes",
+  );
+});
+
+test("uses onToggle only for the trigger button", () => {
+  assert.match(source, /onClick=\{onToggle\}/, "expected the trigger button to toggle the menu");
+  assert.equal(
+    source.match(/onToggle/g).length,
+    3,
+    "expected onToggle in the props interface, the destructuring and the trigger click only",
+  );
 });
