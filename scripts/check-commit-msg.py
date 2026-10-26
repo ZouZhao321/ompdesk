@@ -9,6 +9,7 @@ MAX_SUBJECT_LENGTH: int = 72
 
 
 def read_subject(path: str) -> str:
+    """读取提交信息文件的首个非空行；文件没有内容时返回空串。"""
     with open(path, encoding="utf-8") as message_file:
         for line in message_file:
             stripped = line.rstrip("\r\n")
@@ -18,6 +19,7 @@ def read_subject(path: str) -> str:
 
 
 def validate(subject: str) -> Optional[str]:
+    """校验提交标题，返回 None 表示通过，否则返回中文错误原因。"""
     if not subject:
         return "提交标题为空"
     if any(subject.startswith(prefix) for prefix in SKIP_PREFIXES):
@@ -37,6 +39,7 @@ def validate(subject: str) -> Optional[str]:
 
 
 def main() -> int:
+    """校验命令行指定的提交信息文件，返回 0 通过、1 不合规、2 用法错误。"""
     if len(sys.argv) != 2:
         print("用法：python scripts/check-commit-msg.py <提交信息文件>", file=sys.stderr)
         return 2
@@ -45,7 +48,7 @@ def main() -> int:
     if error is None:
         return 0
     print(f"提交标题不合规：{error}", file=sys.stderr)
-    print("格式说明见 AGENTS.md 第三章。", file=sys.stderr)
+    print("格式说明见 AGENTS.md「Git 工作流」一节。", file=sys.stderr)
     return 1
 
 
