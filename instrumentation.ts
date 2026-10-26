@@ -1,3 +1,4 @@
+import type { pathToFileURL as PathToFileURL } from "node:url";
 import type { configureHttpDispatcher as ConfigureHttpDispatcher } from "@/lib/http-dispatcher";
 import type { startLogging as StartLogging } from "@/lib/logging-startup";
 import { importRuntimeModule } from "@/lib/runtime-import";
@@ -8,15 +9,23 @@ type LoggingModule = { startLogging: typeof StartLogging };
 /**
  * 本地 TypeScript 源码的 file URL。
  *
- * 逐段编码，但保留 Windows 盘符里的冒号：`#`、`?`、`%` 出现在路径里会被 URL 解析吃掉或
- * 在解码阶段失败，整段交给 `new URL()` 只能兜住空格。路径不存在时调用方自己处理。
+ * `pathToFileURL` 负责盘符、空格、`#`、`?`、`%` 的编码，手拼 `file://` 会在这些字符上出错。
+ * 它是 `node:` 内置模块，静态导入会被 Next 拖进 Edge 与浏览器的 instrumentation 打包图，
+ * 因此按运行时加载。路径不存在时由调用方处理。
  */
-function localModuleUrl(relativePath: string): string {
-  const encodeSegments = (value: string) => {
-    const [head, ...rest] = value.split("/");
-    return [head, ...rest.map(encodeURIComponent)].join("/");
-  };
-  return `file:///${encodeSegments(process.cwd().replace(/\\/g, "/"))}/${encodeSegments(relativePath)}`;
+async function localModuleUrl(relativePath: string): Promise<string> {
+  const { pathToFileURL } = await importRuntimeModule<{ pathToFileURL: typeof PathToFileURL }>("node:url");
+  return pathToFileURL(`${process.cwd()}/${relativePath}`).href;
+}
+
+/** 加载仓库内的本地模块并执行它；失败只写一行错误，不阻断进程后续启动。 */
+async function runLocalModule<T>(relativePath: string, label: string, run: (loaded: T) => Promise<void> | void): Promise<void> {
+  try {
+    const loaded = await importRuntimeModule<T>(await localModuleUrl(relativePath));
+    await run(loaded);
+  } catch (error) {
+    console.error(`[ompdesk] ${label}未加载：${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export async function register(): Promise<void> {
@@ -28,19 +37,13 @@ export async function register(): Promise<void> {
   // into the Edge and browser instrumentation bundles, which Next also
   // compiles; loading it by URL keeps it out of every graph but nodejs.
   //
-  // 这份源码只存在于仓库检出里：npm 包与桌面壳只分发构建产物，没有 `lib/`。因此加载失败
-  // 只能降级成“这次没有启动日志”，不能挡住后面的 dispatcher 配置与整个进程。
-  try {
-    const { startLogging } = await importRuntimeModule<LoggingModule>(localModuleUrl("lib/logging-startup.ts"));
-    await startLogging();
-  } catch (error) {
-    console.error(`[ompdesk] 启动日志未初始化：${error instanceof Error ? error.message : String(error)}`);
-  }
+  // 这两份源码只存在于仓库检出里：npm 包与桌面壳只分发构建产物，没有 `lib/`。
+  // 加载失败降级成“本次没有启动日志 / 没有自定义 dispatcher”，不挡住整个进程。
+  await runLocalModule<LoggingModule>("lib/logging-startup.ts", "启动日志", (module) => module.startLogging());
 
   if (typeof process.versions.bun === "string") return;
 
   // Keep the Node-only undici graph out of Next's browser/edge instrumentation
   // bundles. Node 22 can load this local TypeScript module directly.
-  const { configureHttpDispatcher } = await importRuntimeModule<DispatcherModule>(localModuleUrl("lib/http-dispatcher.ts"));
-  await configureHttpDispatcher();
+  await runLocalModule<DispatcherModule>("lib/http-dispatcher.ts", "HTTP dispatcher", (module) => module.configureHttpDispatcher());
 }
