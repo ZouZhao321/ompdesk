@@ -201,6 +201,18 @@ bunx ompdesk@latest
 
 Requests to loopback addresses are never proxied, so a local provider (Ollama, LM Studio, llama.cpp) keeps working with a proxy configured. Note that Bun does **not** currently honour `NO_PROXY` for other hosts.
 
+## Telemetry
+
+Sessions can export traces, logs, and metrics to any OTLP backend. Point `OTEL_EXPORTER_OTLP_ENDPOINT` at the collector, keep `OTEL_EXPORTER_OTLP_PROTOCOL` on `http/protobuf`, and restart:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:6006 \
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+bunx ompdesk@latest
+```
+
+With no endpoint configured nothing is exported and no exporter code loads. Prompt and reply text stay out unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=full` is set. Supported variables, the per-signal switches, the `telemetry.otlpExportEnabled` toggle, flush timing, and container setup: [docs/telemetry.md](./docs/telemetry.md).
+
 ## Features
 
 - **Pick work back up**: browse previous omp conversations by project without digging through terminal history or session paths.
