@@ -1,4 +1,5 @@
-export const MOBILE_MAX_WIDTH = 640;
+import { MOBILE_MAX_WIDTH } from "./mobile-layout";
+
 export const SPLIT_PANEL_MIN_WIDTH = 960;
 
 export const SIDEBAR_DEFAULT_WIDTH = 260;
