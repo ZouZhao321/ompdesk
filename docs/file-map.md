@@ -80,6 +80,7 @@ path-security.ts     路径越界判定
 draft-store.ts       内存草稿表（刷新即失效）
 file-access.ts       /api/files 与 worktree 允许的文件根
 file-paths.ts        客户端与服务端的路径编码辅助
+image-zoom.ts        图片缩放的几何计算（适配、锚点缩放、边界收敛）
 map-layout.ts        按轮树的布局计算（lane + 主干优先）
 map-types.ts         会话地图的共享类型
 markdown.ts          共享 markdown 辅助
@@ -129,6 +130,8 @@ ExtensionStatusBar.tsx 扩展状态栏
 LogsPanel.tsx       服务端日志面板
 MermaidBlock.tsx    mermaid 与代码块渲染
 MarkdownBody.tsx    markdown 渲染器
+MarkdownImage.tsx   markdown 图片：本地路径改走文件接口后交给缩放入口
+ImageZoom.tsx       图片缩放画面、全屏预览层与可点击图片入口
 ModelsConfig.tsx    设置面板内的提供方与认证
 ModelRolesPanel.tsx 设置面板内按角色分配模型
 PluginsConfig.tsx   设置面板内的插件管理

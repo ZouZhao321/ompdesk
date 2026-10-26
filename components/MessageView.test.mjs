@@ -10,15 +10,13 @@ const jiti = createJiti(import.meta.url, {
 });
 const { MessageView } = await jiti.import("./MessageView.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
+const { ImagePreviewProvider } = await jiti.import("./ImageZoom.tsx");
 
-function renderMessage(message) {
-  return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      null,
-      React.createElement(MessageView, { message }),
-    ),
-  );
+function renderMessage(message, { withPreview = false } = {}) {
+  const view = React.createElement(MessageView, { message });
+  const wrapped = withPreview ? React.createElement(ImagePreviewProvider, null, view) : view;
+
+  return renderToStaticMarkup(React.createElement(I18nProvider, null, wrapped));
 }
 
 test("renders a provider error when the assistant message has no content", () => {
@@ -223,4 +221,24 @@ test("renders thinking markdown directly without a collapsible card", () => {
   assert.match(html, /class="markdown-thinking"/);
   assert.match(html, /<strong>Direct thought<\/strong>/);
   assert.doesNotMatch(html, /aria-expanded/);
+});
+
+const userImageMessage = {
+  role: "user",
+  content: [{ type: "image", data: "AAAA", mimeType: "image/png" }],
+  timestamp: 1750000000000,
+};
+
+test("renders chat attachments as preview buttons when a preview host is mounted", () => {
+  const html = renderMessage(userImageMessage, { withPreview: true });
+
+  assert.match(html, /<button[^>]*class="message-image-button"/);
+  assert.match(html, /src="data:image\/png;base64,AAAA"/);
+});
+
+test("keeps chat attachment images when no preview host is mounted", () => {
+  const html = renderMessage(userImageMessage);
+
+  assert.match(html, /<img[^>]*src="data:image\/png;base64,AAAA"/);
+  assert.doesNotMatch(html, /message-image-button/);
 });
