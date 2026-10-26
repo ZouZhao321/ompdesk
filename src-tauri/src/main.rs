@@ -92,8 +92,8 @@ struct ServerChild(Mutex<Option<Child>>);
 /// How long the sidecar gets to exit after the group signal. The port is
 /// fixed, so an orphan that keeps listening would refuse the next launch.
 const SIDECAR_EXIT_TIMEOUT: Duration = Duration::from_secs(3);
-/// How long the fixed port gets to become bindable again after the sidecar
-/// exited, before the refusal is logged for the next launch to explain. Only a
+/// How long the fixed port gets to become bindable again, both right after the
+/// sidecar exits and again after the group is killed a second time. Only a
 /// real leftover listener waits this out: a closed one refuses immediately.
 const SIDECAR_PORT_RELEASE_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -102,7 +102,10 @@ impl ServerChild {
     /// to KILL for the whole group once the grace period runs out.
     ///
     /// The wait matters because the port is fixed: a relaunch right after a
-    /// failure must not find the previous child still holding it.
+    /// failure must not find the previous child still holding it. The leader
+    /// exiting is not proof either — a descendant it spawned can keep the
+    /// listener — so a port that is still taken after the leader is gone earns
+    /// the same KILL.
     fn terminate(&self) {
         let child = self.0.lock().ok().and_then(|mut guard| guard.take());
         let Some(mut child) = child else { return };
@@ -116,7 +119,22 @@ impl ServerChild {
             let _ = child.wait();
             desktop_log("[omp-desktop] sidecar outlived its grace period; killed the process group");
         }
-        confirm_port_released();
+        if wait_for_port_release(SERVER_PORT, SIDECAR_PORT_RELEASE_TIMEOUT) {
+            return;
+        }
+        // The leader is gone but something in its group still listens: kill the
+        // group again, then confirm once more so the log reflects the result.
+        desktop_log(
+            "[omp-desktop] the sidecar exited but its process group still holds the port; \
+             killed the process group again",
+        );
+        kill_process_group(pid, GroupSignal::Kill);
+        if !wait_for_port_release(SERVER_PORT, SIDECAR_PORT_RELEASE_TIMEOUT) {
+            desktop_log(&format!(
+                "[omp-desktop] port {SERVER_PORT} is still held after the sidecar exited; \
+                 the next launch will refuse to start until it is freed"
+            ));
+        }
     }
 }
 
@@ -136,22 +154,22 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
     false
 }
 
-/// Confirms the fixed port became bindable again after the sidecar exited.
+/// Waits for the port to become bindable again; reports whether it did.
 ///
-/// A listener that survives the kill would make the next launch refuse to
-/// start, so the leftover is logged instead of being discovered silently.
-fn confirm_port_released() {
-    let deadline = Instant::now() + SIDECAR_PORT_RELEASE_TIMEOUT;
-    while Instant::now() < deadline {
-        if matches!(probe_port(SERVER_PORT), PortStatus::Free) {
-            return;
+/// Only `PortStatus::Free` counts: a probe that proved nothing (an unconfirmed
+/// status) is not evidence that the port is usable. The caller decides how to
+/// escalate, so this stays silent.
+fn wait_for_port_release(port: u16, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if matches!(probe_port(port), PortStatus::Free) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
         }
         thread::sleep(Duration::from_millis(50));
     }
-    desktop_log(&format!(
-        "[omp-desktop] port {SERVER_PORT} is still held after the sidecar exited; \
-         the next launch will refuse to start until it is freed"
-    ));
 }
 
 /// Reports a failure the user can see, then leaves the exit to them.
@@ -622,5 +640,24 @@ mod tests {
     #[test]
     fn server_port_is_30141() {
         assert_eq!(SERVER_PORT, 30141);
+    }
+
+    // A listener that outlives the leader must be reported, not assumed gone:
+    // terminate() only escalates when this returns false.
+    #[test]
+    fn waiting_for_a_held_port_reports_unreleased() {
+        let held = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+            .expect("bind an ephemeral port to stand in for a leftover listener");
+        let port = held.local_addr().expect("ephemeral address").port();
+        let started = Instant::now();
+
+        assert!(
+            !wait_for_port_release(port, Duration::from_millis(150)),
+            "a held port must not be reported as released"
+        );
+        assert!(
+            started.elapsed() >= Duration::from_millis(150),
+            "the wait must use its whole timeout before giving up"
+        );
     }
 }
