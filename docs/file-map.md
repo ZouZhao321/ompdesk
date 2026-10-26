@@ -123,7 +123,7 @@ ChatInput.tsx       输入栏 + 模型/角色/思考/tools/compact 控件
 MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
 BranchNavigator.tsx 会话内分支切换器
 ConversationMap.tsx 会话地图：卡片、连线、缩放、分叉与切换
-SubagentPanel.tsx   子代理面板
+SubagentPanel.tsx   子代理标签页：运行与历史列表、执行详情
 RewindDialog.tsx    回退选点对话框
 ProjectTrustDialog.tsx 项目信任确认
 ExtensionStatusBar.tsx 扩展状态栏
@@ -137,10 +137,11 @@ ModelRolesPanel.tsx 设置面板内按角色分配模型
 PluginsConfig.tsx   设置面板内的插件管理
 SkillsConfig.tsx    设置面板内的 skills 列表与安装
 FileExplorer.tsx    文件树
-FileExplorerPanel.tsx 右侧文件面板内的文件树区（标题、上传、刷新、折叠）
+FileExplorerPanel.tsx 右侧标签页中的文件树视图（上传、刷新、变更文件）
 FileIcons.tsx       文件图标辅助
-FileViewer.tsx      标签页内的文件内容
-TabBar.tsx          标签栏（聊天 + 已打开文件标签）
+PanelViewIcon.tsx   视图标签与入口的图标
+FileViewer.tsx      文件标签页的内容
+TabBar.tsx          右侧面板标签栏（文件浏览器 / 子代理 / 已打开文件）
 TurnWrittenFiles.tsx 单轮写入文件列表
 ```
 

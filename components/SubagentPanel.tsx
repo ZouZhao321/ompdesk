@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentMessage, SubagentSnapshot, ToolResultMessage } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { normalizeToolCalls } from "@/lib/normalize";
@@ -19,7 +19,7 @@ type SubagentTranscriptResult = {
   entries: Array<{ id?: string; type?: string; message?: AgentMessage }>;
 };
 
-function isSubagentActive(subagent: SubagentSnapshot): boolean {
+export function isSubagentActive(subagent: SubagentSnapshot): boolean {
   return subagent.status === "pending" || subagent.status === "running";
 }
 
@@ -74,6 +74,7 @@ function SubagentDetail({
   onRuntimeIdentity,
   cwd,
   subagent,
+  visible,
   onBack,
 }: {
   sessionId: string;
@@ -81,6 +82,7 @@ function SubagentDetail({
   onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"];
   cwd?: string;
   subagent: SubagentSnapshot;
+  visible: boolean;
   onBack: () => void;
 }) {
   const { t } = useI18n();
@@ -90,54 +92,80 @@ function SubagentDetail({
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const followTailRef = useRef(true);
+  const nextByteRef = useRef(0);
+  const inFlightRef = useRef(false);
+  const requestRef = useRef(0);
+  const pendingRef = useRef(false);
+  const prevVisibleRef = useRef(visible);
+
+  const loadTranscript = useCallback(async () => {
+    if (inFlightRef.current) {
+      pendingRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
+    const requestId = requestRef.current;
+    try {
+      const result = await sendAgentCommand<SubagentTranscriptResult>(sessionId, {
+        type: "get_subagent_messages",
+        subagentId: subagent.id,
+        fromByte: nextByteRef.current,
+      }, { current: runtimeId ?? null, onIdentity: (identity, request) => {
+        if (requestId !== requestRef.current) return false;
+        return onRuntimeIdentity?.(identity, request);
+      } });
+      if (requestId !== requestRef.current) return;
+      const chunk = result.entries.flatMap((entry, index) =>
+        entry.type === "message" && entry.message
+          ? [{
+              id: entry.id ?? `${result.fromByte}:${index}`,
+              message: normalizeToolCalls(entry.message),
+            }]
+          : []);
+      setEntries((current) => result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk]);
+      nextByteRef.current = result.nextByte;
+      setTranscriptError(null);
+    } catch (error) {
+      if (requestId === requestRef.current) {
+        setTranscriptError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      if (requestId === requestRef.current) {
+        setLoadingTranscript(false);
+        inFlightRef.current = false;
+        if (pendingRef.current) {
+          pendingRef.current = false;
+          void loadTranscript();
+        }
+      }
+    }
+  }, [sessionId, runtimeId, onRuntimeIdentity, subagent.id]);
 
   useEffect(() => {
-    let disposed = false;
-    let inFlight = false;
-    let nextByte = 0;
+    requestRef.current += 1;
+    nextByteRef.current = 0;
+    inFlightRef.current = false;
+    pendingRef.current = false;
     setEntries([]);
     setLoadingTranscript(true);
     setTranscriptError(null);
     followTailRef.current = true;
+    // 重置时不发请求：交给可见性副作用，隐藏的标签不产生 RPC。
+    prevVisibleRef.current = false;
+  }, [loadTranscript]);
 
-    const loadTranscript = async () => {
-      if (inFlight || disposed) return;
-      inFlight = true;
-      try {
-        const result = await sendAgentCommand<SubagentTranscriptResult>(sessionId, {
-          type: "get_subagent_messages",
-          subagentId: subagent.id,
-          fromByte: nextByte,
-        }, { current: runtimeId ?? null, onIdentity: (identity, request) => {
-          if (disposed) return false;
-          return onRuntimeIdentity?.(identity, request);
-        } });
-        if (disposed) return;
-        const chunk = result.entries.flatMap((entry, index) =>
-          entry.type === "message" && entry.message
-            ? [{
-                id: entry.id ?? `${result.fromByte}:${index}`,
-                message: normalizeToolCalls(entry.message),
-              }]
-            : []);
-        setEntries((current) => result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk]);
-        nextByte = result.nextByte;
-        setTranscriptError(null);
-      } catch (error) {
-        if (!disposed) setTranscriptError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (!disposed) setLoadingTranscript(false);
-        inFlight = false;
-      }
-    };
+  useEffect(() => () => { requestRef.current += 1; }, []);
 
-    void loadTranscript();
-    const interval = active ? setInterval(() => void loadTranscript(), 1000) : undefined;
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
-  }, [active, sessionId, runtimeId, onRuntimeIdentity, subagent.id]);
+  // 可见时运行中每秒补拉；重新可见或运行结束时补读一次尾部，隐藏的标签不发请求。
+  useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (!visible) return;
+    if (!wasVisible || !active) void loadTranscript();
+    if (!active) return;
+    const interval = setInterval(() => void loadTranscript(), 1000);
+    return () => clearInterval(interval);
+  }, [active, loadTranscript, visible]);
 
   useEffect(() => {
     if (!followTailRef.current) return;
@@ -149,12 +177,13 @@ function SubagentDetail({
   }, [entries.length]);
 
   useEffect(() => {
+    if (!visible) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onBack();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onBack]);
+  }, [onBack, visible]);
 
   const toolResults = useMemo(() => {
     const resultMap = new Map<string, ToolResultMessage>();
@@ -276,9 +305,8 @@ function SubagentRow({ subagent, selected, onSelect }: { subagent: SubagentSnaps
   );
 }
 
-export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, subagents }: { sessionId: string | null; runtimeId?: string; onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"]; cwd?: string; subagents: SubagentSnapshot[] }) {
+export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, subagents, active = true }: { sessionId: string | null; runtimeId?: string; onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"]; cwd?: string; subagents: SubagentSnapshot[]; active?: boolean }) {
   const { t } = useI18n();
-  const [collapsed, setCollapsed] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const running = subagents.filter(isSubagentActive);
   const finished = subagents.filter((subagent) => !isSubagentActive(subagent));
@@ -286,14 +314,42 @@ export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, su
 
   useEffect(() => {
     setSelectedId(null);
-    setCollapsed(false);
   }, [sessionId]);
 
   useEffect(() => {
     if (selectedId && !selected) setSelectedId(null);
   }, [selected, selectedId]);
 
-  if (!sessionId || subagents.length === 0) return null;
+  let body: ReactNode;
+  if (!sessionId || subagents.length === 0) {
+    body = <div style={{ padding: "12px 11px", color: "var(--text-dim)", fontSize: 12 }}>{t("subagents.none")}</div>;
+  } else if (selected) {
+    body = <SubagentDetail sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} cwd={cwd} subagent={selected} visible={active} onBack={() => setSelectedId(null)} />;
+  } else {
+    body = (
+      <>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexShrink: 0, minHeight: 28, padding: "0 11px", fontSize: 9.5, fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ color: running.length > 0 ? "var(--accent)" : "var(--text-dim)" }}>{t("subagents.runningCount", { count: running.length })}</span>
+          <span style={{ color: "var(--text-dim)" }}>{t("subagents.finishedCount", { count: finished.length })}</span>
+        </div>
+
+        <div style={{ minHeight: 0, overflowY: "auto", padding: "7px 6px 8px" }}>
+          {running.length > 0 && (
+            <div role="list" aria-label={t("subagents.running")}>
+              <div style={{ padding: "0 7px 4px", color: "var(--accent)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.running")}</div>
+              {running.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
+            </div>
+          )}
+          {finished.length > 0 && (
+            <div role="list" aria-label={t("subagents.history")} style={{ marginTop: running.length > 0 ? 8 : 0, paddingTop: running.length > 0 ? 8 : 0, borderTop: running.length > 0 ? "1px solid var(--border)" : "none" }}>
+              <div style={{ padding: "0 7px 4px", color: "var(--text-dim)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.history")}</div>
+              {finished.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <aside
@@ -311,42 +367,7 @@ export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, su
         background: "var(--bg-panel)",
       }}
     >
-      {selected ? (
-        <SubagentDetail sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} cwd={cwd} subagent={selected} onBack={() => setSelectedId(null)} />
-      ) : (
-        <>
-          <button
-            type="button"
-            onClick={() => setCollapsed((current) => !current)}
-            aria-expanded={!collapsed}
-            style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", minHeight: 42, padding: "0 11px", border: "none", borderBottom: collapsed ? "none" : "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", textAlign: "left" }}
-          >
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: collapsed ? "none" : "rotate(90deg)", transition: "transform 0.15s" }}><polyline points="3 2 7 5 3 8" /></svg>
-            <span style={{ fontSize: 10, fontWeight: 750, letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("subagents.title")}</span>
-            <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 7, fontSize: 9.5, fontVariantNumeric: "tabular-nums" }}>
-              <span style={{ color: running.length > 0 ? "var(--accent)" : "var(--text-dim)" }}>{t("subagents.runningCount", { count: running.length })}</span>
-              <span style={{ color: "var(--text-dim)" }}>{t("subagents.finishedCount", { count: finished.length })}</span>
-            </span>
-          </button>
-
-          {!collapsed && (
-            <div style={{ minHeight: 0, overflowY: "auto", padding: "7px 6px 8px" }}>
-              {running.length > 0 && (
-                <div role="list" aria-label={t("subagents.running")}>
-                  <div style={{ padding: "0 7px 4px", color: "var(--accent)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.running")}</div>
-                  {running.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
-                </div>
-              )}
-              {finished.length > 0 && (
-                <div role="list" aria-label={t("subagents.history")} style={{ marginTop: running.length > 0 ? 8 : 0, paddingTop: running.length > 0 ? 8 : 0, borderTop: running.length > 0 ? "1px solid var(--border)" : "none" }}>
-                  <div style={{ padding: "0 7px 4px", color: "var(--text-dim)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.history")}</div>
-                  {finished.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
+      {body}
     </aside>
   );
 }
