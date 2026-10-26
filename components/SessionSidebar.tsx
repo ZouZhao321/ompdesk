@@ -1155,6 +1155,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           minHeight: 42,
           padding: "6px 8px 4px 14px",
           flexShrink: 0,
+          // 排序菜单以整行为定位参照，窄侧栏下右对齐才不会被裁掉左缘。
+          position: "relative",
         }}
       >
         <h2 style={{ margin: 0, flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-muted)", fontSize: 13, fontWeight: 600, letterSpacing: "0.01em" }}>

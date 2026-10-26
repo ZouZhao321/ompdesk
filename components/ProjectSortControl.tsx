@@ -127,7 +127,8 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
       ref={menuRef}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      style={{ position: "relative", display: "flex", flexShrink: 0, marginRight: 6 }}
+      // 不建立定位上下文：菜单的包含块是调用方的整行，right:0 对齐行右缘。
+      style={{ display: "flex", flexShrink: 0, marginRight: 6 }}
     >
       <button
         ref={triggerRef}
