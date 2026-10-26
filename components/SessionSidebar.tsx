@@ -1,18 +1,32 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore, type CSSProperties } from "react";
 import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
+import type { ProjectSortMode } from "@/lib/project-order";
+import {
+  dedupePinnedProjects,
+  normalizeProjectKey,
+  orderProjectPaths,
+  placeSelectedProject,
+  projectDisplayName,
+  togglePinnedProject,
+} from "@/lib/project-order";
 import { STATIC_MARKER_APPEARANCE, initialMarkerUnreadIds, resolveFinishedRuns, resolveSessionMarker, type StaticMarkerStatus } from "@/lib/session-marker";
 import { addUnreadSessionIds, clearUnreadSessionIds, getServerUnreadSessionIds, getUnreadSessionIds, retainUnreadSessionIds, subscribeUnreadSessionIds } from "@/lib/session-unread";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import type { TranslationParams } from "@/lib/i18n/types";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
+import { AnimatedDropdown } from "./AnimatedDropdown";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OmpWordmark } from "./OmpWordmark";
+import { ProjectPinMenuItem } from "./ProjectPinMenuItem";
+import { ProjectRow } from "./ProjectRow";
+import { ProjectSortControl } from "./ProjectSortControl";
+import { projectMenuRowStyle } from "./project-menu-row-style";
 
 declare global {
   interface Window {
@@ -69,11 +83,8 @@ const RUNNING_SESSIONS_POLL_MS = 2500;
 const PROJECT_SESSION_LIMIT = 5;
 const COLLAPSED_PROJECTS_STORAGE_KEY = "ompdesk:collapsed-projects";
 const REMOVED_PROJECTS_STORAGE_KEY = "ompdesk:removed-projects";
-
-function normalizeProjectKey(project: string): string {
-  const normalized = project.replace(/\\/g, "/");
-  return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
-}
+const PROJECT_SORT_STORAGE_KEY = "ompdesk:project-sort";
+const PINNED_PROJECTS_STORAGE_KEY = "ompdesk:pinned-projects";
 
 function loadRemovedProjects(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -166,6 +177,49 @@ function saveCollapsedProjects(projects: Set<string>): void {
   }
 }
 
+function loadProjectSortMode(): ProjectSortMode {
+  if (typeof window === "undefined") return "time";
+  try {
+    return window.localStorage.getItem(PROJECT_SORT_STORAGE_KEY) === "name" ? "name" : "time";
+  } catch {
+    return "time";
+  }
+}
+
+function saveProjectSortMode(mode: ProjectSortMode): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (mode === "time") window.localStorage.removeItem(PROJECT_SORT_STORAGE_KEY);
+    else window.localStorage.setItem(PROJECT_SORT_STORAGE_KEY, "name");
+  } catch {
+    // Ignore storage quota and privacy-mode errors.
+  }
+}
+
+/** 置顶序列按点击置顶的先后排列；存储里缺失或损坏时按未置顶处理。 */
+function loadPinnedProjects(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PINNED_PROJECTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return dedupePinnedProjects(parsed.filter((project): project is string => typeof project === "string"));
+  } catch {
+    return [];
+  }
+}
+
+function savePinnedProjects(projects: readonly string[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (projects.length === 0) window.localStorage.removeItem(PINNED_PROJECTS_STORAGE_KEY);
+    else window.localStorage.setItem(PINNED_PROJECTS_STORAGE_KEY, JSON.stringify(projects));
+  } catch {
+    // Ignore storage quota and privacy-mode errors.
+  }
+}
+
 
 
 /**
@@ -219,53 +273,6 @@ function PathLabel({ text, style }: { text: string; style?: CSSProperties }) {
     </span>
   );
 }
-
-const DROPDOWN_ANIMATION_MS = 140;
-
-function AnimatedDropdown({ open, children, style }: { open: boolean; children: ReactNode; style: CSSProperties }) {
-  const [mounted, setMounted] = useState(open);
-  const [visible, setVisible] = useState(open);
-
-  useEffect(() => {
-    let frame: number | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    if (open) {
-      setMounted(true);
-      setVisible(false);
-      frame = window.requestAnimationFrame(() => {
-        frame = window.requestAnimationFrame(() => setVisible(true));
-      });
-    } else {
-      setVisible(false);
-      timeout = setTimeout(() => setMounted(false), DROPDOWN_ANIMATION_MS);
-    }
-
-    return () => {
-      if (frame !== undefined) window.cancelAnimationFrame(frame);
-      if (timeout) clearTimeout(timeout);
-    };
-  }, [open]);
-
-  if (!mounted) return null;
-
-  return (
-    <div
-      style={{
-        ...style,
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0) scale(1)" : "translateY(-8px) scale(0.96)",
-        transformOrigin: "top center",
-        transition: `opacity ${DROPDOWN_ANIMATION_MS}ms ease, transform ${DROPDOWN_ANIMATION_MS}ms ease`,
-        pointerEvents: open ? "auto" : "none",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-
 
 interface SessionTreeNode {
   session: SessionInfo;
@@ -413,6 +420,7 @@ function PiWebTitle() {
 
 export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisticSession, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onBackgroundTaskDone }: Props) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const sessionsForDisplay = optimisticSession && !allSessions.some((session) => session.id === optimisticSession.id)
     ? [optimisticSession, ...allSessions]
@@ -426,6 +434,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
+  const [projectSortMode, setProjectSortMode] = useState<ProjectSortMode>("time");
+  const [pinnedProjects, setPinnedProjects] = useState<string[]>([]);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; count: number } | null>(null);
   const [removedProjects, setRemovedProjects] = useState<Set<string>>(() => new Set());
   const [wtFilter, setWtFilter] = useState("");
@@ -442,6 +453,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [wtConfirmRemove, setWtConfirmRemove] = useState<string | null>(null);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   // 绿色完成提示点亮后自灭；计时器归 effect 管，卸载时清掉。
   useEffect(() => {
@@ -482,6 +494,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   useEffect(() => {
     setCollapsedProjects(loadCollapsedProjects());
     setRemovedProjects(loadRemovedProjects());
+    setProjectSortMode(loadProjectSortMode());
+    setPinnedProjects(loadPinnedProjects());
   }, []);
 
 
@@ -945,6 +959,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         dismissProjectMenu();
         setHoveredProject(null);
       }
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setSortMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -980,12 +997,36 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     });
   }, []);
 
+  const chooseProjectSortMode = useCallback((mode: ProjectSortMode) => {
+    setProjectSortMode(mode);
+    saveProjectSortMode(mode);
+    setSortMenuOpen(false);
+  }, []);
+
+  const closeProjectSortMenu = useCallback(() => setSortMenuOpen(false), []);
+
+  // 切换置顶后菜单立即收起，行高亮也随之清掉，避免菜单悬在移动过的项目上。
+  const handleTogglePinnedProject = useCallback((project: string) => {
+    const next = togglePinnedProject(pinnedProjects, project);
+    setPinnedProjects(next);
+    savePinnedProjects(next);
+    dismissProjectMenu();
+    setHoveredProject(null);
+  }, [pinnedProjects, dismissProjectMenu]);
+
   const selectedProject = projectRootFor(selectedCwd);
-  const projectPaths = getRecentProjects(sessionsForDisplay)
+  // 选中判定与 placeSelectedProject 的去重必须用同一套比较键：Windows 下同一路径的
+  // 盘符大小写或分隔符写法不同，原样比较会既插不进去也高亮不到。
+  const selectedProjectKey = selectedProject ? normalizeProjectKey(selectedProject) : null;
+  const recentProjectPaths = getRecentProjects(sessionsForDisplay)
     .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
-  if (selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject)) && !projectPaths.includes(selectedProject)) {
-    projectPaths.unshift(selectedProject);
-  }
+  const orderedProjectPaths = orderProjectPaths(recentProjectPaths, projectSortMode, pinnedProjects);
+  const pinnedProjectKeys = new Set(pinnedProjects.map(normalizeProjectKey));
+  // 当前选中但还没有会话的项目也要出现在列表里：已置顶的按置顶位次落位，
+  // 其余排在全部置顶项之后、其他未置顶项目之前。
+  const projectPaths = selectedProject && !removedProjects.has(normalizeProjectKey(selectedProject))
+    ? placeSelectedProject(orderedProjectPaths, selectedProject, pinnedProjects)
+    : orderedProjectPaths;
   // 每个工作区的 active / waiting / busy 计数一次遍历算出。等待集合与运行集合
   // 来源独立，所以「正在干活」必须用集合差、「移除前确认」必须用并集，
   // 不能从运行总数里直接减等待数。
@@ -1052,8 +1093,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   const normalizedProjectFilter = projectFilter.trim().toLowerCase();
   const projectGroups = projectPaths.flatMap((project) => {
-    const segments = project.replace(/[\\/]+$/, "").split(/[\\/]/);
-    const name = segments.at(-1) || project;
+    const name = projectDisplayName(project);
     const sessions = sessionsByProject.get(project) ?? [];
     if (!normalizedProjectFilter) return [{ project, name, sessions }];
 
@@ -1202,6 +1242,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         <h2 style={{ margin: 0, flex: 1, color: "var(--text-muted)", fontSize: 13, fontWeight: 600, letterSpacing: "0.01em" }}>
           {t("sidebar.projects")}
         </h2>
+        <ProjectSortControl
+          mode={projectSortMode}
+          open={sortMenuOpen}
+          menuRef={sortMenuRef}
+          onToggle={() => setSortMenuOpen((open) => !open)}
+          onDismiss={closeProjectSortMenu}
+          onSelectMode={chooseProjectSortMode}
+        />
         <button
           type="button"
           onClick={handleCustomPathClick}
@@ -1297,7 +1345,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           </div>
         )}
         {!loading && !error && projectGroups.map(({ project, name, sessions }) => {
-          const isSelectedProject = project === selectedProject;
+          const isSelectedProject = selectedProjectKey !== null && normalizeProjectKey(project) === selectedProjectKey;
           const isCollapsed = collapsedProjects.has(project) && !normalizedProjectFilter;
           const isExpanded = expandedProjects.has(project);
           const visibleSessionsForProject = isExpanded ? sessions : sessions.slice(0, PROJECT_SESSION_LIMIT);
@@ -1306,163 +1354,29 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
           return (
             <section key={project} style={{ marginBottom: isCollapsed ? 3 : 9 }}>
-              <div
-                ref={projectMenuOpen === project ? wtDropdownRef : undefined}
-                className="sidebar-project-row"
-                onMouseEnter={() => setHoveredProject(project)}
-                onMouseLeave={() => setHoveredProject((current) => current === project && projectMenuOpen !== project ? null : current)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  minHeight: 34,
-                  position: "relative",
-                  borderRadius: 6,
-                  background: isSelectedProject ? "var(--bg-hover)" : "transparent",
+              <ProjectRow
+                project={project}
+                name={name}
+                isSelected={isSelectedProject}
+                isCollapsed={isCollapsed}
+                isPinned={pinnedProjectKeys.has(normalizeProjectKey(project))}
+                activity={projectActivity.get(project)}
+                hovered={hoveredProject === project}
+                menuOpen={projectMenuOpen === project}
+                menuRef={projectMenuOpen === project ? wtDropdownRef : undefined}
+                highlightActions={Boolean(isSelectedProject && currentWt && !currentWt.isMain)}
+                onToggleCollapse={() => toggleProjectCollapsed(project)}
+                onSelect={() => setSelectedCwd(project)}
+                onNewSession={() => handleNewSession(project)}
+                onToggleMenu={() => {
+                  const nextOpen = projectMenuOpen === project ? null : project;
+                  dismissProjectMenu();
+                  setProjectMenuOpen(nextOpen);
+                  if (!isSelectedProject) setSelectedCwd(project);
                 }}
+                onHoverChange={(next) => setHoveredProject((current) => (next ? project : current === project && projectMenuOpen !== project ? null : current))}
               >
-                <button
-                  type="button"
-                  className="sidebar-project-icon-button"
-                  onClick={() => toggleProjectCollapsed(project)}
-                  title={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
-                  aria-label={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
-                  aria-expanded={!isCollapsed}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 24,
-                    height: 28,
-                    marginLeft: 2,
-                    padding: 0,
-                    border: "none",
-                    background: "transparent",
-                    color: "var(--text-dim)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                  }}
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.12s" }}
-                  >
-                    <polyline points="2.5 4 6 7.5 9.5 4" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedCwd(project)}
-                  title={project}
-                  className="sidebar-project-name"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flex: 1,
-                    minWidth: 0,
-                    height: 34,
-                    padding: "0 4px",
-                    border: "none",
-                    background: "transparent",
-                    color: isSelectedProject ? "var(--text)" : "var(--text-muted)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontSize: 12.5,
-                    fontWeight: isSelectedProject ? 600 : 500,
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: isSelectedProject ? "var(--accent)" : "var(--text-dim)" }}>
-                    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
-                  </svg>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                  {showProjectActivity(projectActivity.get(project), t)}
-                </button>
 
-                <button
-                  type="button"
-                  className="sidebar-project-icon-button sidebar-project-icon-reveal"
-                  onClick={() => handleNewSession(project)}
-                  title={t("sidebar.newSessionTitle", { path: project })}
-                  aria-label={t("sidebar.newSessionTitle", { path: project })}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 28,
-                    height: 28,
-                    padding: 0,
-                    border: "none",
-                    borderRadius: 5,
-                    background: "transparent",
-                    color: "var(--text-dim)",
-                    cursor: "pointer",
-                    opacity: hoveredProject === project ? 1 : 0,
-                    pointerEvents: hoveredProject === project ? "auto" : "none",
-                    transition: "opacity 0.12s, background 0.12s, color 0.12s",
-                    flexShrink: 0,
-                  }}
-                  onFocus={() => setHoveredProject(project)}
-                  onMouseEnter={(event) => {
-                    event.currentTarget.style.background = "var(--bg-selected)";
-                    event.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.background = "transparent";
-                    event.currentTarget.style.color = "var(--text-dim)";
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                    <line x1="6" y1="1.5" x2="6" y2="10.5" />
-                    <line x1="1.5" y1="6" x2="10.5" y2="6" />
-                  </svg>
-                </button>
-                {(
-                  <div style={{ position: "static", flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      className="sidebar-project-icon-button sidebar-project-icon-reveal"
-                      onClick={() => {
-                        const nextOpen = projectMenuOpen === project ? null : project;
-                        dismissProjectMenu();
-                        setProjectMenuOpen(nextOpen);
-                        if (!isSelectedProject) setSelectedCwd(project);
-                      }}
-                      title={t("sidebar.projectActions")}
-                      aria-label={t("sidebar.projectActions")}
-                      aria-expanded={projectMenuOpen === project}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: 28,
-                        height: 28,
-                        marginRight: 3,
-                        padding: 0,
-                        border: "none",
-                        borderRadius: 5,
-                        background: projectMenuOpen === project ? "var(--bg-selected)" : "transparent",
-                        color: isSelectedProject && currentWt && !currentWt.isMain ? "var(--accent)" : "var(--text-dim)",
-                        cursor: "pointer",
-                        opacity: hoveredProject === project || projectMenuOpen === project ? 1 : 0,
-                        pointerEvents: hoveredProject === project || projectMenuOpen === project ? "auto" : "none",
-                        transition: "opacity 0.12s, background 0.12s, color 0.12s",
-                      }}
-                      onFocus={() => setHoveredProject(project)}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                        <circle cx="3" cy="7" r="1.1" />
-                        <circle cx="7" cy="7" r="1.1" />
-                        <circle cx="11" cy="7" r="1.1" />
-                      </svg>
-                    </button>
                     <AnimatedDropdown
                       open={projectMenuOpen === project}
                       style={{
@@ -1488,19 +1402,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             aria-label={t("sidebar.worktrees")}
                             aria-expanded={wtDropdownOpen}
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              width: "100%",
-                              minHeight: 34,
-                              padding: "0 10px",
+                              ...projectMenuRowStyle(isMobile),
                               border: "none",
                               borderBottom: wtDropdownOpen ? "1px solid var(--border)" : "none",
                               background: wtDropdownOpen ? "var(--bg-selected)" : "transparent",
                               color: "var(--text-muted)",
                               cursor: "pointer",
                               textAlign: "left",
-                              fontSize: 11,
                             }}
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1544,6 +1452,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                         autoFocus
                         style={{
                           width: "100%",
+                          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                           fontSize: 11,
                           fontFamily: "var(--font-mono)",
                           padding: "5px 8px",
@@ -1569,13 +1478,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             <button
                               onClick={() => void handleRemoveWorktree(wt.path, true)}
                               disabled={wtBusy}
-                              style={{ padding: "3px 9px", background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                              style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                             >
                               {t("sidebar.force")}
                             </button>
                             <button
                               onClick={() => setWtConfirmRemove(null)}
-                              style={{ padding: "3px 9px", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
+                              style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
                             >
                               {t("sidebar.cancel")}
                             </button>
@@ -1597,18 +1506,15 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             }}
                             title={wt.path}
                             style={{
+                              ...projectMenuRowStyle(isMobile),
                               flex: 1,
                               minWidth: 0,
-                              display: "flex",
-                              alignItems: "center",
                               gap: 7,
-                              padding: "8px 10px",
                               background: "var(--bg)",
                               border: "none",
                               color: isCurrent ? "var(--text)" : "var(--text-muted)",
                               cursor: "pointer",
                               textAlign: "left",
-                              fontSize: 11,
                               fontFamily: "var(--font-mono)",
                             }}
                           >
@@ -1629,7 +1535,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                                title={t("sidebar.removeWorktreeTitle", { path: wt.path })}
                               style={{
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                width: 34, height: 28, padding: 0, marginRight: 4,
+                                width: isMobile ? MOBILE_HIT_TARGET_PX : 34,
+                                height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
+                                padding: 0, marginRight: 4,
                                 background: "none", border: "none",
                                 color: "var(--text-dim)", cursor: "pointer",
                                 borderRadius: 5, flexShrink: 0,
@@ -1664,17 +1572,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                       }}
                       title={t("sidebar.createWorktreeTitle")}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
+                        ...projectMenuRowStyle(isMobile),
                         gap: 7,
-                        width: "100%",
                         padding: "8px 10px",
                         background: "none",
                         border: "none",
                         color: "var(--text-muted)",
                         cursor: "pointer",
                         textAlign: "left",
-                        fontSize: 11,
                       }}
                     >
                       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
@@ -1706,6 +1611,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                          placeholder={t("sidebar.branchName")}
                         style={{
                           width: "100%",
+                          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                           fontSize: 11,
                           fontFamily: "var(--font-mono)",
                           padding: "5px 8px",
@@ -1724,6 +1630,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                           style={{
                             flex: 1,
                             padding: "4px 0",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             background: "var(--accent)",
                             border: "none",
                             borderRadius: 5,
@@ -1741,6 +1648,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                           style={{
                             flex: 1,
                             padding: "4px 0",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             background: "var(--bg-hover)",
                             border: "1px solid var(--border)",
                             borderRadius: 5,
@@ -1768,11 +1676,16 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               </AnimatedDropdown>
                           </>
                         )}
+                        <ProjectPinMenuItem
+                          isPinned={pinnedProjectKeys.has(normalizeProjectKey(project))}
+                          onToggle={() => handleTogglePinnedProject(project)}
+                        />
                         {removeProjectConfirm?.project === project ? (
                           <div
                             style={{
-                              display: "flex",
+                              ...projectMenuRowStyle(isMobile),
                               flexDirection: "column",
+                              alignItems: "stretch",
                               gap: 6,
                               padding: "7px 10px",
                               borderTop: "1px solid var(--border)",
@@ -1786,14 +1699,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                               <button
                                 type="button"
                                 onClick={() => executeRemoveProject(project)}
-                                style={{ padding: "3px 9px", background: "var(--danger)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                                style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "var(--danger)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                               >
                                 {t("sidebar.removeProjectAnyway")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setRemoveProjectConfirm(null)}
-                                style={{ padding: "3px 9px", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
+                                style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
                               >
                                 {t("sidebar.cancel")}
                               </button>
@@ -1805,19 +1718,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             onClick={() => requestRemoveProject(project)}
                             title={t("sidebar.removeProjectTitle")}
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              width: "100%",
-                              minHeight: 34,
-                              padding: "0 10px",
+                              ...projectMenuRowStyle(isMobile),
                               border: "none",
                               borderTop: "1px solid var(--border)",
                               background: "transparent",
                               color: "var(--danger)",
                               cursor: "pointer",
                               textAlign: "left",
-                              fontSize: 11,
                             }}
                             onMouseEnter={(event) => {
                               event.currentTarget.style.background = "color-mix(in srgb, var(--danger) 10%, transparent)";
@@ -1835,10 +1742,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             {t("sidebar.removeProject")}
                           </button>
                         )}
-                      </AnimatedDropdown>
-                  </div>
-                )}
-              </div>
+                    </AnimatedDropdown>
+              </ProjectRow>
 
               {!isCollapsed && sessions.length === 0 && isSelectedProject && (
                 <div style={{ padding: "6px 12px 7px 32px", color: "var(--text-dim)", fontSize: 11 }}>
@@ -2198,64 +2103,6 @@ function StaticSessionMarker({ status }: { status: StaticMarkerStatus }) {
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
         <circle cx="7" cy="7" r="4" fill="currentColor" />
       </svg>
-    </span>
-  );
-}
-
-/**
- * Compact per-project activity badges for the workspace selector dropdown items:
- * a spinning running icon + count, a yellow waiting badge + count, and an unread
- * dot + count. Renders nothing when the project has no activity. Counts share
- * the accent / warning / unread colors of the per-session indicators so the two
- * stay visually consistent.
- */
-function showProjectActivity(
-  activity: { running: number; waiting: number; unread: number } | undefined,
-  t: (key: string, params?: TranslationParams) => string,
-): ReactNode {
-  if (!activity || (activity.running === 0 && activity.waiting === 0 && activity.unread === 0)) return null;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}>
-      {activity.running > 0 && (
-        <span
-          title={t("sidebar.agentRunning")}
-          aria-label={`${t("sidebar.agentRunning")} (${activity.running})`}
-          role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
-            <g>
-              <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
-              <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite" />
-            </g>
-          </svg>
-          {activity.running}
-        </span>
-      )}
-      {activity.waiting > 0 && (
-        <span
-          title={t("sidebar.agentWaitingForInput")}
-          aria-label={t("sidebar.agentWaitingForInputWithCount", { count: activity.waiting })}
-          role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--warning)", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
-            <circle cx="7" cy="7" r="4" fill="currentColor" />
-          </svg>
-          {activity.waiting}
-        </span>
-      )}
-      {activity.unread > 0 && (
-        <span
-          title={t("sidebar.newSessionActivity")}
-          aria-label={`${t("sidebar.newSessionActivity")} (${activity.unread})`}
-          role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
-          {activity.unread}
-        </span>
-      )}
     </span>
   );
 }

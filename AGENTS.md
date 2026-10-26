@@ -61,6 +61,16 @@ Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 
 进程内创建。扩展通过 omp 的 `initializeExtensions()` 绑定，与 `omp --mode rpc`
 同一套接线，上层叠加浏览器实现的 `ExtensionUIContext`。
 
+## 侧边栏项目排序与置顶
+
+- 排序方式为 `time`（默认，最近活动）或 `name`（目录最后一段；同名用完整路径码元顺序）；存在 `ompdesk:project-sort`，`time` 不写键。
+- 置顶序列按点击先后存在 `ompdesk:pinned-projects`；置顶项始终排在未置顶项之前，按归一化键匹配并去重。
+- 归一化规则：反斜杠转 `/`、Windows 盘符路径折叠大小写、去掉结尾分隔符但保留 `/` 与 `c:/`。
+- 置顶只改变项目行顺序；项目内会话仍按写入时间倒序与 fork 缩进。
+- 当前选中但没有会话的项目按置顶位次插入；选中判断与插入去重共用归一化键。
+- 排序菜单支持方向键 / Home / End / Escape；菜单项不在 Tab 序列，焦点离开或选中即收起，关闭统一走 `onDismiss`。
+- 手机档项目行、排序与项目操作菜单控件的可点区域为 `MOBILE_HIT_TARGET_PX`。
+
 ## 会话文件
 
 会话文件在 `~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`，每行一条

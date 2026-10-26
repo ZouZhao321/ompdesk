@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
+const source = (await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 /**
  * 按锚点切片：两个锚点都必须出现，且结束位置在开始之后。
@@ -55,17 +55,6 @@ test("keeps subagents out of the left session sidebar", () => {
   assert.doesNotMatch(source, /SubagentRail|SubagentPanel|subagents/);
 });
 
-test("includes project activity counts in accessible labels", () => {
-  assert.match(
-    source,
-    /aria-label=\{`\$\{t\("sidebar\.agentRunning"\)\} \(\$\{activity\.running\}\)`\}/,
-  );
-  assert.match(
-    source,
-    /aria-label=\{`\$\{t\("sidebar\.newSessionActivity"\)\} \(\$\{activity\.unread\}\)`\}/,
-  );
-});
-
 test("renders exactly one lifecycle marker slot on a session row", () => {
   assert.match(sessionItemSource, /const marker = resolveSessionMarker\(\{/);
   assert.equal((sessionItemSource.match(/marker\?\.kind === "awaiting"/g) ?? []).length, 1);
@@ -85,14 +74,6 @@ test("labels the inline waiting indicator without a count", () => {
   assert.match(waitingIndicatorSource, /aria-label=\{t\("sidebar\.agentWaitingForInput"\)\}/);
 });
 
-test("interpolates the project waiting badge label", () => {
-  assert.match(
-    source,
-    /aria-label=\{t\("sidebar\.agentWaitingForInputWithCount", \{ count: activity\.waiting \}\)\}/,
-  );
-  assert.doesNotMatch(source, /aria-label=\{`\$\{t\("sidebar\.agentWaitingForInput"\)\}/);
-});
-
 test("confirms removal of a workspace with running or waiting sessions", () => {
   assert.match(
     source,
@@ -104,10 +85,7 @@ test("confirms removal of a workspace with running or waiting sessions", () => {
 test("marks activity indicators as images for screen readers", () => {
   assert.match(indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()"), /role="img"/);
   assert.match(indicatorSource("function WaitingSessionIndicator()", "function StaticSessionMarker("), /role="img"/);
-  assert.match(indicatorSource("function StaticSessionMarker(", "function showProjectActivity("), /role="img"/);
-
-  const projectBadges = indicatorSource("function showProjectActivity(", "function SessionItem(");
-  assert.equal((projectBadges.match(/role="img"/g) ?? []).length, 3);
+  assert.match(indicatorSource("function StaticSessionMarker(", "function SessionItem("), /role="img"/);
 });
 
 test("spins an accent gap ring while the session is processing", () => {
@@ -164,7 +142,7 @@ test("does not expose disk-backed actions for transient sessions", () => {
 test("renders the static lifecycle marker as an animated-free labelled dot", () => {
   const staticMarkerSource = indicatorSource(
     "function StaticSessionMarker(",
-    "function showProjectActivity(",
+    "function SessionItem(",
   );
   assert.match(staticMarkerSource, /function StaticSessionMarker\(\{ status \}: \{ status: StaticMarkerStatus \}\)/);
   assert.match(staticMarkerSource, /STATIC_MARKER_APPEARANCE\[status\]/);
