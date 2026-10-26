@@ -6,7 +6,7 @@ import { resolveLocalFileHref } from "@/lib/file-links";
 import { ZoomableImage } from "./ImageZoom";
 
 interface MarkdownImageProps {
-  src: string | Blob | undefined;
+  src: string;
   alt?: string;
   /** markdown 图片相对路径的解析基准。 */
   baseDir?: string;
@@ -18,9 +18,8 @@ interface MarkdownImageProps {
 
 /** markdown 里的图片：本地路径改走文件接口，其余原样交给 ZoomableImage。 */
 export function MarkdownImage({ src, alt, baseDir, relativeRoot, sourceSessionId, imgProps }: MarkdownImageProps) {
-  const localPath = typeof src === "string" ? resolveLocalFileHref(src, baseDir, relativeRoot ?? baseDir) : null;
+  const localPath = resolveLocalFileHref(src, baseDir, relativeRoot ?? baseDir);
   const imageSrc = localPath ? getFileApiUrl(localPath, "read", sourceSessionId) : src;
-  if (typeof imageSrc !== "string") return null;
 
   return <ZoomableImage src={imageSrc} alt={alt} className="markdown-image-zoomable" imgProps={imgProps} />;
 }

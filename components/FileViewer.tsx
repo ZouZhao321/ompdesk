@@ -1166,6 +1166,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                 },
                 img({ src, alt, ...props }) {
                   delete props.node;
+                  if (typeof src !== "string") return null;
                   return (
                     <MarkdownImage
                       src={src}

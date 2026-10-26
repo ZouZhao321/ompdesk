@@ -37,6 +37,9 @@ export interface ImagePreviewRequest {
 /** 滚轮每像素位移对应的缩放灵敏度。 */
 const IMAGE_WHEEL_SENSITIVITY = 0.0015;
 
+/** 行模式滚轮的一行按多少像素折算。 */
+const WHEEL_LINE_HEIGHT = 16;
+
 /** 无固有尺寸的图片（如只有 viewBox 的 SVG）退回的替换元素默认尺寸。 */
 const DEFAULT_IMAGE_SIZE: Size = { w: 300, h: 150 };
 
@@ -71,6 +74,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   const pinchRef = useRef<{ distance: number; x: number; y: number } | null>(null);
   const previousNaturalRef = useRef<Size | null>(null);
   const frameRef = useRef(0);
+  const gestureRectRef = useRef<DOMRect | null>(null);
 
   useEffect(() => {
     viewportSizeRef.current = viewport;
@@ -223,7 +227,9 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       const rect = element.getBoundingClientRect();
-      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientHeight : 1;
+      let unit = 1;
+      if (event.deltaMode === 1) unit = WHEEL_LINE_HEIGHT;
+      else if (event.deltaMode === 2) unit = element.clientHeight;
       const factor = Math.exp(-event.deltaY * unit * IMAGE_WHEEL_SENSITIVITY);
       zoomTo(cameraRef.current.scale * factor, {
         x: event.clientX - rect.left,
@@ -239,6 +245,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    gestureRectRef.current = event.currentTarget.getBoundingClientRect();
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (pointersRef.current.size === 1) {
@@ -268,7 +275,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
       const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
       const previous = pinchRef.current;
       if (previous.distance > 0) {
-        const rect = event.currentTarget.getBoundingClientRect();
+        const rect = gestureRectRef.current ?? event.currentTarget.getBoundingClientRect();
         const image = naturalSizeRef.current;
         const size = viewportSizeRef.current;
         const next = pinchCamera(
@@ -308,6 +315,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     if (pointersRef.current.size === 0) {
       dragRef.current = null;
       pinchRef.current = null;
+      gestureRectRef.current = null;
       setDragging(false);
       return;
     }
