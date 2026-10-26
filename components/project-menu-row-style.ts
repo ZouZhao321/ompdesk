@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { MOBILE_HIT_TARGET_PX } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 
 /** 项目操作菜单各行的桌面端行高。 */
 const DESKTOP_ROW_MIN_HEIGHT_PX = 34;

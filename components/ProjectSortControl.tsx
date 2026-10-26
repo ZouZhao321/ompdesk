@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, type FocusEvent, type KeyboardEventHandler, type RefObject } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { MOBILE_HIT_TARGET_PX, useIsMobile } from "@/hooks/useIsMobile";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import type { ProjectSortMode } from "@/lib/project-order";
 import { AnimatedDropdown } from "./AnimatedDropdown";
 
