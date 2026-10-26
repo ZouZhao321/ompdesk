@@ -27,6 +27,8 @@ import { ExtensionStatusBar } from "./ExtensionStatusBar";
 import { RewindDialog } from "./RewindDialog";
 import { OmpWordmark } from "./OmpWordmark";
 import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
 import { useSyncedDisplaySettings } from "@/hooks/useDisplaySettings";
 import { formatTokenCount } from "@/lib/format-tokens";
@@ -160,6 +162,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
+        className="process-details-toggle"
         style={{
           display: "flex",
           alignItems: "center",
@@ -968,6 +971,7 @@ function ExtensionDialog({
   onRespond: (request: ExtensionDialogRequest, response: { value: string } | { confirmed: boolean } | { cancelled: true }) => void;
 }) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [value, setValue] = useState(request.method === "editor" ? request.prefill ?? "" : "");
   const [selectedOptions, setSelectedOptions] = useState<Record<string, number[]>>({});
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
@@ -1047,7 +1051,7 @@ function ExtensionDialog({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: 16,
+          padding: isMobile ? 12 : 16,
           background: "color-mix(in srgb, #000 26%, transparent)",
           backdropFilter: "blur(2px)",
         }}
@@ -1060,7 +1064,9 @@ function ExtensionDialog({
             display: "flex",
             flexDirection: "column",
             width: "min(720px, 100%)",
-            maxHeight: "min(780px, calc(100dvh - 32px))",
+            maxHeight: isMobile
+              ? "min(100%, calc(var(--app-viewport-height, 100dvh) - 24px))"
+              : "min(780px, calc(100dvh - 32px))",
             overflow: "hidden",
             border: "1px solid var(--border)",
             borderRadius: 10,
@@ -1068,7 +1074,7 @@ function ExtensionDialog({
             boxShadow: "0 24px 80px rgba(0,0,0,0.32)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--border)", flexShrink: isMobile ? 0 : undefined }}>
             <span
               aria-hidden="true"
               style={{
@@ -1091,7 +1097,7 @@ function ExtensionDialog({
             </div>
           </div>
 
-          <div style={{ overflowY: "auto", padding: 16 }}>
+          <div style={{ overflowY: "auto", padding: 16, flex: isMobile ? "1 1 auto" : undefined, minHeight: isMobile ? 0 : undefined }}>
             <div style={{ display: "grid", gap: 14 }}>
               {request.questions.map((question, questionIndex) => {
                 const selected = selectedOptions[question.id] ?? [];
@@ -1141,6 +1147,7 @@ function ExtensionDialog({
                               alignItems: "start",
                               gap: 9,
                               width: "100%",
+                              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                               padding: "9px 10px",
                               border: `1px solid ${checked ? "color-mix(in srgb, var(--accent) 55%, var(--border))" : "var(--border)"}`,
                               borderRadius: 7,
@@ -1206,7 +1213,7 @@ function ExtensionDialog({
                       aria-label={t("chat.customAnswer")}
                       style={{
                         width: "100%",
-                        height: 34,
+                        height: isMobile ? MOBILE_HIT_TARGET_PX : 34,
                         marginTop: 9,
                         padding: "0 10px",
                         border: "1px solid var(--border)",
@@ -1224,18 +1231,18 @@ function ExtensionDialog({
             </div>
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)", flexShrink: isMobile ? 0 : undefined }}>
             <button
               type="button"
               onClick={() => onRespond(request, { cancelled: true })}
-              style={{ padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text-muted)", cursor: "pointer" }}
+              style={{ padding: "7px 10px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text-muted)", cursor: "pointer" }}
             >
               {t("chat.cancel")}
             </button>
             <button
               type="button"
               onClick={() => onRespond(request, { value: JSON.stringify({ kind: "chat" }) })}
-              style={{ padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: "pointer" }}
+              style={{ padding: "7px 10px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: "pointer" }}
             >
               {t("chat.chatAboutThis")}
             </button>
@@ -1245,6 +1252,8 @@ function ExtensionDialog({
               onClick={submitAnswers}
               style={{
                 padding: "7px 12px",
+                minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                 border: "1px solid var(--accent)",
                 borderRadius: 6,
                 background: "var(--accent)",
@@ -1272,7 +1281,7 @@ function ExtensionDialog({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: 16,
+          padding: isMobile ? 12 : 16,
           background: "color-mix(in srgb, #000 30%, transparent)",
           backdropFilter: "blur(2px)",
         }}
@@ -1285,7 +1294,10 @@ function ExtensionDialog({
             display: "flex",
             flexDirection: "column",
             width: "min(820px, 100%)",
-            height: "min(820px, calc(100dvh - 32px))",
+            height: isMobile
+              ? "min(820px, calc(var(--app-viewport-height, 100dvh) - 24px))"
+              : "min(820px, calc(100dvh - 32px))",
+            maxHeight: isMobile ? "100%" : undefined,
             overflow: "hidden",
             border: "1px solid var(--border)",
             borderRadius: 10,
@@ -1293,7 +1305,7 @@ function ExtensionDialog({
             boxShadow: "0 24px 80px rgba(0,0,0,0.34)",
           }}
         >
-          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", flexShrink: isMobile ? 0 : undefined }}>
             <div style={{ color: "var(--accent)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
               {t("chat.planApproval")}
             </div>
@@ -1309,7 +1321,7 @@ function ExtensionDialog({
             <MarkdownBody>{request.planContent}</MarkdownBody>
           </div>
 
-          <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+          <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)", flexShrink: isMobile ? 0 : undefined }}>
             <textarea
               value={planFeedback}
               onChange={(event) => setPlanFeedback(event.target.value)}
@@ -1337,14 +1349,14 @@ function ExtensionDialog({
                 onClick={() => onRespond(request, {
                   value: JSON.stringify({ action: "refine", feedback: planFeedback.trim() }),
                 })}
-                style={{ padding: "7px 11px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: "pointer" }}
+                style={{ padding: "7px 11px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: "pointer" }}
               >
                 {t("chat.refinePlan")}
               </button>
               <button
                 type="button"
                 onClick={() => onRespond(request, { value: JSON.stringify({ action: "approve" }) })}
-                style={{ padding: "7px 12px", border: "1px solid var(--accent)", borderRadius: 6, background: "var(--accent)", color: "#fff", cursor: "pointer", fontWeight: 650 }}
+                style={{ padding: "7px 12px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined, border: "1px solid var(--accent)", borderRadius: 6, background: "var(--accent)", color: "#fff", cursor: "pointer", fontWeight: 650 }}
               >
                 {t("chat.approvePlan")}
               </button>
@@ -1365,7 +1377,7 @@ function ExtensionDialog({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 20,
+        padding: isMobile ? 12 : 20,
         background: "rgba(0,0,0,0.18)",
       }}
     >
@@ -1374,6 +1386,9 @@ function ExtensionDialog({
         aria-modal="true"
         style={{
           width: "min(560px, 100%)",
+          maxHeight: isMobile ? "min(100%, calc(var(--app-viewport-height, 100dvh) - 24px))" : undefined,
+          display: isMobile ? "flex" : undefined,
+          flexDirection: isMobile ? "column" : undefined,
           border: "1px solid var(--border)",
           borderRadius: 8,
           background: "var(--bg)",
@@ -1381,12 +1396,12 @@ function ExtensionDialog({
           overflow: "hidden",
         }}
       >
-        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)", flexShrink: isMobile ? 0 : undefined }}>
           <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650 }}>{request.title}</div>
           <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>{t("chat.extensionRequest")}</div>
         </div>
 
-        <div style={{ padding: 14 }}>
+        <div style={{ padding: 14, flex: isMobile ? "1 1 auto" : undefined, minHeight: isMobile ? 0 : undefined, overflowY: isMobile ? "auto" : undefined }}>
           {request.method === "confirm" && (
             <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{request.message}</div>
           )}
@@ -1398,6 +1413,7 @@ function ExtensionDialog({
                   onClick={() => onRespond(request, { value: option })}
                   style={{
                     width: "100%",
+                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                     padding: "9px 10px",
                     borderRadius: 7,
                     border: "1px solid var(--border)",
@@ -1462,11 +1478,13 @@ function ExtensionDialog({
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)", flexShrink: isMobile ? 0 : undefined }}>
           <button
             onClick={() => onRespond(request, { cancelled: true })}
             style={{
               padding: "6px 10px",
+              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+              minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
               borderRadius: 6,
               border: "1px solid var(--border)",
               background: "var(--bg)",
@@ -1481,6 +1499,8 @@ function ExtensionDialog({
               onClick={submitValue}
               style={{
                 padding: "6px 10px",
+                minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                 borderRadius: 6,
                 border: "1px solid var(--accent)",
                 background: "var(--accent)",
@@ -1495,6 +1515,8 @@ function ExtensionDialog({
               onClick={submitValue}
               style={{
                 padding: "6px 10px",
+                minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                 borderRadius: 6,
                 border: "1px solid var(--accent)",
                 background: "var(--accent)",
@@ -1529,6 +1551,7 @@ function ExtensionCustomPanel({
   onInput: (request: ExtensionCustomRequest, data: string) => void;
 }) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
   const displayLines = normalizeCustomPanelLines(request.lines);
@@ -1546,7 +1569,7 @@ function ExtensionCustomPanel({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 20,
+        padding: isMobile ? 12 : 20,
         background: "rgba(0,0,0,0.18)",
       }}
     >
@@ -1559,7 +1582,11 @@ function ExtensionCustomPanel({
         style={{
           position: "relative",
           width: "min(920px, 100%)",
-          maxHeight: "min(760px, calc(100vh - 40px))",
+          maxHeight: isMobile
+            ? "min(760px, 100%, calc(var(--app-viewport-height, 100dvh) - 24px))"
+            : "min(760px, calc(100vh - 40px))",
+          display: isMobile ? "flex" : undefined,
+          flexDirection: isMobile ? "column" : undefined,
           border: "1px solid var(--border)",
           borderRadius: 8,
           background: "var(--bg)",
@@ -1616,12 +1643,14 @@ function ExtensionCustomPanel({
             pointerEvents: "none",
           }}
         />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderBottom: "1px solid var(--border)", flexShrink: isMobile ? 0 : undefined }}>
            <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 650 }}>{t("chat.extensionPanel")}</div>
           <button
             onClick={() => onInput(request, "\x03")}
             style={{
               padding: "5px 9px",
+              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+              minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
               borderRadius: 6,
               border: "1px solid var(--border)",
               background: "var(--bg-panel)",
@@ -1637,7 +1666,9 @@ function ExtensionCustomPanel({
           style={{
             margin: 0,
             padding: 14,
-            maxHeight: "calc(min(760px, 100vh - 40px) - 48px)",
+            maxHeight: isMobile ? "none" : "calc(min(760px, 100vh - 40px) - 48px)",
+            flex: isMobile ? "1 1 auto" : undefined,
+            minHeight: isMobile ? 0 : undefined,
             overflow: "auto",
             background: "var(--bg-panel)",
             color: "var(--text)",
