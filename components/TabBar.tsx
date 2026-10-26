@@ -2,23 +2,22 @@
 
 import { useState } from "react";
 import { getFileIcon } from "./FileIcons";
+import { PanelViewIcon } from "./PanelViewIcon";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
-
-export interface Tab {
-  id: string;
-  label: string;
-  filePath: string;
-  sourceSessionId?: string | null;
-  initialDisplayMode?: "source" | "preview" | "diff";
-}
+import { PANEL_VIEW_LABEL_KEYS, type Tab } from "@/lib/panel-tabs";
 
 interface Props {
   tabs: Tab[];
-  activeTabId: string;
+  activeTabId: string | null;
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
+}
+
+function TabGlyph({ tab }: { tab: Tab }) {
+  if (tab.kind === "file") return getFileIcon(tab.label, 13);
+  return <PanelViewIcon kind={tab.kind} size={13} />;
 }
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
@@ -43,6 +42,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
     >
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
+        const label = tab.kind === "file" ? tab.label : t(PANEL_VIEW_LABEL_KEYS[tab.kind]);
         return (
           <div
             key={tab.id}
@@ -78,7 +78,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
             }}
           >
             <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7, display: "flex", alignItems: "center" }}>
-              {getFileIcon(tab.label, 13)}
+              <TabGlyph tab={tab} />
             </span>
             <span
               style={{
@@ -87,10 +87,30 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
                 flex: 1,
                 fontWeight: isActive ? 500 : 400,
               }}
-              title={tab.filePath}
+              title={tab.kind === "file" ? tab.filePath : label}
             >
-              {tab.label}
+              {label}
             </span>
+            {tab.badge ? (
+              <span
+                aria-label={`${tab.badge}`}
+                style={{
+                  flexShrink: 0,
+                  minWidth: 16,
+                  height: 16,
+                  padding: "0 5px",
+                  borderRadius: 8,
+                  background: "var(--bg-selected)",
+                  color: "var(--accent)",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  lineHeight: "16px",
+                  textAlign: "center",
+                }}
+              >
+                {tab.badge}
+              </span>
+            ) : null}
             <button
               className="panel-tab-close"
               onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
@@ -109,7 +129,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
                 transition: "background 0.1s, color 0.1s",
               }}
                title={t("i18n.close")}
-               aria-label={`${t("i18n.close")} ${tab.label}`}
+               aria-label={`${t("i18n.close")} ${label}`}
             >
               <svg width="11" height="11" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
                 <line x1="2" y1="2" x2="8" y2="8" />
