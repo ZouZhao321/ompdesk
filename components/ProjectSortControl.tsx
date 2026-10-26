@@ -52,6 +52,20 @@ export function sortMenuKeyAction(key: string, currentIndex: number, count: numb
 }
 
 /**
+ * 焦点离开排序控件时是否要收起菜单。菜单没开、焦点仍落在控件里、
+ * 或浏览器没有给出 relatedTarget（Safari/Firefox 点击不聚焦、触摸输入）
+ * 都不收起：这些情况下焦点去向未知，收起会把随后的点击变成重新打开。
+ */
+export function shouldDismissOnBlur(
+  open: boolean,
+  container: ParentNode | null,
+  relatedTarget: Node | null,
+): boolean {
+  if (!open || relatedTarget === null || container === null) return false;
+  return !container.contains(relatedTarget);
+}
+
+/**
  * 侧边栏「项目」标题右侧的排序控件：只消费当前排序方式与开关状态，
  * 本地存储与列表排序都由调用方处理。
  */
@@ -74,7 +88,10 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
     return () => window.cancelAnimationFrame(frame);
   }, [open, mode]);
 
-  const handleMenuKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>((event) => {
+  // 键盘处理挂在包住触发按钮与菜单的外层：焦点停在触发按钮上时，
+  // 方向键也能直接进入菜单，不必依赖打开后由 rAF 把焦点搬到菜单项。
+  const handleKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>((event) => {
+    if (!open) return;
     const items = itemRefs.current;
     const currentIndex = items.findIndex((item) => item === document.activeElement);
     const action = sortMenuKeyAction(event.key, currentIndex, items.length);
@@ -88,7 +105,7 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
     event.stopPropagation();
     onDismiss();
     triggerRef.current?.focus();
-  }, [onDismiss]);
+  }, [open, onDismiss]);
 
   // 选中即关闭菜单，焦点回到触发按钮，避免焦点随关闭的菜单项一起消失。
   // 收起统一走 onDismiss，即使父组件在选中时已经自己关过，重复调用也是幂等的。
@@ -101,12 +118,16 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
   // 焦点离开整个控件时才收起菜单：此时浏览器已经完成 Tab 的焦点移动，
   // 菜单项退出占位不会再把焦点甩到 body 上。
   const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
-    if (!open || event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-    onDismiss();
+    if (shouldDismissOnBlur(open, event.currentTarget, event.relatedTarget as Node | null)) onDismiss();
   }, [open, onDismiss]);
 
   return (
-    <div ref={menuRef} onBlur={handleBlur} style={{ position: "relative", display: "flex", flexShrink: 0, marginRight: 6 }}>
+    <div
+      ref={menuRef}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      style={{ position: "relative", display: "flex", flexShrink: 0, marginRight: 6 }}
+    >
       <button
         ref={triggerRef}
         type="button"
@@ -146,7 +167,6 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
       <AnimatedDropdown
         open={open}
         role="menu"
-        onKeyDown={handleMenuKeyDown}
         style={{
           position: "absolute",
           top: "calc(100% + 4px)",
