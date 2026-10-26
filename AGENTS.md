@@ -31,7 +31,14 @@
 worktree 之间真正共享的只有 `.git/info/exclude`、`.git/hooks`、`.git/config`、
 stash 记录，以及 `bun run dev` 的 30141 端口与 `~/.omp/agent` 下的会话数据。
 
-提交标题遵循 `type(scope): 中文描述`，每个提交只对应一个逻辑变更。
+提交标题遵循 `type(scope): 中文描述`，`type` 取 `feat`、`fix`、`refactor`、`test`、
+`docs`、`chore`、`perf`；描述结尾不加句号，整行不超过 72 字符；`Merge `、`Revert `、
+`fixup! `、`squash! `、`amend! ` 前缀跳过校验。每个提交只对应一个逻辑变更。
+
+仓库根 `.pre-commit-config.yaml` 在 commit-msg 阶段执行 `scripts/check-commit-msg.py`。
+克隆后执行 `pre-commit install`（未安装时先 `pipx install pre-commit`）装钩子：配置
+已声明 `default_install_hook_types`，这一条命令就会装到 commit-msg 上，标题不合规
+的提交被拒绝。
 
 ## 临时文件
 
