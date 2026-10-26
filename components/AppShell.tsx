@@ -106,8 +106,8 @@ type AutoNameUi = {
   title: string;
 };
 
-/** 自动命名失败的提示色，两处入口共用。 */
-const AUTO_NAME_ERROR_COLOR = "#dc2626";
+/** 自动命名失败的提示色，两处入口共用，跟主题的 --danger 走。 */
+const AUTO_NAME_ERROR_COLOR = "var(--danger)";
 
 /**
  * 自动命名按钮。

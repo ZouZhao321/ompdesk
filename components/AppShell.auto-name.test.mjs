@@ -48,12 +48,12 @@ test("自动命名按钮在桌面顶栏与手机档会话面板复用同一份�
   );
 
   // 两处入口各自只剩一次调用，按钮本身只有一份实现。
-  assert.equal(source.match(/<AutoNameAction/g)?.length, 2);
-  const sharedSource = source.slice(
-    source.indexOf("function AutoNameAction("),
-    source.indexOf("export function AppShell()"),
-  );
-  assert.ok(sharedSource.length > 0, "共享渲染函数必须存在");
+  assert.equal(source.match(/<AutoNameAction/g)?.length, 2, "自动命名按钮只允许两处入口调用");
+  const sharedStart = source.indexOf("function AutoNameAction(");
+  assert.ok(sharedStart >= 0, "共享渲染函数必须存在");
+  const sharedEnd = source.indexOf("export function AppShell()", sharedStart);
+  assert.ok(sharedEnd > sharedStart, "共享渲染函数必须结束在 AppShell 之前");
+  const sharedSource = source.slice(sharedStart, sharedEnd);
   // 手机档看不到悬停提示：生成中在按钮上转圈，失败原因直接写在面板里。
   assert.match(sharedSource, /\.\.\.MOBILE_SESSION_ACTION_STYLE/);
   assert.match(sharedSource, /status\.kind === "naming"/, "生成中必须有按钮内状态");
@@ -62,11 +62,12 @@ test("自动命名按钮在桌面顶栏与手机档会话面板复用同一份�
     /!topBar && status\.kind === "error"[\s\S]*?\{status\.message\}/,
     "失败原因必须在面板里直接可见",
   );
-  // 错误色收敛到一个常量。
-  assert.match(sharedSource, /AUTO_NAME_ERROR_COLOR/);
+  // 错误色收敛到一个主题变量：常量本身取 --danger，渲染处只引用常量。
+  assert.match(source, /const AUTO_NAME_ERROR_COLOR = "var\(--danger\)";/);
   assert.equal(
-    source.match(/#dc2626/g)?.length,
-    2,
-    "自动命名的错误色只能出现在常量里（另一处是工作区加载失败提示）",
+    sharedSource.match(/AUTO_NAME_ERROR_COLOR/g)?.length,
+    3,
+    "错误色必须由常量提供：按钮配色一处、悬停配色一处、面板文字一处",
   );
+  assert.doesNotMatch(sharedSource, /#[0-9a-fA-F]{3,8}\b/, "共享渲染里不应再出现具体色值");
 });
