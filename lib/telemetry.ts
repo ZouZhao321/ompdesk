@@ -67,8 +67,8 @@ export async function sessionTelemetry(
   settings: Settings,
   modelRegistry: ModelRegistry,
 ): Promise<AgentTelemetryConfig | undefined> {
-  if (!(await startTelemetryExport(settings))) return undefined;
   try {
+    if (!(await startTelemetryExport(settings))) return undefined;
     // Same rule as the CLI: report the provider-computed cost only for models
     // whose rate card is known, instead of exporting a bogus $0.
     return createTelemetryExportConfig(undefined, (providerId, modelId) => {
@@ -76,8 +76,8 @@ export async function sessionTelemetry(
       return model !== undefined && getModelPricingStatus(model) !== "unknown";
     });
   } catch (error) {
-    // Optional observability again: a broken export config must not fail the
-    // session that was about to start.
+    // Optional observability again: the enable check and a broken export config
+    // must not fail the session that was about to start.
     console.error(
       "[ompdesk] telemetry config failed:",
       error instanceof Error ? error.message : error,
