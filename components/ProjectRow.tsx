@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { MOBILE_HIT_TARGET_PX, useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
@@ -63,9 +64,11 @@ export function ProjectRow({
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const rowHeight = isMobile ? MOBILE_HIT_TARGET_PX : 34;
+  // 键盘用户没有鼠标离开事件，行内焦点自成一套可见性来源。
+  const [focusWithin, setFocusWithin] = useState(false);
   // 手机没有悬停态，新建会话与项目操作按钮必须常驻且可点。
-  const newSessionVisible = isMobile || hovered;
-  const actionsVisible = isMobile || hovered || menuOpen;
+  const newSessionVisible = isMobile || hovered || focusWithin;
+  const actionsVisible = isMobile || hovered || focusWithin || menuOpen;
 
   return (
     <div
@@ -73,6 +76,12 @@ export function ProjectRow({
       className="sidebar-project-row"
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
+      onFocus={() => setFocusWithin(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setFocusWithin(false);
+        }
+      }}
       style={{
         display: "flex",
         alignItems: "center",
@@ -182,7 +191,6 @@ export function ProjectRow({
           transition: "opacity 0.12s, background 0.12s, color 0.12s",
           flexShrink: 0,
         }}
-        onFocus={() => onHoverChange(true)}
         onMouseEnter={(event) => {
           event.currentTarget.style.background = "var(--bg-selected)";
           event.currentTarget.style.color = "var(--accent)";
@@ -221,7 +229,6 @@ export function ProjectRow({
             pointerEvents: actionsVisible ? "auto" : "none",
             transition: "opacity 0.12s, background 0.12s, color 0.12s",
           }}
-          onFocus={() => onHoverChange(true)}
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
             <circle cx="3" cy="7" r="1.1" />
