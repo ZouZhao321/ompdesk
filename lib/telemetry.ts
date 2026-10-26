@@ -17,19 +17,29 @@ import { cfgTelemetryOtlpExportEnabled } from "@oh-my-pi/pi-coding-agent/telemet
  * builds its own session options, so both steps happen here instead.
  *
  * Registration is process-wide and irreversible: the first call installs
- * global trace/log/meter providers, every later call is a no-op.
+ * global trace/log/meter providers, every later call is a no-op. The
+ * `telemetry.otlpExportEnabled` switch therefore comes from the process-wide
+ * Settings instance, not from a project-scoped clone, and a change only takes
+ * effect on the next launch.
  */
 declare global {
   var __ompTelemetryStarted: Promise<boolean> | undefined;
 }
 
 function startTelemetryExport(settings: Settings): Promise<boolean> {
+  // Telemetry is optional observability: an init failure must not fail session
+  // creation. omp caches its own rejected init promise, so a retry would replay
+  // the same error — record the outcome once and keep sessions running without
+  // export until the process restarts.
   globalThis.__ompTelemetryStarted ??= (async () => {
     await initTelemetryExport(cfgTelemetryOtlpExportEnabled.get(settings));
     return isTelemetryExportEnabled();
-  })().catch((error) => {
-    globalThis.__ompTelemetryStarted = undefined;
-    throw error;
+  })().catch((error: unknown) => {
+    console.error(
+      "[ompdesk] telemetry export init failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return false;
   });
   return globalThis.__ompTelemetryStarted;
 }
@@ -54,9 +64,12 @@ export async function sessionTelemetry(
 /**
  * Push buffered spans at the end of a turn. omp batches on a 30-second timer,
  * which would leave a fresh trace invisible for that long in the browser.
+ * Never rejects; callers that need the flush to finish (shutdown) await it.
  */
-export function flushSessionTelemetry(): void {
-  void flushTelemetryExport().catch((error: unknown) => {
+export async function flushSessionTelemetry(): Promise<void> {
+  try {
+    await flushTelemetryExport();
+  } catch (error) {
     console.error("[ompdesk] telemetry flush failed:", error instanceof Error ? error.message : error);
-  });
+  }
 }

@@ -666,7 +666,7 @@ export class AgentSessionWrapper {
       this.promptRunning = false;
       this.resetIdleTimer();
       this.emit({ type: "prompt_done" });
-      flushSessionTelemetry();
+      void flushSessionTelemetry();
       notifyRunningChange();
     }
   }
@@ -916,7 +916,7 @@ export class AgentSessionWrapper {
           });
           if (!streamingBehavior) {
             this.emit({ type: "prompt_done" });
-            flushSessionTelemetry();
+            void flushSessionTelemetry();
           }
           notifyRunningChange();
         };
@@ -942,7 +942,7 @@ export class AgentSessionWrapper {
             : this.runLog.finish());
           if (!streamingBehavior) {
             this.emit({ type: "prompt_done" });
-            flushSessionTelemetry();
+            void flushSessionTelemetry();
           }
           notifyRunningChange();
         }).catch(failPrompt);
@@ -1403,6 +1403,9 @@ export class AgentSessionWrapper {
         }
         await this.inner.extensionRunner?.emit?.({ type: "session_shutdown", reason: "quit" });
       } finally {
+        // omp's exporters have no process-exit hook; flush before teardown so
+        // spans outside a turn boundary are not dropped with the batch buffer.
+        await flushSessionTelemetry();
         this.destroy();
       }
     })();
@@ -2040,7 +2043,9 @@ export async function startRpcSession(
       const { modelRegistry } = runtime;
       // OTLP export is opt-in through `OTEL_EXPORTER_OTLP_*`; without an
       // endpoint this resolves to `undefined` and nothing is instrumented.
-      const telemetry = await sessionTelemetry(settings, modelRegistry);
+      // The enable switch is process-wide, so it reads the shared Settings
+      // instance rather than this session's project-scoped clone.
+      const telemetry = await sessionTelemetry(runtime.settings, modelRegistry);
       const scope = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
       const defaultRole = readDefaultModelRole(settings);
       const hasExistingMessages = sessionManager.buildSessionContext().messages.length > 0;
