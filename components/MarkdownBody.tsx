@@ -3,10 +3,9 @@
 import { useMemo, type MouseEvent } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { resolveLocalFileHref } from "@/lib/file-links";
-import { encodeFilePathForApi } from "@/lib/file-paths";
 import { markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
-import { ZoomableImage } from "./ImageZoom";
+import { MarkdownImage } from "./MarkdownImage";
 
 interface MarkdownBodyProps {
   children: string;
@@ -72,20 +71,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
     },
     img({ src, alt, ...props }) {
       delete props.node;
-      const filePath = typeof src === "string" ? resolveLocalFileHref(src, cwd) : null;
-      const imageSrc = filePath
-        ? `/api/files/${encodeFilePathForApi(filePath)}?type=read`
-        : src;
-      if (typeof imageSrc !== "string") return null;
-      // Dynamic local paths are served directly by the file API.
-      return (
-        <ZoomableImage
-          src={imageSrc}
-          alt={alt}
-          className="markdown-image-zoomable"
-          imgProps={props}
-        />
-      );
+      return <MarkdownImage src={src} alt={alt} baseDir={cwd} imgProps={props} />;
     },
     table({ children }) {
       return (

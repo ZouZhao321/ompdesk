@@ -70,6 +70,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   const dragRef = useRef<{ x: number; y: number } | null>(null);
   const pinchRef = useRef<{ distance: number; x: number; y: number } | null>(null);
   const previousNaturalRef = useRef<Size | null>(null);
+  const frameRef = useRef(0);
 
   useEffect(() => {
     viewportSizeRef.current = viewport;
@@ -83,6 +84,27 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   const applyCamera = useCallback((next: ZoomCamera) => {
     cameraRef.current = next;
     setCamera(next);
+  }, []);
+
+  // 指针事件可达 120Hz，合帧后一帧只提交一次渲染。
+  const scheduleCamera = useCallback((next: ZoomCamera) => {
+    cameraRef.current = next;
+    if (frameRef.current) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0;
+      setCamera(cameraRef.current);
+    });
+  }, []);
+
+  const flushCamera = useCallback(() => {
+    if (!frameRef.current) return;
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = 0;
+    setCamera(cameraRef.current);
+  }, []);
+
+  useEffect(() => () => {
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
   }, []);
 
   const onNaturalSizeRef = useRef(onNaturalSize);
@@ -184,8 +206,8 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
       size,
     );
     if (naturalSizeRef.current.w > 0 && next.scale !== cameraRef.current.scale) adjustedRef.current = true;
-    applyCamera(next);
-  }, [applyCamera]);
+    scheduleCamera(next);
+  }, [scheduleCamera]);
 
   const fitToWindow = useCallback(() => {
     adjustedRef.current = false;
@@ -257,7 +279,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
           size,
         );
         if (image.w > 0 && next.scale !== cameraRef.current.scale) adjustedRef.current = true;
-        applyCamera(next);
+        scheduleCamera(next);
       }
       pinchRef.current = { distance, x: midpoint.x, y: midpoint.y };
       return;
@@ -273,7 +295,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     if (naturalSizeRef.current.w > 0 && (next.x !== cameraRef.current.x || next.y !== cameraRef.current.y)) {
       adjustedRef.current = true;
     }
-    applyCamera(next);
+    scheduleCamera(next);
   };
 
   const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -281,6 +303,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    flushCamera();
 
     if (pointersRef.current.size === 0) {
       dragRef.current = null;

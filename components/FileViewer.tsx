@@ -22,7 +22,8 @@ import { resolveLocalFileHref } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "./MermaidBlock";
-import { ImageZoomSurface, ZoomableImage } from "./ImageZoom";
+import { ImageZoomSurface } from "./ImageZoom";
+import { MarkdownImage } from "./MarkdownImage";
 import { FrontmatterCard } from "./FrontmatterCard";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
@@ -1180,19 +1181,13 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                 },
                 img({ src, alt, ...props }) {
                   delete props.node;
-                  const imagePath = typeof src === "string"
-                    ? resolveLocalFileHref(src, markdownDirectory, cwd ?? markdownDirectory)
-                    : null;
-                  const imageSrc = imagePath
-                    ? getFileApiUrl(imagePath, "read", sourceSessionId)
-                    : src;
-                  if (typeof imageSrc !== "string") return null;
-                  // Dynamic local paths are served directly by the file API.
                   return (
-                    <ZoomableImage
-                      src={imageSrc}
+                    <MarkdownImage
+                      src={src}
                       alt={alt}
-                      className="markdown-image-zoomable"
+                      baseDir={markdownDirectory}
+                      relativeRoot={cwd ?? markdownDirectory}
+                      sourceSessionId={sourceSessionId}
                       imgProps={props}
                     />
                   );
