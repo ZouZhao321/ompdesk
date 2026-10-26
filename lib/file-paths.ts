@@ -13,6 +13,30 @@ export function encodeFilePathForApi(filePath: string): string {
     .join("/");
 }
 
+export type FileApiType =
+  | "read"
+  | "download"
+  | "meta"
+  | "preview"
+  | "watch"
+  | "list"
+  | "upload"
+  | "upload-check";
+
+export function getFileApiUrl(
+  filePath: string,
+  type: FileApiType,
+  sourceSessionId?: string | null,
+  params: Record<string, string | number | undefined> = {},
+): string {
+  const searchParams = new URLSearchParams({ type });
+  if (sourceSessionId) searchParams.set("sessionId", sourceSessionId);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) searchParams.set(key, String(value));
+  }
+  return `/api/files/${encodeFilePathForApi(filePath)}?${searchParams.toString()}`;
+}
+
 export function getFileName(filePath: string): string {
   const normalized = normalizeFilePathSlashes(filePath).replace(/\/+$/, "");
   return normalized.split("/").pop() ?? normalized;

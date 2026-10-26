@@ -25,6 +25,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
           <button
             key={filePath}
             type="button"
+            className="file-chip-button"
             title={filePath}
             aria-label={t("chat.openWrittenFile", { name })}
             onClick={() => onOpenFile?.(filePath)}
