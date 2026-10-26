@@ -110,6 +110,7 @@ test("render does not invoke callbacks or change markup", () => {
     open: true,
     mode: "name",
     onToggle: () => calls.push("toggle"),
+    onDismiss: () => calls.push("dismiss"),
     onSelectMode: (mode) => calls.push(`select:${mode}`),
   });
 
@@ -125,6 +126,14 @@ test("wraps the open menu items in a menu container", () => {
     html.indexOf('role="menu"') < html.indexOf('role="menuitemradio"'),
     "expected the menu container to open before the menu items",
   );
+});
+
+test("keeps the sort options out of the tab order so Tab leaves the control", () => {
+  const html = renderControl({ open: true });
+
+  for (const snippet of menuItemSnippets(html)) {
+    assert.ok(snippet.includes('tabindex="-1"'), `expected a roving-focus menu item, got ${snippet}`);
+  }
 });
 
 test("renders the menu labels in zh-CN", () => {
@@ -157,11 +166,13 @@ test("jumps to the first and last sort option with Home and End", () => {
 });
 
 test("closes the sort menu on Escape and hands focus back to the trigger", () => {
-  assert.deepEqual(sortMenuKeyAction("Escape", 0, 2), { kind: "close", returnFocus: true });
+  assert.deepEqual(sortMenuKeyAction("Escape", 0, 2), { kind: "close" });
+  assert.deepEqual(sortMenuKeyAction("Escape", 1, 2), { kind: "close" });
 });
 
-test("closes the sort menu on Tab without pulling focus back to the trigger", () => {
-  assert.deepEqual(sortMenuKeyAction("Tab", 1, 2), { kind: "close", returnFocus: false });
+test("leaves Tab to the browser so focus moves out of the menu instead of closing it", () => {
+  assert.equal(sortMenuKeyAction("Tab", 0, 2), null);
+  assert.equal(sortMenuKeyAction("Tab", 1, 2), null);
 });
 
 test("leaves unrelated keys and an empty menu to the browser", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type KeyboardEventHandler, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type FocusEvent, type KeyboardEventHandler, type RefObject } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { MOBILE_HIT_TARGET_PX, useIsMobile } from "@/hooks/useIsMobile";
 import type { ProjectSortMode } from "@/lib/project-order";
@@ -12,6 +12,8 @@ interface Props {
   /** 父组件用它在菜单打开期间判断外部点击。 */
   menuRef?: RefObject<HTMLDivElement | null>;
   onToggle: () => void;
+  /** 焦点离开整个控件时调用：菜单只在这里收起，Tab 键留给浏览器处理。 */
+  onDismiss?: () => void;
   onSelectMode: (mode: ProjectSortMode) => void;
 }
 
@@ -20,12 +22,12 @@ const SORT_MODES: readonly ProjectSortMode[] = ["time", "name"];
 /** 排序菜单里一次按键要做的动作：把焦点移到某一项，或关闭菜单。 */
 export type SortMenuKeyAction =
   | { kind: "focus"; index: number }
-  | { kind: "close"; returnFocus: boolean };
+  | { kind: "close" };
 
 /**
  * 排序菜单的键盘映射：方向键在选项间循环、Home/End 跳到首尾、
- * Escape 关闭并把焦点交回触发按钮、Tab 关闭并让焦点按顺序离开菜单。
- * 其他按键返回 null，保留浏览器默认行为。
+ * Escape 关闭并把焦点交回触发按钮。其他按键（含 Tab）返回 null，
+ * 保留浏览器默认行为，让焦点按顺序离开菜单。
  */
 export function sortMenuKeyAction(key: string, currentIndex: number, count: number): SortMenuKeyAction | null {
   if (count === 0) return null;
@@ -39,9 +41,7 @@ export function sortMenuKeyAction(key: string, currentIndex: number, count: numb
     case "End":
       return { kind: "focus", index: count - 1 };
     case "Escape":
-      return { kind: "close", returnFocus: true };
-    case "Tab":
-      return { kind: "close", returnFocus: false };
+      return { kind: "close" };
     default:
       return null;
   }
@@ -51,7 +51,7 @@ export function sortMenuKeyAction(key: string, currentIndex: number, count: numb
  * 侧边栏「项目」标题右侧的排序控件：只消费当前排序方式与开关状态，
  * 本地存储与列表排序都由调用方处理。
  */
-export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode }: Props) {
+export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, onSelectMode }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -75,14 +75,15 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode
     const currentIndex = items.findIndex((item) => item === document.activeElement);
     const action = sortMenuKeyAction(event.key, currentIndex, items.length);
     if (action === null) return;
-    // Tab 保留浏览器默认的焦点移动，只把菜单关掉；其余按键自己接管焦点。
-    if (event.key !== "Tab") event.preventDefault();
+    event.preventDefault();
     if (action.kind === "focus") {
       items[action.index]?.focus();
       return;
     }
+    // Escape 只收起菜单：阻止冒泡，避免全局 Esc 快捷键连带中止正在运行的 agent。
+    event.stopPropagation();
     onToggle();
-    if (action.returnFocus) triggerRef.current?.focus();
+    triggerRef.current?.focus();
   }, [onToggle]);
 
   // 选中即关闭菜单，焦点回到触发按钮，避免焦点随关闭的菜单项一起消失。
@@ -91,8 +92,15 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode
     triggerRef.current?.focus();
   }, [onSelectMode]);
 
+  // 焦点离开整个控件时才收起菜单：此时浏览器已经完成 Tab 的焦点移动，
+  // 菜单项退出占位不会再把焦点甩到 body 上。
+  const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    if (!open || event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    onDismiss?.();
+  }, [open, onDismiss]);
+
   return (
-    <div ref={menuRef} style={{ position: "relative", display: "flex", flexShrink: 0, marginRight: 6 }}>
+    <div ref={menuRef} onBlur={handleBlur} style={{ position: "relative", display: "flex", flexShrink: 0, marginRight: 6 }}>
       <button
         ref={triggerRef}
         type="button"
@@ -155,6 +163,8 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onSelectMode
             type="button"
             role="menuitemradio"
             aria-checked={mode === option}
+            // 菜单项只靠方向键漫游聚焦，Tab 直接离开整个控件。
+            tabIndex={-1}
             onClick={() => selectMode(option)}
             style={{
               display: "flex",
