@@ -18,6 +18,7 @@ import {
   IMAGE_ZOOM_MAX,
   IMAGE_ZOOM_MIN,
   IMAGE_ZOOM_STEP,
+  ZOOM_SCALE_EPSILON,
   centerCamera,
   fitZoom,
   isFitCamera,
@@ -412,7 +413,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
         </button>
         <button
           type="button"
-          className={`image-zoom-action image-zoom-actual${camera.scale === 1 ? " is-active" : ""}`}
+          className={`image-zoom-action image-zoom-actual${Math.abs(camera.scale - 1) < ZOOM_SCALE_EPSILON ? " is-active" : ""}`}
           onClick={() => zoomTo(1)}
           title={t("i18n.actualSize")}
           aria-label={t("i18n.actualSize")}

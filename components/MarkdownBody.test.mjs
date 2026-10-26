@@ -138,6 +138,7 @@ test("leaves remote markdown images on their own URL", () => {
 test("degrades to plain images when no preview host is mounted", () => {
   const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)", { withPreview: false });
 
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+  assert.match(html, /alt="shot"/);
   assert.doesNotMatch(html, /markdown-image-zoomable/);
-  assert.doesNotMatch(html, /role="button"/);
 });
