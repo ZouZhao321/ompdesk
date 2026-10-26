@@ -56,8 +56,10 @@ body:
     id: version
     attributes:
       label: 版本
-      description: package.json、桌面应用关于页或安装包标签里显示的版本号
+      description: package.json、桌面应用关于页或安装包标签里显示的版本号；本地检出填 commit SHA
       placeholder: "例如 0.6.2"
+    validations:
+      required: true
 
   - type: textarea
     id: logs
