@@ -37,7 +37,8 @@ body:
       options:
         - 浏览器访问 dev 服务
         - 桌面应用
-        - 通过 npx / npm 安装的包
+        - 通过 bunx / npm 安装的包
+        - Docker / 容器自托管
     validations:
       required: true
 
