@@ -26,15 +26,24 @@ declare global {
   var __ompTelemetryStarted: Promise<boolean> | undefined;
 }
 
+const INIT_TIMEOUT_MS = 3_000;
+
 function startTelemetryExport(settings: Settings): Promise<boolean> {
-  // Telemetry is optional observability: an init failure must not fail session
-  // creation. omp caches its own rejected init promise, so a retry would replay
-  // the same error — record the outcome once and keep sessions running without
-  // export until the process restarts.
-  globalThis.__ompTelemetryStarted ??= (async () => {
-    await initTelemetryExport(cfgTelemetryOtlpExportEnabled.get(settings));
-    return isTelemetryExportEnabled();
-  })().catch((error: unknown) => {
+  // Telemetry is optional observability: an init failure or a stalled module
+  // load must not fail or block session creation. omp caches its own rejected
+  // init promise, so a retry would replay the same error — record the outcome
+  // once and keep sessions running without export until the process restarts.
+  globalThis.__ompTelemetryStarted ??= withTimeout(
+    (async () => {
+      await initTelemetryExport(cfgTelemetryOtlpExportEnabled.get(settings));
+      return isTelemetryExportEnabled();
+    })(),
+    INIT_TIMEOUT_MS,
+    () => {
+      console.error("[ompdesk] telemetry export init timed out; sessions continue without export");
+      return false;
+    },
+  ).catch((error: unknown) => {
     console.error(
       "[ompdesk] telemetry export init failed:",
       error instanceof Error ? error.message : error,
@@ -81,15 +90,17 @@ export async function sessionTelemetry(
 export async function flushSessionTelemetry(timeoutMs?: number): Promise<void> {
   try {
     const flushing = flushTelemetryExport();
-    await (timeoutMs === undefined ? flushing : withTimeout(flushing, timeoutMs));
+    await (timeoutMs === undefined ? flushing : withTimeout(flushing, timeoutMs, () => undefined));
   } catch (error) {
     console.error("[ompdesk] telemetry flush failed:", error instanceof Error ? error.message : error);
   }
 }
 
-function withTimeout(work: Promise<void>, timeoutMs: number): Promise<void> {
-  const expired = Promise.withResolvers<void>();
-  const timer = setTimeout(expired.resolve, timeoutMs);
+function withTimeout<T>(work: Promise<T>, timeoutMs: number, onTimeout: () => T): Promise<T> {
+  // A late settle after the deadline must not surface as an unhandled rejection.
+  void work.catch(() => {});
+  const expired = Promise.withResolvers<T>();
+  const timer = setTimeout(() => expired.resolve(onTimeout()), timeoutMs);
   timer.unref?.();
   return Promise.race([work, expired.promise]).finally(() => clearTimeout(timer));
 }
