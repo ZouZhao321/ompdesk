@@ -92,6 +92,8 @@ omp-types.ts         omp AgentSession 的结构化视图
 project-trust.ts     控制项目可执行资源的开关
 rpc-manager.ts       AgentSessionWrapper + 注册表 + startRpcSession
 session-reader.ts    会话列表 + 路径缓存 + buildSessionContext 适配器
+session-marker.ts    侧栏标记判定、播种集合与运行结束的归属（纯函数）
+session-unread.ts    未读会话集合的共享状态、订阅与本机持久化
 session-map.ts       .jsonl → 轮次树，并合并 fork 文件
 session-archive.ts   归档标记读写
 session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md

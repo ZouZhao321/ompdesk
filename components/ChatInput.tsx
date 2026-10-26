@@ -27,6 +27,7 @@ import { isRewindInput } from "@/lib/rewind";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { formatTokenCount } from "@/lib/format-tokens";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { usePopupPlacement } from "@/hooks/usePopupPlacement";
 import { computePopupPlacement, preferredPopupHeight, POPUP_GAP_PX, type PopupSide } from "@/lib/popup-placement";
 import { useI18n } from "@/hooks/useI18n";
@@ -1511,16 +1512,26 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => removeImage(i)}
                   style={{
-                    position: "absolute", top: -4, right: -4,
-                    width: 16, height: 16, borderRadius: "50%",
-                    background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    position: "absolute",
+                    top: isMobile ? -14 : -4,
+                    right: isMobile ? -14 : -4,
+                    // 手机档把命中区放大到 44px，圆点外观保持不变。
+                    width: isMobile ? MOBILE_HIT_TARGET_PX : 16,
+                    height: isMobile ? MOBILE_HIT_TARGET_PX : 16,
                     display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "none", border: "none",
                     cursor: "pointer", padding: 0, color: "var(--text-muted)",
                   }}
                 >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
-                  </svg>
+                  <span style={{
+                    width: 16, height: 16, borderRadius: "50%",
+                    background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
+                    </svg>
+                  </span>
                 </button>
               </div>
             ))}
@@ -1594,6 +1605,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         alignItems: "flex-start",
                         gap: 8,
                         padding: "7px 8px",
+                        // 手机档浮层条目也要够 44px 高才点得准。
+                        minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                         border: "none",
                         borderRadius: 6,
                         background: active ? "var(--bg-selected)" : "none",
@@ -1831,6 +1844,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             alignItems: "center",
                             gap: 8,
                             padding: "6px 8px",
+                            // 手机档浮层条目也要够 44px 高才点得准。
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             border: "none",
                             borderRadius: 6,
                             background: active ? "var(--bg-selected)" : "none",
@@ -1933,6 +1948,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                     background: canQueueStreamingMessage ? "rgba(234,179,8,0.12)" : "none",
                     border: "1px solid rgba(234,179,8,0.35)",
                     borderRadius: 8,
@@ -1956,6 +1973,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                     background: canQueueStreamingMessage ? "rgba(129,140,248,0.12)" : "none",
                     border: "1px solid rgba(129,140,248,0.35)",
                     borderRadius: 8,
@@ -1982,6 +2001,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 alignSelf: "flex-end",
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "7px 14px",
+                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                 background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
                 borderRadius: 8,
@@ -2010,6 +2031,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
              {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
           </div>
         )}
+        {/* Mobile: 上下文用量常驻在底栏上方，与桌面档顶栏读数一致；
+            会话还没有 token 时组件自身不渲染，不会留下空行。 */}
         {isMobile && (
           <div style={{
             display: "flex",
@@ -2020,7 +2043,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <ContextUsageMeter usage={contextUsage} t={t} />
           </div>
         )}
-
         {/* Bottom bar: left | center (context) | right */}
         <div style={{
           marginTop: 8,
@@ -2037,7 +2059,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
              title={t("chat.attachImage")}
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                width: 32, height: 32, padding: 0,
+                width: isMobile ? MOBILE_HIT_TARGET_PX : 32,
+                height: isMobile ? MOBILE_HIT_TARGET_PX : 32,
+                padding: 0,
                 background: "none", border: "none",
                 borderRadius: 9,
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
@@ -2078,7 +2102,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       display: "flex", alignItems: "center", gap: 6,
                       justifyContent: isMobile ? "flex-start" : undefined,
                       padding: isMobile ? "8px 10px" : "8px 12px",
-                      height: 32,
+                      height: isMobile ? MOBILE_HIT_TARGET_PX : 32,
                       width: isMobile ? "100%" : undefined,
                       maxWidth: isMobile ? "100%" : 220,
                       overflow: "hidden",
@@ -2209,6 +2233,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   style={{
                                     display: "flex", alignItems: "center", gap: 8,
                                     width: "100%", padding: "7px 12px",
+                                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                                     background: isActive ? "var(--bg-selected)" : "none",
                                     border: "none",
                                     color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -2291,6 +2316,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   style={{
                                     display: "flex", alignItems: "center", gap: 8,
                                     width: "100%", padding: "7px 12px",
+                                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                                     background: isActive ? "var(--bg-selected)" : "none",
                                     border: "none",
                                     color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -2355,7 +2381,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   alignItems: "center",
                   justifyContent: "center",
                   width: "100%",
-                  height: 32,
+                  minWidth: MOBILE_HIT_TARGET_PX,
+                  height: MOBILE_HIT_TARGET_PX,
                   padding: "8px 10px",
                   background: "none",
                   border: "none",
@@ -2414,7 +2441,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                     padding: isMobile ? "0 6px" : "8px 12px",
                     width: isMobile ? "auto" : undefined,
-                    height: 32,
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    height: isMobile ? MOBILE_HIT_TARGET_PX : 32,
                     background: thinkingDropdownOpen ? "var(--bg-hover)" : "none",
                     border: "none",
                     borderRadius: 9,
@@ -2465,6 +2493,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
                             width: "100%", padding: "7px 12px",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             background: isActive ? "var(--bg-selected)" : "none",
                             border: "none",
                             color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -2501,7 +2530,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                     padding: isMobile ? "0 6px" : "8px 12px",
                     width: isMobile ? "auto" : undefined,
-                    height: 32,
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    height: isMobile ? MOBILE_HIT_TARGET_PX : 32,
                     background: toolDropdownOpen ? "var(--bg-hover)" : "none",
                     border: "none",
                     borderRadius: 9,
@@ -2550,6 +2580,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           style={{
                             display: "flex", alignItems: "center", gap: 8,
                             width: "100%", padding: "7px 12px",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             background: isActive ? "var(--bg-selected)" : "none",
                             border: "none",
                             color: isActive ? "var(--text)" : "var(--text-muted)",
@@ -2582,7 +2613,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                     padding: isMobile ? "0 6px" : "8px 12px",
                     width: isMobile ? "auto" : undefined,
-                    height: 32,
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                    height: isMobile ? MOBILE_HIT_TARGET_PX : 32,
                     background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
                     border: "none",
                     borderRadius: 9,
@@ -2622,7 +2654,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "8px 14px",
-                  height: 32,
+                  minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                  height: isMobile ? MOBILE_HIT_TARGET_PX : 32,
                   background: "rgba(239,68,68,0.08)",
                   border: "1px solid rgba(239,68,68,0.3)",
                   borderRadius: 9,
@@ -2649,8 +2682,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                  aria-label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                  width: isMobile ? 32 : 32,
-                  height: 32,
+                  width: isMobile ? MOBILE_HIT_TARGET_PX : 32,
+                  height: isMobile ? MOBILE_HIT_TARGET_PX : 32,
                   padding: 0,
                   background: "none",
                   border: "none",
@@ -2701,8 +2734,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 36,
-                  height: 32,
+                  width: MOBILE_HIT_TARGET_PX,
+                  height: MOBILE_HIT_TARGET_PX,
                   padding: 0,
                   marginLeft: 0,
                   background: "var(--bg-hover)",

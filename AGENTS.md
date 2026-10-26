@@ -102,6 +102,8 @@ ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `descri
 - `adr/0012-stream-and-running-state.md`: 30 秒宽限与两套集合独立，旧 run id 的迟到事件要丢弃；改流式、轮询或运行状态时读。
 - `adr/0013-project-trust.md`: 未信任项目过滤项目内扩展与工具并禁用 MCP，skills 与 rules 始终加载；改信任开关时读。
 - `adr/0014-theme-and-css.md`: 主题来自 omp，`globals.css` 只是首屏回退；改配色、字体或主题同步时读。
+- `adr/0015-session-status-markers.md`: 标记分动态与静态，静态按未读归属；改侧栏标记、未读或运行结束时读。
+- `adr/0016-mobile-layout-single-source.md`: 移动档只有一条媒体查询，粗指针不看高度；改断点或手机命中区时读。
 
 `docs/file-map.md` 按目录列出每个文件的职责（路径加一句话），用于确认某个文件
 属于哪一块；文件是否存在以 `git ls-files` 为准。

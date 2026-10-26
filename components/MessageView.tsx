@@ -108,6 +108,7 @@ function SafeMarkdownBody({ children, className, ...props }: React.ComponentProp
     return (
       <button
         onClick={() => setShowRaw(true)}
+        className="message-reveal-button"
         style={{
           display: "block",
           width: "100%",
@@ -366,7 +367,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
           display: "flex", alignItems: "center", justifyContent: "flex-end",
           gap: 6, marginTop: 3,
         }}>
-          <div style={{
+          <div className="message-action-reveal" style={{
             display: "flex", gap: 3,
             opacity: hovered ? 1 : 0,
             pointerEvents: hovered ? "auto" : "none",
@@ -374,6 +375,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
           }}>
             <button
               onClick={copyContent}
+              className="message-action-button"
                title={t("i18n.copyMessage")}
               style={{
                 display: "flex", alignItems: "center", gap: 4,
@@ -403,7 +405,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             </button>
           </div>
           {(canFork || canNavigate) && (
-            <div style={{
+            <div className="message-action-reveal" style={{
               display: "flex", gap: 3,
               opacity: (hovered || forking) ? 1 : 0,
               pointerEvents: (hovered || forking) ? "auto" : "none",
@@ -412,6 +414,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               {canNavigate && (
                 <button
                   onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(message); }}
+                  className="message-action-button"
                    title={t("i18n.editFromHereTitle")}
                   style={{
                     display: "flex", alignItems: "center", gap: 4,
@@ -438,6 +441,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 <button
                   onClick={() => { onFork!(entryId!); }}
                   disabled={forking}
+                  className="message-action-button"
                    title={forking ? t("i18n.creatingSession") : t("i18n.newSessionTitle")}
                   style={{
                     display: "flex", alignItems: "center", gap: 4,
@@ -713,6 +717,7 @@ function AssistantMessageView({
         {textContent && !isStreaming && (
           <button
             onClick={copyContent}
+            className="message-action-reveal message-action-button"
              title={t("i18n.copyMessage")}
             style={{
               display: "flex", alignItems: "center", gap: 4,
@@ -908,6 +913,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
       <button
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
+        className="tool-call-toggle"
         style={{
           display: "flex",
           alignItems: "center",
@@ -1703,7 +1709,7 @@ function CompactionFileMetadata({ readFiles, modifiedFiles }: { readFiles: strin
 
   return (
     <details className="compaction-file-details">
-       <summary>{t("i18n.fileContext", { details: parts.join(", ") })}</summary>
+       <summary className="compaction-file-summary">{t("i18n.fileContext", { details: parts.join(", ") })}</summary>
        {modifiedFiles.length > 0 && <CompactionFileList title={t("i18n.modifiedFiles")} files={modifiedFiles} />}
        {readFiles.length > 0 && <CompactionFileList title={t("i18n.readFiles")} files={readFiles} />}
     </details>
@@ -1797,6 +1803,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
         ) : (
           <button
             onClick={() => setContentExpanded(true)}
+            className="message-reveal-button"
             style={{
               display: "block",
               width: "100%",
@@ -1826,6 +1833,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
           {text || detailsText ? (
             <button
               onClick={copyContent}
+              className="message-action-button"
               style={{
                 padding: "3px 7px",
                 border: "none",
@@ -1844,6 +1852,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                 if (isHiddenDisplay) setContentExpanded((v) => !v);
                 else setDetailsExpanded((v) => !v);
               }}
+              className="message-action-button"
               style={{
                 marginLeft: "auto",
                 padding: "3px 7px",
@@ -2044,6 +2053,7 @@ function BashExecutionView({ message, sessionId }: { message: BashExecutionMessa
             <button
               onClick={loadFullOutput}
               disabled={loadingFull}
+              className="message-inline-action"
               style={{ background: "none", border: "none", color: "var(--accent)", cursor: loadingFull ? "default" : "pointer", fontSize: 11, padding: 0, textDecoration: "underline" }}
             >
               {loadingFull ? "loading…" : "view full output"}
@@ -2051,6 +2061,7 @@ function BashExecutionView({ message, sessionId }: { message: BashExecutionMessa
           )}
           <a
             href={`${fullOutputUrl}&download=1`}
+            className="message-inline-action"
             style={{ marginLeft: showFullButton ? 10 : 0, color: "var(--accent)", fontSize: 11, textDecoration: "underline" }}
           >
             download full output
