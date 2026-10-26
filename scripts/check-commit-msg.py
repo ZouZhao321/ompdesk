@@ -9,11 +9,11 @@ MAX_SUBJECT_LENGTH: int = 72
 
 
 def read_subject(path: str) -> str:
-    """读取提交信息文件的首个非空行；文件没有内容时返回空串。"""
+    """读取提交信息文件的首个非空行；文件没有内容时返回空串，git 写入的 `#` 注释行不算标题。"""
     with open(path, encoding="utf-8") as message_file:
         for line in message_file:
             stripped = line.rstrip("\r\n")
-            if stripped.strip():
+            if stripped.strip() and not stripped.lstrip().startswith("#"):
                 return stripped
     return ""
 
