@@ -116,6 +116,10 @@ const IDLE_RESET_EVENT_TYPES = new Set([
 
 const MAX_SUBAGENT_HISTORY = 128;
 
+// Upper bound on the telemetry flush that runs before a session is torn down;
+// an unreachable collector otherwise holds shutdown for the exporter timeout.
+const SHUTDOWN_FLUSH_TIMEOUT_MS = 3_000;
+
 const HANDOFF_ALLOWED_COMMAND_TYPES: Record<string, true> = {
   abort: true,
   extension_ui_input: true,
@@ -1403,9 +1407,10 @@ export class AgentSessionWrapper {
         }
         await this.inner.extensionRunner?.emit?.({ type: "session_shutdown", reason: "quit" });
       } finally {
-        // omp's exporters have no process-exit hook; flush before teardown so
-        // spans outside a turn boundary are not dropped with the batch buffer.
-        await flushSessionTelemetry();
+        // Sessions are torn down long before process exit (fork, delete), so
+        // flush here; the bound keeps an unreachable collector from holding
+        // shutdown for the exporter's own timeout.
+        await flushSessionTelemetry(SHUTDOWN_FLUSH_TIMEOUT_MS);
         this.destroy();
       }
     })();
