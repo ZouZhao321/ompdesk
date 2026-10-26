@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { getFileIcon } from "./FileIcons";
 import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 
 export interface Tab {
   id: string;
@@ -21,17 +23,22 @@ interface Props {
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
+  // 手机档触屏命中区放大到 44px；桌面档保持 36px 页签与 24px 关闭按钮。
+  const barHeight = isMobile ? MOBILE_HIT_TARGET_PX : 36;
+  const closeSize = isMobile ? MOBILE_HIT_TARGET_PX : 24;
 
   return (
     <div
+      className="panel-tab-bar"
       style={{
         display: "flex",
         alignItems: "flex-end",
         background: "var(--bg-panel)",
         overflowX: "auto",
         flexShrink: 0,
-        height: 36,
+        height: barHeight,
       }}
     >
       {tabs.map((tab) => {
@@ -39,6 +46,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
         return (
           <div
             key={tab.id}
+            className="panel-tab"
             onClick={() => onSelectTab(tab.id)}
             onMouseDown={(e) => {
               if (e.button === 1) e.preventDefault();
@@ -53,7 +61,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               display: "flex",
               alignItems: "center",
               gap: 6,
-              height: 36,
+              height: barHeight,
               paddingLeft: 12,
               paddingRight: 6,
               borderRight: "1px solid var(--border)",
@@ -84,12 +92,13 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               {tab.label}
             </span>
             <button
+              className="panel-tab-close"
               onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
               onMouseEnter={() => setHoveredClose(tab.id)}
               onMouseLeave={() => setHoveredClose(null)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 24, height: 24,
+                width: closeSize, height: closeSize,
                 background: hoveredClose === tab.id ? "var(--bg-hover)" : "transparent",
                 border: "none",
                 borderRadius: 4,

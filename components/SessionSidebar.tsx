@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
-import { skillExpansionToCommand } from "@/lib/slash-display";
+import { STATIC_MARKER_APPEARANCE, initialMarkerUnreadIds, resolveFinishedRuns, resolveSessionMarker, type StaticMarkerStatus } from "@/lib/session-marker";
+import { addUnreadSessionIds, clearUnreadSessionIds, getServerUnreadSessionIds, getUnreadSessionIds, retainUnreadSessionIds, subscribeUnreadSessionIds } from "@/lib/session-unread";
+import { sessionDisplayTitle } from "@/lib/session-title";
 import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import type { TranslationParams } from "@/lib/i18n/types";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OmpWordmark } from "./OmpWordmark";
@@ -60,7 +63,8 @@ type SessionActivitySnapshotState = { [K in keyof SessionActivitySnapshot]?: Ses
 /** 会话列表接口的响应：会话数组加上同一份活动快照。 */
 type SessionsResponse = SessionActivitySnapshotState & { sessions: SessionInfo[] };
 
-const UNREAD_SESSIONS_STORAGE_KEY = "ompdesk:unread-session-ids";
+const MARKER_SEEDED_STORAGE_KEY = "ompdesk:session-marker-seeded";
+const RUNNING_SESSIONS_STORAGE_KEY = "ompdesk:running-session-ids";
 const RUNNING_SESSIONS_POLL_MS = 2500;
 const PROJECT_SESSION_LIMIT = 5;
 const COLLAPSED_PROJECTS_STORAGE_KEY = "ompdesk:collapsed-projects";
@@ -95,27 +99,45 @@ function saveRemovedProjects(projects: Set<string>): void {
   }
 }
 
+/** 本浏览器是否还没做过「异常存量加入未读」的一次性播种。 */
+function shouldSeedInitialMarkerUnread(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(MARKER_SEEDED_STORAGE_KEY) === null;
+  } catch {
+    return false;
+  }
+}
 
+function markInitialMarkerUnreadSeeded(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(MARKER_SEEDED_STORAGE_KEY, "1");
+  } catch {
+    // ignore storage quota / privacy-mode errors
+  }
+}
 
-
-function loadUnreadSessionIds(): Set<string> {
+/** 上次页面看到的运行会话；服务退出后用于判断哪些会话随进程一起结束。 */
+function loadPersistedRunningSessionIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
-    const raw = window.localStorage.getItem(UNREAD_SESSIONS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(RUNNING_SESSIONS_STORAGE_KEY);
     if (!raw) return new Set();
     const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) return new Set(parsed.filter((id): id is string => typeof id === "string"));
-    return new Set();
+    return Array.isArray(parsed)
+      ? new Set(parsed.filter((id): id is string => typeof id === "string"))
+      : new Set();
   } catch {
     return new Set();
   }
 }
 
-function saveUnreadSessionIds(ids: Set<string>): void {
+function savePersistedRunningSessionIds(ids: ReadonlySet<string>): void {
   if (typeof window === "undefined") return;
   try {
-    if (ids.size === 0) window.localStorage.removeItem(UNREAD_SESSIONS_STORAGE_KEY);
-    else window.localStorage.setItem(UNREAD_SESSIONS_STORAGE_KEY, JSON.stringify([...ids]));
+    if (ids.size === 0) window.localStorage.removeItem(RUNNING_SESSIONS_STORAGE_KEY);
+    else window.localStorage.setItem(RUNNING_SESSIONS_STORAGE_KEY, JSON.stringify([...ids]));
   } catch {
     // ignore storage quota / privacy-mode errors
   }
@@ -368,6 +390,7 @@ function PiWebTitle() {
 
   return (
     <button
+      className="sidebar-brand-button"
       onClick={handleClick}
       style={{
         display: "flex",
@@ -420,17 +443,42 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
+  // 绿色完成提示点亮后自灭；计时器归 effect 管，卸载时清掉。
+  useEffect(() => {
+    if (!sessionRefreshDone) return;
+    const timer = setTimeout(() => setSessionRefreshDone(false), 2000);
+    return () => clearTimeout(timer);
+  }, [sessionRefreshDone]);
   const [activitySnapshot, setActivitySnapshot] = useState<SessionActivitySnapshotState>({});
   const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
   // 运行中但停在提问表单上、等待用户作答的会话。
   const waitingSessionIds = useMemo(() => new Set(activitySnapshot.waitingSessionIds ?? []), [activitySnapshot]);
-  const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
+  // 未读集合与打开路径共用同一份状态：这里只订阅，写入由 add/clear 完成。
+  const unreadSessionIds = useSyncExternalStore(
+    subscribeUnreadSessionIds,
+    getUnreadSessionIds,
+    getServerUnreadSessionIds,
+  );
   const previousActivitySnapshotRef = useRef(activitySnapshot);
+  // 页面在相邻两份快照之间是否一直可见；隐藏期间结束的运行要亮标记。
+  const pageVisibilitySinceSnapshotRef = useRef<DocumentVisibilityState>(
+    typeof document === "undefined" ? "visible" : document.visibilityState,
+  );
+  // 相邻两份快照之间是否与服务失去过联系；服务失联时结束时刻不可观察。
+  const serverOutageSinceSnapshotRef = useRef(false);
+  // 首轮轮询是否已经到达；服务失联的对账只认轮询快照，不认会话列表的初始回退。
+  const [activityPolled, setActivityPolled] = useState(false);
+  const startupRunningIdsRef = useRef<Set<string> | null>(null);
+  const restartReconciledRef = useRef(false);
+  // 初始恢复是否已经有机会选定会话；播种必须排在它之后。
+  const [initialRestoreSettled, setInitialRestoreSettled] = useState(!initialSessionId);
+  // 启动时打开的那个会话（含 continuation 映射后的 id）：它一进来就是可见的
+  // 当前会话，播种不能把它点亮，恢复落定后也要清掉旧的未读标记。
+  const launchSessionIdRef = useRef<string | null>(initialSessionId);
   const listedRuntimeIdsRef = useRef<Record<string, string>>({});
   // Once polling has delivered a snapshot it is the source of truth for
   // running state; late /api/sessions responses must not overwrite it.
   const runningPollAuthoritativeRef = useRef(false);
-  const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     setCollapsedProjects(loadCollapsedProjects());
     setRemovedProjects(loadRemovedProjects());
@@ -457,18 +505,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         });
       }
       // Drop unread markers for sessions that no longer exist (e.g. deleted).
-      const existingIds = new Set(data.sessions.map((s) => s.id));
-      setUnreadSessionIds((prev) => {
-        if (prev.size === 0) return prev;
-        const next = new Set([...prev].filter((id) => existingIds.has(id)));
-        return next.size === prev.size ? prev : next;
-      });
+      retainUnreadSessionIds(new Set(data.sessions.map((s) => s.id)));
       setError(null);
-      if (!showLoading) {
-        setSessionRefreshDone(true);
-        if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
-        sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
-      }
+      // 绿色完成提示只属于绕过缓存的扫描；后台读取不点亮刷新按钮。
+      if (force) setSessionRefreshDone(true);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -491,11 +531,18 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     loadSessions(isFirst, !isFirst);
   }, [loadSessions, refreshKey]);
 
-  // Persist unread markers so they survive a browser refresh before the user
-  // has actually opened the completed session.
+  // 首次加载时把浏览器的异常存量加入未读集合。播种只做一次：之后点开会话
+  // 得到的已读结果不会被页面刷新重新点亮，清掉本机存储才会重新播种。
+  // 播种排在初始恢复之后：恢复在首次加载时同步选定会话，早播种会把正在恢复
+  // 的会话播成未读。当前打开且可见的会话按已读处理（看到即灭）。
   useEffect(() => {
-    saveUnreadSessionIds(unreadSessionIds);
-  }, [unreadSessionIds]);
+    if (!initialRestoreSettled) return;
+    if (allSessions.length === 0 || !shouldSeedInitialMarkerUnread()) return;
+    markInitialMarkerUnreadSeeded();
+    const seededIds = initialMarkerUnreadIds(allSessions, runningSessionIds, waitingSessionIds)
+      .filter((id) => id !== selectedSessionId && id !== launchSessionIdRef.current);
+    addUnreadSessionIds(seededIds);
+  }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId, initialRestoreSettled]);
 
   useEffect(() => {
     let stopped = false;
@@ -513,6 +560,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       timer = setTimeout(() => void poll(), RUNNING_SESSIONS_POLL_MS);
     };
 
+    // 只有上一份快照里还有运行中的会话时才算与服务失联，否则没有结束归属要改。
+    const markServerOutage = () => {
+      if ((previousActivitySnapshotRef.current.runningSessionIds?.length ?? 0) > 0) {
+        serverOutageSinceSnapshotRef.current = true;
+      }
+    };
+
     const poll = async () => {
       if (stopped || document.visibilityState !== "visible") return;
       const current = new AbortController();
@@ -523,10 +577,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           cache: "no-store",
           signal: current.signal,
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          markServerOutage();
+          return;
+        }
         const data = await res.json() as SessionActivitySnapshotState;
         if (stopped || controller !== current) return;
         runningPollAuthoritativeRef.current = true;
+        setActivityPolled(true);
         setActivitySnapshot({
           runningSessionIds: data.runningSessionIds,
           waitingSessionIds: data.waitingSessionIds,
@@ -534,6 +592,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         });
       } catch {
         // Keep the last known state; the next visible-tab poll retries.
+        markServerOutage();
       } finally {
         if (controller === current) controller = null;
         schedule();
@@ -542,9 +601,17 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        // 回到前台时同时核对运行快照与会话最后状态，标记才有正确的依据。
         void poll();
+        // 只有隐藏期间确有运行在跑或与服务失联过，才需要绕过缓存重扫：
+        // 其余情况轻量读取列表即可，避免每次切回前台都全量扫描。
+        const mayHaveFinished =
+          serverOutageSinceSnapshotRef.current
+          || (previousActivitySnapshotRef.current.runningSessionIds?.length ?? 0) > 0;
+        loadSessions(false, mayHaveFinished);
         return;
       }
+      pageVisibilitySinceSnapshotRef.current = "hidden";
       clearTimer();
       controller?.abort();
       controller = null;
@@ -558,58 +625,76 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, []);
+  }, [loadSessions]);
 
   useEffect(() => {
     const previousSnapshot = previousActivitySnapshotRef.current;
     const previous = new Set(previousSnapshot.runningSessionIds ?? []);
-    // Compare the same live wrapper across fallback IDs before reporting completion.
-    const previousRuntimeIds = new Map(Object.entries(previousSnapshot.sessionIdsByRuntimeId ?? {})
-      .map(([runtimeId, sessionId]) => [sessionId, runtimeId]));
-    const selectedCanonicalId = selectedRuntimeId
-      ? activitySnapshot.sessionIdsByRuntimeId?.[selectedRuntimeId] ?? selectedSessionId
-      : selectedSessionId;
-    const completedInBackground = [...previous].flatMap((id) => {
-      const runtimeId = previousRuntimeIds.get(id);
-      // A server restart can erase the current mapping before the sidebar sees
-      // a relocation. The previous snapshot still identifies the selected run.
-      if (runtimeId && runtimeId === selectedRuntimeId) return [];
-      const currentId = (runtimeId && activitySnapshot.sessionIdsByRuntimeId?.[runtimeId]) || id;
-      return !runningSessionIds.has(currentId) && currentId !== selectedCanonicalId
-        ? [currentId] : [];
+    // 结束归属看这份快照覆盖的时间段：期间隐藏过或与服务失联，结束就不算被看到。
+    const finished = resolveFinishedRuns({
+      previousRunningSessionIds: previousSnapshot.runningSessionIds ?? [],
+      runningSessionIds,
+      previousSessionIdsByRuntimeId: previousSnapshot.sessionIdsByRuntimeId,
+      sessionIdsByRuntimeId: activitySnapshot.sessionIdsByRuntimeId,
+      selectedSessionId,
+      selectedRuntimeId,
+      isPageVisible: pageVisibilitySinceSnapshotRef.current === "visible",
+      isEndUnobserved: serverOutageSinceSnapshotRef.current,
     });
     const newlyRunning = [...runningSessionIds].filter((id) => !previous.has(id));
 
-    if (completedInBackground.length > 0 || newlyRunning.length > 0) {
-      setUnreadSessionIds((prev) => {
-        const next = new Set(prev);
-        runningSessionIds.forEach((id) => next.delete(id));
-        completedInBackground.forEach((id) => next.add(id));
-        return next;
-      });
+    // 再次进入运行的会话先清掉旧标记，结束后按新结果重新亮。
+    clearUnreadSessionIds(runningSessionIds);
+    addUnreadSessionIds(finished.unreadIds);
+    // 隐藏期间结束的选中会话，回到前台时正看着它：看到即已读，不留标记。
+    if (
+      document.visibilityState === "visible"
+      && selectedSessionId
+      && finished.finishedIds.includes(selectedSessionId)
+    ) {
+      clearUnreadSessionIds([selectedSessionId]);
     }
     const hasUnlistedRunningSession = newlyRunning.some(
       (id) => !allSessions.some((session) => session.id === id),
     );
-    if (completedInBackground.length > 0 || hasUnlistedRunningSession) {
+    // 只有确实产生了未读结果才重读最后状态：选中会话每轮结束都已读，不必全量刷新。
+    if (finished.unreadIds.length > 0 || hasUnlistedRunningSession) {
       loadSessions(false, true);
     }
-    if (completedInBackground.length > 0) {
+    if (finished.backgroundIds.length > 0) {
       onBackgroundTaskDone?.();
     }
 
-    previousActivitySnapshotRef.current = activitySnapshot;
+    // 只有新快照才移动对比窗口；会话列表刷新等无关重跑不能把窗口提前关掉。
+    const hasNewSnapshot = previousSnapshot !== activitySnapshot;
+    if (hasNewSnapshot) {
+      previousActivitySnapshotRef.current = activitySnapshot;
+      pageVisibilitySinceSnapshotRef.current = document.visibilityState;
+      serverOutageSinceSnapshotRef.current = false;
+    }
   }, [activitySnapshot, runningSessionIds, selectedSessionId, selectedRuntimeId, allSessions, loadSessions, onBackgroundTaskDone]);
 
+  // 服务失联或退出后页面看不到结束的那一刻，也无法区分哪次运行是被打断的。把上次
+  // 页面看到过的运行集合与首轮轮询对比：消失的运行一律记为未读，之后持续记录当前集合。
   useEffect(() => {
-    if (!selectedSessionId) return;
-    setUnreadSessionIds((prev) => {
-      if (!prev.has(selectedSessionId)) return prev;
-      const next = new Set(prev);
-      next.delete(selectedSessionId);
-      return next;
-    });
-  }, [selectedSessionId]);
+    // 恢复中的会话尚未成为选中会话，对账必须等初始恢复尘埃落定，否则会把它点亮。
+    if (!activityPolled || !initialRestoreSettled) return;
+    if (startupRunningIdsRef.current === null) {
+      startupRunningIdsRef.current = loadPersistedRunningSessionIds();
+    }
+    if (!restartReconciledRef.current) {
+      restartReconciledRef.current = true;
+      const lostAcrossRestart = resolveFinishedRuns({
+        previousRunningSessionIds: [...startupRunningIdsRef.current],
+        runningSessionIds,
+        isPageVisible: true,
+        isEndUnobserved: true,
+      });
+      // 与播种规则一致：正在打开的会话（自动恢复）看到即已读，不记未读。
+      addUnreadSessionIds(lostAcrossRestart.unreadIds.filter((id) => id !== selectedSessionId));
+    }
+    savePersistedRunningSessionIds(runningSessionIds);
+  }, [activityPolled, initialRestoreSettled, runningSessionIds, selectedSessionId]);
 
   useEffect(() => {
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
@@ -685,15 +770,44 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
-    if (allSessions.length === 0 || skipInitialProjectSelection) return;
+    if (skipInitialProjectSelection) {
+      // cwd 由 URL 接管，侧栏不做恢复，播种不必再等。URL 里的那个会话由父组件
+      // 打开，同样是启动后立刻可见的会话，旧的未读标记在这里一并清掉。URL 可能
+      // 带 continuation handle（runtime id），先换算成当前会话 id 再清。
+      if (initialSessionId) {
+        const target = restoreSessionContinuation(
+          initialSessionId,
+          allSessions,
+          listedRuntimeIdsRef.current,
+        );
+        clearUnreadSessionIds([target?.id ?? initialSessionId]);
+      }
+      setInitialRestoreSettled(true);
+      return;
+    }
+    // 列表还在加载时为空只代表尚未到达，不能据此判定恢复结果。
+    if (loading) return;
+    if (allSessions.length === 0) {
+      // 列表就绪但为空：恢复目标不存在，播种、重启对账与运行集合持久化都不能
+      // 等一次永远不会到来的恢复。父组件也在这里收到通知，把占位画出来。
+      setInitialRestoreSettled(true);
+      onInitialRestoreDone?.();
+      return;
+    }
 
     if (selectedCwd === null) {
       // If restoring a session, set cwd to match that session
       if (initialSessionId && !restoredRef.current) {
         restoredRef.current = true;
         const target = restoreSessionContinuation(initialSessionId, allSessions, listedRuntimeIdsRef.current);
+        // 恢复目标已经确定，播种从这里开始，并按本次选中的会话过滤。
+        setInitialRestoreSettled(true);
         if (target) {
           setSelectedCwd(target.cwd);
+          // 父组件的自动恢复（isRestore）不清未读，而恢复出来的会话就是启动后
+          // 立刻可见的当前会话：这里清掉它的标记，播种也不会再把它点亮。
+          launchSessionIdRef.current = target.id;
+          clearUnreadSessionIds([target.id]);
           onSelectSession(target, true);
           return;
         }
@@ -704,7 +818,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
       if (projects.length > 0) setSelectedCwd(projects[0]);
     }
-  }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone, removedProjects]);
+  }, [allSessions, loading, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone, removedProjects]);
 
   const commitCustomPath = useCallback(async (candidate: string) => {
     const path = candidate.trim();
@@ -945,7 +1059,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
     const projectMatches = name.toLowerCase().includes(normalizedProjectFilter);
     const matchingSessions = sessions.filter((session) => {
-      const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+      const title = sessionDisplayTitle(session);
       return title.toLowerCase().includes(normalizedProjectFilter);
     });
     if (!projectMatches && matchingSessions.length === 0) return [];
@@ -993,6 +1107,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           <PiWebTitle />
           <div style={{ display: "flex", gap: 6 }}>
             <button
+              className="sidebar-new-session-button"
               onClick={() => handleNewSession()}
               disabled={!selectedCwd}
               style={{
@@ -1030,6 +1145,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               {t("sidebar.new")}
             </button>
             <button
+              className="sidebar-header-icon-button"
               onClick={() => loadSessions(false, true)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -1091,6 +1207,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           onClick={handleCustomPathClick}
           title={t("sidebar.addProject")}
           aria-label={t("sidebar.addProject")}
+          className="sidebar-header-icon-button"
           style={{
             display: "flex",
             alignItems: "center",
@@ -1191,6 +1308,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             <section key={project} style={{ marginBottom: isCollapsed ? 3 : 9 }}>
               <div
                 ref={projectMenuOpen === project ? wtDropdownRef : undefined}
+                className="sidebar-project-row"
                 onMouseEnter={() => setHoveredProject(project)}
                 onMouseLeave={() => setHoveredProject((current) => current === project && projectMenuOpen !== project ? null : current)}
                 style={{
@@ -1204,6 +1322,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               >
                 <button
                   type="button"
+                  className="sidebar-project-icon-button"
                   onClick={() => toggleProjectCollapsed(project)}
                   title={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
                   aria-label={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
@@ -1242,6 +1361,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                   type="button"
                   onClick={() => setSelectedCwd(project)}
                   title={project}
+                  className="sidebar-project-name"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1268,6 +1388,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
                 <button
                   type="button"
+                  className="sidebar-project-icon-button sidebar-project-icon-reveal"
                   onClick={() => handleNewSession(project)}
                   title={t("sidebar.newSessionTitle", { path: project })}
                   aria-label={t("sidebar.newSessionTitle", { path: project })}
@@ -1307,6 +1428,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                   <div style={{ position: "static", flexShrink: 0 }}>
                     <button
                       type="button"
+                      className="sidebar-project-icon-button sidebar-project-icon-reveal"
                       onClick={() => {
                         const nextOpen = projectMenuOpen === project ? null : project;
                         dismissProjectMenu();
@@ -1748,6 +1870,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
               {!isCollapsed && showMore && (
                 <button
                   type="button"
+                  className="sidebar-show-more"
                   onClick={() => {
                     setExpandedProjects((current) => {
                       const next = new Set(current);
@@ -1837,6 +1960,7 @@ function ArchivedSessionsSection({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        className="sidebar-archived-toggle"
         style={{
           display: "flex", alignItems: "center", gap: 6,
           width: "100%", padding: "7px 12px",
@@ -1862,11 +1986,11 @@ function ArchivedSessionsSection({
             </div>
           )}
           {sessions.map((s) => {
-            const firstMessage = skillExpansionToCommand(s.firstMessage) ?? s.firstMessage;
-            const title = s.name || firstMessage.slice(0, 50) || s.id.slice(0, 12);
+            const title = sessionDisplayTitle(s);
             return (
               <div
                 key={s.id}
+                className="sidebar-session-row"
                 onClick={() => onSelectSession(s)}
                 style={{
                   height: 40, display: "flex", alignItems: "center",
@@ -1880,6 +2004,7 @@ function ArchivedSessionsSection({
                   {title}
                 </div>
                 <button
+                  className="sidebar-session-restore-button"
                   onClick={(e) => restore(e, s.id)}
                   title={t("sidebar.restore")}
                   style={{
@@ -1917,7 +2042,7 @@ function SessionTreeItem({
   selectedSessionId: string | null;
   runningSessionIds: Set<string>;
   waitingSessionIds: Set<string>;
-  unreadSessionIds: Set<string>;
+  unreadSessionIds: ReadonlySet<string>;
   onSelectSession: (s: SessionInfo) => void;
   onRenamed?: () => void;
   onSessionDeleted?: (id: string) => void;
@@ -2020,9 +2145,9 @@ function RunningSessionIndicator() {
 }
 
 /**
- * 黄灯：会话仍在运行，但停在提问表单上等待用户作答。
+ * 黄环：会话仍在运行，但停在提问表单上等待用户作答。
  *
- * 用静态圆点加呼吸光晕区别于运行中的旋转弧线，两者一眼可分。
+ * 用完整圆环加呼吸明暗区别于运行中的旋转缺口圆环：形状一闭一缺，动静一停一转。
  */
 function WaitingSessionIndicator() {
   const { t } = useI18n();
@@ -2042,22 +2167,23 @@ function WaitingSessionIndicator() {
       }}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
-        <circle cx="7" cy="7" r="4" fill="currentColor" />
-        <circle cx="7" cy="7" r="4" stroke="currentColor" strokeWidth="1.2" opacity="0.5">
-          <animate attributeName="r" values="4;6.2;4" dur="1.8s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.5;0;0.5" dur="1.8s" repeatCount="indefinite" />
+        <circle cx="7" cy="7" r="4.6" stroke="currentColor" strokeWidth="2">
+          <animate attributeName="r" values="4.2;5;4.2" dur="1.8s" repeatCount="indefinite" />
+          <animate attributeName="stroke-opacity" values="1;0.4;1" dur="1.8s" repeatCount="indefinite" />
         </circle>
       </svg>
     </span>
   );
 }
 
-function UnreadSessionIndicator() {
+/** 静态生命周期标记：实心圆点，没有动画；五种结果靠颜色与无障碍文字区分。 */
+function StaticSessionMarker({ status }: { status: StaticMarkerStatus }) {
   const { t } = useI18n();
+  const { color, labelKey } = STATIC_MARKER_APPEARANCE[status];
   return (
     <span
-      title={t("sidebar.newActivity")}
-      aria-label={t("sidebar.newSessionActivity")}
+      title={t(labelKey)}
+      aria-label={t(labelKey)}
       role="img"
       style={{
         width: 14,
@@ -2066,15 +2192,11 @@ function UnreadSessionIndicator() {
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
-        color: "#0891b2",
+        color,
       }}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
-        <circle cx="7" cy="7" r="2.5" fill="currentColor" />
-        <circle cx="7" cy="7" r="3" stroke="currentColor" strokeWidth="1.4" opacity="0.32">
-          <animate attributeName="r" values="3;6;3" dur="1.6s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.32;0;0.32" dur="1.6s" repeatCount="indefinite" />
-        </circle>
+        <circle cx="7" cy="7" r="4" fill="currentColor" />
       </svg>
     </span>
   );
@@ -2169,6 +2291,7 @@ function SessionItem({
   onToggleCollapse?: () => void;
 }) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [hovered, setHovered] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -2185,27 +2308,34 @@ function SessionItem({
     }
   }, [renaming]);
 
-  // A stored first message may be an SDK-expanded <skill> block; collapse it
-  // back to the compact /skill:name args command the user typed before using
-  // it as the auto-name fallback, mirroring MessageView's rendering.
-  const displayFirstMessage = skillExpansionToCommand(session.firstMessage) ?? session.firstMessage;
-  const title = session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12);
+  // A stored first message may hold an SDK-expanded <skill> block;
+  // sessionDisplayTitle collapses it to the compact command form, so the
+  // fallback title matches the one the top bar renders.
+  const title = sessionDisplayTitle(session);
+
+  // 一行只保留一个标记槽位：动态标记优先，静态标记在点开会话后熄灭。
+  const marker = resolveSessionMarker({
+    status: session.status,
+    isRunning,
+    isWaiting,
+    isUnread: isUnread === true,
+  });
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     // Transient sessions have no file yet, so renaming would fail.
     if (session.transient) return;
-    setRenameValue(session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12));
+    setRenameValue(title);
     setRenaming(true);
-  }, [session.name, session.transient, displayFirstMessage, session.id]);
+  }, [session.transient, title]);
 
   const commitRename = useCallback(async () => {
     const name = renameValue.trim();
     setRenaming(false);
     // No-op when unchanged: the fallback title (first message / id) isn't a
-    // real stored name, so don't persist it as one. (The rename input seeds
-    // from the same collapsed displayFirstMessage, so an untouched rename of
-    // a skill-invoked session stays a no-op instead of persisting raw XML.)
+    // real stored name, so don't persist it as one. The rename input seeds from
+    // the same collapsed title, so an untouched rename of a skill-invoked
+    // session stays a no-op instead of persisting raw XML.
     if (renameValue === title || name === (session.name ?? "")) return;
     try {
       await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
@@ -2285,6 +2415,7 @@ function SessionItem({
 
   return (
     <div
+      className="sidebar-session-row"
       onClick={confirmDelete || renaming ? undefined : onClick}
       onContextMenu={confirmDelete || renaming ? undefined : handleContextMenu}
       onMouseEnter={() => setHovered(true)}
@@ -2402,8 +2533,9 @@ function SessionItem({
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {title}
             </span>
-            {isWaiting ? <WaitingSessionIndicator /> : isRunning && <RunningSessionIndicator />}
-            {!isRunning && isUnread && <UnreadSessionIndicator />}
+            {marker?.kind === "awaiting" && <WaitingSessionIndicator />}
+            {marker?.kind === "running" && <RunningSessionIndicator />}
+            {marker?.kind === "static" && <StaticSessionMarker status={marker.status} />}
             {session.worktreeBranch && (
               <span title={t("sidebar.worktreePath", { path: session.cwd })} style={{ display: "flex", color: "var(--accent)", flexShrink: 0 }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2419,6 +2551,7 @@ function SessionItem({
           {/* Collapse toggle — always visible when has children */}
           {hasChildren && (
             <button
+              className="sidebar-project-icon-button"
               onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
               title={collapsed ? t("sidebar.expandForks") : t("sidebar.collapseForks")}
               style={{
@@ -2436,10 +2569,11 @@ function SessionItem({
             </button>
           )}
 
-          {/* Action buttons — shown on hover */}
-          {hovered && !session.transient && (
+          {/* Action buttons — hover on desktop, also while selected on touch */}
+          {(hovered || (isMobile && isSelected)) && !session.transient && (
             <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
               <button
+                className="sidebar-session-action-button"
                 onClick={startRename}
                 title={t("sidebar.rename")}
                 style={{
@@ -2466,6 +2600,7 @@ function SessionItem({
                 </svg>
               </button>
               <button
+                className="sidebar-session-action-button"
                 onClick={performArchive}
                 title={t("sidebar.archive")}
                 style={{
@@ -2492,6 +2627,7 @@ function SessionItem({
                 </svg>
               </button>
               <button
+                className="sidebar-session-action-button"
                 onClick={handleDeleteClick}
                 title={t("sidebar.deleteWithShiftClick")}
                 style={{

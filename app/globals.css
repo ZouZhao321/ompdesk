@@ -1097,7 +1097,7 @@ pre, code {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) {
   .file-viewer-meta {
     display: none;
   }
@@ -1319,7 +1319,7 @@ span.linenumber {
   border-left: 1px solid var(--border);
   background: var(--bg-panel);
 }
-@media (max-width: 640px) {
+@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) {
   .subagent-column {
     display: none !important;
   }
@@ -1357,7 +1357,7 @@ span.linenumber {
 }
 
 /* Desktop sidebar: animate width */
-@media (min-width: 641px) {
+@media (min-width: 769px) {
   .sidebar-overlay-backdrop {
     display: none !important;
   }
@@ -1414,7 +1414,7 @@ span.linenumber {
 }
 
 /* Compact desktop file panel: overlay the chat instead of collapsing it. */
-@media (min-width: 641px) and (max-width: 959px) {
+@media (min-width: 769px) and (max-width: 959px) {
   .right-panel-resize-handle {
     display: none;
   }
@@ -1457,8 +1457,9 @@ span.linenumber {
   }
 }
 
+/* 移动档：判定规则与 lib/mobile-layout.ts 中的 MOBILE_LAYOUT_QUERY 保持一致。 */
 /* Mobile sidebar: slide in/out as overlay */
-@media (max-width: 640px) {
+@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) {
   .chat-stats-center {
     display: none !important;
   }
@@ -1470,7 +1471,13 @@ span.linenumber {
     width: 280px;
     max-width: 85vw;
     height: var(--app-viewport-height, 100dvh);
+    overflow: visible;
     transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .sidebar-container.sidebar-open,
+  .sidebar-container.sidebar-closed {
+    width: 280px;
+    min-width: 0;
   }
   .sidebar-container.sidebar-open {
     transform: translateX(0);
@@ -1479,6 +1486,68 @@ span.linenumber {
   .sidebar-container.sidebar-closed {
     transform: translateX(calc(-100% - env(safe-area-inset-left)));
     box-shadow: none;
+  }
+  .sidebar-container > * {
+    width: 100%;
+    min-width: 0;
+  }
+  /* 抽屉内的点按目标：会话行与项目行至少 44px 高，行内图标按钮的命中区
+     不小于 44×44，而 svg 自身尺寸保持不变。 */
+  .sidebar-session-row {
+    min-height: 44px;
+  }
+  /* 会话行的悬停操作（重命名/归档/删除）与归档行的恢复按钮在触屏上补足命中区，
+     svg 图标尺寸保持不变；触屏没有悬停态，选中行的操作由组件按 isSelected 常驻。 */
+  .sidebar-session-action-button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .sidebar-session-restore-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .sidebar-project-row {
+    min-height: 44px !important;
+  }
+  .sidebar-project-name {
+    min-height: 44px;
+  }
+  .sidebar-brand-button {
+    min-width: 44px !important;
+    min-height: 44px;
+  }
+  .sidebar-new-session-button {
+    min-width: 44px !important;
+    min-height: 44px;
+  }
+  .sidebar-header-icon-button {
+    min-width: 44px !important;
+    min-height: 44px;
+  }
+  .sidebar-project-icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* 触屏没有悬停态，项目图标常驻显示并保持可点。 */
+  .sidebar-project-icon-reveal {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  .sidebar-show-more {
+    display: inline-flex !important;
+    align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 8px !important;
+  }
+  /* 抽屉底部的归档与设置按钮同样保持 44px 命中高度。 */
+  .sidebar-archived-toggle,
+  .sidebar-settings-button {
+    min-height: 44px;
+  }
+  /* 横屏手机也命中本块，抵消 min-width: 769px 桌面规则留下的隐藏与定宽。 */
+  .sidebar-overlay-backdrop {
+    display: block !important;
   }
 
   .right-panel-container {
@@ -1503,6 +1572,13 @@ span.linenumber {
     width: 100%;
     min-width: 0;
   }
+  /* 文件面板页签栏与手机顶栏同高；右侧 44px 内边距让悬浮的面板开关
+     （z-index 300）不会盖住最后一个页签的关闭按钮。页签高度与关闭按钮命中区
+     由 TabBar 按 useIsMobile() 取自 MOBILE_HIT_TARGET_PX，这里不再覆盖。 */
+  .panel-tab-bar {
+    padding-right: 44px;
+    box-sizing: border-box;
+  }
   .panel-resize-handle,
   .right-panel-overlay-backdrop {
     display: none;
@@ -1518,6 +1594,40 @@ span.linenumber {
   .directory-picker-footer {
     flex-wrap: wrap;
     padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+  }
+  /* 消息区：操作条、工具调用行、流程折叠与文件 chip 的命中区不小于 44×44，
+     文字与图标尺寸保持不变。触屏没有悬停态，消息操作条常驻显示。 */
+  .message-action-reveal {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  .message-action-button,
+  .message-inline-action,
+  .file-chip-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .message-reveal-button,
+  .compaction-file-summary,
+  .tool-call-toggle {
+    min-height: 44px;
+  }
+  .compaction-file-summary {
+    padding-block: 14px;
+  }
+  .tool-call-toggle {
+    width: 100%;
+  }
+  .process-details-toggle {
+    min-width: 44px;
+    min-height: 44px !important;
+  }
+  /* 分支树的一行桌面档只有 24px 高，手机档补到可点面积。 */
+  .branch-tree-row {
+    min-height: 44px;
   }
   textarea,
   input,
