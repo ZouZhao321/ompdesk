@@ -1,3 +1,4 @@
+import type { existsSync as ExistsSync } from "node:fs";
 import type { pathToFileURL as PathToFileURL } from "node:url";
 import type { configureHttpDispatcher as ConfigureHttpDispatcher } from "@/lib/http-dispatcher";
 import type { startLogging as StartLogging } from "@/lib/logging-startup";
@@ -5,6 +6,7 @@ import { importRuntimeModule } from "@/lib/runtime-import";
 
 type DispatcherModule = { configureHttpDispatcher: typeof ConfigureHttpDispatcher };
 type LoggingModule = { startLogging: typeof StartLogging };
+type FsModule = { existsSync: typeof ExistsSync };
 
 /**
  * 本地 TypeScript 源码的 file URL。
@@ -18,17 +20,24 @@ async function localModuleUrl(relativePath: string): Promise<string> {
   return pathToFileURL(`${process.cwd()}/${relativePath}`).href;
 }
 
-/** 加载仓库内的本地模块并执行它；源码缺失按预期降级，其它错误保留堆栈。 */
+/** 入口源码在本进程的文件系统里是否存在；只用于探测，不参与 import。 */
+async function localModuleExists(relativePath: string): Promise<boolean> {
+  const { existsSync } = await importRuntimeModule<FsModule>("node:fs");
+  return existsSync(`${process.cwd()}/${relativePath}`);
+}
+
+/** 加载仓库内的本地模块并执行它；入口缺失按预期降级，其余失败保留堆栈。 */
 async function runLocalModule<T>(relativePath: string, label: string, run: (loaded: T) => Promise<void> | void): Promise<void> {
+  // 判定入口文件是否存在，不看错误码：模块自身的依赖缺失同样是 `ERR_MODULE_NOT_FOUND`，
+  // 那种情况要留下堆栈，不能被当成“没有这份源码”。
+  if (!(await localModuleExists(relativePath))) {
+    console.warn(`[ompdesk] ${label}源码不存在，已跳过`);
+    return;
+  }
   try {
     const loaded = await importRuntimeModule<T>(await localModuleUrl(relativePath));
     await run(loaded);
   } catch (error) {
-    // 源码缺失是可预期的情况（npm 包与桌面壳只分发构建产物）；其它错误说明模块本身有问题。
-    if ((error as NodeJS.ErrnoException).code === "ERR_MODULE_NOT_FOUND") {
-      console.warn(`[ompdesk] ${label}源码不存在，已跳过`);
-      return;
-    }
     console.error(`[ompdesk] ${label}执行失败：`, error);
   }
 }
