@@ -73,6 +73,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
     },
     img({ src, alt, ...props }) {
       delete props.node;
+      if (typeof src !== "string") return null;
       return <MarkdownImage src={src} alt={alt} baseDir={cwd} sourceSessionId={sessionId} imgProps={props} />;
     },
     table({ children }) {
