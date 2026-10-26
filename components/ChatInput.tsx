@@ -1512,16 +1512,26 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => removeImage(i)}
                   style={{
-                    position: "absolute", top: -4, right: -4,
-                    width: 16, height: 16, borderRadius: "50%",
-                    background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    position: "absolute",
+                    top: isMobile ? -14 : -4,
+                    right: isMobile ? -14 : -4,
+                    // 手机档把命中区放大到 44px，圆点外观保持不变。
+                    width: isMobile ? MOBILE_HIT_TARGET_PX : 16,
+                    height: isMobile ? MOBILE_HIT_TARGET_PX : 16,
                     display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "none", border: "none",
                     cursor: "pointer", padding: 0, color: "var(--text-muted)",
                   }}
                 >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
-                  </svg>
+                  <span style={{
+                    width: 16, height: 16, borderRadius: "50%",
+                    background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
+                    </svg>
+                  </span>
                 </button>
               </div>
             ))}
@@ -1595,6 +1605,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         alignItems: "flex-start",
                         gap: 8,
                         padding: "7px 8px",
+                        // 手机档浮层条目也要够 44px 高才点得准。
+                        minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                         border: "none",
                         borderRadius: 6,
                         background: active ? "var(--bg-selected)" : "none",
@@ -1832,6 +1844,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                             alignItems: "center",
                             gap: 8,
                             padding: "6px 8px",
+                            // 手机档浮层条目也要够 44px 高才点得准。
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             border: "none",
                             borderRadius: 6,
                             background: active ? "var(--bg-selected)" : "none",

@@ -467,7 +467,9 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
   控件按 `MOBILE_HIT_TARGET_PX`（44px）给命中区。TSX 中的尺寸直接引用该常量，
   不要重写 `44`；CSS 无法导入 TS 常量，`app/globals.css` 内的手机查询使用等值
   的 `44px`。分支树的每一行桌面档只有 24px 高，手机档由 `.branch-tree-row`
-  补到 44px。
+  补到 44px。文件面板的页签栏高度、页签高度与关闭按钮命中区同理由
+  `components/TabBar.tsx` 按 `useIsMobile()` 取常量，CSS 里的手机查询只保留
+  `.panel-tab-bar` 的右侧内边距给悬浮的面板开关，不再用 `!important` 覆盖尺寸。
 
 ## omp 会话文件格式
 
