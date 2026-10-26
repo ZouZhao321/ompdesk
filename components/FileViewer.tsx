@@ -527,7 +527,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ src: string; w: number; h: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -535,7 +534,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
     setBust(0);
     setSize(null);
     setNaturalSize(null);
-    setError(null);
   }, [filePath, sourceSessionId]);
 
   const watching = useFileWatch({
@@ -545,7 +543,6 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
     onChanged: (d) => {
       if (typeof d.size === "number") setSize(d.size);
       setNaturalSize(null);
-      setError(null);
       setBust((b) => b + 1);
     },
   });
