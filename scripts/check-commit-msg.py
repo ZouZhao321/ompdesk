@@ -9,7 +9,18 @@ MAX_SUBJECT_LENGTH: int = 72
 
 
 def read_subject(path: str) -> str:
-    """读取提交信息文件的首个非空行；文件没有内容时返回空串，git 写入的 `#` 注释行不算标题。"""
+    """读取提交信息文件的首个有效行。
+
+    Args:
+        path (str): 提交信息文件路径，由 commit-msg 钩子传入。
+
+    Returns:
+        str: 首个非空且不以 `#` 开头的行；没有有效标题时返回空串。
+
+    Raises:
+        OSError: 文件无法读取时抛出。
+        UnicodeDecodeError: 文件不是 UTF-8 编码时抛出。
+    """
     with open(path, encoding="utf-8") as message_file:
         for line in message_file:
             stripped = line.rstrip("\r\n")
@@ -19,7 +30,14 @@ def read_subject(path: str) -> str:
 
 
 def validate(subject: str) -> Optional[str]:
-    """校验提交标题，返回 None 表示通过，否则返回中文错误原因。"""
+    """校验提交标题。
+
+    Args:
+        subject (str): 提交信息文件中的首个有效行。
+
+    Returns:
+        Optional[str]: None 表示通过，否则返回中文错误原因。
+    """
     if not subject:
         return "提交标题为空"
     if any(subject.startswith(prefix) for prefix in SKIP_PREFIXES):
@@ -39,7 +57,11 @@ def validate(subject: str) -> Optional[str]:
 
 
 def main() -> int:
-    """校验命令行指定的提交信息文件，返回 0 通过、1 不合规、2 用法错误。"""
+    """校验命令行指定的提交信息文件。
+
+    Returns:
+        int: 0 表示通过，1 表示标题不合规，2 表示用法错误。
+    """
     if len(sys.argv) != 2:
         print("用法：python scripts/check-commit-msg.py <提交信息文件>", file=sys.stderr)
         return 2
