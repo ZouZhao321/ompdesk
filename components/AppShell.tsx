@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, type CSSProperties } from "react";
+import { useState, useCallback, useRef, useEffect, memo, type CSSProperties, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
-import { SubagentPanel } from "./SubagentPanel";
+import { SubagentPanel, isSubagentActive } from "./SubagentPanel";
 import { ChatWindow } from "./ChatWindow";
 import { FileExplorerPanel } from "./FileExplorerPanel";
 import { FileViewer } from "./FileViewer";
-import { TabBar, type Tab } from "./TabBar";
+import { TabBar } from "./TabBar";
+import { PanelViewIcon } from "./PanelViewIcon";
 import { SettingsConfig } from "./SettingsConfig";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { OmpUpdateIndicator } from "./OmpUpdateIndicator";
@@ -24,7 +25,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { canApplySessionIdentity, type SessionIdentity } from "@/lib/agent-client";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
-import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
+import { PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type FileTab, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -39,8 +40,6 @@ import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
   getSidebarMaxWidth,
-  RIGHT_PANEL_EXPLORER_MIN_HEIGHT,
-  RIGHT_PANEL_EXPLORER_SHARE_PERCENT,
   RIGHT_PANEL_FALLBACK_WIDTH,
   RIGHT_PANEL_HEADER_RESERVED_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
@@ -53,6 +52,12 @@ import type { BlockingExtensionUiRequest, SessionInfo, SessionTreeNode, Subagent
 import type { ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/omp-types";
+
+// 隐藏标签只切换 display，仍然参与渲染；用 memo 让它们的正文在 AppShell
+// 重渲染（面板拖动、子代理快照更新）时保持不动。
+const MemoFileViewer = memo(FileViewer);
+const MemoFileExplorerPanel = memo(FileExplorerPanel);
+const MemoSubagentPanel = memo(SubagentPanel);
 
 type SessionCopyField = "file" | "id";
 type AutoNameStatus =
@@ -209,6 +214,68 @@ function AutoNameAction({
   );
 }
 
+/** 穷举分支的兜底：新增标签类型却漏了分支时，编译期在调用处报错。 */
+function assertNever(value: never): never {
+  throw new Error(`Unexpected panel tab: ${String(value)}`);
+}
+
+/** 面板头部的视图入口：点击把对应视图作为标签页打开或关闭。 */
+function PanelViewButton({
+  active,
+  title,
+  onClick,
+  size,
+  showDot,
+  children,
+}: {
+  active: boolean;
+  title: string;
+  onClick: () => void;
+  size: number;
+  showDot?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: size,
+        height: size,
+        padding: 0,
+        flexShrink: 0,
+        background: active ? "var(--bg-selected)" : "none",
+        border: "none",
+        borderRadius: 5,
+        color: active ? "var(--text)" : "var(--text-muted)",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+      {showDot && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 5,
+            right: 5,
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: "var(--accent)",
+          }}
+        />
+      )}
+    </button>
+  );
+}
+
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -246,7 +313,6 @@ export function AppShell() {
   const [projectTrustError, setProjectTrustError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [explorerOpen, setExplorerOpen] = useState(true);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
@@ -308,11 +374,6 @@ export function AppShell() {
   }, [isMobile]);
   useEffect(() => {
     setMobileSidebarReady(true);
-  }, []);
-  // Browser storage is unavailable during server rendering, so the explorer
-  // preference is restored after hydration.
-  useEffect(() => {
-    setExplorerOpen(loadExplorerOpen());
   }, []);
   useEffect(() => {
     if (!rightPanelOpen) return;
@@ -419,9 +480,9 @@ export function AppShell() {
     return () => ro.disconnect();
   }, [activeTopPanel, isMobile]);
 
-  // Right panel — file tabs and explorer
-  const [fileTabs, setFileTabs] = useState<Tab[]>([]);
-  const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
+  // Right panel — one tab page holding the explorer, the subagents view, and files
+  const [panelTabs, setPanelTabs] = useState<Tab[]>([]);
+  const [activePanelTabId, setActivePanelTabId] = useState<string | null>(null);
 
   // Same @mention format as the chat input's @ autocomplete, so the agent's
   // read tool resolves it the same way (it strips the @ prefix).
@@ -579,13 +640,12 @@ export function AppShell() {
     setBranchTree([]);
     setBranchActiveLeafId(null);
     setActiveTopPanel(null);
-    // File tabs are keyed by absolute path, so tabs opened in the previous
-    // project would otherwise linger after switching to a different project.
-    // Reached only past the same-project early return above, so worktrees of
-    // one repo keep their open tabs. The panel stays open: the explorer inside
-    // it follows the new cwd.
-    setFileTabs([]);
-    setActiveFileTabId(null);
+    // Tabs are keyed by absolute path, so tabs opened in the previous project
+    // would otherwise linger after switching to a different project. Reached
+    // only past the same-project early return above, so worktrees of one repo
+    // keep their open tabs. The panel stays open with an empty tab page.
+    setPanelTabs([]);
+    setActivePanelTabId(null);
     // Restore the workspace we switched to: its last open session, or keep
     // the default welcome page when none is remembered.
     restoreWorkspaceContext(newProject);
@@ -832,14 +892,6 @@ export function AppShell() {
     setExplorerRefreshKey((k) => k + 1);
   }, []);
 
-  const handleToggleExplorer = useCallback(() => {
-    setExplorerOpen((open) => {
-      const next = !open;
-      saveExplorerOpen(next);
-      return next;
-    });
-  }, []);
-
   const handleInitialRestoreDone = useCallback(() => {
     setInitialSessionRestored(true);
   }, []);
@@ -867,29 +919,31 @@ export function AppShell() {
     const sourceSessionId = options?.sourceSessionId;
     const modeHint = options?.modeHint;
     const tabId = `file:${filePath}`;
-    setFileTabs((prev) => {
+    setPanelTabs((prev) => {
       const existing = prev.find((t) => t.id === tabId);
       if (!existing) {
         return [...prev, {
           id: tabId,
+          kind: "file",
           label: fileName,
           filePath,
           sourceSessionId,
           initialDisplayMode: modeHint,
-        }];
+        } satisfies FileTab];
       }
+      if (existing.kind !== "file") return prev;
       const sourceUnchanged = !sourceSessionId || existing.sourceSessionId === sourceSessionId;
       const modeUnchanged = !modeHint || existing.initialDisplayMode === modeHint;
       if (sourceUnchanged && modeUnchanged) return prev;
-      return prev.map((t) => {
-        if (t.id !== tabId) return t;
-        const next: Tab = { ...t };
-        if (sourceSessionId) next.sourceSessionId = sourceSessionId;
-        if (modeHint) next.initialDisplayMode = modeHint;
-        return next;
-      });
+      return prev.map((t) => t.id === tabId && t.kind === "file"
+        ? {
+            ...t,
+            ...(sourceSessionId ? { sourceSessionId } : {}),
+            ...(modeHint ? { initialDisplayMode: modeHint } : {}),
+          }
+        : t);
     });
-    setActiveFileTabId(tabId);
+    setActivePanelTabId(tabId);
     setRightPanelOpen(true);
     // On mobile the file panel is full-screen; close the drawer so it shows.
     if (isMobile) setSidebarOpen(false);
@@ -899,15 +953,31 @@ export function AppShell() {
     handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
   }, [handleOpenFile, selectedSession?.id]);
 
-  const handleCloseFileTab = useCallback((tabId: string) => {
-    // The panel also hosts the explorer, so closing the last tab leaves it open.
-    setFileTabs((prev) => prev.filter((t) => t.id !== tabId));
-    setActiveFileTabId((cur) => {
+  // 文件标签打开的链接沿用该标签的 sourceSessionId；身份稳定，标签正文才能用 memo。
+  const handleOpenFileFromViewer = useCallback((filePath: string, sourceSessionId?: string | null) => {
+    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId });
+  }, [handleOpenFile]);
+
+  const handleClosePanelTab = useCallback((tabId: string) => {
+    setPanelTabs((prev) => prev.filter((t) => t.id !== tabId));
+    setActivePanelTabId((cur) => {
       if (cur !== tabId) return cur;
-      const remaining = fileTabs.filter((t) => t.id !== tabId);
+      const remaining = panelTabs.filter((t) => t.id !== tabId);
       return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
     });
-  }, [fileTabs]);
+  }, [panelTabs]);
+
+  // 视图入口按钮：未打开时加入标签页并切过去，已是当前标签时再点一次收起。
+  const handleToggleViewTab = useCallback((kind: PanelViewKind) => {
+    const tab = panelViewTab(kind);
+    if (activePanelTabId === tab.id) {
+      handleClosePanelTab(tab.id);
+      return;
+    }
+    setPanelTabs((prev) => prev.some((t) => t.id === tab.id) ? prev : [...prev, tab]);
+    setActivePanelTabId(tab.id);
+    setRightPanelOpen(true);
+  }, [activePanelTabId, handleClosePanelTab, setPanelTabs]);
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -925,7 +995,6 @@ export function AppShell() {
   const mobileSessionTitle = selectedSession
     ? sessionDisplayTitle(selectedSession)
     : "";
-  const showSubagentPanel = !isMobile && selectedSession !== null && subagents.length > 0;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
@@ -975,19 +1044,61 @@ export function AppShell() {
     }
   }, [projectTrustBusy, projectTrustCwd]);
 
-  const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
+  const activePanelTab = panelTabs.find((t) => t.id === activePanelTabId) ?? null;
+  const runningSubagentCount = subagents.filter(isSubagentActive).length;
+  const renderedPanelTabs = runningSubagentCount > 0
+    ? panelTabs.map((tab) => tab.kind === "subagents" ? { ...tab, badge: runningSubagentCount } : tab)
+    : panelTabs;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ompdesk` : "ompdesk";
-  // Explorer section geometry: header only when collapsed, the full panel when
-  // no file is open, and a fixed share of the panel height when a file is open.
-  const explorerSectionFlex = !explorerOpen
-    ? "0 0 auto"
-    : activeFileTab
-      ? `0 0 ${RIGHT_PANEL_EXPLORER_SHARE_PERCENT}%`
-      : "1 1 auto";
-  const explorerSectionMinHeight = explorerOpen && activeFileTab
-    ? RIGHT_PANEL_EXPLORER_MIN_HEIGHT
-    : 0;
+
+  // 标签正文按 kind 穷举；新增类型时 default 分支的 never 赋值会编译报错。
+  const panelTabBody = (tab: Tab) => {
+    switch (tab.kind) {
+      case "file":
+        return (
+          <MemoFileViewer
+            filePath={tab.filePath}
+            cwd={activeCwd ?? undefined}
+            sourceSessionId={tab.sourceSessionId}
+            active={tab.id === activePanelTabId && rightPanelOpen}
+            gitRefreshKey={explorerRefreshKey}
+            initialDisplayMode={tab.initialDisplayMode}
+            onMentionLines={handleFileLineMention}
+            onAtMention={handleAtMention}
+            onOpenFile={handleOpenFileFromViewer}
+          />
+        );
+      case "explorer":
+        return activeCwd ? (
+          <MemoFileExplorerPanel
+            cwd={activeCwd}
+            onOpenFile={handleOpenFile}
+            refreshKey={explorerRefreshKey}
+            onRefresh={handleExplorerRefresh}
+            onAtMention={handleAtMention}
+            onAtMentions={handleAtMentions}
+          />
+        ) : (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
+            {translate("files.noProject")}
+          </div>
+        );
+      case "subagents":
+        return (
+          <MemoSubagentPanel
+            sessionId={selectedSession?.id ?? null}
+            runtimeId={selectedSession?.runtimeId}
+            onRuntimeIdentity={handleRuntimeIdentity}
+            cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
+            subagents={subagents}
+            active={tab.id === activePanelTabId && rightPanelOpen}
+          />
+        );
+      default:
+        return assertNever(tab);
+    }
+  };
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -1051,7 +1162,9 @@ export function AppShell() {
        aria-controls="file-panel"
        aria-expanded={rightPanelOpen}
        title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-       aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+       aria-label={runningSubagentCount > 0
+         ? `${rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")} · ${translate("subagents.runningCount", { count: runningSubagentCount })}`
+         : (rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel"))}
       style={{
         ...FILE_PANEL_TOGGLE_STYLE,
         ...(isMobile
@@ -1077,6 +1190,28 @@ export function AppShell() {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
       </svg>
+      {runningSubagentCount > 0 && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: isMobile ? 4 : 2,
+            right: isMobile ? 4 : 2,
+            minWidth: 15,
+            height: 15,
+            padding: "0 4px",
+            borderRadius: 8,
+            background: "var(--accent)",
+            color: "var(--bg)",
+            fontSize: 9,
+            fontWeight: 700,
+            lineHeight: "15px",
+            textAlign: "center",
+          }}
+        >
+          {runningSubagentCount}
+        </span>
+      )}
     </button>
   );
 
@@ -1948,17 +2083,6 @@ export function AppShell() {
             )
           ) : null}
           </div>
-          {showSubagentPanel && (
-            <div className="subagent-column">
-              <SubagentPanel
-                sessionId={selectedSession?.id ?? null}
-                runtimeId={selectedSession?.runtimeId}
-                onRuntimeIdentity={handleRuntimeIdentity}
-                cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
-                subagents={subagents}
-              />
-            </div>
-          )}
         </div>
       </div>
 
@@ -1981,6 +2105,7 @@ export function AppShell() {
       <div
         ref={rightPanelResizer.panelRef}
         id="file-panel"
+        inert={!rightPanelOpen}
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
@@ -1990,7 +2115,7 @@ export function AppShell() {
           background: "var(--bg)",
         } as React.CSSProperties}
       >
-        {/* Right panel header: open file tabs, or the project name when none are open */}
+        {/* Right panel header: view entries and the open tab strip */}
         <div className="panel-tab-header" style={{
           display: "flex",
           alignItems: "center",
@@ -2000,74 +2125,117 @@ export function AppShell() {
           background: "var(--bg-panel)",
           borderBottom: "1px solid var(--border)",
         }}>
-          {fileTabs.length > 0 ? (
-            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-              <TabBar
-                tabs={fileTabs}
-                activeTabId={activeFileTabId ?? ""}
-                onSelectTab={setActiveFileTabId}
-                onCloseTab={handleCloseFileTab}
-              />
-            </div>
-          ) : (
-            <div style={{
-              flex: 1, minWidth: 0, padding: "0 12px",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
-              textTransform: "uppercase", color: "var(--text-dim)",
-            }}>
-              {activeCwdName ?? translate("files.explorer")}
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, paddingLeft: 4 }}>
+            <PanelViewButton
+              active={activePanelTab?.kind === "explorer"}
+              title={translate("files.explorer")}
+              onClick={() => handleToggleViewTab("explorer")}
+              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+            >
+              <PanelViewIcon kind="explorer" />
+            </PanelViewButton>
+            <PanelViewButton
+              active={activePanelTab?.kind === "subagents"}
+              title={translate("subagents.title")}
+              onClick={() => handleToggleViewTab("subagents")}
+              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+              showDot={runningSubagentCount > 0 && activePanelTab?.kind !== "subagents"}
+            >
+              <PanelViewIcon kind="subagents" />
+            </PanelViewButton>
+          </div>
+          <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+            <TabBar
+              tabs={renderedPanelTabs}
+              activeTabId={activePanelTabId}
+              onSelectTab={setActivePanelTabId}
+              onCloseTab={handleClosePanelTab}
+            />
+          </div>
+          {/* The fixed panel toggle sits in this corner. On mobile the top bar
+              owns the toggle and the tab bar already reserves its width. */}
+          {!isMobile && (
+            <div style={{ width: RIGHT_PANEL_HEADER_RESERVED_WIDTH, flexShrink: 0 }} aria-hidden="true" />
           )}
-          {/* The fixed panel toggle sits in this corner. */}
-          <div style={{ width: RIGHT_PANEL_HEADER_RESERVED_WIDTH, flexShrink: 0 }} aria-hidden="true" />
         </div>
 
-        {rightPanelOpen && activeCwd && (
+        {renderedPanelTabs.map((tab) => (
+          <div
+            key={tab.id}
+            style={{
+              display: tab.id === activePanelTabId ? "flex" : "none",
+              flexDirection: "column",
+              flex: 1,
+              minHeight: 0,
+              overflow: "hidden",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
+          >
+            {panelTabBody(tab)}
+          </div>
+        ))}
+        {renderedPanelTabs.length === 0 && (
           <div style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
             display: "flex",
             flexDirection: "column",
-            flex: explorerSectionFlex,
-            minHeight: explorerSectionMinHeight,
-            overflow: "hidden",
-            borderBottom: activeFileTab ? "1px solid var(--border)" : "none",
+            gap: 2,
+            padding: "10px 8px",
+            paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
           }}>
-            <FileExplorerPanel
-              cwd={activeCwd}
-              open={explorerOpen}
-              onToggleOpen={handleToggleExplorer}
-              onOpenFile={handleOpenFile}
-              refreshKey={explorerRefreshKey}
-              onRefresh={handleExplorerRefresh}
-              onAtMention={handleAtMention}
-              onAtMentions={handleAtMentions}
-            />
+            {PANEL_VIEW_KINDS.map((kind) => (
+              <button
+                key={kind}
+                onClick={() => handleToggleViewTab(kind)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  height: isMobile ? MOBILE_HIT_TARGET_PX : 30,
+                  padding: "0 8px",
+                  flexShrink: 0,
+                  background: "none",
+                  border: "none",
+                  borderRadius: 6,
+                  color: "var(--text-muted)",
+                  fontSize: 12,
+                  textAlign: "left",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "none";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }}
+              >
+                <PanelViewIcon kind={kind} />
+                {translate(PANEL_VIEW_LABEL_KEYS[kind])}
+                {kind === "subagents" && runningSubagentCount > 0 && (
+                  <span style={{
+                    marginLeft: "auto",
+                    minWidth: 16,
+                    height: 16,
+                    padding: "0 5px",
+                    borderRadius: 8,
+                    background: "var(--bg-selected)",
+                    color: "var(--accent)",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    lineHeight: "16px",
+                    textAlign: "center",
+                  }}>
+                    {runningSubagentCount}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         )}
-
-        {/* File content */}
-        {activeFileTab?.filePath ? (
-          <div style={{ flex: 1, minHeight: 0, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
-            <FileViewer
-              filePath={activeFileTab.filePath}
-              cwd={activeCwd ?? undefined}
-              sourceSessionId={activeFileTab.sourceSessionId}
-              gitRefreshKey={explorerRefreshKey}
-              initialDisplayMode={activeFileTab.initialDisplayMode}
-              onMentionLines={rightPanelOpen ? handleFileLineMention : undefined}
-              onAtMention={handleAtMention}
-              onOpenFile={(filePath) => handleOpenFile(
-                filePath,
-                getFileName(filePath),
-                { sourceSessionId: activeFileTab.sourceSessionId },
-              )}
-            />
-          </div>
-        ) : !explorerOpen || !activeCwd ? (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            {translate("files.noneOpen")}
-          </div>
-        ) : null}
       </div>
     </div>
     {/* File panel toggle — desktop fixed overlay; on mobile it sits at the end of the top bar */}
