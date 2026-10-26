@@ -11,7 +11,7 @@
 
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -402,15 +402,15 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
     Ok(())
 }
 
-/// What a connect probe proved about the port.
+/// What a probe proved about the port.
 ///
-/// A probe separates a live listener from a socket lingering in TIME_WAIT: the
-/// listener accepts the connection, the lingering socket refuses it, so a
-/// recently closed server never blocks the next launch. The refusal may arrive
-/// as a reset right after a restart, so a free verdict is repeated a few times
-/// before it is reported.
+/// 连接探测负责认出「有人在 accept」：监听者接受连接，残留的 TIME_WAIT 套接字
+/// 拒绝连接，已退出的服务因此不会挡住下一次启动。但连接结果不能单独用来判
+/// 「空闲」：Windows 把一次被拒绝的 loopback 连接报成 `TimedOut`，只看连接就会
+/// 把空闲端口判成未确认、启动直接拒绝。确认能绑定才是启动真正需要的动作，所以
+/// 没有连接 accept 之后由 [`confirm_free`] 用一次 bind 定案。
 enum PortStatus {
-    /// Nothing listens: the port can be bound.
+    /// Nothing holds the port: it can be bound.
     Free,
     /// A listener accepted the connection: the port is definitely taken.
     Occupied,
@@ -427,16 +427,35 @@ fn probe_port(port: u16) -> PortStatus {
         }
         match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
             Ok(_) => return PortStatus::Occupied,
+            // 超时不足以证明空闲：有的平台把拒绝报成超时，交给 bind 定案。
+            Err(error) if error.kind() == ErrorKind::TimedOut => break,
             Err(error) if is_no_listener_error(error.kind()) => {}
             Err(error) => return PortStatus::Unconfirmed(error.to_string()),
         }
     }
-    // 每次尝试都没有进程 accept 这个连接，端口可以绑定。
-    PortStatus::Free
+    confirm_free(addr)
+}
+
+/// 用一次 bind 确认端口空闲：能绑定就是启动时服务器真正要的结果。
+///
+/// 只在这里短暂持有端口，判定完立刻释放。仍绑不上却没人 accept 的端口（例如
+/// 平台不允许复用刚关闭的套接字）既不能证明可用、也不能证明有人在监听，因此报
+/// 未确认而不冒充「已被占用」。
+fn confirm_free(addr: SocketAddr) -> PortStatus {
+    match TcpListener::bind(addr) {
+        Ok(listener) => {
+            drop(listener);
+            PortStatus::Free
+        }
+        Err(error) if error.kind() == ErrorKind::AddrInUse => PortStatus::Unconfirmed(format!(
+            "the port cannot be bound ({error}) even though no connection was accepted"
+        )),
+        Err(error) => PortStatus::Unconfirmed(error.to_string()),
+    }
 }
 
 /// 无人 accept 的错误：拒绝、复位与中断都算。服务刚退出或刚绑定的瞬间，本机
-/// 可能先回 RST 而不是干净的拒绝，所以探测会短重试几次再下结论。
+/// 可能先回 RST 而不是干净的拒绝，所以探测会短重试几次再确认。
 fn is_no_listener_error(kind: ErrorKind) -> bool {
     matches!(
         kind,
@@ -617,8 +636,6 @@ fn loopback_no_proxy() -> Option<String> {
 mod tests {
     use super::*;
 
-    use std::net::TcpListener;
-
     // A held port must be rejected loudly instead of falling back to a
     // different port; the same probe must pass once the holder is gone.
     #[test]
@@ -671,25 +688,40 @@ mod tests {
         assert_eq!(SERVER_PORT, 30141);
     }
 
-    // 关闭监听后不能再说「有人在 accept」。平台差异只影响 Free 与 Unconfirmed
-    // 的取舍：Windows 的 connect_timeout 会把拒绝报成超时，两种结果都不该是
-    // Occupied，否则端口会被误判成仍被占用。
+    // 刚释放的端口与从未监听的端口都必须判 Free。Windows 的 connect_timeout 会把
+    // 「拒绝」报成超时，只看连接就会把空闲端口判成未确认，桌面壳因此拒绝启动。
     #[test]
-    fn closed_listener_is_never_reported_as_occupied() {
-        let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .expect("bind an ephemeral port to stand in for a closed server");
-        let port = listener.local_addr().expect("ephemeral address").port();
-        drop(listener);
+    fn idle_loopback_ports_probe_as_free() {
+        for _ in 0..3 {
+            let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+                .expect("bind an ephemeral port to stand in for an idle port");
+            let port = listener.local_addr().expect("ephemeral address").port();
+            drop(listener);
 
-        let status = probe_port(port);
-        let label = match &status {
-            PortStatus::Free => String::from("free"),
-            PortStatus::Occupied => String::from("occupied"),
-            PortStatus::Unconfirmed(reason) => format!("unconfirmed: {reason}"),
-        };
+            let status = probe_port(port);
+            let label = match &status {
+                PortStatus::Free => String::from("free"),
+                PortStatus::Occupied => String::from("occupied"),
+                PortStatus::Unconfirmed(reason) => format!("unconfirmed: {reason}"),
+            };
+            assert!(
+                matches!(status, PortStatus::Free),
+                "an idle port must probe as free, got {label}"
+            );
+        }
+    }
+
+    // bind 兜底位于「没人 accept」之后，因此不能把被别人监听的端口判成空闲。
+    #[test]
+    fn bind_confirmation_keeps_a_held_port_taken() {
+        let held = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+            .expect("bind an ephemeral port to stand in for a running server");
+        let port = held.local_addr().expect("ephemeral address").port();
+
+        let status = confirm_free(SocketAddr::from((Ipv4Addr::LOCALHOST, port)));
         assert!(
-            !matches!(status, PortStatus::Occupied),
-            "a closed listener must not look occupied, got {label}"
+            !matches!(status, PortStatus::Free),
+            "a port another process holds must never be confirmed free"
         );
     }
 
