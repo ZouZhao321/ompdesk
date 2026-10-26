@@ -205,6 +205,26 @@ test("leaves marking a clicked session read to the shared open path", () => {
   assert.doesNotMatch(treeSource, /onSelectSession=\{handleSelectSessionFromList\}/);
 });
 
+test("恢复出来的会话不留未读标记", () => {
+  const restoreEffect = sliceBetween(
+    source,
+    "// Auto-select cwd and restore session from URL on first load",
+    "const commitCustomPath",
+  );
+  // 父组件的自动恢复（isRestore）不清未读：恢复路径自己补清，再交给父组件选中。
+  assert.match(
+    restoreEffect,
+    /launchSessionIdRef\.current = target\.id;\s*clearUnreadSessionIds\(\[target\.id\]\);\s*onSelectSession\(target, true\);/,
+    "恢复选中的会话必须清掉旧标记",
+  );
+  // cwd 由 URL 接管时恢复在父组件里，标记同样在这里清。
+  assert.match(
+    restoreEffect,
+    /if \(initialSessionId\) clearUnreadSessionIds\(\[initialSessionId\]\);/,
+    "URL 里的会话由父组件打开，标记同样要清",
+  );
+});
+
 test("keeps lifecycle markers out of the archived section", () => {
   assert.ok(archivedSectionSource.length > 0);
   assert.doesNotMatch(archivedSectionSource, /SessionMarker|UnreadSessionIndicator|resolveSessionMarker/);
@@ -235,7 +255,11 @@ test("seeds the marker backlog only after the initial restore picked a session",
     "useEffect(() => {\n    let stopped = false;",
   );
   assert.match(seedEffect, /if \(!initialRestoreSettled\) return;\s*if \(allSessions\.length === 0/);
-  assert.match(seedEffect, /\.filter\(\(id\) => id !== selectedSessionId\)/);
+  assert.match(
+    seedEffect,
+    /\.filter\(\(id\) => id !== selectedSessionId && id !== launchSessionIdRef\.current\)/,
+    "播种必须跳过选中会话与启动会话",
+  );
   // 恢复路径负责放行播种，播种因此排在它之后。
   assert.match(source, /setInitialRestoreSettled\(true\);\s*if \(target\) \{/);
 });
