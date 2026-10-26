@@ -22,6 +22,7 @@ import {
   fitZoom,
   isFitCamera,
   panCamera,
+  pinchCamera,
   zoomCameraAt,
   type Size,
   type ZoomCamera,
@@ -247,17 +248,15 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
         const rect = event.currentTarget.getBoundingClientRect();
         const image = naturalSizeRef.current;
         const size = viewportSizeRef.current;
-        const zoomed = zoomCameraAt(
+        const next = pinchCamera(
           cameraRef.current,
-          { x: midpoint.x - rect.left, y: midpoint.y - rect.top },
-          cameraRef.current.scale * (distance / previous.distance),
+          { distance: previous.distance, x: previous.x - rect.left, y: previous.y - rect.top },
+          { distance, x: midpoint.x - rect.left, y: midpoint.y - rect.top },
           image,
           size,
         );
-        if (image.w > 0 && zoomed.scale !== cameraRef.current.scale) adjustedRef.current = true;
-        applyCamera(
-          panCamera(zoomed, midpoint.x - previous.x, midpoint.y - previous.y, image, size),
-        );
+        if (image.w > 0 && next.scale !== cameraRef.current.scale) adjustedRef.current = true;
+        applyCamera(next);
       }
       pinchRef.current = { distance, x: midpoint.x, y: midpoint.y };
       return;
@@ -477,8 +476,6 @@ export function ImagePreviewDialog({ request, onClose }: { request: ImagePreview
 
 const ImagePreviewContext = createContext<((request: ImagePreviewRequest) => void) | null>(null);
 
-const noop = () => {};
-
 /** 全屏图片预览的挂载点，放在应用根部；聊天里任意图片都能通过 useImagePreview() 打开它。 */
 export function ImagePreviewProvider({ children }: { children: React.ReactNode }) {
   const [request, setRequest] = useState<ImagePreviewRequest | null>(null);
@@ -499,7 +496,7 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
 }
 
 export function useImagePreview() {
-  return useContext(ImagePreviewContext) ?? noop;
+  return useContext(ImagePreviewContext);
 }
 
 interface ZoomableImageProps {
@@ -529,8 +526,10 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
 
   if (!src) return null;
 
+  const clickable = openImagePreview !== null;
   const label = alt?.trim() || t("i18n.openImagePreview");
   const open = (event: ReactMouseEvent<HTMLElement> | KeyboardEvent<HTMLImageElement>) => {
+    if (!openImagePreview) return;
     if (event.currentTarget.closest("a")) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
@@ -539,10 +538,14 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
   };
 
   if (thumbnail) {
+    const thumbnailImage = (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt="" style={imgStyle} />
+    );
+    if (!clickable) return thumbnailImage;
     return (
       <button type="button" className="message-image-button" onClick={open} title={label} aria-label={label}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" style={imgStyle} />
+        {thumbnailImage}
       </button>
     );
   }
@@ -550,7 +553,7 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
   const restProps: ImgHTMLAttributes<HTMLImageElement> & { node?: unknown } = { ...imgProps };
   delete restProps.node;
   // 链接关系只能在挂载后从 DOM 读出，服务端渲染先保持普通图片语义。
-  const interactive = insideLink === false;
+  const interactive = clickable && insideLink === false;
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -560,7 +563,7 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
       src={src}
       alt={alt ?? ""}
       loading={restProps.loading ?? "lazy"}
-      className={[restProps.className, className].filter(Boolean).join(" ") || undefined}
+      className={[restProps.className, clickable ? className : undefined].filter(Boolean).join(" ") || undefined}
       style={imgStyle ?? restProps.style}
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}

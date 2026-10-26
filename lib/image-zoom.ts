@@ -92,6 +92,34 @@ export function panCamera(
   return clampCamera({ scale: camera.scale, x: camera.x + dx, y: camera.y + dy }, natural, viewport);
 }
 
+export interface PinchFrame {
+  distance: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * 双指捏合：以旧中点为锚缩放，再按中点位移平移。
+ * 锚点必须取旧中点，否则中点移动时画面会相对手指漂移。
+ */
+export function pinchCamera(
+  camera: ZoomCamera,
+  previous: PinchFrame,
+  next: PinchFrame,
+  natural: Size,
+  viewport: Size,
+): ZoomCamera {
+  if (previous.distance <= 0) return camera;
+  const zoomed = zoomCameraAt(
+    camera,
+    { x: previous.x, y: previous.y },
+    camera.scale * (next.distance / previous.distance),
+    natural,
+    viewport,
+  );
+  return panCamera(zoomed, next.x - previous.x, next.y - previous.y, natural, viewport);
+}
+
 /** 当前比例是否等于适配比例（用于双击切换与「适配」按钮的按下状态）。 */
 export function isFitCamera(camera: ZoomCamera, natural: Size, viewport: Size): boolean {
   return Math.abs(camera.scale - fitZoom(natural, viewport)) < 0.001;
