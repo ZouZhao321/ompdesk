@@ -1856,6 +1856,7 @@ function ArchivedSessionsSection({
             return (
               <div
                 key={s.id}
+                data-session-id={s.id}
                 className="sidebar-session-row"
                 onClick={() => onSelectSession(s)}
                 style={{
@@ -2223,6 +2224,7 @@ function SessionItem({
 
   return (
     <div
+      data-session-id={session.id}
       className="sidebar-session-row"
       onClick={confirmDelete || renaming ? undefined : onClick}
       onContextMenu={confirmDelete || renaming ? undefined : handleContextMenu}
