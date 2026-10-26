@@ -24,11 +24,39 @@
 7. PR 合并且用户同意清理后，才删除 worktree 与分支。
 
 检查范围是本 worktree 的代码。`bun run typecheck`、`bun run lint`、`bun test`、
-合并前的自检与 CI 都以该 worktree 为准，主检出的失败不构成阻塞。主检出的未提交
-内容只挡住合并回主检出这一步：`git merge` 拒绝覆盖它，此时先在主检出提交或暂存，
-或改走 PR 合并。
+合并前的自检与 CI 都以该 worktree 为准，主检出的失败不构成阻塞；失败与本次改动
+无关时，在 PR 描述里写明复现命令。主检出的未提交内容只挡住合并回主检出的这一步：
+`git merge` 拒绝覆盖它，此时先在主检出提交或暂存，或改走 PR 合并。
 
-提交标题遵循 `type(scope): 中文描述`，每个提交只对应一个逻辑变更。
+worktree 之间真正共享的只有 `.git/info/exclude`、`.git/hooks`、`.git/config`、
+stash 记录，以及 `bun run dev` 的 30141 端口与 `~/.omp/agent` 下的会话数据。
+
+提交标题遵循 `type(scope): 中文描述`，`type` 取 `feat`、`fix`、`refactor`、`test`、
+`docs`、`chore`、`perf`；描述结尾不加句号，整行不超过 72 字符；`Merge `、`Revert `、
+`fixup! `、`squash! `、`amend! ` 前缀跳过校验。每个提交只对应一个逻辑变更。
+
+仓库根 `.pre-commit-config.yaml` 在 commit-msg 阶段执行 `scripts/check-commit-msg.py`。
+克隆后执行 `pre-commit install`（未安装时先 `pipx install pre-commit`）装钩子：配置
+已声明 `default_install_hook_types`，这一条命令就会装到 commit-msg 上，标题不合规
+的提交被拒绝。
+
+## 临时文件
+
+所有临时文件都写入 `.tmp/`：探针脚本、日志、截图、导出的 HTML、分析用的下载
+数据，以及其他只在本任务内使用的产物。不得写入系统临时目录、仓库其他位置或
+仓库外的目录。该目录已被 Git 忽略。
+
+- 一个任务一个子目录：`.tmp/<任务名>/`，目录内必须有 `README.md` 写明用途与
+  创建时间。
+- 新目录用 `bun run scratch <任务名> "<用途>"` 创建，不要手工建。
+- 子目录自包含：脚本、输入、输出都放在自己目录内，不与其他任务共享文件，也不
+  写回仓库其他位置。
+- `.tmp/` 可以整体删除，不影响仓库与构建。
+- 位置跟随当前工作区：在 worktree 里执行就建在该 worktree 的 `.tmp/`，随
+  worktree 一起清理。
+- `.tmp/legacy/` 收纳早期的调查产物，内容不再维护。
+
+`.backups/` 由 omp 扩展 `backup-guard` 在改动或删除前自动写入，同样被忽略。
 
 ## 命令
 
@@ -127,6 +155,7 @@ ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `descri
 - `adr/0015-session-status-markers.md`: 标记分动态与静态，静态按未读归属；改侧栏标记、未读或运行结束时读。
 - `adr/0016-mobile-layout-single-source.md`: 移动档只有一条媒体查询，粗指针不看高度；改断点或手机命中区时读。
 - `adr/0017-image-zoom.md`: 缩放与预览共用同一相机模型，适配不放大、锚点取旧中点、失败不留白；改图片查看或预览入口时读。
+- `adr/0018-right-panel-tabs.md`: 右侧面板只有一个标签页面、默认空；标签按 id 常驻，只有当前标签且面板打开时才保留文件监听与子代理补拉；改右侧面板、标签或面板开关时读。
 
 `docs/file-map.md` 按目录列出每个文件的职责（路径加一句话），用于确认某个文件
 属于哪一块；文件是否存在以 `git ls-files` 为准。
