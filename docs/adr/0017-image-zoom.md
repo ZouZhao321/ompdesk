@@ -13,6 +13,8 @@ description: 图片标签页与全屏预览共用同一相机模型，适配不�
 
 尺寸未知时视口中央显示加载提示，加载失败显示失败提示；只有 viewBox 的 SVG 等无固有尺寸的图片退回元素尺寸或 300×150，照常显示。换源先回到加载占位；尺寸相近的刷新保留当前比例与位置，新旧尺寸相差超过 2 倍时重新适配。
 
-聊天里任何图片——用户附件、扩展消息、markdown 内联、文件预览内联——点击都由 `ImagePreviewProvider` 打开同一个全屏预览层；未挂载 Provider 时图片降级为普通图片，不声明按钮语义。预览层是全屏模态层：Esc 只关闭自己，`stopPropagation` 挡住全局 Esc 中止会话；四边按 `env(safe-area-inset-*)` 留白，控制条在粗指针设备按 44px 触摸目标渲染。
+聊天里任何图片——用户附件、扩展消息、markdown 内联、文件预览内联——点击都由 `ImagePreviewProvider` 打开同一个全屏预览层；未挂载 Provider 时图片降级为普通图片，不声明按钮语义。预览层是全屏模态层：Esc 只关闭自己，`stopPropagation` 挡住全局 Esc 中止会话；四边按 `env(safe-area-inset-*)` 留白。
+
+控制条与关闭按钮在移动档按 44px 触摸目标渲染，媒体查询取自 ADR-0016 的单一来源。
 
 markdown 图片的本地路径解析集中在 `components/MarkdownImage.tsx`，两个渲染器共用；聊天侧需要 `sessionId` 才能让允许根之外的路径走会话兜底。

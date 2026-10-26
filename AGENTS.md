@@ -73,6 +73,16 @@ gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
 进程内创建。扩展通过 omp 的 `initializeExtensions()` 绑定，与 `omp --mode rpc`
 同一套接线，上层叠加浏览器实现的 `ExtensionUIContext`。
 
+## 侧边栏项目排序与置顶
+
+- 排序方式为 `time`（默认，最近活动）或 `name`（目录最后一段；同名用完整路径码元顺序）；存在 `ompdesk:project-sort`，`time` 不写键。
+- 置顶序列按点击先后存在 `ompdesk:pinned-projects`；置顶项始终排在未置顶项之前，按归一化键匹配并去重。
+- 归一化规则：反斜杠转 `/`、Windows 盘符路径折叠大小写、去掉结尾分隔符但保留 `/` 与 `c:/`。
+- 置顶只改变项目行顺序；项目内会话仍按写入时间倒序与 fork 缩进。
+- 当前选中但没有会话的项目按置顶位次插入；选中判断与插入去重共用归一化键。
+- 排序菜单支持方向键 / Home / End / Escape；菜单项不在 Tab 序列，焦点离开或选中即收起，关闭统一走 `onDismiss`。
+- 手机档项目行、排序与项目操作菜单控件的可点区域为 `MOBILE_HIT_TARGET_PX`。
+
 ## 会话文件
 
 会话文件在 `~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`，每行一条
@@ -114,7 +124,9 @@ ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `descri
 - `adr/0012-stream-and-running-state.md`: 30 秒宽限与两套集合独立，旧 run id 的迟到事件要丢弃；改流式、轮询或运行状态时读。
 - `adr/0013-project-trust.md`: 未信任项目过滤项目内扩展与工具并禁用 MCP，skills 与 rules 始终加载；改信任开关时读。
 - `adr/0014-theme-and-css.md`: 主题来自 omp，`globals.css` 只是首屏回退；改配色、字体或主题同步时读。
-- `adr/0015-image-zoom.md`: 缩放与预览共用同一相机模型，适配不放大、锚点取旧中点、失败不留白；改图片查看或预览入口时读。
+- `adr/0015-session-status-markers.md`: 标记分动态与静态，静态按未读归属；改侧栏标记、未读或运行结束时读。
+- `adr/0016-mobile-layout-single-source.md`: 移动档只有一条媒体查询，粗指针不看高度；改断点或手机命中区时读。
+- `adr/0017-image-zoom.md`: 缩放与预览共用同一相机模型，适配不放大、锚点取旧中点、失败不留白；改图片查看或预览入口时读。
 
 `docs/file-map.md` 按目录列出每个文件的职责（路径加一句话），用于确认某个文件
 属于哪一块；文件是否存在以 `git ls-files` 为准。
