@@ -24,9 +24,12 @@
 7. PR 合并且用户同意清理后，才删除 worktree 与分支。
 
 检查范围是本 worktree 的代码。`bun run typecheck`、`bun run lint`、`bun test`、
-合并前的自检与 CI 都以该 worktree 为准，主检出的失败不构成阻塞。主检出的未提交
-内容只挡住合并回主检出这一步：`git merge` 拒绝覆盖它，此时先在主检出提交或暂存，
-或改走 PR 合并。
+合并前的自检与 CI 都以该 worktree 为准，主检出的失败不构成阻塞；失败与本次改动
+无关时，在 PR 描述里写明复现命令。主检出的未提交内容只挡住合并回主检出的这一步：
+`git merge` 拒绝覆盖它，此时先在主检出提交或暂存，或改走 PR 合并。
+
+worktree 之间真正共享的只有 `.git/info/exclude`、`.git/hooks`、`.git/config`、
+stash 记录，以及 `bun run dev` 的 30141 端口与 `~/.omp/agent` 下的会话数据。
 
 提交标题遵循 `type(scope): 中文描述`，每个提交只对应一个逻辑变更。
 
