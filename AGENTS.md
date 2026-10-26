@@ -55,6 +55,18 @@ Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 
 把 ompdesk 的工作目录切到那里再开会话。真实项目目录不作为测试数据的写入位置；该
 目录的 `AGENTS.md` 记录复现步骤与预期结果。
 
+## 界面改动
+
+界面改动必须附截图，能录视频的再附一段不超过一分钟的短视频，只演示这次的交互。
+证据上传到 PR 评论的附件区，正文引用那条评论：
+
+```
+gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
+```
+
+`--attach` 需要 gh 2.99 以上；视频单独成段时渲染成播放器。截图与视频不提交进仓库，
+避免占用 git 历史。截图至少覆盖默认状态、关键状态与手机档。
+
 ## 架构不变量
 
 会话浏览只读 `.jsonl`，不创建 `AgentSession`；发消息时 `startRpcSession()` 才在
@@ -114,6 +126,7 @@ ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `descri
 - `adr/0014-theme-and-css.md`: 主题来自 omp，`globals.css` 只是首屏回退；改配色、字体或主题同步时读。
 - `adr/0015-session-status-markers.md`: 标记分动态与静态，静态按未读归属；改侧栏标记、未读或运行结束时读。
 - `adr/0016-mobile-layout-single-source.md`: 移动档只有一条媒体查询，粗指针不看高度；改断点或手机命中区时读。
+- `adr/0017-image-zoom.md`: 缩放与预览共用同一相机模型，适配不放大、锚点取旧中点、失败不留白；改图片查看或预览入口时读。
 
 `docs/file-map.md` 按目录列出每个文件的职责（路径加一句话），用于确认某个文件
 属于哪一块；文件是否存在以 `git ls-files` 为准。
