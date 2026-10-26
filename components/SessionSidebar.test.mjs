@@ -3,12 +3,32 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
-const sessionItemSource = source.slice(source.indexOf("function SessionItem("));
-const indicatorSource = (startMarker, nextMarker) =>
-  source.slice(source.indexOf(startMarker), source.indexOf(nextMarker));
-const archivedSectionSource = source.slice(
-  source.indexOf("function ArchivedSessionsSection("),
-  source.indexOf("function SessionTreeItem("),
+
+/**
+ * 按锚点切片：两个锚点都必须出现，且结束位置在开始之后。
+ * 锚点写错时断言直接失败，不会拿一段错位的源码继续断言。
+ */
+function sliceBetween(text, startMarker, endMarker) {
+  const start = text.indexOf(startMarker);
+  assert.ok(start >= 0, `源码必须包含开始锚点：${startMarker}`);
+  const end = text.indexOf(endMarker, start);
+  assert.ok(end > start, `结束锚点必须出现在开始锚点之后：${endMarker}`);
+  return text.slice(start, end);
+}
+
+/** 从锚点到文件结尾的切片。 */
+function sliceFrom(text, startMarker) {
+  const start = text.indexOf(startMarker);
+  assert.ok(start >= 0, `源码必须包含锚点：${startMarker}`);
+  return text.slice(start);
+}
+
+const sessionItemSource = sliceFrom(source, "function SessionItem(");
+const indicatorSource = (startMarker, nextMarker) => sliceBetween(source, startMarker, nextMarker);
+const archivedSectionSource = sliceBetween(
+  source,
+  "function ArchivedSessionsSection(",
+  "function SessionTreeItem(",
 );
 
 test("only Shift+click bypasses session deletion confirmation", () => {
@@ -133,6 +153,12 @@ test("manual and lifecycle refreshes bypass the server session-list cache", () =
 
 test("does not expose disk-backed actions for transient sessions", () => {
   assert.match(sessionItemSource, /if \(session\.transient\) return;/);
+  // 手机档选中时动作条常驻，瞬时会话同样不能露出磁盘动作。
+  assert.match(
+    sessionItemSource,
+    /\(hovered \|\| \(isMobile && isSelected\)\) && !session\.transient && \(/,
+    "动作条的显示条件必须同时排除瞬时会话",
+  );
 });
 
 test("renders the static lifecycle marker as an animated-free labelled dot", () => {
@@ -154,8 +180,29 @@ test("leaves marking a clicked session read to the shared open path", () => {
     source,
     /const handleSelectSessionFromList = useCallback\(\(s: SessionInfo\) => \{\s*if \(s\.cwd\) setSelectedCwd\(s\.cwd\);\s*onSelectSession\(s\);/,
   );
-  assert.match(source, /onClick=\{\(\) => onSelectSession\(s\)\}/);
   assert.doesNotMatch(source, /setUnreadSessionIds/);
+
+  // 会话树与归档区都接到同一个入口；归档区自己的 onClick 不算接线。
+  const wiring = source.match(/onSelectSession=\{handleSelectSessionFromList\}/g) ?? [];
+  assert.equal(wiring.length, 2, "会话树与归档区都必须接到 handleSelectSessionFromList");
+
+  // 树里的两处接线：行点击与子节点转发，都只能用父组件传下来的入口。
+  const treeSource = sliceBetween(
+    source,
+    "function SessionTreeItem(",
+    "function RunningSessionIndicator(",
+  );
+  assert.equal(
+    (treeSource.match(/onClick=\{\(\) => onSelectSession\(node\.session\)\}/g) ?? []).length,
+    1,
+    "行点击必须接到父组件传入的入口",
+  );
+  assert.equal(
+    (treeSource.match(/onSelectSession=\{onSelectSession\}/g) ?? []).length,
+    1,
+    "子节点必须转发同一个入口",
+  );
+  assert.doesNotMatch(treeSource, /onSelectSession=\{handleSelectSessionFromList\}/);
 });
 
 test("keeps lifecycle markers out of the archived section", () => {
@@ -164,11 +211,11 @@ test("keeps lifecycle markers out of the archived section", () => {
 });
 
 test("reconciles markers and running state when the page becomes visible again", () => {
-  const visibilityHandler = source.slice(
-    source.indexOf("const onVisibilityChange = () => {"),
-    source.indexOf('document.addEventListener("visibilitychange", onVisibilityChange)'),
+  const visibilityHandler = sliceBetween(
+    source,
+    "const onVisibilityChange = () => {",
+    'document.addEventListener("visibilitychange", onVisibilityChange)',
   );
-  assert.ok(visibilityHandler.length > 0, "onVisibilityChange must exist");
   assert.match(visibilityHandler, /if \(document\.visibilityState === "visible"\) \{[\s\S]*?void poll\(\);/);
   // 默认只轻量读取：只有失联过或隐藏期间确有运行在跑，才绕过缓存重扫。
   assert.match(visibilityHandler, /loadSessions\(false, mayHaveFinished\)/);
@@ -182,9 +229,10 @@ test("remembers that the server went away while a session was running", () => {
 });
 
 test("seeds the marker backlog only after the initial restore picked a session", () => {
-  const seedEffect = source.slice(
-    source.indexOf("// 首次加载时把浏览器的异常存量加入未读集合"),
-    source.indexOf("useEffect(() => {\n    let stopped = false;"),
+  const seedEffect = sliceBetween(
+    source,
+    "// 首次加载时把浏览器的异常存量加入未读集合",
+    "useEffect(() => {\n    let stopped = false;",
   );
   assert.match(seedEffect, /if \(!initialRestoreSettled\) return;\s*if \(allSessions\.length === 0/);
   assert.match(seedEffect, /\.filter\(\(id\) => id !== selectedSessionId\)/);
@@ -193,20 +241,19 @@ test("seeds the marker backlog only after the initial restore picked a session",
 });
 
 test("settles the initial restore when the ready session list is empty", () => {
-  const restoreEffect = source.slice(
-    source.indexOf("// Auto-select cwd and restore session from URL on first load"),
-    source.indexOf("const commitCustomPath"),
+  const restoreEffect = sliceBetween(
+    source,
+    "// Auto-select cwd and restore session from URL on first load",
+    "const commitCustomPath",
   );
-  assert.ok(restoreEffect.length > 0, "初始恢复的 effect 必须存在");
   // 列表还在到达时为空只代表尚未加载，不能当作恢复失败。
   assert.match(restoreEffect, /if \(loading\) return;/);
   // 列表就绪且为空：先落定并通知父组件，再退出，否则播种、重启对账与运行集合
   // 持久化会一直等一次不会到来的恢复。
-  const emptyStart = restoreEffect.indexOf("if (allSessions.length === 0) {");
-  assert.ok(emptyStart >= 0, "空列表分支必须存在");
-  const emptyBranch = restoreEffect.slice(
-    emptyStart,
-    restoreEffect.indexOf("\n    }", emptyStart),
+  const emptyBranch = sliceBetween(
+    restoreEffect,
+    "if (allSessions.length === 0) {",
+    "\n    }",
   );
   assert.match(emptyBranch, /setInitialRestoreSettled\(true\);/);
   assert.match(emptyBranch, /onInitialRestoreDone\?\.\(\);/);
@@ -221,11 +268,10 @@ test("skips the open session when reconciling runs lost across a restart", () =>
 });
 
 test("waits for the initial restore before reconciling runs lost across a restart", () => {
-  const reconcileStart = source.indexOf("服务失联或退出后页面看不到结束的那一刻");
-  assert.ok(reconcileStart >= 0, "重启对账必须留在侧栏里");
-  const reconcileSource = source.slice(
-    reconcileStart,
-    source.indexOf("savePersistedRunningSessionIds(runningSessionIds);", reconcileStart),
+  const reconcileSource = sliceBetween(
+    source,
+    "服务失联或退出后页面看不到结束的那一刻",
+    "savePersistedRunningSessionIds(runningSessionIds);",
   );
   // 恢复中的会话还没成为选中会话，对账排在恢复之后才不会把它点亮。
   assert.match(reconcileSource, /if \(!activityPolled \|\| !initialRestoreSettled\) return;/);
@@ -233,22 +279,21 @@ test("waits for the initial restore before reconciling runs lost across a restar
 });
 
 test("forces a full session re-read only when the finish produced unread results", () => {
-  const finishedStart = source.indexOf("const finished = resolveFinishedRuns({");
-  assert.ok(finishedStart >= 0, "结束归属计算必须留在侧栏里");
-  const finishedSource = source.slice(
-    finishedStart,
-    source.indexOf("onBackgroundTaskDone", finishedStart),
+  const finishedSource = sliceBetween(
+    source,
+    "const finished = resolveFinishedRuns({",
+    "onBackgroundTaskDone",
   );
   assert.match(finishedSource, /if \(finished\.unreadIds\.length > 0 \|\| hasUnlistedRunningSession\) \{/);
   assert.doesNotMatch(finishedSource, /finished\.finishedIds\.length > 0/);
 });
 
 test("lights the refresh button only for cache-bypassing scans", () => {
-  const loadSessionsSource = source.slice(
-    source.indexOf("const loadSessions = useCallback"),
-    source.indexOf("// Bumped whenever a session is archived/restored"),
+  const loadSessionsSource = sliceBetween(
+    source,
+    "const loadSessions = useCallback",
+    "// Bumped whenever a session is archived/restored",
   );
-  assert.ok(loadSessionsSource.length > 0, "loadSessions must exist");
   assert.match(loadSessionsSource, /if \(force\) setSessionRefreshDone\(true\);/);
   assert.doesNotMatch(loadSessionsSource, /if \(!showLoading\) \{/);
 });
