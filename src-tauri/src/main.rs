@@ -532,6 +532,11 @@ enum GroupSignal {
 }
 
 /// Fire-and-forget signal to the sidecar's process group.
+///
+/// Unix signals the group itself, which outlives its leader. Windows
+/// enumerates the tree from the leader instead, so a retry after the leader has
+/// already exited cannot reach the leftover descendant; the wait that follows
+/// still reports it in the log.
 fn kill_process_group(pid: u32, signal: GroupSignal) {
     #[cfg(unix)]
     {
