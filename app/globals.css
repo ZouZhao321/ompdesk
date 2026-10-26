@@ -1097,7 +1097,7 @@ pre, code {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) and (max-height: 480px) {
+@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) {
   .file-viewer-meta {
     display: none;
   }
@@ -1319,7 +1319,7 @@ span.linenumber {
   border-left: 1px solid var(--border);
   background: var(--bg-panel);
 }
-@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) and (max-height: 480px) {
+@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) {
   .subagent-column {
     display: none !important;
   }
@@ -1459,7 +1459,7 @@ span.linenumber {
 
 /* 移动档：判定规则与 lib/mobile-layout.ts 中的 MOBILE_LAYOUT_QUERY 保持一致。 */
 /* Mobile sidebar: slide in/out as overlay */
-@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) and (max-height: 480px) {
+@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) {
   .chat-stats-center {
     display: none !important;
   }

@@ -454,16 +454,15 @@ loopback，而本地提供方需要 loopback。它忽略 `NO_PROXY`。`lib/http-
 ### 移动档布局（`lib/mobile-layout.ts`）
 - 判定移动档只有一个来源：`lib/mobile-layout.ts` 的 `MOBILE_LAYOUT_QUERY`。宽度
   ≤ `MOBILE_MAX_WIDTH`（768），或粗指针、宽度 ≤ `MOBILE_COARSE_MAX_WIDTH`
-  （1023）且高度 ≤ `MOBILE_MAX_COARSE_HEIGHT`（480）。粗指针分支必须带宽度上界：
-  软键盘只压缩视口高度，没有上界会把桌面宽度的触屏设备推进移动档，而手机横屏
-  （宽度 ≤ 932）仍落在档内。`hooks/useIsMobile.ts` 直接取这条媒体查询的 `matches`
-  当快照，不在渲染期创建或缓存查询对象：缩放与聚焦放大只改视觉视口，JS 与 CSS
-  因此不会错位。
+  （1023）。粗指针分支只看指针与宽度：视口高度会被软键盘压缩，带上高度维度
+  会让 769–1023px 宽的触屏设备在聚焦输入框时跳档。手机横屏（宽度 ≤ 932）与
+  769–1023px 宽的平板因此都落在移动档内。`hooks/useIsMobile.ts` 直接取这条
+  媒体查询的 `matches` 当快照，不在渲染期创建或缓存查询对象：缩放与聚焦放大
+  只改视觉视口，JS 与 CSS 因此不会错位。
 - `app/globals.css` 的移动查询 `(max-width: 768px), (pointer: coarse) and
-  (max-width: 1023px) and (max-height: 480px)` 必须与 `MOBILE_LAYOUT_QUERY`
-  逐字一致（查询串由三个常量拼出，CSS 里是字面量）；改断点时两处同时改，否则
-  React 侧与 CSS 侧会分叉。`components/AppShell.tsx` 的内联样式插值同一常量，
-  不再重写数值。
+  (max-width: 1023px)` 必须与 `MOBILE_LAYOUT_QUERY` 逐字一致（查询串由两个
+  常量拼出，CSS 里是字面量）；改断点时两处同时改，否则 React 侧与 CSS 侧会
+  分叉。`components/AppShell.tsx` 的内联样式插值同一常量，不再重写数值。
 - 手机档的四个界面——顶栏、输入区（含扩展弹窗）、侧栏抽屉、消息操作——的可点
   控件按 `MOBILE_HIT_TARGET_PX`（44px）给命中区。TSX 中的尺寸直接引用该常量，
   不要重写 `44`；CSS 无法导入 TS 常量，`app/globals.css` 内的手机查询使用等值
