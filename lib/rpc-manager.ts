@@ -2052,8 +2052,10 @@ export async function startRpcSession(
       // endpoint this resolves to `undefined` and nothing is instrumented.
       // The enable switch is process-wide, so it reads the shared Settings
       // instance rather than this session's project-scoped clone.
-      const telemetry = await sessionTelemetry(runtime.settings, modelRegistry);
-      const scope = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
+      const [telemetry, scope] = await Promise.all([
+        sessionTelemetry(runtime.settings, modelRegistry),
+        resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings),
+      ]);
       const defaultRole = readDefaultModelRole(settings);
       const hasExistingMessages = sessionManager.buildSessionContext().messages.length > 0;
       const initial = hasExistingMessages
