@@ -109,6 +109,52 @@ API requests accept loopback names, IP literals, the selected bind hostname, and
 
 Full details, including the recovery threat model: [docs/authentication.md](./docs/authentication.md).
 
+## Phone access (Tailscale)
+
+The desktop app and the `bun run dev` / `bun run start` scripts serve the
+fixed loopback port **30141** and never pick another one, so a tailnet forward
+set up once keeps working across restarts. The `ompdesk` CLI launcher defaults
+to 30141 but takes another port (`ompdesk --port 8080`, `PORT=8080 ompdesk`);
+point the tailnet forward at whichever port it uses.
+
+1. Start ompdesk on the machine that holds your projects and sessions: the
+   desktop app, `ompdesk`, or `bun run start`.
+2. Turn the password lock on (see [Password access](#password-access)). Phone
+   access without Basic Auth hands your agent to everyone on the tailnet.
+3. Forward the loopback port into your tailnet. `--bg` keeps the forward in
+   place across reboots:
+   ```bash
+   tailscale serve --bg --tcp=30141 tcp://localhost:30141
+   ```
+4. On the phone, open `http://<tailnet address>:30141` — the machine's tailnet
+   IPv4 address (`tailscale ip -4` prints it) — and sign in with the Basic
+   Auth username `omp` and the password from step 2.
+
+Keep these constraints in mind:
+
+- **MagicDNS names need `OMPDESK_ALLOWED_HOSTS`.** IP literals and loopback
+  names pass the host check as they are; the machine's tailnet name
+  (`<machine>.<tailnet>.ts.net`) does not, so add that exact name
+  (`OMPDESK_ALLOWED_HOSTS=myhost.tail1234.ts.net`) before opening
+  `http://myhost.tail1234.ts.net:30141`. The desktop app reads the variable
+  from the environment it was launched in.
+- **Plain HTTP is only acceptable inside the tailnet.** Basic Auth sends the
+  password in cleartext, so reaching ompdesk from outside a trusted tailnet
+  needs TLS — for example a tailnet HTTPS forward
+  (`tailscale serve --bg --https=443 http://localhost:30141`, then
+  `https://<tailnet address>/`) or a reverse proxy that terminates HTTPS.
+- **Run one ompdesk server per port.** The desktop shell cannot bind a port
+  another process already holds: the window shows `port 30141 on 127.0.0.1 is
+  already in use: the port accepts connections`, and closing it exits with a
+  non-zero status instead of picking another port. When the probe cannot prove
+  the port is free (timeout, permission), the window says the port could not be
+  confirmed free and names the probe error instead of claiming another server is
+  running. The CLI launcher passes the requested port through
+  unchanged, so a taken port fails there too instead of moving to a free one.
+
+The desktop shell writes its startup lines (including the port it serves) to
+`omp-desktop.log` in the system temp directory.
+
 ## Model roles
 
 omp does not have "the" model — it has a model per **scope of work**, and ompdesk exposes the same roles the TUI's `/model` selector and `Ctrl+P` cycle use:
@@ -161,14 +207,14 @@ Requests to loopback addresses are never proxied, so a local provider (Ollama, L
 - **Route by role**: assign and switch models per scope of work — the roles omp already uses for subagents, plan mode, and commits.
 - **Try different directions safely**: continue from an earlier message or fork a session into a separate route.
 - **Work across branches**: switch Git worktrees from the sidebar so new sessions and the Explorer follow the checkout you choose.
-- **Chat beside the project**: browse files on the left and preview source, docs, images, audio, and PDFs on the right while the agent works.
+- **Chat beside the project**: browse the project's files in the right panel, then preview source, docs, images, audio, and PDFs in the same panel while the agent works.
 - **See session state clearly**: context usage, cost, and compaction state are visible from the top bar.
 - **Configure less from the terminal**: manage providers, logins/API keys, model tests, plugins, and skill switches from the web UI.
 - **Use the interface in your language**: switch between the supported UI languages from the top bar.
 
 ## Screenshots
 
-**Session browsing + file explorer** — projects and past sessions on the left, the project's real file tree underneath, ready to preview or attach to a message.
+**Session browsing** — projects and past sessions on the left, with the file tree for the active project.
 
 ![Sidebar with session browsing and the file explorer](./docs/screenshots/01-sidebar-and-explorer.png)
 
@@ -249,8 +295,11 @@ Avoid running `bun run build` during local development. It writes to `.next/` an
 
 `src-tauri/` is a Tauri v2 shell that runs this same app as a desktop
 application: the webview loads the Next.js server, which is started as a Bun
-sidecar on a free loopback port. Desktop and CLI share `~/.omp`, so sessions,
-credentials and model config are identical across both.
+sidecar on the fixed loopback port 30141 (`http://127.0.0.1:30141`). The port
+never changes between launches, and when another process already holds it the
+window shows the reason and quits once you close it, instead of picking a
+different port. Desktop and CLI share `~/.omp`, so sessions, credentials and
+model config are identical across both.
 
 Requires a Rust toolchain in addition to Bun. Useful commands (all defined in
 `package.json`):
@@ -308,7 +357,7 @@ app/
     skills/         # skill listing, search, install, enable/disable
 components/
   AppShell.tsx        # main layout, URL state, top panels, file tabs
-  SessionSidebar.tsx  # project selector, session tree, Explorer
+  SessionSidebar.tsx  # project selector, session tree
   DirectoryPicker.tsx # browsable and editable working-directory picker
   ChatWindow.tsx      # messages, SSE, image drag/drop, minimap
   ChatInput.tsx       # input bar, model/role/tools/thinking/compact/slash controls
@@ -317,6 +366,7 @@ components/
   ModelRolesPanel.tsx # per-role model assignment
   SkillsConfig.tsx    # skill management panel
   FileExplorer.tsx    # file tree
+  FileExplorerPanel.tsx # explorer section inside the right file panel
   FileViewer.tsx      # source, diff, image, audio, PDF, DOCX preview
 lib/
   directory-browser.ts # directory normalization and safe listing helpers

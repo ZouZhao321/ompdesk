@@ -9,15 +9,21 @@ const jiti = createJiti(import.meta.url, {
   tsconfigPaths: true,
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
+const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
+const { ImagePreviewProvider } = await jiti.import("./ImageZoom.tsx");
 const { normalizeDisplayMath } = await jiti.import("../lib/markdown.ts");
 
-function renderMarkdown(markdown) {
-  return renderToStaticMarkup(
-    React.createElement(MarkdownBody, {
-      cwd: "/home/me/project",
-      onOpenFile() {},
-    }, markdown),
-  );
+function renderMarkdown(markdown, { withPreview = true, sessionId } = {}) {
+  const body = React.createElement(MarkdownBody, {
+    cwd: "/home/me/project",
+    onOpenFile() {},
+    sessionId,
+  }, markdown);
+  const wrapped = withPreview
+    ? React.createElement(ImagePreviewProvider, null, body)
+    : body;
+
+  return renderToStaticMarkup(React.createElement(I18nProvider, null, wrapped));
 }
 
 test("opens non-file markdown links in a safe new tab", () => {
@@ -96,4 +102,53 @@ test("does not normalize escaped delimiters or link destinations", () => {
 
   assert.equal(normalizeDisplayMath(escaped), escaped);
   assert.equal(normalizeDisplayMath(link), link);
+});
+
+test("renders local markdown images as zoomable images served by the file API", () => {
+  const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)");
+
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+  assert.match(html, /alt="shot"/);
+  assert.match(html, /class="markdown-image-zoomable"/);
+  assert.match(html, /loading="lazy"/);
+  assert.doesNotMatch(html, /\snode=/);
+});
+
+test("keeps linked images inside their anchor", () => {
+  const html = renderMarkdown("[![shot](/home/me/project/assets/shot.png)](https://example.com)");
+
+  assert.match(
+    html,
+    /<a [^>]*href="https:\/\/example\.com"[^>]*><img [^>]*class="markdown-image-zoomable"[^>]*\/><\/a>/,
+  );
+});
+
+test("resolves relative markdown images against the working directory", () => {
+  const html = renderMarkdown("![shot](./assets/shot.png)");
+
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+});
+
+test("leaves remote markdown images on their own URL", () => {
+  const html = renderMarkdown("![shot](https://cdn.example.com/shot.png)");
+
+  assert.match(html, /src="https:\/\/cdn\.example\.com\/shot\.png"/);
+  assert.doesNotMatch(html, /\/api\/files\//);
+});
+
+test("degrades to plain images when no preview host is mounted", () => {
+  const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)", { withPreview: false });
+
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+  assert.match(html, /alt="shot"/);
+  assert.doesNotMatch(html, /markdown-image-zoomable/);
+});
+
+test("passes the session id to local image urls", () => {
+  const html = renderMarkdown("![shot](./assets/shot.png)", { sessionId: "sess-1" });
+
+  assert.match(
+    html,
+    /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read&amp;sessionId=sess-1"/,
+  );
 });
