@@ -16,12 +16,14 @@ import {
   togglePinnedProject,
 } from "@/lib/project-order";
 import { useI18n } from "@/hooks/useI18n";
+import { MOBILE_HIT_TARGET_PX, useIsMobile } from "@/hooks/useIsMobile";
 import { AnimatedDropdown } from "./AnimatedDropdown";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OmpWordmark } from "./OmpWordmark";
 import { ProjectPinMenuItem } from "./ProjectPinMenuItem";
 import { ProjectRow } from "./ProjectRow";
 import { ProjectSortControl } from "./ProjectSortControl";
+import { projectMenuRowStyle } from "./project-menu-row-style";
 
 declare global {
   interface Window {
@@ -395,6 +397,7 @@ function PiWebTitle() {
 
 export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisticSession, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onBackgroundTaskDone }: Props) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const sessionsForDisplay = optimisticSession && !allSessions.some((session) => session.id === optimisticSession.id)
     ? [optimisticSession, ...allSessions]
@@ -1281,19 +1284,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             aria-label={t("sidebar.worktrees")}
                             aria-expanded={wtDropdownOpen}
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              width: "100%",
-                              minHeight: 34,
-                              padding: "0 10px",
+                              ...projectMenuRowStyle(isMobile),
                               border: "none",
                               borderBottom: wtDropdownOpen ? "1px solid var(--border)" : "none",
                               background: wtDropdownOpen ? "var(--bg-selected)" : "transparent",
                               color: "var(--text-muted)",
                               cursor: "pointer",
                               textAlign: "left",
-                              fontSize: 11,
                             }}
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1337,6 +1334,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                         autoFocus
                         style={{
                           width: "100%",
+                          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                           fontSize: 11,
                           fontFamily: "var(--font-mono)",
                           padding: "5px 8px",
@@ -1390,18 +1388,15 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             }}
                             title={wt.path}
                             style={{
+                              ...projectMenuRowStyle(isMobile),
                               flex: 1,
                               minWidth: 0,
-                              display: "flex",
-                              alignItems: "center",
                               gap: 7,
-                              padding: "8px 10px",
                               background: "var(--bg)",
                               border: "none",
                               color: isCurrent ? "var(--text)" : "var(--text-muted)",
                               cursor: "pointer",
                               textAlign: "left",
-                              fontSize: 11,
                               fontFamily: "var(--font-mono)",
                             }}
                           >
@@ -1422,7 +1417,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                                title={t("sidebar.removeWorktreeTitle", { path: wt.path })}
                               style={{
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                width: 34, height: 28, padding: 0, marginRight: 4,
+                                width: isMobile ? MOBILE_HIT_TARGET_PX : 34,
+                                height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
+                                padding: 0, marginRight: 4,
                                 background: "none", border: "none",
                                 color: "var(--text-dim)", cursor: "pointer",
                                 borderRadius: 5, flexShrink: 0,
@@ -1457,17 +1454,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                       }}
                       title={t("sidebar.createWorktreeTitle")}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
+                        ...projectMenuRowStyle(isMobile),
                         gap: 7,
-                        width: "100%",
                         padding: "8px 10px",
                         background: "none",
                         border: "none",
                         color: "var(--text-muted)",
                         cursor: "pointer",
                         textAlign: "left",
-                        fontSize: 11,
                       }}
                     >
                       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
@@ -1568,8 +1562,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                         {removeProjectConfirm?.project === project ? (
                           <div
                             style={{
-                              display: "flex",
+                              ...projectMenuRowStyle(isMobile),
                               flexDirection: "column",
+                              alignItems: "stretch",
                               gap: 6,
                               padding: "7px 10px",
                               borderTop: "1px solid var(--border)",
@@ -1602,19 +1597,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             onClick={() => requestRemoveProject(project)}
                             title={t("sidebar.removeProjectTitle")}
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              width: "100%",
-                              minHeight: 34,
-                              padding: "0 10px",
+                              ...projectMenuRowStyle(isMobile),
                               border: "none",
                               borderTop: "1px solid var(--border)",
                               background: "transparent",
                               color: "var(--danger)",
                               cursor: "pointer",
                               textAlign: "left",
-                              fontSize: 11,
                             }}
                             onMouseEnter={(event) => {
                               event.currentTarget.style.background = "color-mix(in srgb, var(--danger) 10%, transparent)";

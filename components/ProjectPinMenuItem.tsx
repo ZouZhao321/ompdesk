@@ -1,7 +1,8 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { MOBILE_HIT_TARGET_PX, useIsMobile } from "@/hooks/useIsMobile";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { projectMenuRowStyle } from "./project-menu-row-style";
 
 interface Props {
   /** 该项目当前是否已置顶，决定显示「置顶项目」还是「取消置顶」。 */
@@ -24,19 +25,13 @@ export function ProjectPinMenuItem({ isPinned, onToggle }: Props) {
       onClick={onToggle}
       title={label}
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        width: "100%",
-        minHeight: isMobile ? MOBILE_HIT_TARGET_PX : 34,
-        padding: "0 10px",
+        ...projectMenuRowStyle(isMobile),
         border: "none",
         borderTop: "1px solid var(--border)",
         background: "transparent",
         color: "var(--text-muted)",
         cursor: "pointer",
         textAlign: "left",
-        fontSize: 11,
       }}
       onMouseEnter={(event) => {
         event.currentTarget.style.background = "var(--bg-hover)";

@@ -8,7 +8,7 @@ const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
-const { ProjectSortControl, sortMenuKeyAction } = await jiti.import("./ProjectSortControl.tsx");
+const { ProjectSortControl, shouldDismissOnBlur, sortMenuKeyAction } = await jiti.import("./ProjectSortControl.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 const TRIGGER_LABEL = "Sort projects";
@@ -182,4 +182,28 @@ test("leaves unrelated keys and an empty menu to the browser", () => {
   }
   assert.equal(sortMenuKeyAction("ArrowDown", -1, 0), null);
   assert.equal(sortMenuKeyAction("Escape", -1, 0), null);
+});
+
+// 点击触发按钮时 Safari/Firefox 不聚焦按钮、触摸输入也不给 relatedTarget：
+// 这时焦点去向未知，收起菜单会把同一次点击变成「先关再开」。
+const containerOf = (...children) => ({ contains: (node) => children.includes(node) });
+const trigger = { name: "trigger" };
+const menuItem = { name: "menuItem" };
+const outside = { name: "outside" };
+
+test("keeps the sort menu open when focus leaves without a related target", () => {
+  assert.equal(shouldDismissOnBlur(true, containerOf(trigger, menuItem), null), false);
+});
+
+test("keeps the sort menu open when focus stays inside the control", () => {
+  assert.equal(shouldDismissOnBlur(true, containerOf(trigger, menuItem), trigger), false);
+  assert.equal(shouldDismissOnBlur(true, containerOf(trigger, menuItem), menuItem), false);
+});
+
+test("dismisses the sort menu when focus moves outside the control", () => {
+  assert.equal(shouldDismissOnBlur(true, containerOf(trigger, menuItem), outside), true);
+});
+
+test("does not dismiss on blur while the sort menu is closed", () => {
+  assert.equal(shouldDismissOnBlur(false, containerOf(trigger), outside), false);
 });
