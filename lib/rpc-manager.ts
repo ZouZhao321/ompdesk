@@ -1409,8 +1409,11 @@ export class AgentSessionWrapper {
       } finally {
         // Destroy first so a slow collector cannot keep a dismantled session
         // reachable; flushing afterwards is process-wide and loses nothing.
-        this.destroy();
-        await flushSessionTelemetry(SHUTDOWN_FLUSH_TIMEOUT_MS);
+        try {
+          this.destroy();
+        } finally {
+          await flushSessionTelemetry(SHUTDOWN_FLUSH_TIMEOUT_MS);
+        }
       }
     })();
     return this.shutdownPromise;
