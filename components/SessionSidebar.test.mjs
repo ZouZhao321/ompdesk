@@ -217,11 +217,12 @@ test("恢复出来的会话不留未读标记", () => {
     /launchSessionIdRef\.current = target\.id;\s*clearUnreadSessionIds\(\[target\.id\]\);\s*onSelectSession\(target, true\);/,
     "恢复选中的会话必须清掉旧标记",
   );
-  // cwd 由 URL 接管时恢复在父组件里，标记同样在这里清。
+  // cwd 由 URL 接管时恢复在父组件里，标记同样在这里清；URL 可能是 runtime id，
+  // 先换算成当前会话 id 再清。
   assert.match(
     restoreEffect,
-    /if \(initialSessionId\) clearUnreadSessionIds\(\[initialSessionId\]\);/,
-    "URL 里的会话由父组件打开，标记同样要清",
+    /const target = restoreSessionContinuation\(\s*initialSessionId,\s*allSessions,\s*listedRuntimeIdsRef\.current,\s*\);\s*clearUnreadSessionIds\(\[target\?\.id \?\? initialSessionId\]\);/,
+    "URL 里的会话由父组件打开，按映射后的会话 id 清标记",
   );
 });
 

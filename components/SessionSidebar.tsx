@@ -772,8 +772,16 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   useEffect(() => {
     if (skipInitialProjectSelection) {
       // cwd 由 URL 接管，侧栏不做恢复，播种不必再等。URL 里的那个会话由父组件
-      // 打开，同样是启动后立刻可见的会话，旧的未读标记在这里一并清掉。
-      if (initialSessionId) clearUnreadSessionIds([initialSessionId]);
+      // 打开，同样是启动后立刻可见的会话，旧的未读标记在这里一并清掉。URL 可能
+      // 带 continuation handle（runtime id），先换算成当前会话 id 再清。
+      if (initialSessionId) {
+        const target = restoreSessionContinuation(
+          initialSessionId,
+          allSessions,
+          listedRuntimeIdsRef.current,
+        );
+        clearUnreadSessionIds([target?.id ?? initialSessionId]);
+      }
       setInitialRestoreSettled(true);
       return;
     }
