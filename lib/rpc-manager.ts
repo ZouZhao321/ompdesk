@@ -2072,8 +2072,10 @@ export async function startRpcSession(
         ...(initial.scopedModels.length > 0 ? { scopedModels: initial.scopedModels } : {}),
         ...(toolsOption !== undefined ? { toolNames: toolsOption, restrictToolNames: true } : {}),
         ...(untrusted ?? {}),
-        ...(telemetry ? { telemetry } : {}),
       };
+      // Assign rather than spread so the option key is checked against
+      // `CreateAgentSessionOptions`; a spread would let a renamed key pass.
+      if (telemetry) sessionOptions.telemetry = telemetry;
       // omp's own applier, so a prompt file goes through the same templates the
       // CLI renders it with instead of overwriting the whole system prompt.
       applyResolvedSystemPromptInputs(sessionOptions, systemPrompts.systemPrompt, systemPrompts.appendPrompt);

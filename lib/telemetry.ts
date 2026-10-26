@@ -48,15 +48,32 @@ function startTelemetryExport(settings: Settings): Promise<boolean> {
   // registered anyway.
   if (globalThis.__ompTelemetryInitTimedOut) return Promise.resolve(isTelemetryExportEnabled());
 
-  return withTimeout(
-    globalThis.__ompTelemetryStarted.then(() => isTelemetryExportEnabled()),
+  return settleTelemetryInit(
+    globalThis.__ompTelemetryStarted,
+    isTelemetryExportEnabled,
     INIT_TIMEOUT_MS,
     () => {
       globalThis.__ompTelemetryInitTimedOut = true;
       console.error("[ompdesk] telemetry export init timed out; sessions continue without export");
-      return false;
     },
   );
+}
+
+/**
+ * Wait at most `timeoutMs` for the process-wide init, then report whether
+ * export is actually active. Split out so the timeout path is exercised without
+ * faking the OTel SDK.
+ */
+export function settleTelemetryInit(
+  init: Promise<void>,
+  isActive: () => boolean,
+  timeoutMs: number,
+  onTimeout: () => void,
+): Promise<boolean> {
+  return withTimeout(init.then(() => isActive()), timeoutMs, () => {
+    onTimeout();
+    return false;
+  });
 }
 
 /**
