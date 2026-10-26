@@ -13,9 +13,11 @@ interface MarkdownBodyProps {
   isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
+  /** 会话 id：让允许根之外的图片路径走会话兜底。 */
+  sessionId?: string | null;
 }
 
-export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
+export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, sessionId }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   // Stable renderer identities keep stateful blocks mounted across message hover updates.
   const components = useMemo<Components>(() => ({
@@ -71,7 +73,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
     },
     img({ src, alt, ...props }) {
       delete props.node;
-      return <MarkdownImage src={src} alt={alt} baseDir={cwd} imgProps={props} />;
+      return <MarkdownImage src={src} alt={alt} baseDir={cwd} sourceSessionId={sessionId} imgProps={props} />;
     },
     table({ children }) {
       return (
@@ -80,7 +82,7 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
         </div>
       );
     },
-  }), [cwd, isStreaming, onOpenFile]);
+  }), [cwd, isStreaming, onOpenFile, sessionId]);
 
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
