@@ -97,6 +97,118 @@ const MOBILE_SESSION_ACTION_STYLE = {
   whiteSpace: "nowrap",
 } satisfies CSSProperties;
 
+/** 自动命名按钮的判定与文案：桌面顶栏与手机档会话面板共用同一份。 */
+type AutoNameUi = {
+  disabled: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  label: string;
+  title: string;
+};
+
+/** 自动命名失败的提示色，两处入口共用。 */
+const AUTO_NAME_ERROR_COLOR = "#dc2626";
+
+/**
+ * 自动命名按钮。
+ *
+ * 桌面顶栏与手机档会话面板共用同一份状态、图标与文案，差别只在容器：顶栏是
+ * 贴着分隔线的分段按钮，手机档是会话面板里的胶囊按钮。手机档没有悬停提示，
+ * 失败原因因此由本组件直接写进面板。
+ */
+function AutoNameAction({
+  ui,
+  status,
+  variant,
+  onClick,
+}: {
+  ui: AutoNameUi;
+  status: AutoNameStatus;
+  variant: "top-bar" | "mobile-panel";
+  onClick: () => void;
+}) {
+  const topBar = variant === "top-bar";
+  const color = ui.isError
+    ? AUTO_NAME_ERROR_COLOR
+    : ui.isSuccess
+      ? "var(--accent)"
+      : ui.disabled
+        ? "var(--text-dim)"
+        : "var(--text-muted)";
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={ui.disabled}
+        title={ui.title}
+        aria-label={ui.label}
+        style={topBar
+          ? {
+            display: "flex", alignItems: "center", gap: 6,
+            height: "100%", padding: "0 12px",
+            background: "none", border: "none",
+            borderTop: "2px solid transparent",
+            borderRight: "1px solid var(--border)",
+            color,
+            cursor: ui.disabled ? "not-allowed" : "pointer",
+            opacity: ui.disabled && status.kind !== "naming" ? 0.45 : 1,
+            flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
+            transition: "color 0.1s, background 0.1s, opacity 0.1s",
+          }
+          : {
+            ...MOBILE_SESSION_ACTION_STYLE,
+            gap: 6,
+            color,
+            cursor: ui.disabled ? "not-allowed" : "pointer",
+            opacity: ui.disabled && status.kind !== "naming" ? 0.45 : 1,
+          }}
+        onMouseEnter={(e) => {
+          if (ui.disabled) return;
+          e.currentTarget.style.color = ui.isError ? AUTO_NAME_ERROR_COLOR : "var(--text)";
+          e.currentTarget.style.background = "var(--bg-hover)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = color;
+          e.currentTarget.style.background = "none";
+        }}
+      >
+        {status.kind === "naming" ? (
+          <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        ) : ui.isSuccess ? (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m15 4 5 5L7 22l-5-5Z" />
+            <path d="m14 5 5 5" />
+            <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
+          </svg>
+        )}
+        {topBar ? <span>{ui.label}</span> : ui.label}
+      </button>
+      {!topBar && status.kind === "error" && (
+        <div
+          role="status"
+          style={{
+            flexBasis: "100%",
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: AUTO_NAME_ERROR_COLOR,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {status.message}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -969,7 +1081,7 @@ export function AppShell() {
   );
 
   // 自动命名按钮的状态：桌面顶栏与手机档会话面板共用同一份判定。
-  const autoNameUi = (() => {
+  const autoNameUi: AutoNameUi = (() => {
     // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
     const hasMessages = Boolean(
       selectedSession
@@ -1348,52 +1460,12 @@ export function AppShell() {
                 </svg>
                  <span>{translate("history.label")}</span>
               </button>
-              <button
-                type="button"
+              <AutoNameAction
+                ui={autoNameUi}
+                status={autoNameStatus}
+                variant="top-bar"
                 onClick={() => void handleAutoName()}
-                disabled={autoNameUi.disabled}
-                title={autoNameUi.title}
-                aria-label={autoNameUi.label}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: "100%", padding: "0 12px",
-                  background: "none", border: "none",
-                  borderTop: "2px solid transparent",
-                  borderRight: "1px solid var(--border)",
-                  color: autoNameUi.isError ? "#dc2626" : autoNameUi.isSuccess ? "var(--accent)" : autoNameUi.disabled ? "var(--text-dim)" : "var(--text-muted)",
-                  cursor: autoNameUi.disabled ? "not-allowed" : "pointer",
-                  opacity: autoNameUi.disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
-                  flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-                  transition: "color 0.1s, background 0.1s, opacity 0.1s",
-                }}
-                onMouseEnter={(e) => {
-                  if (autoNameUi.disabled) return;
-                  e.currentTarget.style.color = autoNameUi.isError ? "#dc2626" : "var(--text)";
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = autoNameUi.isError ? "#dc2626" : autoNameUi.isSuccess ? "var(--accent)" : autoNameUi.disabled ? "var(--text-dim)" : "var(--text-muted)";
-                  e.currentTarget.style.background = "none";
-                }}
-              >
-                {autoNameStatus.kind === "naming" ? (
-                  <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                ) : autoNameUi.isSuccess ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="m15 4 5 5L7 22l-5-5Z" />
-                    <path d="m14 5 5 5" />
-                    <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
-                  </svg>
-                )}
-                <span>{autoNameUi.label}</span>
-              </button>
+              />
               <button
                 type="button"
                 onClick={() => {
@@ -1761,42 +1833,12 @@ export function AppShell() {
                       >
                         {translate("history.label")}
                       </button>
-                      <button
-                        type="button"
+                      <AutoNameAction
+                        ui={autoNameUi}
+                        status={autoNameStatus}
+                        variant="mobile-panel"
                         onClick={() => void handleAutoName()}
-                        disabled={autoNameUi.disabled}
-                        title={autoNameUi.title}
-                        style={{
-                          ...MOBILE_SESSION_ACTION_STYLE,
-                          gap: 6,
-                          opacity: autoNameUi.disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
-                          cursor: autoNameUi.disabled ? "not-allowed" : "pointer",
-                          color: autoNameUi.isError ? "#dc2626" : undefined,
-                        }}
-                      >
-                        {autoNameStatus.kind === "naming" && (
-                          <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                          </svg>
-                        )}
-                        {autoNameUi.label}
-                      </button>
-                      {/* 手机档没有悬停提示，生成失败的原因必须直接写在面板里。 */}
-                      {autoNameStatus.kind === "error" && (
-                        <div
-                          role="status"
-                          style={{
-                            flexBasis: "100%",
-                            fontSize: 11,
-                            lineHeight: 1.5,
-                            color: "#dc2626",
-                            overflowWrap: "anywhere",
-                          }}
-                        >
-                          {autoNameStatus.message}
-                        </div>
-                      )}
+                      />
                       <button
                         type="button"
                         onClick={() => {
