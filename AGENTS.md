@@ -175,6 +175,7 @@ components/
   ConversationMap.tsx 会话地图：卡片、连线、缩放、分叉与切换
   ChatMinimap.tsx     消息列表旁的滚动缩略图
   MarkdownBody.tsx    markdown 渲染器
+  MarkdownImage.tsx   markdown 图片：本地路径改走文件接口后交给缩放入口
   ModelsConfig.tsx    提供方与认证弹窗（从侧栏底部打开）
   ModelRolesPanel.tsx 该弹窗内按角色分配模型
   PluginsConfig.tsx   已安装 omp 插件的弹窗
