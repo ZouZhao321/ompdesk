@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { ReactNode, RefObject } from "react";
-import { MOBILE_HIT_TARGET_PX, useIsMobile } from "@/hooks/useIsMobile";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { useI18n } from "@/hooks/useI18n";
 import type { TranslationParams } from "@/lib/i18n/types";
 
@@ -93,6 +94,7 @@ export function ProjectRow({
     >
       <button
         type="button"
+        className="sidebar-project-icon-button"
         onClick={onToggleCollapse}
         title={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
         aria-label={isCollapsed ? t("sidebar.expandProject") : t("sidebar.collapseProject")}
@@ -171,6 +173,7 @@ export function ProjectRow({
 
       <button
         type="button"
+        className="sidebar-project-icon-button sidebar-project-icon-reveal"
         onClick={onNewSession}
         title={t("sidebar.newSessionTitle", { path: project })}
         aria-label={t("sidebar.newSessionTitle", { path: project })}
@@ -208,6 +211,7 @@ export function ProjectRow({
       <div style={{ position: "static", flexShrink: 0 }}>
         <button
           type="button"
+          className="sidebar-project-icon-button sidebar-project-icon-reveal"
           onClick={onToggleMenu}
           title={t("sidebar.projectActions")}
           aria-label={t("sidebar.projectActions")}
