@@ -898,6 +898,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   }, [pinnedProjects, dismissProjectMenu]);
 
   const selectedProject = projectRootFor(selectedCwd);
+  // 选中判定与 placeSelectedProject 的去重必须用同一套比较键：Windows 下同一路径的
+  // 盘符大小写或分隔符写法不同，原样比较会既插不进去也高亮不到。
+  const selectedProjectKey = selectedProject ? normalizeProjectKey(selectedProject) : null;
   const recentProjectPaths = getRecentProjects(sessionsForDisplay)
     .filter((project) => !removedProjects.has(normalizeProjectKey(project)));
   const orderedProjectPaths = orderProjectPaths(recentProjectPaths, projectSortMode, pinnedProjects);
@@ -1222,7 +1225,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           </div>
         )}
         {!loading && !error && projectGroups.map(({ project, name, sessions }) => {
-          const isSelectedProject = project === selectedProject;
+          const isSelectedProject = selectedProjectKey !== null && normalizeProjectKey(project) === selectedProjectKey;
           const isCollapsed = collapsedProjects.has(project) && !normalizedProjectFilter;
           const isExpanded = expandedProjects.has(project);
           const visibleSessionsForProject = isExpanded ? sessions : sessions.slice(0, PROJECT_SESSION_LIMIT);
