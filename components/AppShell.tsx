@@ -18,7 +18,7 @@ import { ConversationMap } from "./ConversationMap";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
+import { MOBILE_HIT_TARGET_PX, MOBILE_LAYOUT_QUERY } from "@/lib/mobile-layout";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useAudio } from "@/hooks/useAudio";
@@ -34,6 +34,7 @@ import {
 } from "@/lib/browser-notifications";
 import { getInitialNavigation } from "@/lib/initial-navigation";
 import { sessionDisplayTitle } from "@/lib/session-title";
+import { clearUnreadSessionIds } from "@/lib/session-unread";
 import { clearLastOpen, getLastOpenSession, setLastOpenSession, getSessionContinuation, clearSessionContinuation, rememberSessionContinuation, restoreSessionContinuation } from "@/lib/workspace-memory";
 import {
   getDefaultRightPanelWidth,
@@ -85,6 +86,133 @@ const FILE_PANEL_TOGGLE_STYLE = {
   transition: "color 0.12s",
 } satisfies CSSProperties;
 const LANGUAGE_MENU_WIDTH = 176;
+/** 手机档会话面板里的动作按钮：顶栏放不下的入口统一落在这里。 */
+const MOBILE_SESSION_ACTION_STYLE = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: MOBILE_HIT_TARGET_PX,
+  minHeight: MOBILE_HIT_TARGET_PX,
+  padding: "0 12px",
+  background: "none",
+  border: "1px solid var(--border)",
+  borderRadius: 8,
+  color: "var(--text-muted)",
+  fontSize: 12,
+  whiteSpace: "nowrap",
+} satisfies CSSProperties;
+
+/** 自动命名按钮的判定与文案：桌面顶栏与手机档会话面板共用同一份。 */
+type AutoNameUi = {
+  disabled: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  label: string;
+  title: string;
+};
+
+/** 自动命名失败的提示色，两处入口共用，跟主题的 --danger 走。 */
+const AUTO_NAME_ERROR_COLOR = "var(--danger)";
+
+/**
+ * 自动命名按钮。
+ *
+ * 桌面顶栏与手机档会话面板共用同一份状态、图标与文案，差别只在容器：顶栏是
+ * 贴着分隔线的分段按钮，手机档是会话面板里的胶囊按钮。手机档没有悬停提示，
+ * 失败原因因此由本组件直接写进面板。
+ */
+function AutoNameAction({
+  ui,
+  status,
+  variant,
+  onClick,
+}: {
+  ui: AutoNameUi;
+  status: AutoNameStatus;
+  variant: "top-bar" | "mobile-panel";
+  onClick: () => void;
+}) {
+  const topBar = variant === "top-bar";
+  const color = ui.isError
+    ? AUTO_NAME_ERROR_COLOR
+    : ui.isSuccess
+      ? "var(--accent)"
+      : ui.disabled
+        ? "var(--text-dim)"
+        : "var(--text-muted)";
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={ui.disabled}
+        title={ui.title}
+        aria-label={ui.label}
+        style={topBar
+          ? {
+            display: "flex", alignItems: "center", gap: 6,
+            height: "100%", padding: "0 12px",
+            background: "none", border: "none",
+            borderTop: "2px solid transparent",
+            borderRight: "1px solid var(--border)",
+            color,
+            cursor: ui.disabled ? "not-allowed" : "pointer",
+            opacity: ui.disabled && status.kind !== "naming" ? 0.45 : 1,
+            flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
+            transition: "color 0.1s, background 0.1s, opacity 0.1s",
+          }
+          : {
+            ...MOBILE_SESSION_ACTION_STYLE,
+            gap: 6,
+            color,
+            cursor: ui.disabled ? "not-allowed" : "pointer",
+            opacity: ui.disabled && status.kind !== "naming" ? 0.45 : 1,
+          }}
+        onMouseEnter={(e) => {
+          if (ui.disabled) return;
+          e.currentTarget.style.color = ui.isError ? AUTO_NAME_ERROR_COLOR : "var(--text)";
+          e.currentTarget.style.background = "var(--bg-hover)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = color;
+          e.currentTarget.style.background = "none";
+        }}
+      >
+        {status.kind === "naming" ? (
+          <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        ) : ui.isSuccess ? (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m15 4 5 5L7 22l-5-5Z" />
+            <path d="m14 5 5 5" />
+            <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
+          </svg>
+        )}
+        {topBar ? <span>{ui.label}</span> : ui.label}
+      </button>
+      {!topBar && status.kind === "error" && (
+        <div
+          role="status"
+          style={{
+            flexBasis: "100%",
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: AUTO_NAME_ERROR_COLOR,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {status.message}
+        </div>
+      )}
+    </>
+  );
+}
 
 /** 穷举分支的兜底：新增标签类型却漏了分支时，编译期在调用处报错。 */
 function assertNever(value: never): never {
@@ -525,6 +653,9 @@ export function AppShell() {
   }, [router, selectedSession, invalidateWorkspaceRestore, restoreWorkspaceContext]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    // 用户主动打开会话就算读过了：侧栏点击、命令面板、通知点击都走这里。
+    // 自动恢复（isRestore）不算点开，标记保留到用户真的点开为止。
+    if (!isRestore) clearUnreadSessionIds([session.id]);
     // Mark the target project before the cwd synchronization effect runs.
     // Otherwise selecting a session in another project looks like a manual
     // project switch and the just-selected session is cleared.
@@ -720,8 +851,8 @@ export function AppShell() {
     const sessionId = selectedSession?.id;
     const runtimeId = selectedSession?.runtimeId;
     if (!sessionId || autoNameStatus.kind === "naming") return;
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
-    setActiveTopPanel(null);
+    clearTimeout(autoNameTimerRef.current ?? undefined);
+    // 面板不关：手机档的入口就在会话面板里，关掉后生成中/成功/失败都看不到。
     setAutoNameStatus({ kind: "naming" });
 
     try {
@@ -753,7 +884,7 @@ export function AppShell() {
   }, [autoNameStatus.kind, selectedSession?.id, selectedSession?.runtimeId, handleRuntimeIdentity]);
 
   useEffect(() => {
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
+    clearTimeout(autoNameTimerRef.current ?? undefined);
     setAutoNameStatus({ kind: "idle" });
   }, [selectedSession?.id]);
 
@@ -1084,6 +1215,33 @@ export function AppShell() {
     </button>
   );
 
+  // 自动命名按钮的状态：桌面顶栏与手机档会话面板共用同一份判定。
+  const autoNameUi: AutoNameUi = (() => {
+    // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
+    const hasMessages = Boolean(
+      selectedSession
+      && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
+    );
+    const disabled = !selectedSession || selectedSession.transient || !hasMessages || autoNameStatus.kind === "naming";
+    const isSuccess = autoNameStatus.kind === "success";
+    const isError = autoNameStatus.kind === "error";
+    const label = autoNameStatus.kind === "naming"
+      ? translate("title.generating")
+      : isSuccess
+        ? translate("title.updated")
+        : isError
+          ? translate("title.failed")
+          : translate("title.generate");
+    const title = !selectedSession || selectedSession.transient
+      ? translate("title.unsaved")
+      : !hasMessages
+        ? translate("title.noMessages")
+        : isError
+          ? autoNameStatus.message
+          : translate("title.generateSession");
+    return { disabled, isSuccess, isError, label, title };
+  })();
+
   return (
     <>
     <style>{`
@@ -1142,7 +1300,7 @@ export function AppShell() {
       }
       /* 手机档顶栏的分支入口与图标按钮保持同一命中区。 */
       .mobile-topbar-branch-button {
-        min-width: 44px;
+        min-width: ${MOBILE_HIT_TARGET_PX}px;
         justify-content: center;
       }
       @media (prefers-reduced-motion: reduce) {
@@ -1151,7 +1309,7 @@ export function AppShell() {
           animation: none;
         }
       }
-      @media (max-width: 768px), (pointer: coarse) and (max-height: 480px) {
+      @media ${MOBILE_LAYOUT_QUERY} {
         .sidebar-overlay-backdrop.sidebar-mobile-pending {
           opacity: 0 !important;
           pointer-events: none !important;
@@ -1293,8 +1451,8 @@ export function AppShell() {
             )}
            </button>
           )}
-          {!isMobile && (
-           <button
+          {/* 语言切换在两个档位都保留；主题在手机档走 Settings 入口。 */}
+          <button
              ref={languageBtnRef}
              type="button"
              onClick={() => toggleTopPanel("language")}
@@ -1335,7 +1493,6 @@ export function AppShell() {
                <path d="M14 18h6" />
              </svg>
            </button>
-          )}
           {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
               type="button"
@@ -1438,79 +1595,12 @@ export function AppShell() {
                 </svg>
                  <span>{translate("history.label")}</span>
               </button>
-              {(() => {
-                // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
-                const hasMessages = Boolean(
-                  selectedSession
-                  && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
-                );
-                const disabled = !selectedSession || selectedSession.transient || !hasMessages || autoNameStatus.kind === "naming";
-                const isSuccess = autoNameStatus.kind === "success";
-                const isError = autoNameStatus.kind === "error";
-                const label = autoNameStatus.kind === "naming"
-                   ? translate("title.generating")
-                    : isSuccess
-                    ? translate("title.updated")
-                    : isError
-                      ? translate("title.failed")
-                      : translate("title.generate");
-                const title = !selectedSession || selectedSession.transient
-                   ? translate("title.unsaved")
-                   : !hasMessages
-                     ? translate("title.noMessages")
-                     : isError
-                       ? autoNameStatus.message
-                       : translate("title.generateSession");
-
-                return (
-                  <button
-                    type="button"
-                    onClick={() => void handleAutoName()}
-                    disabled={disabled}
-                    title={title}
-                    aria-label={label}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      height: "100%", padding: "0 12px",
-                      background: "none", border: "none",
-                      borderTop: "2px solid transparent",
-                      borderRight: "1px solid var(--border)",
-                      color: isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)",
-                      cursor: disabled ? "not-allowed" : "pointer",
-                      opacity: disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
-                      flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-                      transition: "color 0.1s, background 0.1s, opacity 0.1s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (disabled) return;
-                      e.currentTarget.style.color = isError ? "#dc2626" : "var(--text)";
-                      e.currentTarget.style.background = "var(--bg-hover)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)";
-                      e.currentTarget.style.background = "none";
-                    }}
-                  >
-                    {autoNameStatus.kind === "naming" ? (
-                      <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                    ) : isSuccess ? (
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    ) : (
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="m15 4 5 5L7 22l-5-5Z" />
-                        <path d="m14 5 5 5" />
-                        <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
-                      </svg>
-                    )}
-                    <span>{label}</span>
-                  </button>
-                );
-              })()}
+              <AutoNameAction
+                ui={autoNameUi}
+                status={autoNameStatus}
+                variant="top-bar"
+                onClick={() => void handleAutoName()}
+              />
               <button
                 type="button"
                 onClick={() => {
@@ -1544,7 +1634,7 @@ export function AppShell() {
                   <circle cx="19" cy="9" r="2" />
                   <path d="M6.7 7.1 10.4 16.4M13.7 17.3 17.5 10.6M7 6h10" />
                 </svg>
-                {!isMobile && <span>{translate("map.open")}</span>}
+                <span>{translate("map.open")}</span>
               </button>
               </>)}
               <BranchNavigator
@@ -1589,7 +1679,7 @@ export function AppShell() {
                   marginLeft: "auto",
                   display: "flex", alignItems: "center", gap: 10,
                   paddingLeft: 12,
-                  paddingRight: isMobile ? 12 : rightPanelOpen ? 12 : 48,
+                  paddingRight: isMobile || rightPanelOpen ? 12 : 48,
                   minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                   height: "100%",
                   background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
@@ -1676,7 +1766,7 @@ export function AppShell() {
                       aria-checked={locale === plugin.id}
                       style={{
                         display: "flex", alignItems: "center",
-                        width: "100%", height: 34, padding: "0 10px",
+                        width: "100%", height: isMobile ? MOBILE_HIT_TARGET_PX : 34, padding: "0 10px",
                         border: "none", borderRadius: 4,
                         background: locale === plugin.id ? "var(--bg-selected)" : "transparent",
                         color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
@@ -1862,6 +1952,47 @@ export function AppShell() {
                        {translate("session.load")}
                     </div>
                   )}
+                  {/* 手机档顶栏不展示全量历史、自动命名与会话地图，统一收进会话面板。 */}
+                  {isMobile && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                      <button
+                        type="button"
+                        onClick={handleViewFullHistory}
+                        disabled={!selectedSession}
+                        title={selectedSession ? translate("history.full") : translate("history.unsaved")}
+                        style={{
+                          ...MOBILE_SESSION_ACTION_STYLE,
+                          opacity: selectedSession ? 1 : 0.45,
+                          cursor: selectedSession ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {translate("history.label")}
+                      </button>
+                      <AutoNameAction
+                        ui={autoNameUi}
+                        status={autoNameStatus}
+                        variant="mobile-panel"
+                        onClick={() => void handleAutoName()}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTopPanel(null);
+                          setMapOpen((open) => !open);
+                        }}
+                        disabled={!selectedSession}
+                        aria-pressed={mapOpen}
+                        title={translate("map.title")}
+                        style={{
+                          ...MOBILE_SESSION_ACTION_STYLE,
+                          opacity: selectedSession ? 1 : 0.45,
+                          cursor: selectedSession ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {translate("map.open")}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1925,7 +2056,7 @@ export function AppShell() {
               role="alert"
               style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, color: "var(--text-muted)", textAlign: "center" }}
             >
-               <div style={{ fontSize: 14, color: "#dc2626" }}>{translate("workspace.unable")}</div>
+               <div style={{ fontSize: 14, color: "var(--danger)" }}>{translate("workspace.unable")}</div>
               <div style={{ maxWidth: "min(720px, 100%)", overflowWrap: "anywhere", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                 {initialNavigation.requestedCwd}
               </div>
@@ -1989,7 +2120,7 @@ export function AppShell() {
           display: "flex",
           alignItems: "center",
           flexShrink: 0,
-          height: "calc(36px + env(safe-area-inset-top))",
+          height: `calc(${topBar.height}px + env(safe-area-inset-top))`,
           paddingTop: "env(safe-area-inset-top)",
           background: "var(--bg-panel)",
           borderBottom: "1px solid var(--border)",

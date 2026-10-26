@@ -71,6 +71,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
           ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
         : undefined,
       transient: false,
+      ...(s.status ? { status: s.status } : {}),
     };
   });
   return attachSessionProjectInfo(sessions);

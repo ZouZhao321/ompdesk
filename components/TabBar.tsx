@@ -4,6 +4,8 @@ import { useState } from "react";
 import { getFileIcon } from "./FileIcons";
 import { PanelViewIcon } from "./PanelViewIcon";
 import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { PANEL_VIEW_LABEL_KEYS, type Tab } from "@/lib/panel-tabs";
 
 interface Props {
@@ -20,7 +22,11 @@ function TabGlyph({ tab }: { tab: Tab }) {
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
+  // 手机档触屏命中区放大到 44px；桌面档保持 36px 页签与 24px 关闭按钮。
+  const barHeight = isMobile ? MOBILE_HIT_TARGET_PX : 36;
+  const closeSize = isMobile ? MOBILE_HIT_TARGET_PX : 24;
 
   return (
     <div
@@ -31,7 +37,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
         background: "var(--bg-panel)",
         overflowX: "auto",
         flexShrink: 0,
-        height: 36,
+        height: barHeight,
       }}
     >
       {tabs.map((tab) => {
@@ -55,7 +61,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               display: "flex",
               alignItems: "center",
               gap: 6,
-              height: 36,
+              height: barHeight,
               paddingLeft: 12,
               paddingRight: 6,
               borderRight: "1px solid var(--border)",
@@ -112,7 +118,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
               onMouseLeave={() => setHoveredClose(null)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 24, height: 24,
+                width: closeSize, height: closeSize,
                 background: hoveredClose === tab.id ? "var(--bg-hover)" : "transparent",
                 border: "none",
                 borderRadius: 4,
