@@ -10,19 +10,19 @@ const jiti = createJiti(import.meta.url, {
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
+const { ImagePreviewProvider } = await jiti.import("./ImageZoom.tsx");
 const { normalizeDisplayMath } = await jiti.import("../lib/markdown.ts");
 
-function renderMarkdown(markdown) {
-  return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      null,
-      React.createElement(MarkdownBody, {
-        cwd: "/home/me/project",
-        onOpenFile() {},
-      }, markdown),
-    ),
-  );
+function renderMarkdown(markdown, { withPreview = true } = {}) {
+  const body = React.createElement(MarkdownBody, {
+    cwd: "/home/me/project",
+    onOpenFile() {},
+  }, markdown);
+  const wrapped = withPreview
+    ? React.createElement(ImagePreviewProvider, null, body)
+    : body;
+
+  return renderToStaticMarkup(React.createElement(I18nProvider, null, wrapped));
 }
 
 test("opens non-file markdown links in a safe new tab", () => {
@@ -133,4 +133,11 @@ test("leaves remote markdown images on their own URL", () => {
 
   assert.match(html, /src="https:\/\/cdn\.example\.com\/shot\.png"/);
   assert.doesNotMatch(html, /\/api\/files\//);
+});
+
+test("degrades to plain images when no preview host is mounted", () => {
+  const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)", { withPreview: false });
+
+  assert.doesNotMatch(html, /markdown-image-zoomable/);
+  assert.doesNotMatch(html, /role="button"/);
 });
