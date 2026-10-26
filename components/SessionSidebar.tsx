@@ -472,6 +472,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const restartReconciledRef = useRef(false);
   // 初始恢复是否已经有机会选定会话；播种必须排在它之后。
   const [initialRestoreSettled, setInitialRestoreSettled] = useState(!initialSessionId);
+  // 启动时打开的那个会话（含 continuation 映射后的 id）：它一进来就是可见的
+  // 当前会话，播种不能把它点亮，恢复落定后也要清掉旧的未读标记。
+  const launchSessionIdRef = useRef<string | null>(initialSessionId);
   const listedRuntimeIdsRef = useRef<Record<string, string>>({});
   // Once polling has delivered a snapshot it is the source of truth for
   // running state; late /api/sessions responses must not overwrite it.
@@ -537,7 +540,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     if (allSessions.length === 0 || !shouldSeedInitialMarkerUnread()) return;
     markInitialMarkerUnreadSeeded();
     const seededIds = initialMarkerUnreadIds(allSessions, runningSessionIds, waitingSessionIds)
-      .filter((id) => id !== selectedSessionId);
+      .filter((id) => id !== selectedSessionId && id !== launchSessionIdRef.current);
     addUnreadSessionIds(seededIds);
   }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId, initialRestoreSettled]);
 
@@ -768,7 +771,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
     if (skipInitialProjectSelection) {
-      // cwd 由 URL 接管，侧栏不做恢复，播种不必再等。
+      // cwd 由 URL 接管，侧栏不做恢复，播种不必再等。URL 里的那个会话由父组件
+      // 打开，同样是启动后立刻可见的会话，旧的未读标记在这里一并清掉。
+      if (initialSessionId) clearUnreadSessionIds([initialSessionId]);
       setInitialRestoreSettled(true);
       return;
     }
@@ -791,6 +796,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         setInitialRestoreSettled(true);
         if (target) {
           setSelectedCwd(target.cwd);
+          // 父组件的自动恢复（isRestore）不清未读，而恢复出来的会话就是启动后
+          // 立刻可见的当前会话：这里清掉它的标记，播种也不会再把它点亮。
+          launchSessionIdRef.current = target.id;
+          clearUnreadSessionIds([target.id]);
           onSelectSession(target, true);
           return;
         }
