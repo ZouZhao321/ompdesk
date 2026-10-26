@@ -1583,7 +1583,7 @@ function ExtensionCustomPanel({
           position: "relative",
           width: "min(920px, 100%)",
           maxHeight: isMobile
-            ? "min(760px, calc(var(--app-viewport-height, 100dvh) - 24px))"
+            ? "min(760px, 100%, calc(var(--app-viewport-height, 100dvh) - 24px))"
             : "min(760px, calc(100vh - 40px))",
           display: isMobile ? "flex" : undefined,
           flexDirection: isMobile ? "column" : undefined,

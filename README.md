@@ -144,10 +144,13 @@ Keep these constraints in mind:
   (`tailscale serve --bg --https=443 http://localhost:30141`, then
   `https://<tailnet address>/`) or a reverse proxy that terminates HTTPS.
 - **Run one ompdesk server per port.** The desktop shell cannot bind a port
-  another process already holds: it logs `port 30141 on 127.0.0.1 is already in
-  use` and exits with a non-zero status instead of picking another port. The
-  CLI launcher passes the requested port through unchanged, so a taken port
-  fails there too instead of moving to a free one.
+  another process already holds: the window shows `port 30141 on 127.0.0.1 is
+  already in use: the port accepts connections`, and closing it exits with a
+  non-zero status instead of picking another port. When the probe cannot prove
+  the port is free (timeout, permission), the window says the port could not be
+  confirmed free and names the probe error instead of claiming another server is
+  running. The CLI launcher passes the requested port through
+  unchanged, so a taken port fails there too instead of moving to a free one.
 
 The desktop shell writes its startup lines (including the port it serves) to
 `omp-desktop.log` in the system temp directory.
@@ -294,9 +297,9 @@ Avoid running `bun run build` during local development. It writes to `.next/` an
 application: the webview loads the Next.js server, which is started as a Bun
 sidecar on the fixed loopback port 30141 (`http://127.0.0.1:30141`). The port
 never changes between launches, and when another process already holds it the
-shell logs the reason and exits instead of picking a different port. Desktop
-and CLI share `~/.omp`, so sessions, credentials and model config are identical
-across both.
+window shows the reason and quits once you close it, instead of picking a
+different port. Desktop and CLI share `~/.omp`, so sessions, credentials and
+model config are identical across both.
 
 Requires a Rust toolchain in addition to Bun. Useful commands (all defined in
 `package.json`):
