@@ -89,87 +89,93 @@ fn bun_binary_name() -> &'static str {
 /// torn down when the app exits.
 struct ServerChild(Mutex<Option<Child>>);
 
-/// How long the sidecar gets to exit after the group signal. The port is
-/// fixed, so an orphan that keeps listening would refuse the next launch.
-const SIDECAR_EXIT_TIMEOUT: Duration = Duration::from_secs(3);
-/// How long the fixed port gets to become bindable again, both right after the
-/// sidecar exits and again after the group is killed a second time. Only a
-/// real leftover listener waits this out: a closed one refuses immediately.
-const SIDECAR_PORT_RELEASE_TIMEOUT: Duration = Duration::from_secs(1);
+/// 发 TERM 后给 sidecar 的宽限。退出路径在 Tauri 的事件线程上跑，这段等待
+/// 直接卡住窗口关闭，所以只留很短的一档。
+const SIDECAR_EXIT_TIMEOUT: Duration = Duration::from_millis(700);
+/// 补发 KILL 之后等待 leader 回收的上限，`wait()` 因此不会无界阻塞。
+const SIDECAR_KILL_TIMEOUT: Duration = Duration::from_millis(300);
+/// 端口探测的重试次数与间隔：刚退出或刚绑定的瞬间可能先回 RST。
+const PORT_PROBE_ATTEMPTS: u32 = 3;
+const PORT_PROBE_RETRY_DELAY: Duration = Duration::from_millis(50);
 
 impl ServerChild {
-    /// Stops the sidecar's process group and waits for it to exit, escalating
-    /// to KILL for the whole group once the grace period runs out.
+    /// Stops the sidecar's process group and waits for the leader to exit.
     ///
-    /// The wait matters because the port is fixed: a relaunch right after a
-    /// failure must not find the previous child still holding it. The leader
-    /// exiting is not proof either — a descendant it spawned can keep the
-    /// listener — so a port that is still taken after the leader is gone earns
-    /// the same KILL.
+    /// 补发信号只发生在 leader 尚未回收时：那一刻 pid 还属于本进程，KILL 整棵
+    /// 树是安全的。leader 一旦回收，同样的 pid 可能已被无关进程复用，再按旧
+    /// pid 发信号会打到别人的进程树，因此这里不再补发。
+    ///
+    /// 端口固定，leader 退出后仍被占用意味着下次启动会被拒绝，但那只是一条
+    /// 日志：占用可能来自本机其它进程，销毁动作到此为止。
     fn terminate(&self) {
         let child = self.0.lock().ok().and_then(|mut guard| guard.take());
         let Some(mut child) = child else { return };
         let pid = child.id();
         kill_process_group(pid, GroupSignal::Terminate);
-        if !wait_for_exit(&mut child, SIDECAR_EXIT_TIMEOUT) {
-            // The child and its descendants still hold the port: escalate the
-            // whole group instead of only reaping the leader.
+        let mut wait = wait_for_exit(&mut child, SIDECAR_EXIT_TIMEOUT);
+        if matches!(wait, ExitWait::Running) {
+            // leader 还没回收，pid 仍属于本进程，可以安全地 KILL 整棵树。
             kill_process_group(pid, GroupSignal::Kill);
             let _ = child.kill();
-            let _ = child.wait();
-            desktop_log("[omp-desktop] sidecar outlived its grace period; killed the process group");
+            wait = wait_for_exit(&mut child, SIDECAR_KILL_TIMEOUT);
+            match wait {
+                ExitWait::Unknown => {
+                    desktop_log("[omp-desktop] could not confirm whether the sidecar exited after KILL")
+                }
+                ExitWait::Exited => desktop_log(
+                    "[omp-desktop] sidecar outlived its grace period; killed the process group",
+                ),
+                ExitWait::Running => desktop_log(
+                    "[omp-desktop] sidecar is still running after KILL; leaving it to the OS",
+                ),
+            }
         }
-        if wait_for_port_release(SERVER_PORT, SIDECAR_PORT_RELEASE_TIMEOUT) {
+        if !matches!(wait, ExitWait::Exited) {
             return;
         }
-        // The leader is gone but something in its group still listens: kill the
-        // group again, then confirm once more so the log reflects the result.
-        desktop_log(
-            "[omp-desktop] the sidecar exited but its process group still holds the port; \
-             killed the process group again",
-        );
-        kill_process_group(pid, GroupSignal::Kill);
-        if !wait_for_port_release(SERVER_PORT, SIDECAR_PORT_RELEASE_TIMEOUT) {
-            desktop_log(&format!(
-                "[omp-desktop] port {SERVER_PORT} is still held after the sidecar exited; \
-                 the next launch will refuse to start until it is freed"
-            ));
+        // 只记录结果：确认占用与无法确认占用要分开说，后者不能断言端口被占。
+        match probe_port(SERVER_PORT) {
+            PortStatus::Free => {}
+            PortStatus::Occupied => desktop_log(&format!(
+                "[omp-desktop] port {SERVER_PORT} still accepts connections after the sidecar \
+                 exited; another process may hold it, and the next launch will refuse to start \
+                 until it is freed"
+            )),
+            PortStatus::Unconfirmed(reason) => desktop_log(&format!(
+                "[omp-desktop] could not confirm that port {SERVER_PORT} was released after the \
+                 sidecar exited: {reason}"
+            )),
         }
     }
 }
 
-/// Waits for the child to exit; reports whether it did.
-fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
+/// 等待 leader 的结果。
+///
+/// `Unknown` 与 `Running` 必须分开：只有确认 leader 仍未回收时，pid 才肯定还属于
+/// 本进程，按它补发信号才安全。
+enum ExitWait {
+    /// leader 已回收。
+    Exited,
+    /// 宽限期内仍在运行。
+    Running,
+    /// 无法确认（回收出错），不得再按旧 pid 发信号。
+    Unknown,
+}
+
+/// Waits for the child to exit within the timeout.
+fn wait_for_exit(child: &mut Child, timeout: Duration) -> ExitWait {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         match child.try_wait() {
-            Ok(Some(_)) => return true,
+            Ok(Some(_)) => return ExitWait::Exited,
             Ok(None) => thread::sleep(Duration::from_millis(50)),
             Err(error) => {
                 desktop_log(&format!("[omp-desktop] could not reap the sidecar: {error}"));
-                return false;
+                return ExitWait::Unknown;
             }
         }
     }
-    false
-}
-
-/// Waits for the port to become bindable again; reports whether it did.
-///
-/// Only `PortStatus::Free` counts: a probe that proved nothing (an unconfirmed
-/// status) is not evidence that the port is usable. The caller decides how to
-/// escalate, so this stays silent.
-fn wait_for_port_release(port: u16, timeout: Duration) -> bool {
-    let deadline = Instant::now() + timeout;
-    loop {
-        if matches!(probe_port(port), PortStatus::Free) {
-            return true;
-        }
-        if Instant::now() >= deadline {
-            return false;
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
+    ExitWait::Running
 }
 
 /// Reports a failure the user can see, then leaves the exit to them.
@@ -400,7 +406,9 @@ fn start_server(app: &mut tauri::App) -> Result<(), String> {
 ///
 /// A probe separates a live listener from a socket lingering in TIME_WAIT: the
 /// listener accepts the connection, the lingering socket refuses it, so a
-/// recently closed server never blocks the next launch.
+/// recently closed server never blocks the next launch. The refusal may arrive
+/// as a reset right after a restart, so a free verdict is repeated a few times
+/// before it is reported.
 enum PortStatus {
     /// Nothing listens: the port can be bound.
     Free,
@@ -413,11 +421,27 @@ enum PortStatus {
 
 fn probe_port(port: u16) -> PortStatus {
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
-        Ok(_) => PortStatus::Occupied,
-        Err(error) if error.kind() == ErrorKind::ConnectionRefused => PortStatus::Free,
-        Err(error) => PortStatus::Unconfirmed(error.to_string()),
+    for attempt in 0..PORT_PROBE_ATTEMPTS {
+        if attempt > 0 {
+            thread::sleep(PORT_PROBE_RETRY_DELAY);
+        }
+        match TcpStream::connect_timeout(&addr, Duration::from_millis(500)) {
+            Ok(_) => return PortStatus::Occupied,
+            Err(error) if is_no_listener_error(error.kind()) => {}
+            Err(error) => return PortStatus::Unconfirmed(error.to_string()),
+        }
     }
+    // 每次尝试都没有进程 accept 这个连接，端口可以绑定。
+    PortStatus::Free
+}
+
+/// 无人 accept 的错误：拒绝、复位与中断都算。服务刚退出或刚绑定的瞬间，本机
+/// 可能先回 RST 而不是干净的拒绝，所以探测会短重试几次再下结论。
+fn is_no_listener_error(kind: ErrorKind) -> bool {
+    matches!(
+        kind,
+        ErrorKind::ConnectionRefused | ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted
+    )
 }
 
 /// Why the fixed port cannot be used, or `None` when the probe proved it free.
@@ -534,9 +558,9 @@ enum GroupSignal {
 /// Fire-and-forget signal to the sidecar's process group.
 ///
 /// Unix signals the group itself, which outlives its leader. Windows
-/// enumerates the tree from the leader instead, so a retry after the leader has
-/// already exited cannot reach the leftover descendant; the wait that follows
-/// still reports it in the log.
+/// enumerates the tree from the leader instead, so the tree is only reachable
+/// while the leader is unreaped — callers signal before the leader is reaped,
+/// never after (a reaped pid can be reused by an unrelated process).
 fn kill_process_group(pid: u32, signal: GroupSignal) {
     #[cfg(unix)]
     {
@@ -647,22 +671,44 @@ mod tests {
         assert_eq!(SERVER_PORT, 30141);
     }
 
-    // A listener that outlives the leader must be reported, not assumed gone:
-    // terminate() only escalates when this returns false.
+    // 关闭监听后不能再说「有人在 accept」。平台差异只影响 Free 与 Unconfirmed
+    // 的取舍：Windows 的 connect_timeout 会把拒绝报成超时，两种结果都不该是
+    // Occupied，否则端口会被误判成仍被占用。
     #[test]
-    fn waiting_for_a_held_port_reports_unreleased() {
-        let held = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-            .expect("bind an ephemeral port to stand in for a leftover listener");
-        let port = held.local_addr().expect("ephemeral address").port();
-        let started = Instant::now();
+    fn closed_listener_is_never_reported_as_occupied() {
+        let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+            .expect("bind an ephemeral port to stand in for a closed server");
+        let port = listener.local_addr().expect("ephemeral address").port();
+        drop(listener);
 
+        let status = probe_port(port);
+        let label = match &status {
+            PortStatus::Free => String::from("free"),
+            PortStatus::Occupied => String::from("occupied"),
+            PortStatus::Unconfirmed(reason) => format!("unconfirmed: {reason}"),
+        };
         assert!(
-            !wait_for_port_release(port, Duration::from_millis(150)),
-            "a held port must not be reported as released"
+            !matches!(status, PortStatus::Occupied),
+            "a closed listener must not look occupied, got {label}"
         );
+    }
+
+    // 复位与中断同样说明没有人 accept，只有真正没结论的错误才算未确认。
+    #[test]
+    fn reset_and_abort_count_as_nobody_listening() {
+        for kind in [
+            ErrorKind::ConnectionRefused,
+            ErrorKind::ConnectionReset,
+            ErrorKind::ConnectionAborted,
+        ] {
+            assert!(
+                is_no_listener_error(kind),
+                "{kind:?} means no process accepted the connection"
+            );
+        }
         assert!(
-            started.elapsed() >= Duration::from_millis(150),
-            "the wait must use its whole timeout before giving up"
+            !is_no_listener_error(ErrorKind::TimedOut),
+            "a timeout proves nothing about the port"
         );
     }
 }
