@@ -23,7 +23,8 @@ import { cfgTelemetryOtlpExportEnabled } from "@oh-my-pi/pi-coding-agent/telemet
  * effect on the next launch.
  */
 declare global {
-  var __ompTelemetryStarted: Promise<boolean> | undefined;
+  var __ompTelemetryStarted: Promise<void> | undefined;
+  var __ompTelemetryInitTimedOut: boolean | undefined;
 }
 
 const INIT_TIMEOUT_MS = 3_000;
@@ -31,26 +32,31 @@ const INIT_TIMEOUT_MS = 3_000;
 function startTelemetryExport(settings: Settings): Promise<boolean> {
   // Telemetry is optional observability: an init failure or a stalled module
   // load must not fail or block session creation. omp caches its own rejected
-  // init promise, so a retry would replay the same error — record the outcome
-  // once and keep sessions running without export until the process restarts.
-  globalThis.__ompTelemetryStarted ??= withTimeout(
-    (async () => {
-      await initTelemetryExport(cfgTelemetryOtlpExportEnabled.get(settings));
-      return isTelemetryExportEnabled();
-    })(),
-    INIT_TIMEOUT_MS,
-    () => {
-      console.error("[ompdesk] telemetry export init timed out; sessions continue without export");
-      return false;
-    },
+  // init promise, so a retry would replay the same error — this one attempt
+  // stands for the process, and a failure keeps sessions running without export.
+  globalThis.__ompTelemetryStarted ??= initTelemetryExport(
+    cfgTelemetryOtlpExportEnabled.get(settings),
   ).catch((error: unknown) => {
     console.error(
       "[ompdesk] telemetry export init failed:",
       error instanceof Error ? error.message : error,
     );
-    return false;
   });
-  return globalThis.__ompTelemetryStarted;
+
+  // After a timeout, stop blocking new sessions but keep asking the SDK whether
+  // the late init finished: caching `false` here would contradict providers that
+  // registered anyway.
+  if (globalThis.__ompTelemetryInitTimedOut) return Promise.resolve(isTelemetryExportEnabled());
+
+  return withTimeout(
+    globalThis.__ompTelemetryStarted.then(() => isTelemetryExportEnabled()),
+    INIT_TIMEOUT_MS,
+    () => {
+      globalThis.__ompTelemetryInitTimedOut = true;
+      console.error("[ompdesk] telemetry export init timed out; sessions continue without export");
+      return false;
+    },
+  );
 }
 
 /**
