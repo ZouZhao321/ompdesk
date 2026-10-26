@@ -64,12 +64,22 @@ export async function sessionTelemetry(
 /**
  * Push buffered spans at the end of a turn. omp batches on a 30-second timer,
  * which would leave a fresh trace invisible for that long in the browser.
- * Never rejects; callers that need the flush to finish (shutdown) await it.
+ * Never rejects; callers that need the flush to finish (shutdown) await it and
+ * pass `timeoutMs` so an unreachable collector cannot hold the caller open for
+ * the exporter's own timeout.
  */
-export async function flushSessionTelemetry(): Promise<void> {
+export async function flushSessionTelemetry(timeoutMs?: number): Promise<void> {
   try {
-    await flushTelemetryExport();
+    const flushing = flushTelemetryExport();
+    await (timeoutMs === undefined ? flushing : withTimeout(flushing, timeoutMs));
   } catch (error) {
     console.error("[ompdesk] telemetry flush failed:", error instanceof Error ? error.message : error);
   }
+}
+
+function withTimeout(work: Promise<void>, timeoutMs: number): Promise<void> {
+  const expired = Promise.withResolvers<void>();
+  const timer = setTimeout(expired.resolve, timeoutMs);
+  timer.unref?.();
+  return Promise.race([work, expired.promise]).finally(() => clearTimeout(timer));
 }
