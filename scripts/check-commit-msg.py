@@ -23,8 +23,8 @@ def read_subject(path: str) -> str:
     """
     with open(path, encoding="utf-8") as message_file:
         for line in message_file:
-            stripped = line.rstrip("\r\n")
-            if stripped.strip() and not stripped.lstrip().startswith("#"):
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
                 return stripped
     return ""
 
