@@ -32,7 +32,7 @@ function positiveInt(name, fallback) {
 }
 
 const PORT = positiveInt("OMPDESK_SMOKE_PORT", 30199);
-const DIST_DIR = process.env.OMPDESK_DIST_DIR ?? ".next-smoke";
+const DIST_DIR = process.env.OMPDESK_DIST_DIR?.trim() || ".next-smoke";
 const STARTUP_TIMEOUT_MS = positiveInt("OMPDESK_SMOKE_STARTUP_MS", 240_000);
 const BASE_URL = `http://${HOST}:${PORT}`;
 const AUTH = process.env.OMPDESK_SMOKE_AUTH ?? "";
@@ -75,6 +75,7 @@ if (await probePort()) {
 
 const output = [];
 let childExit = null;
+let childClosed = false;
 let childError = null;
 
 const child = spawn(
@@ -105,6 +106,10 @@ child.on("error", (error) => {
 child.on("exit", (code, signal) => {
   childExit = { code, signal };
 });
+// exit 先于 stdio 读空触发；日志末尾要等 close，否则失败原因会缺最后几行。
+child.on("close", () => {
+  childClosed = true;
+});
 
 /**
  * 按进程组收尾。直接子进程先退出、孙进程仍占着端口是常见情形，所以这里不看
@@ -127,7 +132,7 @@ async function stopServer() {
       }
     }
   };
-  const exited = childExit ? Promise.resolve() : new Promise((resolve) => child.once("exit", resolve));
+  const exited = childClosed ? Promise.resolve() : new Promise((resolve) => child.once("close", resolve));
   send("SIGTERM");
   const force = setTimeout(() => send("SIGKILL"), 5_000);
   await Promise.race([exited, Bun.sleep(6_000)]);
