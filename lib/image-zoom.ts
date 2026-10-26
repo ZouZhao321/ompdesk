@@ -120,7 +120,10 @@ export function pinchCamera(
   return panCamera(zoomed, next.x - previous.x, next.y - previous.y, natural, viewport);
 }
 
+/** 比例比较的容差：读数取整、按钮高亮与适配判断共用同一阈值。 */
+export const ZOOM_SCALE_EPSILON = 0.001;
+
 /** 当前比例是否等于适配比例（用于双击切换与「适配」按钮的按下状态）。 */
 export function isFitCamera(camera: ZoomCamera, natural: Size, viewport: Size): boolean {
-  return Math.abs(camera.scale - fitZoom(natural, viewport)) < 0.001;
+  return Math.abs(camera.scale - fitZoom(natural, viewport)) < ZOOM_SCALE_EPSILON;
 }
