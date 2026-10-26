@@ -1360,13 +1360,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             <button
                               onClick={() => void handleRemoveWorktree(wt.path, true)}
                               disabled={wtBusy}
-                              style={{ padding: "3px 9px", background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                              style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                             >
                               {t("sidebar.force")}
                             </button>
                             <button
                               onClick={() => setWtConfirmRemove(null)}
-                              style={{ padding: "3px 9px", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
+                              style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
                             >
                               {t("sidebar.cancel")}
                             </button>
@@ -1493,6 +1493,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                          placeholder={t("sidebar.branchName")}
                         style={{
                           width: "100%",
+                          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                           fontSize: 11,
                           fontFamily: "var(--font-mono)",
                           padding: "5px 8px",
@@ -1511,6 +1512,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                           style={{
                             flex: 1,
                             padding: "4px 0",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             background: "var(--accent)",
                             border: "none",
                             borderRadius: 5,
@@ -1528,6 +1530,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                           style={{
                             flex: 1,
                             padding: "4px 0",
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                             background: "var(--bg-hover)",
                             border: "1px solid var(--border)",
                             borderRadius: 5,
@@ -1578,14 +1581,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                               <button
                                 type="button"
                                 onClick={() => executeRemoveProject(project)}
-                                style={{ padding: "3px 9px", background: "var(--danger)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                                style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "var(--danger)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                               >
                                 {t("sidebar.removeProjectAnyway")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setRemoveProjectConfirm(null)}
-                                style={{ padding: "3px 9px", background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
+                                style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
                               >
                                 {t("sidebar.cancel")}
                               </button>
