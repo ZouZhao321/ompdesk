@@ -117,43 +117,32 @@ set up once keeps working across restarts. The `ompdesk` CLI launcher defaults
 to 30141 but takes another port (`ompdesk --port 8080`, `PORT=8080 ompdesk`);
 point the tailnet forward at whichever port it uses.
 
-1. Start ompdesk on the machine that holds your projects and sessions: the
-   desktop app, `ompdesk`, or `bun run start`.
-2. Turn the password lock on (see [Password access](#password-access)). Phone
-   access without Basic Auth hands your agent to everyone on the tailnet.
-3. Forward the loopback port into your tailnet. `--bg` keeps the forward in
-   place across reboots:
-   ```bash
-   tailscale serve --bg --tcp=30141 tcp://localhost:30141
-   ```
-4. On the phone, open `http://<tailnet address>:30141` — the machine's tailnet
-   IPv4 address (`tailscale ip -4` prints it) — and sign in with the Basic
-   Auth username `omp` and the password from step 2.
+Start ompdesk on the machine that holds your projects and sessions, forward
+the loopback port into the tailnet, and open the tailnet address from the
+phone:
 
-Keep these constraints in mind:
+```bash
+tailscale serve --bg --tcp=30141 tcp://localhost:30141
+```
 
+`--bg` keeps the forward in place across reboots. On the phone open
+`http://<tailnet IPv4>:30141` — `tailscale ip -4` prints the address — and sign
+in as `omp`.
+
+- **Set the password lock first** (see [Password access](#password-access)).
+  Phone access without Basic Auth hands your agent to everyone on the tailnet.
 - **MagicDNS names need `OMPDESK_ALLOWED_HOSTS`.** IP literals and loopback
-  names pass the host check as they are; the machine's tailnet name
-  (`<machine>.<tailnet>.ts.net`) does not, so add that exact name
-  (`OMPDESK_ALLOWED_HOSTS=myhost.tail1234.ts.net`) before opening
-  `http://myhost.tail1234.ts.net:30141`. The desktop app reads the variable
-  from the environment it was launched in.
+  names pass the host check as they are; `<machine>.<tailnet>.ts.net` needs that
+  exact name in the variable. The desktop app reads it from the environment it
+  was launched in.
 - **Plain HTTP is only acceptable inside the tailnet.** Basic Auth sends the
-  password in cleartext, so reaching ompdesk from outside a trusted tailnet
-  needs TLS — for example a tailnet HTTPS forward
-  (`tailscale serve --bg --https=443 http://localhost:30141`, then
-  `https://<tailnet address>/`) or a reverse proxy that terminates HTTPS.
-- **Run one ompdesk server per port.** The desktop shell cannot bind a port
-  another process already holds: the window shows `port 30141 on 127.0.0.1 is
-  already in use: the port accepts connections`, and closing it exits with a
-  non-zero status instead of picking another port. When the probe cannot prove
-  the port is free (timeout, permission), the window says the port could not be
-  confirmed free and names the probe error instead of claiming another server is
-  running. The CLI launcher passes the requested port through
-  unchanged, so a taken port fails there too instead of moving to a free one.
+  password in cleartext; outside a trusted tailnet, terminate TLS at a tailnet
+  HTTPS forward or a reverse proxy.
+- **Run one ompdesk server per port.** A taken port fails instead of moving to a
+  free one.
 
-The desktop shell writes its startup lines (including the port it serves) to
-`omp-desktop.log` in the system temp directory.
+Full walkthrough, verification commands, troubleshooting and the security
+boundary: [docs/tailscale.md](./docs/tailscale.md) (Chinese).
 
 ## Model roles
 
