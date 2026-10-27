@@ -15,8 +15,8 @@ services:
         UID: ${OMP_UID:-1000}
         GID: ${OMP_GID:-1000}
     image: ompdesk:local
-    # Loopback only. ompdesk can run a high-privilege agent, so read
-    # docs/docker.md before publishing this on 0.0.0.0.
+    # Loopback only. ompdesk can run a high-privilege agent; docs/deployment.md
+    # explains why publishing this on 0.0.0.0 is not an option.
     ports:
       - "127.0.0.1:${OMPDESK_PORT:-30141}:30141"
     environment:
