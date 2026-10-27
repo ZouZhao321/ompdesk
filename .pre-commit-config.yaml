@@ -1,5 +1,12 @@
-# 安装：pre-commit install
-default_install_hook_types: [commit-msg]
+# 安装：pre-commit install（default_install_hook_types 会一次装齐三种钩子）
+#
+# 三层，越往后越贵，每层拦下一层拦不住的东西：
+# - commit-msg：提交标题格式，毫秒级
+# - pre-commit：类型检查，十秒级
+# - pre-push：与 CI 的 verify job 同一条流水线（类型检查、构建、开发冒烟）
+#
+# 临时跳过某一步：SKIP=typecheck git commit ...
+default_install_hook_types: [commit-msg, pre-commit, pre-push]
 repos:
   - repo: local
     hooks:
@@ -8,3 +15,17 @@ repos:
         entry: python scripts/check-commit-msg.py
         language: python
         stages: [commit-msg]
+
+      - id: typecheck
+        name: 类型检查
+        entry: bun run typecheck
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: verify-before-push
+        name: 推送前完整校验（构建与开发冒烟，与 CI 相同）
+        entry: bun run verify:push
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
