@@ -108,9 +108,10 @@ On the phone open `http://<tailnet IPv4>:30141` — `tailscale ip -4` prints the
 address — and sign in as `omp`. Walkthrough, verification commands and
 troubleshooting: [docs/tailscale.md](./docs/tailscale.md) (Chinese).
 
-Not used in any deployment: binding the host to `0.0.0.0`, router port
-forwarding, `tailscale funnel`. Containers are the exception — the process binds
-`0.0.0.0` inside the container while the host publishes on loopback.
+The launcher refuses a non-loopback `--hostname` / `OMPDESK_HOSTNAME`, so the
+host never opens the port beyond `127.0.0.1`. Containers are the exception: the
+image sets `OMPDESK_ALLOW_NON_LOOPBACK=1` and binds `0.0.0.0` inside its own
+network namespace while the host publishes on loopback.
 
 Set the password before anything reaches the server from outside the machine;
 see [Password access](#password-access). Full rules:
