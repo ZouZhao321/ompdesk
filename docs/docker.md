@@ -90,15 +90,18 @@ detached container has none of. Pass `OMPDESK_PASSWORD` instead, or set the
 password once in **Settings → Access** and let it persist in the mounted
 `~/.omp/agent/ompdesk-auth.json`.
 
-## Exposing it beyond localhost
+## Reaching it beyond the host
 
 `0.0.0.0` inside the container is not the same as publishing on `0.0.0.0` on the
-host — the `-p 127.0.0.1:30141:30141` above keeps it local. Before widening
-that:
+host — the `-p 127.0.0.1:30141:30141` above keeps it local, and it stays that
+way. Forward the loopback port into a tailnet instead of widening it; see
+[deployment.md](./deployment.md) for the rule and [tailscale.md](./tailscale.md)
+for the steps.
 
-- Turn the password on. Basic Auth does not encrypt the password in transit, so
-  terminate HTTPS at a trusted reverse proxy and set `OMPDESK_ALLOWED_HOSTS` to
-  the hostname that proxy uses.
+- Turn the password on. Basic Auth does not encrypt the password in transit; a
+  tailnet carries the connection inside WireGuard.
+- `OMPDESK_ALLOWED_HOSTS` still applies when a tailnet MagicDNS name is used
+  instead of the tailnet IP.
 - Remember that the agent runs with the container's access to the mounts you
   gave it. Mount the narrowest project tree that is useful.
 

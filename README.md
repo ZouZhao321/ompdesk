@@ -66,33 +66,55 @@ The `ompdesk` entrypoint itself runs under Node or Bun; it locates Bun and re-ex
 
 ```bash
 ompdesk --port 8080              # custom port
-ompdesk --hostname 0.0.0.0       # expose on a trusted network
-ompdesk -p 8080 -H 0.0.0.0       # combine options
 ompdesk --no-open                # do not open the browser automatically
 ompdesk --authenticated          # require a password (asks for one if none is set)
 ompdesk --reset-password         # set a new password when the old one is lost
 
 PORT=8080 ompdesk                 # environment variable is also supported
-OMPDESK_HOSTNAME=0.0.0.0 ompdesk  # explicit network exposure
 OMPDESK_ALLOWED_HOSTS=omp.internal ompdesk  # allow an exact proxy/custom hostname
 OMPDESK_AUTHENTICATED=1 ompdesk   # same as --authenticated
 OMPDESK_PASSWORD='a-long-random-password' ompdesk  # override the stored password
 OMPDESK_NO_OPEN=1 ompdesk         # useful when running as a background service
 ```
 
-## Docker
+## Deployment
 
-A `Dockerfile` builds ompdesk from source and runs it under Bun in the
-container. It still needs the omp home the CLI writes, so mount it:
+ompdesk listens on `127.0.0.1` and never on a LAN or public address. Every
+deployment keeps that rule: remote access forwards the loopback port into a
+tailnet, and the password lock goes on before anything leaves the machine.
+
+**Local.** `bunx ompdesk@latest` or the desktop app, then open
+<http://127.0.0.1:30141>.
+
+**Docker.** A `Dockerfile` builds ompdesk from source and runs it under Bun. It
+still needs the omp home the CLI writes, so mount it:
 
 ```bash
 OMPDESK_PASSWORD='a-long-random-password' \
 OMP_UID=$(id -u) OMP_GID=$(id -g) docker compose up --build
 ```
 
-That publishes <http://127.0.0.1:30141> with the password lock on, sharing
-`$HOME/.omp` with the container so terminal sessions continue in the browser.
-Volume layout, UID/GID matching and reverse-proxy notes: [docs/docker.md](./docs/docker.md).
+The port is published on loopback and `$HOME/.omp` is shared with the container,
+so terminal sessions continue in the browser. Volume layout and UID/GID
+matching: [docs/docker.md](./docs/docker.md).
+
+**Remote.** Forward the loopback port into your tailnet:
+
+```bash
+tailscale serve --bg --tcp=30141 tcp://localhost:30141
+```
+
+On the phone open `http://<tailnet IPv4>:30141` — `tailscale ip -4` prints the
+address — and sign in as `omp`. Walkthrough, verification commands and
+troubleshooting: [docs/tailscale.md](./docs/tailscale.md) (Chinese).
+
+Not used in any deployment: binding the host to `0.0.0.0`, router port
+forwarding, `tailscale funnel`. Containers are the exception — the process binds
+`0.0.0.0` inside the container while the host publishes on loopback.
+
+Set the password before anything reaches the server from outside the machine;
+see [Password access](#password-access). Full rules:
+[docs/deployment.md](./docs/deployment.md) (Chinese).
 
 ## Password access
 
@@ -108,41 +130,6 @@ ompdesk can invoke a high-privilege agent. Basic Auth does not encrypt the passw
 API requests accept loopback names, IP literals, the selected bind hostname, and exact comma-separated names in `OMPDESK_ALLOWED_HOSTS`. Configure that variable when a trusted reverse proxy uses a different external hostname.
 
 Full details, including the recovery threat model: [docs/authentication.md](./docs/authentication.md).
-
-## Phone access (Tailscale)
-
-The desktop app and the `bun run dev` / `bun run start` scripts serve the
-fixed loopback port **30141** and never pick another one, so a tailnet forward
-set up once keeps working across restarts. The `ompdesk` CLI launcher defaults
-to 30141 but takes another port (`ompdesk --port 8080`, `PORT=8080 ompdesk`);
-point the tailnet forward at whichever port it uses.
-
-Start ompdesk on the machine that holds your projects and sessions, forward
-the loopback port into the tailnet, and open the tailnet address from the
-phone:
-
-```bash
-tailscale serve --bg --tcp=30141 tcp://localhost:30141
-```
-
-`--bg` keeps the forward in place across reboots. On the phone open
-`http://<tailnet IPv4>:30141` — `tailscale ip -4` prints the address — and sign
-in as `omp`.
-
-- **Set the password lock first** (see [Password access](#password-access)).
-  Phone access without Basic Auth hands your agent to everyone on the tailnet.
-- **MagicDNS names need `OMPDESK_ALLOWED_HOSTS`.** IP literals and loopback
-  names pass the host check as they are; `<machine>.<tailnet>.ts.net` needs that
-  exact name in the variable. The desktop app reads it from the environment it
-  was launched in.
-- **Plain HTTP is only acceptable inside the tailnet.** Basic Auth sends the
-  password in cleartext; outside a trusted tailnet, terminate TLS at a tailnet
-  HTTPS forward or a reverse proxy.
-- **Run one ompdesk server per port.** A taken port fails instead of moving to a
-  free one.
-
-Full walkthrough, verification commands, troubleshooting and the security
-boundary: [docs/tailscale.md](./docs/tailscale.md) (Chinese).
 
 ## Model roles
 
