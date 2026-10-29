@@ -72,6 +72,7 @@ agent-client.ts      为 /api/agent 命令提供带类型的 fetch 辅助
 api-request-log.ts   withRequestLog：统一请求日志与耗时
 request-security.ts  请求来源与主机校验
 logging.ts           服务端日志入口
+memory-monitor.ts    进程内存采样：process.memory 记录的数据来源
 sse-lifecycle.ts     两条 SSE 路由共用的连接生命周期
 http-dispatcher.ts   代理环境变量接线的运行时分支
 web-auth.ts          密码锁的读取方
