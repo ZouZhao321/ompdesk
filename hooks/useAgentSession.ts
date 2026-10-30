@@ -182,6 +182,11 @@ export interface UseAgentSessionOptions {
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSessionStatsPanelOpen?: () => void;
   setToolPreset?: (preset: "none" | "default" | "full") => void;
+  /**
+   * 把转写视图带到末尾。定位由虚拟列表执行，hook 只负责决定什么时候该带，
+   * 不再自己动滚动元素。
+   */
+  scrollTranscriptToEnd?: (behavior: ScrollBehavior) => void;
 }
 
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -453,8 +458,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const bashRunningRef = useRef(false);
   const bashRecoveryIdRef = useRef(0);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
-  const initialScrollDoneRef = useRef(false);
-  const completionScrollAllowedRef = useRef(true);
   const [autoFollowPaused, setAutoFollowPaused] = useState(false);
   const [goalStatus, setGoalStatus] = useState<GoalStatusInfo | null>(null);
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
@@ -462,7 +465,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const ignoreProgrammaticScrollUntilRef = useRef(0);
   // Forward reference: handleSend/executeBash are declared above setAutoFollow.
   const setAutoFollowRef = useRef<(following: boolean) => void>(() => {});
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
+  const scrollTranscriptToEndRef = useRef(opts.scrollTranscriptToEnd);
+  scrollTranscriptToEndRef.current = opts.scrollTranscriptToEnd;
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const ensuringNewSessionRef = useRef<Promise<string | null> | null>(null);
   const newSessionPromotedRef = useRef(false);
@@ -2313,17 +2318,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [setToolPresetState]);
 
-  // Single writer for the follow flag so the ref (read by the scroll effects)
-  // and the state (read by the jump-to-bottom button) never drift apart.
+  // 跟随开关只写状态：滚动位置由列表按这个开关决定，这里不再直接改滚动元素。
   const setAutoFollow = useCallback((following: boolean) => {
-    completionScrollAllowedRef.current = following;
     setAutoFollowPaused((paused) => (paused === !following ? paused : !following));
   }, []);
   setAutoFollowRef.current = setAutoFollow;
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    scrollTranscriptToEndRef.current?.(behavior);
   }, []);
 
   const resumeAutoFollow = useCallback(() => {
@@ -2346,10 +2349,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!agentRunningRef.current && !bashRunningRef.current) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    // The auto-follow effect refreshes the programmatic-scroll window on every
-    // streaming chunk, so during a stream it is always open. Honour a scroll
-    // the user actually drove (wheel/touch/pointer/keys) regardless of it,
-    // otherwise following could never be paused mid-turn.
+    // 列表自己跟随滚动时也会触发 scroll；那不是用户操作，别让它改跟随开关。
+    // 用户真正驱动的滚动（滚轮/触摸/指针/方向键）要照常生效，否则输出中途
+    // 永远停不下跟随。
     const userDriven = Date.now() <= userScrollIntentUntilRef.current;
     if (!userDriven && Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
@@ -2455,29 +2457,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
   }, [messages.length, loading, handleScrollPositionChange, markUserScrollIntent]);
 
-  useEffect(() => {
-    if ((!agentRunning && !bashRunning) || !completionScrollAllowedRef.current) return;
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const frame = requestAnimationFrame(() => {
-      ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-      container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [agentRunning, bashRunning, messages.length, streamState.streamingMessage, agentPhase, pendingBash]);
-
-  useEffect(() => {
-    if (messages.length === 0) return;
-    if (!initialScrollDoneRef.current) {
-      initialScrollDoneRef.current = true;
-      scrollToBottom("instant");
-      return;
-    }
-    if (completionScrollAllowedRef.current) {
-      scrollToBottom(agentRunningRef.current || bashRunningRef.current ? "instant" : "smooth");
-    }
-  }, [messages.length, agentRunning, bashRunning, scrollToBottom]);
-
   // Load model list
   useEffect(() => {
     const controller = new AbortController();
@@ -2530,7 +2509,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     autoFollowPaused, resumeAutoFollow,
     goalStatus,
     // Refs
-    sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
+    sessionIdRef, eventSourceRef, scrollContainerRef,
     // Actions
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange, handleRoleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
