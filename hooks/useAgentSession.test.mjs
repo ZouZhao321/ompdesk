@@ -218,11 +218,11 @@ test("feeds the scroll position into the follow reducer", () => {
   );
 
   // 「上滚停止跟随、程序化滚动不算数」的判定在 lib/transcript-follow.ts，由它的
-  // 逻辑测试覆盖；这里只钉住接线：滚动位置按三个字段交给判定。
+  // 逻辑测试覆盖；这里只钉住接线：滚动位置按两个字段交给判定。
   assert.match(scrollHandlerSource, /type: "scroll"/);
   assert.match(scrollHandlerSource, /userDriven: Date\.now\(\) <= userScrollIntentUntilRef\.current/);
-  assert.match(scrollHandlerSource, /programmaticWindow: Date\.now\(\) < ignoreProgrammaticScrollUntilRef\.current/);
   assert.match(scrollHandlerSource, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
+  assert.doesNotMatch(source, /programmaticWindow/);
 });
 
 test("restores follow and brings the view to the end when a prompt is submitted", () => {
@@ -251,14 +251,16 @@ test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   // 单一写入点：跟随开关只由 setAutoFollow 写，状态不会和判定漂移。
   assert.match(source, /const setAutoFollow = useCallback\(\(following: boolean\) => \{\s*setAutoFollowPaused\(/);
   assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{\s*applyFollow\(\{ type: "resume" \}\);\s*\}, \[applyFollow\]\);/);
-  // 意图窗口的清理只在 applyFollow 里做，提交与「回到底部」共用同一条前置清理。
+  // 意图窗口的清理只在 applyFollow 里做：提交、「回到底部」与跳转共用同一条前置清理。
   assert.equal(source.match(/userScrollIntentUntilRef\.current = 0/g)?.length, 1);
+  // 跳转自己会带着列表滚一次，窗口留着的话这次滚动会被当成用户驱动。
+  assert.match(source, /if \(outcome\.scrollToEnd \|\| event\.type === "pause"\) userScrollIntentUntilRef\.current = 0;/);
   assert.match(source, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow,/);
   // Scrolling is the list's job: the hook hands the jump to the list handle
   // instead of touching the scroll element itself. 入口是必填的：漏接在 typecheck 暴露，
   // 不会出现状态写着「跟随中」却没有落点。
   assert.match(source, /scrollTranscriptToEnd: \(behavior: ScrollBehavior\) => void;/);
-  assert.match(source, /const scrollToBottom = useCallback\(\(behavior: ScrollBehavior = "smooth"\) => \{\s*ignoreProgrammaticScrollUntilRef\.current = Date\.now\(\) \+ PROGRAMMATIC_SCROLL_IGNORE_MS;\s*scrollTranscriptToEndRef\.current\(behavior\);/);
+  assert.match(source, /const scrollToBottom = useCallback\(\(behavior: ScrollBehavior = "smooth"\) => \{\s*scrollTranscriptToEndRef\.current\(behavior\);\s*\}, \[\]\);/);
   assert.doesNotMatch(source, /scrollTranscriptToEndRef\.current\?\./);
   assert.doesNotMatch(source, /scrollIntoView/);
   assert.doesNotMatch(source, /container\.scrollTo\(/);

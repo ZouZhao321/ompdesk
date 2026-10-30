@@ -21,8 +21,6 @@ export type FollowEvent =
     type: "scroll";
     /** 这次滚动是不是用户自己驱动的（滚轮/触摸/指针/方向键）。 */
     userDriven: boolean;
-    /** 程序化滚动的静默窗口是否还没过。 */
-    programmaticWindow: boolean;
     /** 距列表底部的像素。 */
     distanceFromBottom: number;
   };
@@ -38,9 +36,10 @@ export interface FollowOutcome {
  * 事件对跟随开关的影响；这次事件不改状态时返回 null。
  *
  * 提交与「回到底部」都恢复跟随并把视图带到末尾；跳转停掉跟随，让「回到底部」
- * 按钮出现，跳转自己的定位不经过这里。滚动观测里，静默窗口内的程序化滚动不算
- * 数，用户驱动的滚动离开底部就停止跟随，回到贴底距离内则恢复跟随（列表自己跟随
- * 到底部时同样恢复）。
+ * 按钮出现，跳转自己的定位不经过这里。滚动观测里只有用户驱动的滚动改开关：
+ * 离开底部就停止跟随，回到贴底距离内则恢复跟随。程序化定位带动的滚动（回底与
+ * 跳转的落点、列表自行贴底、内容增高）说明不了用户的意图，一律不改开关——否则
+ * 跳转落在贴底距离内就会把刚停掉的跟随又打开，「回到底部」按钮不再出现。
  */
 export function reduceFollow(event: FollowEvent): FollowOutcome | null {
   switch (event.type) {
@@ -51,11 +50,10 @@ export function reduceFollow(event: FollowEvent): FollowOutcome | null {
     case "pause":
       return { paused: true, scrollToEnd: null };
     case "scroll": {
-      if (!event.userDriven && event.programmaticWindow) return null;
-      if (event.distanceFromBottom <= FOLLOW_BOTTOM_THRESHOLD_PX) {
-        return { paused: false, scrollToEnd: null };
-      }
-      return event.userDriven ? { paused: true, scrollToEnd: null } : null;
+      if (!event.userDriven) return null;
+      return event.distanceFromBottom <= FOLLOW_BOTTOM_THRESHOLD_PX
+        ? { paused: false, scrollToEnd: null }
+        : { paused: true, scrollToEnd: null };
     }
   }
 }
