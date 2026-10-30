@@ -24,7 +24,7 @@ import { AnimatedDropdown } from "./AnimatedDropdown";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { OmpWordmark } from "./OmpWordmark";
 import { ProjectPinMenuItem } from "./ProjectPinMenuItem";
-import { ProjectRow } from "./ProjectRow";
+import { ProjectRow, type ProjectActivity } from "./ProjectRow";
 import { ProjectSortControl } from "./ProjectSortControl";
 import { projectMenuRowStyle } from "./project-menu-row-style";
 
@@ -1035,11 +1035,11 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     [sessionsForDisplay, runningSessionIds, waitingSessionIds],
   );
 
-  // Per-project activity counts for the project rows, keyed by the shared
-  // workspace key rule. `running` counts only sessions that are working (the
-  // waiting ones are reported separately), `unread` stays local to the sidebar.
+  // 每个工作区的活动计数，键走共用的工作区键规则。`running` 只数正在干活的
+  // 会话（等待回答单列）。未读会话按会话行同一个静态标记分组，所以项目行的
+  // 汇总与行内的灯在状态与颜色上始终一致。
   const projectActivity = useMemo(() => {
-    const counts = new Map<string, { running: number; waiting: number; unread: number }>();
+    const counts = new Map<string, ProjectActivity>();
     for (const session of sessionsForDisplay) {
       const key = workspaceKeyOf(session);
       if (!key) continue;
@@ -1048,14 +1048,22 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         entry = {
           running: workspaceActivity.get(key)?.active ?? 0,
           waiting: workspaceActivity.get(key)?.waiting ?? 0,
-          unread: 0,
+          unread: {},
         };
         counts.set(key, entry);
       }
-      if (unreadSessionIds.has(session.id)) entry.unread++;
+      const marker = resolveSessionMarker({
+        status: session.status,
+        isRunning: runningSessionIds.has(session.id),
+        isWaiting: waitingSessionIds.has(session.id),
+        isUnread: unreadSessionIds.has(session.id),
+      });
+      if (marker?.kind === "static") {
+        entry.unread[marker.status] = (entry.unread[marker.status] ?? 0) + 1;
+      }
     }
     return counts;
-  }, [sessionsForDisplay, workspaceActivity, unreadSessionIds]);
+  }, [sessionsForDisplay, workspaceActivity, unreadSessionIds, runningSessionIds, waitingSessionIds]);
 
   const executeRemoveProject = (project: string) => {
     const key = normalizeProjectKey(project);
