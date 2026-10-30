@@ -2334,15 +2334,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const applyFollow = useCallback((event: FollowEvent) => {
     const outcome = reduceFollow(event);
     if (!outcome) return;
+    // 主动回底的滚动是程序化的：先清掉用户滚动意图窗口，否则这次回底自己产生的
+    // 滚动会被当成用户驱动，跟随立刻又被判回暂停。提交与「回到底部」都走这里。
+    if (outcome.scrollToEnd) userScrollIntentUntilRef.current = 0;
     setAutoFollow(!outcome.paused);
     if (outcome.scrollToEnd) scrollToBottom(outcome.scrollToEnd);
   }, [scrollToBottom, setAutoFollow]);
   applyFollowRef.current = applyFollow;
 
   const resumeAutoFollow = useCallback(() => {
-    // Clear any lingering intent window so the smooth scroll we are about to
-    // start is not mistaken for the user scrolling away again.
-    userScrollIntentUntilRef.current = 0;
     applyFollow({ type: "resume" });
   }, [applyFollow]);
 
