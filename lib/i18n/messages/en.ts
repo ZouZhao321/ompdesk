@@ -347,6 +347,7 @@ export const enLocale: LocalePlugin = {
     "chat.previousPrompt": "Previous prompt",
     "chat.nextPrompt": "Next prompt",
     "chat.jumpToPrompt": "Jump to prompt {index}",
+    "chat.jumpToPromptDescription": "Prompt {index}: {prompt}",
     "chat.compacted": "Compacted",
     "chat.tokensSaved": "{saved} saved",
     "i18n.close": "Close",
