@@ -2386,8 +2386,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // 失效，调用方漏了松开也不会让跟随永久停摆。
     if (followObservationHeldRef.current) {
       if (Date.now() < followObservationHoldUntilRef.current) return;
-      followObservationHeldRef.current = false;
-      followObservationHoldUntilRef.current = 0;
+      // 到点收回走同一个松开入口：合上状态与截止时间只有一处写。
+      releaseFollowObservation();
     }
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -2398,7 +2398,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       userDriven: Date.now() <= userScrollIntentUntilRef.current,
       distanceFromBottom: container.scrollHeight - container.scrollTop - container.clientHeight,
     });
-  }, [applyFollow]);
+  }, [applyFollow, releaseFollowObservation]);
 
   const displayedSessionIdRef = useRef(session?.id);
   useEffect(() => {
