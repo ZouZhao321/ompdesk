@@ -160,30 +160,16 @@ body {
   background: var(--text-dim);
 }
 
-/* 转写滚动条的宽度只有一处来源：下面 ::-webkit-scrollbar 的 width。这条规则不要再写
-   scrollbar-width / scrollbar-color：Chromium 只要看到其中任意一个标准属性就改用原生
-   滚动条，::-webkit-scrollbar 的定宽与滑块样式一起失效（thin 的实际宽度由平台与缩放
-   决定，Windows 上是 10px），跳转条按 8px 留白就会压住那条滚动条并截获拖动。
-   scrollbar-gutter: stable 常驻留白，滚动条出现与否都不让正文左右跳。 */
+/* 转写区隐藏滚动条，与既有观感一致，跳转条因此不需要为滚动条留白。隐藏只写在这里，
+   组件的 className 不再挂 [scrollbar-width:none]：两处来源会互相覆盖，改一处就漏一处。 */
 .chat-session-scroll {
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
 }
 
+/* 不认识 scrollbar-width 的旧 Chromium 走这条兜底；两者都命中时标准属性生效，
+   伪元素规则不再参与渲染。 */
 .chat-session-scroll::-webkit-scrollbar {
-  /* 这里的宽度就是滚动条实际占的宽度，跳转条的右留白直接引用同一个变量
-     （.chat-transcript-region 声明）。 */
-  width: var(--chat-scrollbar-width);
-}
-
-.chat-session-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text-dim) 65%, transparent);
-  border: 2px solid transparent;
-  background-clip: content-box;
-  border-radius: 999px;
-}
-
-.chat-session-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text);
+  display: none;
 }
 
 :root {
@@ -1592,12 +1578,8 @@ span.linenumber {
   --transcript-rail-lane: 36px;
   /* 跳转条与对话列之间留的缝隙。 */
   --transcript-rail-gap: 6px;
-  /* 转写滚动条的宽度：::-webkit-scrollbar 用这个变量定宽，是它唯一的宽度来源，
-     所以这里的值就是稳定留白（scrollbar-gutter: stable）实际占的宽度，下面的最小
-     留白等于它；留白比它窄就会盖住滚动条并截获拖动。 */
-  --chat-scrollbar-width: 8px;
-  /* 跳转条右边缘的最小留白：让开滚动条占用的那条稳定留白。 */
-  --transcript-rail-margin: var(--chat-scrollbar-width);
+  /* 跳转条右边缘的最小留白。转写区隐藏滚动条，跳转条不需要为它让位。 */
+  --transcript-rail-margin: 4px;
   /* 悬停提示与车道之间的间距。 */
   --transcript-rail-tip-gap: 8px;
   /* 跳转条左缘相对转写区中线的偏移：版心一半 + 内边距 + 缝隙。 */
@@ -1755,9 +1737,9 @@ span.linenumber {
   overflow: hidden;
   pointer-events: none;
 }
-/* 放不下整条车道即藏起来：951 是 --transcript-rail-min-region (952px) 减一，宽度小于
+/* 放不下整条车道即藏起来：943 是 --transcript-rail-min-region (944px) 减一，宽度小于
    最小宽度就收起，避免跳转条压到正文右缘、抢走点击。 */
-@container transcript-rail-lane (max-width: 951px) {
+@container transcript-rail-lane (max-width: 943px) {
   .transcript-rail {
     display: none;
   }
