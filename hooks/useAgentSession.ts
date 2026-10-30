@@ -702,6 +702,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
       setContextUsage(d.contextUsage ?? null);
+      // 切分支或切叶是整段替换消息，既不会重挂列表也不走追加路径，跟随看不到任何
+      // 信号；重新载入成功就当作一次回底事件，视图落在新分支的末尾。
+      applyFollowRef.current({ type: "resume" });
       return true;
     } catch (e) {
       if (ownsContext()) console.error("Failed to load context:", e);
