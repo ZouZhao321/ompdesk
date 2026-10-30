@@ -116,7 +116,9 @@ function hasDisplayableProcessMessage(message: AgentMessage, options: DisplayOpt
   if (message.role === "assistant") {
     return getDisplayableAssistantBlocks(message as AssistantMessage, options).length > 0;
   }
-  return message.role === "custom";
+  // 自定义消息与 shell 执行都在过程区间里渲染：前者承载 compaction 之外的说明，
+  // 后者是用户自己敲下的命令与输出，折叠时漏掉它们等于把这段过程删掉。
+  return message.role === "custom" || message.role === "bashExecution";
 }
 
 function withAssistantBlocks(
