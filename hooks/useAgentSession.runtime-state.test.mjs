@@ -54,6 +54,7 @@ function harness() {
     agentRunningRef: { current: true },
     bashRunningRef: { current: true },
     modelSwitchPendingRef: { current: false },
+    activeLeafIdRef: { current: null },
     opts: {},
     onSessionForked: (...args) => effects.push(["identity", ...args]),
     rememberSessionContinuation: (sessionId, runtimeId) => { continuation.current = { sessionId, runtimeId }; },

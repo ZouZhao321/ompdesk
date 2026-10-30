@@ -80,6 +80,12 @@ function harness() {
     EntryIds: ["current-entry"],
     ContextUsage: { percent: 10, contextWindow: 1000, tokens: 100 },
     ActiveLeafId: "current-leaf",
+    Data: null,
+    Loading: false,
+    Error: null,
+    ThinkingLevel: "off",
+    EffectiveThinkingLevel: undefined,
+    CurrentModelOverride: null,
   };
   const bindings = {
     mountedRef: { current: true },
@@ -87,6 +93,9 @@ function harness() {
     runtimeIdRef: { current: "runtime:r1" },
     identityDraftKeyRef: { current: "b" },
     contextRequestRef: { current: 0 },
+    historyRequestRef: { current: 0 },
+    modelSwitchPendingRef: { current: false },
+    eventConnectionAttemptRef: { current: null },
     eventSourceRef: { current: null },
     eventSourceSessionIdRef: { current: "b" },
     eventSourceRuntimeIdRef: { current: null },
@@ -105,8 +114,8 @@ function harness() {
   };
   for (const field of Object.keys(ui)) {
     bindings[`set${field}`] = (value) => {
-      ui[field] = value;
-      effects.push([field, value]);
+      ui[field] = typeof value === "function" ? value(ui[field]) : value;
+      effects.push([field, ui[field]]);
     };
   }
   const client = productionModule(clientSource, { fetch: (...args) => bindings.fetch(...args) }, {
@@ -121,6 +130,8 @@ function harness() {
   };
   bindings.followSessionIdentity = callback("followSessionIdentity", bindings);
   bindings.runtimeIdRef.onIdentity = callback("onIdentity", bindings);
+  // 只载入正文、不落运行态：这条路径不需要 state 请求。
+  bindings.followRuntimeState = () => false;
   // 回底票号由 hook 的 effect 消费；这里只记下每次请求的值。
   let followTicket = 0;
   bindings.setContextFollowTicket = (update) => {
@@ -129,6 +140,7 @@ function harness() {
   };
   // Use an indirection only for fetch so responses can be scheduled per test.
   const callbackBindings = { ...bindings, fetch: (...args) => bindings.fetch(...args) };
+  bindings.loadSession = callback("loadSession", callbackBindings);
   bindings.loadContext = callback("loadContext", callbackBindings);
   bindings.handleNavigate = callback("handleNavigate", bindings);
   bindings.handleLeafChange = callback("handleLeafChange", bindings);
@@ -319,3 +331,68 @@ for (const superseded of ["different session selection", "unmount"]) {
     assert.deepEqual(h.effects, []);
   });
 }
+
+test("a fresh load records the leaf it landed on, so clicking that leaf changes nothing", async () => {
+  const h = harness();
+  h.bindings.fetch = async () => response({
+    sessionId: "b",
+    runtimeId: "runtime:r1",
+    leafId: "current-leaf",
+    context: { messages: [{ role: "user", content: "loaded" }], entryIds: ["loaded-entry"] },
+  });
+
+  await h.bindings.loadSession("b", true);
+
+  // 载入就是一次真实的叶子切换：状态与去重用的 ref 一起写。
+  assert.equal(h.ui.ActiveLeafId, "current-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
+  h.effects.length = 0;
+  h.bindings.fetch = () => { throw new Error("the loaded leaf must not be reloaded"); };
+
+  await h.bindings.handleLeafChange(h.ui.ActiveLeafId);
+
+  // 首屏落到的就是这条分支：再点一次不重载、不记回底票号，视图留在原处。
+  assert.deepEqual(h.effects, []);
+  assert.deepEqual(h.commands, []);
+});
+
+test("a missing session clears the recorded leaf together with the state", async () => {
+  const h = harness();
+  h.bindings.activeLeafIdRef.current = "current-leaf";
+  h.bindings.fetch = async () => response(null, 404);
+
+  await h.bindings.loadSession("b", true);
+
+  assert.equal(h.ui.ActiveLeafId, null);
+  assert.equal(h.bindings.activeLeafIdRef.current, null);
+});
+
+test("a navigation already under way is not reloaded by a click on the same leaf", async () => {
+  const h = harness();
+  const started = deferred();
+  const pending = deferred();
+  let contextRequests = 0;
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    contextRequests += 1;
+    assert.equal(contextRequests, 1, "the leaf already being loaded must not be reloaded");
+    started.resolve();
+    return { ok: true, json: () => pending.promise };
+  };
+
+  const navigating = h.bindings.handleNavigate("target-leaf");
+  await started.promise;
+  h.effects.length = 0;
+
+  // 载入还挂着，叶子标记已经落在新叶子上：再点这一叶不该另起一次整段载入。
+  await h.bindings.handleLeafChange("target-leaf");
+  assert.deepEqual(h.effects, []);
+
+  pending.resolve(context("target"));
+  await navigating;
+  await Promise.all(h.commands);
+  assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target" }]);
+});

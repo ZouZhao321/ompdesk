@@ -391,8 +391,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
-  // 最近一次成功载入的叶子：分支导航点的就是它时叶子没变，跳过整段重载，正在上滚
-  // 阅读的视图不会被拽回末尾。载入失败不写，再点一次仍会重试。
+  // 最近一次载入的叶子：分支导航点的就是它时叶子没变，跳过整段重载，正在上滚
+  // 阅读的视图不会被拽回末尾。凡是写 activeLeafId 的地方都要同时写它（载入、404
+  // 清空、两条导航路径），两边不一致就会把没变判成变了，或者反过来吞掉真导航。
   const activeLeafIdRef = useRef<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
@@ -621,6 +622,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (showLoading && ownsHistory()) {
           setData(null);
           setActiveLeafId(null);
+          activeLeafIdRef.current = null;
           setMessages([]);
           setError(null);
         }
@@ -634,7 +636,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         sid = d.sessionId;
       }
       setData(d);
+      // 载入就是一次真实的叶子切换：状态与 ref 一起写。只在导航路径写 ref 会让首屏
+      // 之后点已高亮的当前叶子被判成换了叶子，整段重载并把视图拽回末尾；一轮结束后
+      // 叶子前进了，ref 却还停在旧叶子上，点旧叶子又被去重判据静默吞掉。
       setActiveLeafId(d.leafId);
+      activeLeafIdRef.current = d.leafId;
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
       setContextUsage(d.contextUsage ?? null);
@@ -1853,8 +1859,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef).catch(() => {});
+    // 先写 ref 再改状态：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
+    // 同一段上下文被重载一遍又把视图拽回末尾。
+    activeLeafIdRef.current = entryId;
     setActiveLeafId(entryId);
-    if (await loadContext(sid, entryId)) activeLeafIdRef.current = entryId;
+    await loadContext(sid, entryId);
   }, [loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
