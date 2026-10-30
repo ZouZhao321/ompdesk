@@ -96,7 +96,16 @@ test("derives the rail geometry from the region constants", async () => {
   // 会盖住一条并截获拖动。留白跟着滚动条宽度走，不再出现两组独立的像素值。
   assert.equal(customPixel(region, "chat-scrollbar-width"), SCROLLBAR_PX);
   assert.match(region, /--transcript-rail-margin: var\(--chat-scrollbar-width\);/);
-  assert.match(declarations(".chat-session-scroll"), /scrollbar-gutter: stable;/);
+  // 滚动条的宽度只有 ::-webkit-scrollbar 一处来源。这条规则一旦写上 scrollbar-width
+  // 或 scrollbar-color，Chromium 就改用原生滚动条：定宽与滑块样式一起失效，thin 的
+  // 实际宽度由平台与缩放决定（Windows 上是 10px），留白不再等于 gutter，跳转条会压住
+  // 滚动条并截获拖动。列表的 className 同样不能再挂 [scrollbar-width:*]。
+  const scroller = declarations(".chat-session-scroll");
+  assert.ok(scroller, "missing .chat-session-scroll");
+  assert.doesNotMatch(scroller, /scrollbar-width/);
+  assert.doesNotMatch(scroller, /scrollbar-color/);
+  assert.doesNotMatch(chatWindow, /\[scrollbar-width:(?:none|thin)\]/);
+  assert.match(scroller, /scrollbar-gutter: stable;/);
   assert.match(declarations(".chat-session-scroll::-webkit-scrollbar"), /width: var\(--chat-scrollbar-width\);/);
   // 左缘偏移与最小宽度都由这几个常量算出，不再出现手抄的派生像素值。
   assert.match(
