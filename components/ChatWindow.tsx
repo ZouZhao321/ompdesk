@@ -336,7 +336,9 @@ function renderTranscriptItem(row: TranscriptRowContext, item: TranscriptListIte
         <div key={`process-group-${item.anchorIndex}-${item.finalAssistantIndex}`}>
           <ProcessDetailsGroup
             messageCount={item.processMessageCount}
-            defaultExpanded={!item.finalAnswerMessage}
+            // 含 provider 错误的一组默认展开：折叠起来只剩一个计数，轮中部的错误横幅
+            // 就被藏掉了。
+            defaultExpanded={!item.finalAnswerMessage || item.hasProcessError}
             sessionId={row.sessionId}
             anchorEntryId={turnAnchorEntryId}
             t={row.t}
