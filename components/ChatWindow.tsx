@@ -643,7 +643,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   }, [scheduleRailMeasure]);
 
   // 滚动元素由列表提供，句柄交回现有的 scrollContainerRef，
-  // 自动跟随、上滚判定与「回到最新」按钮继续挂在同一个滚动元素上；
+  // 自动跟随、上滚判定与「回到底部」按钮继续挂在同一个滚动元素上；
   // 跳转条的当前轮跟着同一个滚动元素的每一帧更新。
   const handleTranscriptScrollerRef = useCallback((element: HTMLElement | Window | null) => {
     scrollContainerRef.current = element instanceof HTMLDivElement ? element : null;
