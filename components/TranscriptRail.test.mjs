@@ -52,14 +52,24 @@ test("re-anchors the tip when the dot column scrolls under the focus ring", () =
   assert.match(source, /window\.removeEventListener\("scroll", onScroll, true\)/);
 });
 
+/** 跳转条几何：车道、缝隙与最小留白只写在 CSS 与这里，版心常量从 lib 读。 */
+const LANE_PX = 36;
+const GAP_PX = 6;
+const EDGE_MARGIN_PX = 4;
+
 test("derives the rail geometry from the region constants", async () => {
-  const { RAIL_INSET_PX, RAIL_LANE_QUERY_MAX_PX, RAIL_MIN_REGION_PX, RAIL_WIDTH_PX } = await import("../lib/transcript-rail.ts");
+  const { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } = await import("../lib/transcript-rail.ts");
+  const insetPx = RAIL_COLUMN_WIDTH_PX / 2 + RAIL_COLUMN_PADDING_PX + GAP_PX;
+  const minRegionPx = 2 * (insetPx + LANE_PX + EDGE_MARGIN_PX);
+  const laneQueryMaxPx = minRegionPx - 1;
   const region = declarations(".chat-transcript-region");
   assert.ok(region, "missing .chat-transcript-region");
-  // 同步来源写在容器上：版心与内边距来自 ChatWindow，车道宽来自 lib/transcript-rail.ts。
-  assert.match(region, /--chat-column-width: 820px;/);
-  assert.match(region, /--chat-column-padding: 16px;/);
-  assert.match(region, /--transcript-rail-lane: 36px;/);
+  // 同步来源写在容器上：版心与内边距来自 ChatWindow 的行盒常量，车道宽来自 CSS。
+  assert.match(region, new RegExp(`--chat-column-width: ${RAIL_COLUMN_WIDTH_PX}px;`));
+  assert.match(region, new RegExp(`--chat-column-padding: ${RAIL_COLUMN_PADDING_PX}px;`));
+  assert.match(region, new RegExp(`--transcript-rail-lane: ${LANE_PX}px;`));
+  assert.equal(customPixel(region, "transcript-rail-gap"), GAP_PX);
+  assert.equal(customPixel(region, "transcript-rail-margin"), EDGE_MARGIN_PX);
   // 左缘偏移与最小宽度都由这几个常量算出，不再出现手抄的派生像素值。
   assert.match(
     region,
@@ -69,21 +79,24 @@ test("derives the rail geometry from the region constants", async () => {
     region,
     /--transcript-rail-min-region: calc\(\s*2 \* \(var\(--transcript-rail-inset\) \+ var\(--transcript-rail-lane\) \+ var\(--transcript-rail-margin\)\)\s*\);/,
   );
-  // 阈值把内边距与缝隙一起算进去，数值与 lib/transcript-rail.ts 的几何常量一致。
+  // 阈值把内边距与缝隙一起算进去：版心一半 + 内边距 + 缝隙 = 432，最小宽度 944。
   const inset = customPixel(region, "chat-column-width") / 2
     + customPixel(region, "chat-column-padding")
     + customPixel(region, "transcript-rail-gap");
-  assert.equal(inset, RAIL_INSET_PX);
+  assert.equal(inset, insetPx);
+  assert.equal(inset, 432);
   const minRegion = 2 * (
     inset + customPixel(region, "transcript-rail-lane") + customPixel(region, "transcript-rail-margin")
   );
-  assert.equal(minRegion, RAIL_MIN_REGION_PX);
+  assert.equal(minRegion, minRegionPx);
+  assert.equal(minRegion, 944);
   // 车道容器铺满转写区，只承载隐藏判定；容器查询写不了 calc，阈值照最小宽度减一。
   const lane = declarations(".transcript-rail-lane");
   assert.ok(lane, "missing .transcript-rail-lane");
   assert.match(lane, /container: transcript-rail-lane \/ inline-size;/);
   assert.doesNotMatch(lane, /width:/);
-  assert.match(styles, new RegExp(`@container transcript-rail-lane \\(max-width: ${RAIL_LANE_QUERY_MAX_PX}px\\)`));
+  assert.match(styles, new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\)`));
+  assert.equal(laneQueryMaxPx, 943);
   const rail = declarations(".transcript-rail {");
   assert.ok(rail, "missing .transcript-rail");
   assert.match(
@@ -92,8 +105,6 @@ test("derives the rail geometry from the region constants", async () => {
   );
   const dot = declarations(".transcript-rail-dot {");
   assert.match(dot, /width: var\(--transcript-rail-lane\);/);
-  // 车道宽只有一处来源：CSS 变量与 lib 常量必须是同一个数，单边改动会在这里失败。
-  assert.equal(customPixel(region, "transcript-rail-lane"), RAIL_WIDTH_PX);
   assert.doesNotMatch(styles, /calc\(50% - 468px\)/);
   assert.doesNotMatch(styles, /max-width: 899px/);
 });
@@ -101,7 +112,7 @@ test("derives the rail geometry from the region constants", async () => {
 test("keeps the tip offset on the lane variables", () => {
   const region = declarations(".chat-transcript-region");
   assert.match(region, /--transcript-rail-tip-gap: 8px;/);
-  // 提示间距与车道宽都由 CSS 变量算出，组件里不再出现 RAIL_WIDTH_PX + 8 这种手算。
+  // 提示间距与车道宽都由 CSS 变量算出，组件里不再出现「车道宽 + 8」这种手算。
   assert.match(
     declarations(".transcript-rail-tip"),
     /right: calc\(var\(--transcript-rail-lane\) \+ var\(--transcript-rail-tip-gap\)\);/,
@@ -137,12 +148,17 @@ test("keeps a disabled step visually out of reach", () => {
   assert.match(styles, /\.transcript-rail-step:hover:not\(:disabled\)/);
 });
 
-test("keeps the rail out of the tab order while it is hidden", async () => {
-  const { RAIL_LANE_QUERY_MAX_PX } = await import("../lib/transcript-rail.ts");
+test("keeps the rail out of the tab order while it is hidden", () => {
+  const region = declarations(".chat-transcript-region");
+  assert.ok(region, "missing .chat-transcript-region");
+  const inset = customPixel(region, "chat-column-width") / 2
+    + customPixel(region, "chat-column-padding")
+    + GAP_PX;
+  const laneQueryMaxPx = 2 * (inset + LANE_PX + EDGE_MARGIN_PX) - 1;
   // 放不下整条车道就是放不下：整条 display: none 收起，隐藏时元素不可聚焦。
   assert.match(
     styles,
-    new RegExp(`@container transcript-rail-lane \\(max-width: ${RAIL_LANE_QUERY_MAX_PX}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`),
+    new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`),
   );
   // 移动档与桌面档是同一个选择器、都在未分层样式里，优先级相同，靠后声明即可覆盖。
   const baseRule = styles.indexOf(".transcript-rail {");
