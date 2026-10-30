@@ -29,6 +29,8 @@ test("parks the streaming message as the last list item", () => {
   assert.match(source, /const TranscriptRow = memo\(function TranscriptRow\(/);
   // 页尾不再渲染流式气泡，它已经是列表最后一项。
   const footerSource = source.slice(source.indexOf("const transcriptFooter = ("), source.indexOf("if (loading) {"));
+  // 锚点一旦找不到切片就是空串，下面的否定断言会静默通过。
+  assert.ok(footerSource.length > 0, "the transcript footer slice is empty");
   assert.doesNotMatch(footerSource, /streamingMessage as AgentMessage/);
 });
 
@@ -46,6 +48,8 @@ test("lands the transcript on the real bottom after aligning the last item", () 
   // 「对齐到末端」只把最后一条数据项的底边对上视口底，页脚插槽在它之后；定位后
   // 再补一次滚动元素自身的底部滚动，页脚晚一帧出现也能算进去。
   const target = source.slice(source.indexOf("const scrollTranscriptToEnd = useCallback("), source.indexOf("const {", source.indexOf("const scrollTranscriptToEnd = useCallback(")));
+  // 空切片会让下面的断言失去对象，先确认切到了东西。
+  assert.ok(target.length > 0, "the scrollTranscriptToEnd slice is empty");
   assert.match(target, /requestAnimationFrame\(\(\) => \{\s*virtuosoRef\.current\?\.scrollTo\(\{ top: Number\.MAX_SAFE_INTEGER, behavior: resolved \}\);/);
   // 首屏同样补一次：会话加载完成后落到底部，不差页脚那一截。
   assert.match(source, /initialBottomLandedRef[\s\S]*?scrollTranscriptToEnd\("auto"\)/);
