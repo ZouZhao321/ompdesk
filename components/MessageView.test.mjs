@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -12,6 +13,7 @@ const { MessageView } = await jiti.import("./MessageView.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 const { ImagePreviewProvider } = await jiti.import("./ImageZoom.tsx");
 const { transcriptViewState, thinkingPart } = await jiti.import("../lib/transcript-view-state.ts");
+const source = await readFile(new URL("./MessageView.tsx", import.meta.url), "utf8");
 
 function renderMessage(message, { withPreview = false } = {}) {
   const view = React.createElement(MessageView, { message });
@@ -255,6 +257,18 @@ test("skips the loading state once a deferred thought has been fetched", () => {
   assert.match(html, /markdown-thinking-body/);
   assert.match(html, /先看一下这条消息/);
   assert.doesNotMatch(html, /class="markdown-thinking-status"/);
+});
+
+test("keeps bash and todo blocks off the expand-state subscription", () => {
+  // 展开状态只在折叠卡片里读：bash 与待办在前面就提前返回，不该订整个视图仓库。
+  assert.equal(source.match(/useTranscriptExpanded\(/g)?.length, 1);
+  assert.ok(
+    source.indexOf("useTranscriptExpanded(") > source.indexOf("function ToolCallCard("),
+    "useTranscriptExpanded must live in ToolCallCard",
+  );
+  // bash 输出预览记忆化，行切分与高亮都收在 useMemo 里，展开别处的块不再重跑。
+  assert.match(source, /const ConsoleOutputPreview = memo\(function ConsoleOutputPreview\(/);
+  assert.match(source, /\{lineElements\}/);
 });
 
 test("reads a deferred thought that was saved without a session id", () => {
