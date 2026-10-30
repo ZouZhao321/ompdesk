@@ -418,6 +418,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     agentPhase,
     isNew,
     autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,
+    contextFollowTicket,
     goalStatus,
     sessionIdRef, scrollContainerRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange, handleRoleModelChange,
@@ -683,6 +684,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     railJumpTimerRef.current = window.setTimeout(() => settleRailJumpNowRef.current(), RAIL_JUMP_SETTLE_MS);
   }, [clearRailJumpTimer, releaseFollowObservation]);
   settleRailJumpNowRef.current = settleRailJumpNow;
+
+  // 转写被整段替换（切分支/切叶）时，挂在旧列表条目下标上的跳转就没意义了：新列表
+  // 的下标是另一串条目，按旧目标再对齐一次会把刚回到底部的视图拽回旧轮次。载入一次
+  // 就丢掉待清算目标并松开抑制器，回底交给 hook 在提交后自己发起。
+  useEffect(() => {
+    if (contextFollowTicket === 0) return;
+    railJumpRef.current = RAIL_JUMP_IDLE;
+    clearRailJumpTimer();
+    releaseFollowObservation();
+  }, [contextFollowTicket, clearRailJumpTimer, releaseFollowObservation]);
 
   const handleRailJump = useCallback((itemIndex: number) => {
     // 跳转是一次有意的位置改变：停掉跟随，视图不再被末尾输出拽走。

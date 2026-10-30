@@ -2577,6 +2577,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentPhase,
     isNew,
     autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,
+    // 转写整段替换的次数：调用方据此丢弃挂在旧条目下标上的待办（例如跳转的落点）。
+    contextFollowTicket,
     goalStatus,
     // Refs
     sessionIdRef, eventSourceRef, scrollContainerRef,
