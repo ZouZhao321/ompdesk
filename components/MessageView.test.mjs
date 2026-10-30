@@ -260,6 +260,8 @@ test("skips the loading state once a deferred thought has been fetched", () => {
 test("reads a deferred thought that was saved without a session id", () => {
   // 还没落盘的会话没有 sessionId：写入落在空会话桶，读也只按 entryId 定位，
   // 读写因此落在同一个位置。
+  // 这里只锁首帧：SSR 不跑 effect，effect 里「已有正文就不落错误」的那条分支由
+  // lib/transcript-view-state.test.mjs 的 planDeferredContent 用例覆盖。
   transcriptViewState.markLoaded(
     undefined,
     "entry-unsaved",

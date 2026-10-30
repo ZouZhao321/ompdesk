@@ -11,7 +11,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, isHiddenAssistantBlock } from "@/lib/message-display";
 import { useDisplaySettings } from "@/hooks/useDisplaySettings";
-import { thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
+import { planDeferredContent, thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
@@ -851,9 +851,20 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
     }
 
     let cancelled = false;
-    // 取回正文需要会话 id；视图状态的读写则只看 entryId，守卫由 thinkingViewKey 统一。
     const key = thinkingViewKey(sessionId, entryId, turnAnchorEntryId, blockIndex);
-    if (!sessionId || key === null) {
+    // 正文按 entryId 定位，与会话 id 无关：视图状态里已有正文就先渲染，会话还没
+    // 落盘也不会把它换成错误文案。只有确实没有正文时才轮到会话 id 决定去请求还是报错。
+    const plan = planDeferredContent(readThinkingContent(key), sessionId, entryId);
+    if (plan.kind === "stored") {
+      // 正文已经在手，重建后不必再请求。
+      setContent(plan.content);
+      setLoading(false);
+      setError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (plan.kind === "unavailable" || key === null) {
       setLoading(false);
       setError(t("i18n.thinkingUnavailable"));
       return () => {
@@ -861,20 +872,9 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
       };
     }
 
-    const stored = readThinkingContent(key);
-    if (stored !== null) {
-      // 正文已经在手，重建后不必再请求。
-      setContent(stored);
-      setLoading(false);
-      setError(null);
-      return () => {
-        cancelled = true;
-      };
-    }
-
     setLoading(true);
     setError(null);
-    void loadThinkingContent(sessionId, key.entryId, blockIndex)
+    void loadThinkingContent(plan.sessionId, plan.entryId, blockIndex)
       .then((value) => {
         if (cancelled) return;
         setContent(value);
