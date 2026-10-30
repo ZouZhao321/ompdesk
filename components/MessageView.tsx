@@ -886,6 +886,12 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
 }
 
 
+/** 待办类工具：结果自带阶段清单，界面换成专用的勾选预览。 */
+function isTodoToolCall(toolName: string): boolean {
+  const normalized = toolName.toLowerCase();
+  return normalized === "todo" || normalized.endsWith(".todo") || normalized.endsWith("_todo");
+}
+
 function ToolCallBlock({ block, result, duration, sessionId, turnAnchorEntryId }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; sessionId?: string; turnAnchorEntryId?: string }) {
   const normalizedToolName = block.toolName.toLowerCase();
   const isEditTool = normalizedToolName === "edit" ||
@@ -898,25 +904,36 @@ function ToolCallBlock({ block, result, duration, sessionId, turnAnchorEntryId }
   const part = toolCallPart(block.toolCallId);
   const anchorEntryId = turnAnchorEntryId ?? block.toolCallId;
   const expanded = useTranscriptExpanded(sessionId, anchorEntryId, part, isEditTool);
-  const inputStr = JSON.stringify(block.input, null, 2);
-  const isTodoTool = normalizedToolName === "todo" || normalizedToolName.endsWith(".todo") || normalizedToolName.endsWith("_todo");
+  const isTodoTool = isTodoToolCall(block.toolName);
   const isBashTool = normalizedToolName === "bash" || normalizedToolName.startsWith("bash ") || normalizedToolName.endsWith(".bash") || normalizedToolName.endsWith("_bash");
-  const resultDiff = result && !result.isError ? getResultDiff(result) : null;
-  const todoPhases = isTodoTool ? getTodoPreviewPhases(block, result) : null;
-  const diffStats = resultDiff
-    ? resultDiff.text.split(/\r?\n/).reduce(
-        (stats, line) => {
-          if (line.startsWith("+") && !line.startsWith("+++")) stats.added += 1;
-          if (line.startsWith("-") && !line.startsWith("---")) stats.removed += 1;
-          return stats;
-        },
-        { added: 0, removed: 0 },
-      )
-    : null;
-
-  const resultText = result
-    ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
-    : null;
+  // 输入序列化与 diff 统计是整段转写里最贵的计算，按引用收住：条目因展开状态、
+  // 延迟正文或其他无关状态重渲染时不再重算。
+  const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
+  const resultDiff = useMemo(
+    () => (result && !result.isError ? getResultDiff(result) : null),
+    [result],
+  );
+  const diffStats = useMemo(() => {
+    if (!resultDiff) return null;
+    let added = 0;
+    let removed = 0;
+    for (const line of resultDiff.text.split(/\r?\n/)) {
+      if (line.startsWith("+") && !line.startsWith("+++")) added += 1;
+      if (line.startsWith("-") && !line.startsWith("---")) removed += 1;
+    }
+    return { added, removed };
+  }, [resultDiff]);
+  const todoPhases = useMemo(
+    () => (isTodoToolCall(block.toolName) ? getTodoPreviewPhases(block, result) : null),
+    [block, result],
+  );
+  const resultText = useMemo(
+    () => (result
+      ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
+      : null),
+    [result],
+  );
+  const headerPreview = useMemo(() => getStructuredToolPreview(block, todoPhases), [block, todoPhases]);
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
 
@@ -938,8 +955,6 @@ function ToolCallBlock({ block, result, duration, sessionId, turnAnchorEntryId }
   }
 
   const hasStructuredPreview = Boolean(todoPhases || resultDiff);
-  const headerPreview = getStructuredToolPreview(block, todoPhases);
-
 
   return (
     <div

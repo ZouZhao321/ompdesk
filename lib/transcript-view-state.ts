@@ -27,7 +27,7 @@ export interface TranscriptViewStore {
   /** 读出展开状态；没有用户操作记录时返回 `fallback`。 */
   isExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): boolean;
   toggleExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): void;
-  /** 记下取回的延迟内容；正文本身就是「已加载」的标记。 */
+  /** 记下取回的延迟内容；正文本身就是「已加载」的标记，写入不通知订阅方。 */
   markLoaded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, content: string): void;
   /** 已取回的延迟内容；还没取回时为 null。 */
   loadedContent(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): string | null;
@@ -99,10 +99,10 @@ export function createTranscriptViewStore(): TranscriptViewStore {
     markLoaded(sessionId, anchorEntryId, part, content) {
       const key = entryKey(sessionId, anchorEntryId, part);
       const current = entries.get(key);
-      // 同一段正文再标记一次不通知订阅方：思考块加载完不该触发整段转写重渲染。
       if (current?.content === content) return;
+      // 正文只服务下一次挂载的首帧，读者在渲染期直接取。这里不通知订阅方：展开状态
+      // 的订阅者是所有已挂载的工具块，一条延迟正文取回不该让它们全部重渲染。
       write(key, { ...current, content });
-      emit();
     },
     loadedContent(sessionId, anchorEntryId, part) {
       return entries.get(entryKey(sessionId, anchorEntryId, part))?.content ?? null;
