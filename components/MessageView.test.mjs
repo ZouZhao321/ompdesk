@@ -257,6 +257,17 @@ test("skips the loading state once a deferred thought has been fetched", () => {
   assert.match(html, /markdown-thinking-body/);
   assert.match(html, /先看一下这条消息/);
   assert.doesNotMatch(html, /class="markdown-thinking-status"/);
+  assert.doesNotMatch(html, /class="markdown-thinking-error"/);
+});
+
+test("renders an available thought ahead of loading and error markup", () => {
+  // SSR 不跑 effect：正文与错误同时在手的那一帧由 lib/message-display.test.mjs 的
+  // thinkingDisplayState 用例锁住，这里锁组件真的按这个优先级排版。
+  assert.match(source, /const display = thinkingDisplayState\(hasText, loading, error\);/);
+  assert.match(
+    source,
+    /display === "text" \? \(\s*<MarkdownBody className="markdown-thinking-body">\{text \?\? ""\}<\/MarkdownBody>\s*\) : display === "loading" \?/,
+  );
 });
 
 test("keeps bash and todo blocks off the expand-state subscription", () => {

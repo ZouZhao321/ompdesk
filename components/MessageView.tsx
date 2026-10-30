@@ -9,7 +9,7 @@ import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
-import { getAssistantErrorMessage, isHiddenAssistantBlock } from "@/lib/message-display";
+import { getAssistantErrorMessage, isHiddenAssistantBlock, thinkingDisplayState } from "@/lib/message-display";
 import { useDisplaySettings } from "@/hooks/useDisplaySettings";
 import { planDeferredContent, thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
@@ -895,16 +895,17 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
 
   const text = block.deferred ? content : block.thinking;
   const hasText = typeof text === "string" && text.trim().length > 0;
+  const display = thinkingDisplayState(hasText, loading, error);
 
   return (
     <div className="markdown-thinking" aria-label={t("i18n.thinking")}>
       <div className="markdown-thinking-content">
-        {loading ? (
+        {display === "text" ? (
+          <MarkdownBody className="markdown-thinking-body">{text ?? ""}</MarkdownBody>
+        ) : display === "loading" ? (
           <span className="markdown-thinking-status">{t("i18n.loadingThinking")}</span>
-        ) : error ? (
+        ) : display === "error" ? (
           <span className="markdown-thinking-error">{error}</span>
-        ) : hasText ? (
-          <MarkdownBody className="markdown-thinking-body">{text}</MarkdownBody>
         ) : (
           <span className="markdown-thinking-status">{t("chat.thinking")}</span>
         )}
