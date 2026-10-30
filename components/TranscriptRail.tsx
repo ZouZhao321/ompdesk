@@ -4,7 +4,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import {
   RAIL_MAX_HEIGHT_PX,
   RAIL_ROW_PX,
-  RAIL_WIDTH_PX,
   railScrollTop,
   railStepItemIndex,
   type TranscriptRailDot,
@@ -155,7 +154,6 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
         className="transcript-rail"
         role="navigation"
         aria-label={t("chat.transcriptRail")}
-        style={{ width: RAIL_WIDTH_PX }}
       >
         <button
           type="button"
@@ -209,7 +207,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
           <Chevron direction="down" />
         </button>
         {tipAnchor && (
-          <div ref={tipRef} className="transcript-rail-tip" style={{ right: RAIL_WIDTH_PX + 8 }} aria-hidden="true">
+          <div ref={tipRef} className="transcript-rail-tip" aria-hidden="true">
             {tipAnchor.text}
           </div>
         )}

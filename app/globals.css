@@ -1575,7 +1575,7 @@ span.linenumber {
 /*
  * 转写区的宽度常数集中在这里声明，下面所有位置与阈值都由它们派生：
  * - 版心 820px 与内边距 16px 与 components/ChatWindow.tsx 的 820 / CHAT_COLUMN_PADDING 同源；
- * - 车道 36px 与 lib/transcript-rail.ts 的 RAIL_WIDTH_PX 同源，跳转条宽度由 JS 内联给出。
+ * - 车道 36px 与 lib/transcript-rail.ts 的 RAIL_WIDTH_PX 同源，跳转条宽度也由这里给出。
  */
 .chat-transcript-region {
   --chat-column-width: 820px;
@@ -1585,6 +1585,8 @@ span.linenumber {
   --transcript-rail-gap: 6px;
   /* 跳转条右边缘的最小留白。 */
   --transcript-rail-margin: 4px;
+  /* 悬停提示与车道之间的间距。 */
+  --transcript-rail-tip-gap: 8px;
   /* 跳转条左缘相对转写区中线的偏移：版心一半 + 内边距 + 缝隙。 */
   --transcript-rail-inset: calc(
     var(--chat-column-width) / 2 + var(--chat-column-padding) + var(--transcript-rail-gap)
@@ -1606,8 +1608,8 @@ span.linenumber {
   container: transcript-rail-lane / inline-size;
 }
 
-/* 提问跳转条：绝对定位，不参与布局。左缘钉在对话列右侧的缝隙上，右缘与转写区
-   右边缘至少留 --transcript-rail-margin。 */
+/* 提问跳转条：绝对定位，不参与布局。宽度就是车道宽，左缘钉在对话列右侧的缝隙上，
+   右缘与转写区右边缘至少留 --transcript-rail-margin。 */
 .transcript-rail {
   position: absolute;
   top: 0;
@@ -1616,6 +1618,7 @@ span.linenumber {
     var(--transcript-rail-margin),
     calc(50% - var(--transcript-rail-inset) - var(--transcript-rail-lane))
   );
+  width: var(--transcript-rail-lane);
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -1717,9 +1720,11 @@ span.linenumber {
   color: var(--text-dim);
   cursor: default;
 }
-/* 悬停提示放在圆点列之外，才不会被那层内部滚动裁掉。 */
+/* 悬停提示放在圆点列之外，才不会被那层内部滚动裁掉。右偏移就是车道宽加上间距，
+   两个数都从容器变量来，组件不再手算。 */
 .transcript-rail-tip {
   position: absolute;
+  right: calc(var(--transcript-rail-lane) + var(--transcript-rail-tip-gap));
   transform: translateY(-50%);
   width: max-content;
   max-width: 240px;
