@@ -461,6 +461,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [goalStatus, setGoalStatus] = useState<GoalStatusInfo | null>(null);
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
+  // 跳转的落点由列表带着滚一串：这一串里读到的位置说明不了用户意图。一次性抑制器
+  // 在跳转开始时合上，由列表停止滚动或跳转的兜底定时器松开。
+  const followObservationHeldRef = useRef(false);
   // Forward reference: handleSend/executeBash are declared above applyFollow.
   const applyFollowRef = useRef<(event: FollowEvent) => void>(() => {});
   // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
@@ -2331,14 +2334,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const applyFollow = useCallback((event: FollowEvent) => {
     const outcome = reduceFollow(event);
     if (!outcome) return;
-    // 回底与跳转都会带着列表滚一次：先清掉用户滚动意图窗口，否则这次滚动会被当成
-    // 用户驱动——回底会被判回暂停，跳转则会立刻恢复跟随，把刚停掉的跟随抵消。提交
-    // 与「回到底部」都走这里。
-    if (outcome.scrollToEnd || event.type === "pause") userScrollIntentUntilRef.current = 0;
+    // 回底会带着列表滚一次：先清掉用户滚动意图窗口，否则这次滚动会被当成用户驱动，
+    // 回底立刻又被判回暂停。跳转的落点不靠窗口，而由 followObservationHeldRef 挡住。
+    if (outcome.scrollToEnd) userScrollIntentUntilRef.current = 0;
     setAutoFollow(!outcome.paused);
     if (outcome.scrollToEnd) scrollToBottom(outcome.scrollToEnd);
   }, [scrollToBottom, setAutoFollow]);
   applyFollowRef.current = applyFollow;
+
+  // 跳转自己的落点不参与跟随判定：合上抑制器，由列表停止滚动或跳转的兜底定时器松开。
+  const holdFollowObservation = useCallback(() => {
+    followObservationHeldRef.current = true;
+  }, []);
+
+  const releaseFollowObservation = useCallback(() => {
+    followObservationHeldRef.current = false;
+  }, []);
 
   const resumeAutoFollow = useCallback(() => {
     applyFollow({ type: "resume" });
@@ -2358,9 +2369,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleScrollPositionChange = useCallback(() => {
-    if (!agentRunningRef.current && !bashRunningRef.current) return;
+    // 跳转自己的落点还在滚：这一串位置不参与判定，读到的一律丢掉。
+    if (followObservationHeldRef.current) return;
     const container = scrollContainerRef.current;
     if (!container) return;
+    // 位置判定与运行状态无关：跳转在空闲期停掉的跟随，靠用户把视图滑回底部自愈，
+    // 按运行状态早退会把这条路堵死。
     applyFollow({
       type: "scroll",
       userDriven: Date.now() <= userScrollIntentUntilRef.current,
@@ -2510,7 +2524,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
     isNew,
-    autoFollowPaused, resumeAutoFollow, pauseAutoFollow,
+    autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,
     goalStatus,
     // Refs
     sessionIdRef, eventSourceRef, scrollContainerRef,

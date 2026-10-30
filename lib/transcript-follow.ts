@@ -36,10 +36,15 @@ export interface FollowOutcome {
  * 事件对跟随开关的影响；这次事件不改状态时返回 null。
  *
  * 提交与「回到底部」都恢复跟随并把视图带到末尾；跳转停掉跟随，让「回到底部」
- * 按钮出现，跳转自己的定位不经过这里。滚动观测里只有用户驱动的滚动改开关：
- * 离开底部就停止跟随，回到贴底距离内则恢复跟随。程序化定位带动的滚动（回底与
- * 跳转的落点、列表自行贴底、内容增高）说明不了用户的意图，一律不改开关——否则
- * 跳转落在贴底距离内就会把刚停掉的跟随又打开，「回到底部」按钮不再出现。
+ * 按钮出现，跳转自己的定位不经过这里。
+ *
+ * 滚动观测里暂停与恢复分两条判据：暂停只认用户驱动的滚动——离开底部才停止跟随，
+ * 内容增高、行重新测量引起的滚动说明不了用户意图，不改开关；恢复只看位置——回到
+ * 贴底距离内就恢复，不看是谁带的、也不看离用户最后一次操作过了多久。触控惯性与
+ * 拖滚动条到底可能远晚于用户意图窗口，按窗口判定会让视图一直停在暂停。
+ *
+ * 正因恢复不查驱动方，跳转自己的落点必须先被挡在判定之外，否则落在贴底距离内就会
+ * 把刚停掉的跟随又打开，「回到底部」按钮不再出现。
  */
 export function reduceFollow(event: FollowEvent): FollowOutcome | null {
   switch (event.type) {
@@ -50,10 +55,10 @@ export function reduceFollow(event: FollowEvent): FollowOutcome | null {
     case "pause":
       return { paused: true, scrollToEnd: null };
     case "scroll": {
-      if (!event.userDriven) return null;
-      return event.distanceFromBottom <= FOLLOW_BOTTOM_THRESHOLD_PX
-        ? { paused: false, scrollToEnd: null }
-        : { paused: true, scrollToEnd: null };
+      if (event.distanceFromBottom <= FOLLOW_BOTTOM_THRESHOLD_PX) {
+        return { paused: false, scrollToEnd: null };
+      }
+      return event.userDriven ? { paused: true, scrollToEnd: null } : null;
     }
   }
 }
