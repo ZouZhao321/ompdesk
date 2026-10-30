@@ -255,8 +255,11 @@ test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   assert.equal(source.match(/userScrollIntentUntilRef\.current = 0/g)?.length, 1);
   assert.match(source, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow,/);
   // Scrolling is the list's job: the hook hands the jump to the list handle
-  // instead of touching the scroll element itself.
-  assert.match(source, /const scrollToBottom = useCallback\(\(behavior: ScrollBehavior = "smooth"\) => \{\s*ignoreProgrammaticScrollUntilRef\.current = Date\.now\(\) \+ PROGRAMMATIC_SCROLL_IGNORE_MS;\s*scrollTranscriptToEndRef\.current\?\.\(behavior\);/);
+  // instead of touching the scroll element itself. 入口是必填的：漏接在 typecheck 暴露，
+  // 不会出现状态写着「跟随中」却没有落点。
+  assert.match(source, /scrollTranscriptToEnd: \(behavior: ScrollBehavior\) => void;/);
+  assert.match(source, /const scrollToBottom = useCallback\(\(behavior: ScrollBehavior = "smooth"\) => \{\s*ignoreProgrammaticScrollUntilRef\.current = Date\.now\(\) \+ PROGRAMMATIC_SCROLL_IGNORE_MS;\s*scrollTranscriptToEndRef\.current\(behavior\);/);
+  assert.doesNotMatch(source, /scrollTranscriptToEndRef\.current\?\./);
   assert.doesNotMatch(source, /scrollIntoView/);
   assert.doesNotMatch(source, /container\.scrollTo\(/);
 
