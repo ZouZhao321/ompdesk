@@ -257,6 +257,36 @@ test("skips the loading state once a deferred thought has been fetched", () => {
   assert.doesNotMatch(html, /class="markdown-thinking-status"/);
 });
 
+test("reads a deferred thought that was saved without a session id", () => {
+  // 还没落盘的会话没有 sessionId：写入落在空会话桶，读也只按 entryId 定位，
+  // 读写因此落在同一个位置。
+  transcriptViewState.markLoaded(
+    undefined,
+    "entry-unsaved",
+    thinkingPart("entry-unsaved", 0),
+    "尚未落盘的正文",
+  );
+
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(MessageView, {
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "gpt-test",
+          content: [{ type: "thinking", thinking: "", deferred: true }],
+        },
+        entryId: "entry-unsaved",
+      }),
+    ),
+  );
+
+  assert.match(html, /尚未落盘的正文/);
+  assert.doesNotMatch(html, /Loading thinking/);
+});
+
 const userImageMessage = {
   role: "user",
   content: [{ type: "image", data: "AAAA", mimeType: "image/png" }],
