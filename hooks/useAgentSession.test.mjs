@@ -239,9 +239,10 @@ test("restores follow and brings the view to the end when a prompt is submitted"
   assert.match(sendSource, /applyFollowRef\.current\(\{ type: "submit" \}\)/);
   assert.match(bashSource, /applyFollowRef\.current\(\{ type: "submit" \}\)/);
   // 结论落到状态与滚动入口：恢复跟随打开列表的 followOutput，回底走列表定位。
+  // 意图窗口的清理也在回底之前，由 useAgentSession.follow.test.mjs 的行为测试覆盖。
   assert.match(
     source,
-    /const applyFollow = useCallback\(\(event: FollowEvent\) => \{\s*const outcome = reduceFollow\(event\);\s*if \(!outcome\) return;\s*setAutoFollow\(!outcome\.paused\);\s*if \(outcome\.scrollToEnd\) scrollToBottom\(outcome\.scrollToEnd\);/,
+    /const applyFollow = useCallback\(\(event: FollowEvent\) => \{\s*const outcome = reduceFollow\(event\);\s*if \(!outcome\) return;[\s\S]*?setAutoFollow\(!outcome\.paused\);\s*if \(outcome\.scrollToEnd\) scrollToBottom\(outcome\.scrollToEnd\);\s*\}, \[scrollToBottom, setAutoFollow\]\);/,
   );
   assert.match(chatWindowSource, /virtuosoRef\.current\?\.scrollToIndex\(\{\s*index: "LAST",\s*align: "end",/);
 });
@@ -249,7 +250,9 @@ test("restores follow and brings the view to the end when a prompt is submitted"
 test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   // 单一写入点：跟随开关只由 setAutoFollow 写，状态不会和判定漂移。
   assert.match(source, /const setAutoFollow = useCallback\(\(following: boolean\) => \{\s*setAutoFollowPaused\(/);
-  assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{[\s\S]*?userScrollIntentUntilRef\.current = 0;[\s\S]*?applyFollow\(\{ type: "resume" \}\)/);
+  assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{\s*applyFollow\(\{ type: "resume" \}\);\s*\}, \[applyFollow\]\);/);
+  // 意图窗口的清理只在 applyFollow 里做，提交与「回到底部」共用同一条前置清理。
+  assert.equal(source.match(/userScrollIntentUntilRef\.current = 0/g)?.length, 1);
   assert.match(source, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow,/);
   // Scrolling is the list's job: the hook hands the jump to the list handle
   // instead of touching the scroll element itself.
