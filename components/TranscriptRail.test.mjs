@@ -52,12 +52,12 @@ test("derives the rail geometry from the region constants", () => {
   assert.match(region, /--chat-column-width: 820px;/);
   assert.match(region, /--chat-column-padding: 16px;/);
   assert.match(region, /--transcript-rail-lane: 36px;/);
-  // 左偏移与最小宽度都由这四个常量算出，不再出现手抄的派生像素值。
-  assert.match(region, /--transcript-rail-offset: calc\(/);
+  // 右偏移与最小宽度都由这几个常量算出，不再出现手抄的派生像素值。
+  assert.match(region, /--transcript-rail-inset: calc\(/);
   assert.match(region, /--transcript-rail-min-region: calc\(/);
   const rail = declarations(".transcript-rail {");
   assert.ok(rail, "missing .transcript-rail");
-  assert.match(rail, /left: max\(\s*var\(--transcript-rail-margin\),\s*calc\(50% - var\(--transcript-rail-offset\)/);
+  assert.match(rail, /right: max\(\s*var\(--transcript-rail-margin\),\s*calc\(\s*50% \+ var\(--transcript-rail-min-region\) \/ 2 - var\(--transcript-rail-inset\) -\s*var\(--transcript-rail-lane\)/);
   const dot = declarations(".transcript-rail-dot {");
   assert.match(dot, /width: var\(--transcript-rail-lane\);/);
   // 阈值同样派生：车道容器宽度 = 转写区宽度 - 最小宽度。

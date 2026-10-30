@@ -1,6 +1,6 @@
 import type { TranscriptItem } from "./transcript-items";
 
-/** 跳转条车道的宽度（px）：贴在对话列左外侧。 */
+/** 跳转条车道的宽度（px）：贴在对话列右外侧。 */
 export const RAIL_WIDTH_PX = 36;
 /** 相邻圆点的中心距（px）：圆点 6px、间隙 8px，圆点列表按它换算滚动位置。 */
 export const RAIL_ROW_PX = 14;

@@ -1583,16 +1583,15 @@ span.linenumber {
   --transcript-rail-lane: 36px;
   /* 跳转条贴住对话列时与正文之间留的缝隙。 */
   --transcript-rail-gap: 6px;
-  /* 跳转条左边缘的最小留白。 */
+  /* 跳转条右边缘的最小留白。 */
   --transcript-rail-margin: 4px;
-  /* 跳转条左边缘相对转写区中线偏左的量：版心一半 + 内边距 + 车道 + 缝隙。 */
-  --transcript-rail-offset: calc(
-    var(--chat-column-width) / 2 + var(--chat-column-padding) +
-      var(--transcript-rail-lane) + var(--transcript-rail-gap)
+  /* 跳转条右边缘相对转写区中线偏右的量：版心一半 + 内边距 + 缝隙。 */
+  --transcript-rail-inset: calc(
+    var(--chat-column-width) / 2 + var(--chat-column-padding) + var(--transcript-rail-gap)
   );
-  /* 放得下车道的最小转写区宽度：正文两侧各要最小留白与一条车道。 */
+  /* 放得下车道的最小转写区宽度：正文左右各要最小留白，右侧还要一条车道。 */
   --transcript-rail-min-region: calc(
-    var(--chat-column-width) + 2 * (var(--transcript-rail-margin) + var(--transcript-rail-lane))
+    var(--chat-column-width) + 2 * var(--transcript-rail-margin) + var(--transcript-rail-lane)
   );
 }
 /* 跳转条车道：宽度就是「转写区宽度 - 放得下车道的最小宽度」。车道没有宽度时
@@ -1601,21 +1600,24 @@ span.linenumber {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  right: 0;
   width: calc(100% - var(--transcript-rail-min-region));
   pointer-events: none;
   container: transcript-rail-lane / inline-size;
 }
 
-/* 提问跳转条：贴在对话列左外侧，绝对定位，不参与布局。左边缘相对车道容器
+/* 提问跳转条：贴在对话列右外侧，绝对定位，不参与布局。右边缘相对车道容器
    计算，所以把车道容器的宽度差补回来才是相对转写区中线的位置。 */
 .transcript-rail {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: max(
+  right: max(
     var(--transcript-rail-margin),
-    calc(50% - var(--transcript-rail-offset) + var(--transcript-rail-min-region) / 2)
+    calc(
+      50% + var(--transcript-rail-min-region) / 2 - var(--transcript-rail-inset) -
+        var(--transcript-rail-lane)
+    )
   );
   z-index: 30;
   display: flex;
