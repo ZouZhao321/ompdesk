@@ -52,6 +52,11 @@ export interface TranscriptItem {
   finalAnswerMessage: AssistantMessage | null;
   /** 过程组的消息条数：可见过程消息 + 正式回答拆出的过程块。 */
   processMessageCount: number;
+  /**
+   * 过程组里是否有 provider 错误。有错误时界面默认展开这一组：折叠起来只剩一个
+   * 计数，轮中部的错误横幅会被藏掉。
+   */
+  hasProcessError: boolean;
   /** 过程组的工具调用数。 */
   toolCallCount: number;
   /** 本轮写入的文件；只在有正式回答时收集。 */
@@ -125,6 +130,19 @@ function hasDisplayableProcessMessage(message: AgentMessage, options: DisplayOpt
   return message.role === "custom" || message.role === "bashExecution";
 }
 
+/** 这些过程消息里有没有 provider 错误：横幅只在展开的组里才看得见。 */
+function hasProviderError(
+  messages: AgentMessage[],
+  indices: readonly number[],
+  options: DisplayOptions,
+): boolean {
+  return indices.some((index) => {
+    const message = messages[index];
+    return message?.role === "assistant"
+      && getAssistantErrorMessage(message as AssistantMessage, options) !== null;
+  });
+}
+
 function withAssistantBlocks(
   message: AssistantMessage,
   content: AssistantContentBlock[],
@@ -156,6 +174,7 @@ function buildStandaloneMessageItem(entryIds: readonly string[], index: number):
     finalProcessMessage: null,
     finalAnswerMessage: null,
     processMessageCount: 0,
+    hasProcessError: false,
     toolCallCount: 0,
     writtenFiles: [],
     tailIndices: [],
@@ -195,6 +214,7 @@ function buildTurn(
       finalProcessMessage: null,
       finalAnswerMessage: null,
       processMessageCount: 0,
+      hasProcessError: false,
       toolCallCount: 0,
       writtenFiles: [],
       tailIndices: [],
@@ -227,6 +247,7 @@ function buildTurn(
     finalProcessMessage,
     finalAnswerMessage,
     processMessageCount: visibleProcessIndices.length + (finalProcessMessage ? 1 : 0),
+    hasProcessError: hasProviderError(messages, visibleProcessIndices, displayOptions),
     toolCallCount: countToolCalls(messages, visibleProcessIndices, displayOptions)
       + countToolCallBlocks(finalSplit.processBlocks),
     writtenFiles,

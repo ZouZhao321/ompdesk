@@ -4,11 +4,13 @@ import test from "node:test";
 
 const source = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
 
-test("expands process details when a completed turn has no final answer", () => {
+test("unfolds process details without a final answer or with a provider error", () => {
+  // 没有正式回答时整轮都是过程；有正式回答但过程组里带着 provider 错误时也要展开，
+  // 否则错误横幅被折叠起来，只剩一个计数。
   assert.match(source, /const expanded = useTranscriptExpanded\(sessionId, anchorEntryId, PROCESS_DETAILS_PART, defaultExpanded\)/);
   assert.match(
     source,
-    /<ProcessDetailsGroup[\s\S]*?defaultExpanded=\{!item\.finalAnswerMessage\}/,
+    /<ProcessDetailsGroup[\s\S]*?defaultExpanded=\{!item\.finalAnswerMessage \|\| item\.hasProcessError\}/,
   );
 });
 
