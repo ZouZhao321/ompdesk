@@ -11,6 +11,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, isHiddenAssistantBlock } from "@/lib/message-display";
 import { useDisplaySettings } from "@/hooks/useDisplaySettings";
+import { thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
@@ -196,6 +197,11 @@ interface Props {
   prevTimestamp?: number;
   sessionId?: string;
   /**
+   * 本条消息所属轮的提问锚点 entryId。展开状态与延迟加载标记都按它分桶，
+   * 所以条目的渲染单元被卸载重建后状态不变；单条消息不带轮时退化为自身 entryId。
+   */
+  turnAnchorEntryId?: string;
+  /**
    * Files this turn wrote, derived by the caller from the whole turn's
    * successful write/edit tool calls. ChatWindow computes this because the
    * saved-message path splits tool calls into their own entries, leaving the
@@ -231,12 +237,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, turnAnchorEntryId, writtenFiles }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} sessionId={sessionId} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} turnAnchorEntryId={turnAnchorEntryId} writtenFiles={writtenFiles} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -249,7 +255,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
   }
   if (message.role === "bashExecution") {
-    return <BashExecutionView message={message as BashExecutionMessage} sessionId={sessionId} />;
+    return <BashExecutionView message={message as BashExecutionMessage} sessionId={sessionId} turnAnchorEntryId={turnAnchorEntryId} />;
   }
   return null;
 }, (prev, next) => {
@@ -267,7 +273,8 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.onEditContent === next.onEditContent
     && prev.showTimestamp === next.showTimestamp
     && prev.prevTimestamp === next.prevTimestamp
-    && prev.sessionId === next.sessionId;
+    && prev.sessionId === next.sessionId
+    && prev.turnAnchorEntryId === next.turnAnchorEntryId;
 });
 
 function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, sessionId }: {
@@ -488,6 +495,7 @@ function AssistantMessageView({
   prevTimestamp,
   sessionId,
   entryId,
+  turnAnchorEntryId,
   writtenFiles,
 }: {
   message: AssistantMessage;
@@ -500,6 +508,7 @@ function AssistantMessageView({
   prevTimestamp?: number;
   sessionId?: string;
   entryId?: string;
+  turnAnchorEntryId?: string;
   writtenFiles?: WrittenFile[];
 }) {
   const { t } = useI18n();
@@ -679,7 +688,7 @@ function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
-          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
+          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} entryId={entryId} turnAnchorEntryId={turnAnchorEntryId} blockIndex={originalIndex} />
         ))}
       </div>
 
@@ -758,18 +767,18 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
+function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, sessionId, entryId, turnAnchorEntryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; entryId?: string; turnAnchorEntryId?: string; blockIndex: number }) {
   if (block.type === "text") {
     return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
   }
   if (block.type === "thinking") {
-    return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} entryId={entryId} blockIndex={blockIndex} />;
+    return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} entryId={entryId} turnAnchorEntryId={turnAnchorEntryId} blockIndex={blockIndex} />;
   }
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
     const duration = toolCallDurations?.get(tc.toolCallId);
-    return <ToolCallBlock block={tc} result={result} duration={duration} />;
+    return <ToolCallBlock block={tc} result={result} duration={duration} sessionId={sessionId} turnAnchorEntryId={turnAnchorEntryId} />;
   }
   return null;
 }
@@ -778,11 +787,12 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile, sessionId }: { block: 
   return <SafeMarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId}>{block.text}</SafeMarkdownBody>;
 }
 
-function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
+function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId, blockIndex }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
   entryId?: string;
+  turnAnchorEntryId?: string;
   blockIndex: number;
 }) {
   const { t } = useI18n();
@@ -811,7 +821,10 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
     setError(null);
     void loadThinkingContent(sessionId, entryId, blockIndex)
       .then((value) => {
-        if (!cancelled) setContent(value);
+        if (cancelled) return;
+        setContent(value);
+        // 记下延迟内容已取回，条目被卸载重建后不必再当作未加载。
+        transcriptViewState.markLoaded(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
@@ -823,7 +836,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
     return () => {
       cancelled = true;
     };
-  }, [block.deferred, block.thinking, blockIndex, entryId, sessionId, t]);
+  }, [block.deferred, block.thinking, blockIndex, entryId, sessionId, t, turnAnchorEntryId]);
 
   const text = block.deferred ? content : block.thinking;
   const hasText = typeof text === "string" && text.trim().length > 0;
@@ -849,7 +862,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
 }
 
 
-function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number }) {
+function ToolCallBlock({ block, result, duration, sessionId, turnAnchorEntryId }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; sessionId?: string; turnAnchorEntryId?: string }) {
   const normalizedToolName = block.toolName.toLowerCase();
   const isEditTool = normalizedToolName === "edit" ||
     normalizedToolName.startsWith("edit_") ||
@@ -857,7 +870,10 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     normalizedToolName.endsWith("_edit") ||
     normalizedToolName.includes("str_replace") ||
     normalizedToolName.includes("replace_editor");
-  const [expanded, setExpanded] = useState(isEditTool);
+  // 编辑类工具调用默认展开；展开状态记在视图状态里，条目卸载重建后保留。
+  const part = toolCallPart(block.toolCallId);
+  const anchorEntryId = turnAnchorEntryId ?? block.toolCallId;
+  const expanded = useTranscriptExpanded(sessionId, anchorEntryId, part, isEditTool);
   const inputStr = JSON.stringify(block.input, null, 2);
   const isTodoTool = normalizedToolName === "todo" || normalizedToolName.endsWith(".todo") || normalizedToolName.endsWith("_todo");
   const isBashTool = normalizedToolName === "bash" || normalizedToolName.startsWith("bash ") || normalizedToolName.endsWith(".bash") || normalizedToolName.endsWith("_bash");
@@ -913,7 +929,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     >
 
       <button
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => transcriptViewState.toggleExpanded(sessionId, anchorEntryId, part, isEditTool)}
         aria-expanded={expanded}
         className="tool-call-toggle"
         style={{
@@ -1993,7 +2009,7 @@ function formatUsage(usage: {
   return parts.join(" · ");
 }
 
-function BashExecutionView({ message, sessionId }: { message: BashExecutionMessage; sessionId?: string }) {
+function BashExecutionView({ message, sessionId, turnAnchorEntryId }: { message: BashExecutionMessage; sessionId?: string; turnAnchorEntryId?: string }) {
   const [fullOutput, setFullOutput] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
@@ -2047,7 +2063,7 @@ function BashExecutionView({ message, sessionId }: { message: BashExecutionMessa
 
   return (
     <div style={{ margin: "6px 0" }}>
-      <ToolCallBlock block={block} result={result} />
+      <ToolCallBlock block={block} result={result} sessionId={sessionId} turnAnchorEntryId={turnAnchorEntryId} />
       {message.truncated && fullOutputUrl && (
         <div style={{ padding: "4px 10px", fontSize: 11, marginTop: -1 }}>
           {showFullButton && (
