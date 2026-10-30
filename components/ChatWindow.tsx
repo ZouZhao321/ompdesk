@@ -93,6 +93,12 @@ interface TranscriptSlotsContext {
 }
 
 /**
+ * 视口上下各预留 400px：快速滚动时先有内容，挂载量仍是一屏加固定缓冲，
+ * 与会话总长度无关。
+ */
+const TRANSCRIPT_VIEWPORT_BUFFER = { top: 400, bottom: 400 };
+
+/**
  * 列表之外的部件走列表提供的页首/页尾插槽，仍然在同一条滚动流里。
  * 插槽组件定义在模块作用域，身份不变；内容更新走 context，插槽不会被卸载重挂。
  */
@@ -666,6 +672,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
           context={{ header: transcriptHeader, footer: transcriptFooter }}
           components={TRANSCRIPT_SLOTS}
           scrollerRef={handleTranscriptScrollerRef}
+          increaseViewportBy={TRANSCRIPT_VIEWPORT_BUFFER}
           className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none]"
           itemContent={(_, item) => (
             <div style={TRANSCRIPT_ROW_STYLE}>{renderTranscriptItem(item)}</div>
