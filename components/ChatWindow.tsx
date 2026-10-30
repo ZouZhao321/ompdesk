@@ -28,6 +28,7 @@ import {
 import { RAIL_JUMP_IDLE, RAIL_JUMP_SETTLE_MS, settleRailJump, type RailJumpState } from "@/lib/transcript-rail-jump";
 import { buildVirtualTranscriptModel, transcriptFollowOutput } from "@/lib/transcript-virtual-list";
 import {
+  hasTranscriptLiveTail,
   isTranscriptLiveTailItem,
   TRANSCRIPT_LIVE_TAIL_KEY,
   withTranscriptLiveTail,
@@ -543,22 +544,22 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   );
 
   // 流式消息是列表的最后一项：它跟着数据块更新，前面的条目保持原对象。
+  // 数据表与键表都从 hasTranscriptLiveTail 这一条判据推出合成项在不在：
+  // agent_start 到首个数据块之间流式已开始而消息还是空的，两表必须同样不加。
+  const streamingTranscriptMessage = streamState.isStreaming ? streamState.streamingMessage : null;
   const transcriptItems = useMemo(
-    () => withTranscriptLiveTail(
-      groupedTranscriptItems,
-      streamState.isStreaming ? streamState.streamingMessage : null,
-    ),
-    [groupedTranscriptItems, streamState.isStreaming, streamState.streamingMessage],
+    () => withTranscriptLiveTail(groupedTranscriptItems, streamingTranscriptMessage),
+    [groupedTranscriptItems, streamingTranscriptMessage],
   );
+  const transcriptLiveTailKey = hasTranscriptLiveTail(streamingTranscriptMessage)
+    ? TRANSCRIPT_LIVE_TAIL_KEY
+    : null;
 
-  // 键与首屏定位只由分组结果决定：流式合成项的键固定追加。流式数据块因此不重建
-  // 键数组，列表每块拿到的 itemKeys 与 computeItemKey 都是同一份引用。
+  // 键与首屏定位只由分组结果与合成项的有无决定：流式数据块因此不重建键数组，
+  // 列表每块拿到的 itemKeys 与 computeItemKey 都是同一份引用。
   const virtualTranscript = useMemo(
-    () => buildVirtualTranscriptModel(
-      groupedTranscriptItems,
-      streamState.isStreaming ? TRANSCRIPT_LIVE_TAIL_KEY : null,
-    ),
-    [groupedTranscriptItems, streamState.isStreaming],
+    () => buildVirtualTranscriptModel(groupedTranscriptItems, transcriptLiveTailKey),
+    [groupedTranscriptItems, transcriptLiveTailKey],
   );
 
   // 流式合成项不属于分组，锚点取当前最后一轮的键：流结束后定稿的正是这一轮，
