@@ -40,7 +40,7 @@ export interface TranscriptViewStore {
 // ASCII 单元分隔符不会出现在 entryId 或部位标识里。
 const KEY_SEPARATOR = "\u001f";
 
-/** 一个视图仓库保存的条目上限：超出后淘汰最久没碰过的条目，优先只带正文的。 */
+/** 一个视图仓库保存的条目上限：超出后按写入顺序淘汰最久没写过的条目，优先只带正文的。 */
 export const MAX_VIEW_ENTRIES = 1000;
 
 // 还没落盘的新会话没有 id，统一落到同一个空会话桶里。
@@ -61,9 +61,9 @@ export function createTranscriptViewStore(): TranscriptViewStore {
   }
 
   /**
-   * 淘汰一条，`keep` 是刚写入的键、不参与本轮的挑选。优先丢只带正文的条目：展开
-   * 状态是用户的选择，正文按需重新取回。返回丢掉的是哪一类，写入方据此决定要不要
-   * 通知订阅方。
+   * 淘汰一条，`keep` 是刚写入的键、不参与本轮的挑选。优先丢掉写入顺序上最久的那条
+   * 只带正文的条目：展开状态是用户的选择，正文按需重新取回。返回丢掉的是哪一类，
+   * 写入方据此决定要不要通知订阅方。
    */
   function evictOne(keep: string): "empty" | "content" | "expanded" {
     let contentOnly: string | null = null;
@@ -84,9 +84,10 @@ export function createTranscriptViewStore(): TranscriptViewStore {
   }
 
   /**
-   * 写入并维持上限。已有键先删后写：Map 的插入顺序因此就是访问顺序，最近写过或
-   * 读过的那条不会因为「写得早」被当成最久没用的。返回淘汰是否丢了展开状态——
-   * 那时已挂载的订阅方快照已经过期，写入方要补一次通知。
+   * 写入并维持上限。已有键先删后写：Map 的插入顺序因此就是写入顺序，最近写过的那条
+   * 不会因为「写得早」被当成最久没用的。读取不刷新顺序——读发生在渲染期，不在渲染里
+   * 改仓库；淘汰只看写入。返回淘汰是否丢了展开状态——那时已挂载的订阅方快照已经过期，
+   * 写入方要补一次通知。
    */
   function write(key: string, state: EntryViewState): boolean {
     entries.delete(key);
