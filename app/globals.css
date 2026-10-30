@@ -1664,8 +1664,11 @@ span.linenumber {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+/* 到头的那一端保持禁用样式：底色与图标颜色固定，不随悬停变成强调色。 */
 .transcript-rail-step:disabled {
   opacity: 0.35;
+  background: transparent;
+  color: var(--text-dim);
   cursor: default;
 }
 /* 悬停提示放在圆点列之外，才不会被那层内部滚动裁掉。 */

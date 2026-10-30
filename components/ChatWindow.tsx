@@ -877,6 +877,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             <NoticeShelf notices={notices} floating align="right" />
           </div>
         </div>
+        {/* 跳转条排在转写之前：Tab 先到导航条，不必穿过整段会话里的链接与按钮。 */}
+        {shouldShowTranscriptRail(railDots.length) && (
+          <TranscriptRail
+            dots={railDots}
+            currentDotIndex={railCurrentIndex}
+            onJump={handleRailJump}
+            t={t}
+          />
+        )}
         <TranscriptListRefContext.Provider value={transcriptListRef}>
           <Virtuoso<TranscriptListItem, TranscriptSlotsContext>
             ref={virtuosoRef}
@@ -894,14 +903,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             itemContent={renderTranscriptRow}
           />
         </TranscriptListRefContext.Provider>
-        {shouldShowTranscriptRail(railDots.length) && (
-          <TranscriptRail
-            dots={railDots}
-            currentDotIndex={railCurrentIndex}
-            onJump={handleRailJump}
-            t={t}
-          />
-        )}
         {sessionBusy && autoFollowPaused && (
           <button
             type="button"
