@@ -40,6 +40,35 @@ test("hands follow and the jump to the list", () => {
   assert.match(source, /scrollTranscriptToEnd,$/m);
 });
 
+test("parks the streaming bubble in the same bucket as the finished turn", () => {
+  // 流式合成项没有 entryId，锚点取当前最后一轮的键：流结束定稿的是同一轮，
+  // 展开状态因此不会随工具调用变化、也不会在流结束时丢。
+  assert.match(source, /turnAnchorEntryId=\{row\.liveTailAnchorEntryId\}/);
+  assert.match(source, /sessionId=\{row\.sessionId\}/);
+  assert.match(source, /groupedTranscriptItems\[groupedTranscriptItems\.length - 1\]\?\.key/);
+});
+
+test("clears a rail jump once, whether or not the list scrolled", () => {
+  // 只对齐一次与兜底清算的时序在 lib/transcript-rail-jump.ts，由它的逻辑测试覆盖；
+  // 这里只钉住接线：列表停稳与兜底定时器都走同一个收尾，跳转自己先停掉跟随。
+  assert.match(
+    source,
+    /const handleRailJump = useCallback\(\(itemIndex: number\) => \{[\s\S]*?pauseAutoFollow\(\);[\s\S]*?railJumpRef\.current = \{ pending: itemIndex \};/,
+  );
+  assert.match(source, /railJumpTimerRef\.current = window\.setTimeout\(settleRailJumpNow, RAIL_JUMP_SETTLE_MS\)/);
+  assert.match(
+    source,
+    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*settleRailJumpNow\(\);/,
+  );
+});
+
+test("skips the rail measurement while the rail is hidden", () => {
+  // 单轮、移动档、窄转写区都不显示跳转条：可见性由跳转条自己量，不可见时不读尺寸、
+  // 滚动帧里也不写状态。
+  assert.match(source, /const syncRailTopItem = useCallback\(\(\) => \{\s*if \(!railVisibleRef\.current\) return;/);
+  assert.match(source, /onVisibilityChange=\{handleRailVisibilityChange\}/);
+});
+
 test("keeps no paging leftovers in the transcript", () => {
   assert.doesNotMatch(source, /chat\.loadEarlier/);
   assert.doesNotMatch(source, /IntersectionObserver/);

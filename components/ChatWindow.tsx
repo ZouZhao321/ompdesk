@@ -25,9 +25,11 @@ import {
   shouldShowTranscriptRail,
   type RailRenderedItem,
 } from "@/lib/transcript-rail";
+import { RAIL_JUMP_IDLE, RAIL_JUMP_SETTLE_MS, settleRailJump, type RailJumpState } from "@/lib/transcript-rail-jump";
 import { buildVirtualTranscriptModel, transcriptFollowOutput } from "@/lib/transcript-virtual-list";
 import {
   isTranscriptLiveTailItem,
+  TRANSCRIPT_LIVE_TAIL_KEY,
   withTranscriptLiveTail,
   type TranscriptListItem,
 } from "@/lib/transcript-live-tail";
@@ -222,6 +224,11 @@ interface TranscriptRowContext {
   cwd?: string;
   /** 用于按会话分桶展开状态。 */
   sessionId?: string;
+  /**
+   * 流式合成项本轮提问锚点的键：流式气泡与流结束后定稿的那一轮共用同一个桶，
+   * 展开状态不会随工具调用变化、也不会在流结束时丢失。
+   */
+  liveTailAnchorEntryId: string;
   sessionBusy: boolean;
   isNew: boolean;
   forkingEntryId: string | null;
@@ -307,6 +314,8 @@ function renderTranscriptItem(row: TranscriptRowContext, item: TranscriptListIte
         modelNames={row.modelNames}
         cwd={row.cwd}
         onOpenFile={row.onOpenFile}
+        sessionId={row.sessionId}
+        turnAnchorEntryId={row.liveTailAnchorEntryId}
       />
     );
   }
@@ -396,7 +405,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     isAutoModelSelection,
     agentPhase,
     isNew,
-    autoFollowPaused, resumeAutoFollow,
+    autoFollowPaused, resumeAutoFollow, pauseAutoFollow,
     goalStatus,
     sessionIdRef, scrollContainerRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange, handleRoleModelChange,
@@ -545,6 +554,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   // 虚拟列表只消费条目数组：键与首屏定位由条目算一次，分组不参与。
   const virtualTranscript = useMemo(() => buildVirtualTranscriptModel(transcriptItems), [transcriptItems]);
 
+  // 流式合成项不属于分组，锚点取当前最后一轮的键：流结束后定稿的正是这一轮，
+  // 展开状态因此落在同一个桶里。还没有任何一轮时退回合成项自己的键。
+  const liveTailAnchorEntryId = groupedTranscriptItems[groupedTranscriptItems.length - 1]?.key
+    ?? TRANSCRIPT_LIVE_TAIL_KEY;
+
   // 跳转条与列表共用同一份分组结果，只为锚点轮取提问原文，不重新扫描消息；
   // 流式合成项不是一轮，圆点数只随正式轮次变化。
   const railDots = useMemo(
@@ -558,11 +572,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   const transcriptListRef = useRef<HTMLDivElement | null>(null);
   const railRenderedItemsRef = useRef<RailRenderedItem[]>([]);
   const railScrollCleanupRef = useRef<(() => void) | null>(null);
+  const railVisibleRef = useRef(false);
   const [topItemIndex, setTopItemIndex] = useState<number | null>(null);
 
   // 顶部可见条目以列表报告的已渲染条目为准：偏移是列表的测量值，这里只补一个
-  // 滚动容器与列表容器的矩形差，不按平均高度反推。
+  // 滚动容器与列表容器的矩形差，不按平均高度反推。跳转条在单轮、移动档、窄转写区
+  // 下不显示，这时不读尺寸也不写状态，滚动帧里因此没有多余的重渲染。
   const syncRailTopItem = useCallback(() => {
+    if (!railVisibleRef.current) return;
     const scroller = scrollContainerRef.current;
     const list = transcriptListRef.current;
     if (!scroller || !list) return;
@@ -570,6 +587,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     const next = railTopVisibleItemIndex(railRenderedItemsRef.current, visibleTop);
     setTopItemIndex((current) => (current === next ? current : next));
   }, [scrollContainerRef]);
+
+  // 是否可见由跳转条自己量：移动档与窄转写区都由 CSS 收起，这里不重复判定断点。
+  const handleRailVisibilityChange = useCallback((visible: boolean) => {
+    railVisibleRef.current = visible;
+    if (visible) syncRailTopItem();
+  }, [syncRailTopItem]);
 
   const handleTranscriptItemsRendered = useCallback((items: ListItem<TranscriptListItem>[]) => {
     railRenderedItemsRef.current = items.map(({ index, offset, size }) => ({ index, offset, size }));
@@ -600,28 +623,54 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     syncRailTopItem();
   }, [scrollContainerRef, syncRailTopItem]);
 
-  useEffect(() => () => railScrollCleanupRef.current?.(), []);
-
   const railCurrentIndex = useMemo(
     () => (topItemIndex === null ? -1 : railCurrentDotIndex(railDots, topItemIndex)),
     [railDots, topItemIndex],
   );
 
   // 跳转只把条目下标交给列表，目标位置由列表自己算。
-  const railJumpTargetRef = useRef<number | null>(null);
-  const handleRailJump = useCallback((itemIndex: number) => {
-    railJumpTargetRef.current = itemIndex;
-    virtuosoRef.current?.scrollToIndex({ index: itemIndex, align: "start" });
+  const railJumpRef = useRef<RailJumpState>(RAIL_JUMP_IDLE);
+  const railJumpTimerRef = useRef<number | null>(null);
+
+  const clearRailJumpTimer = useCallback(() => {
+    if (railJumpTimerRef.current === null) return;
+    window.clearTimeout(railJumpTimerRef.current);
+    railJumpTimerRef.current = null;
   }, []);
 
-  // 目标附近的行第一次被量出来之前，列表只能按估计高度落点。滚动停下后再调一次
-  // 定位接口，让它按实测高度重新对齐；目标位置依旧由列表算，这里不碰像素。
+  // 目标附近的行第一次被量出来之前，列表只能按估计高度落点。收尾时再调一次定位
+  // 接口，让它按实测高度重新对齐；目标位置依旧由列表算，这里不碰像素。
+  const settleRailJumpNow = useCallback(() => {
+    clearRailJumpTimer();
+    const settled = settleRailJump(railJumpRef.current);
+    railJumpRef.current = settled.state;
+    if (settled.realign !== null) {
+      virtuosoRef.current?.scrollToIndex({ index: settled.realign, align: "start" });
+    }
+  }, [clearRailJumpTimer]);
+
+  const handleRailJump = useCallback((itemIndex: number) => {
+    // 跳转是一次有意的位置改变：停掉跟随，视图不再被末尾输出拽走。
+    pauseAutoFollow();
+    railJumpRef.current = { pending: itemIndex };
+    virtuosoRef.current?.scrollToIndex({ index: itemIndex, align: "start" });
+    clearRailJumpTimer();
+    // 兜底：点击已经在顶部的圆点不会产生滚动，等不到列表的停止回调，也要在短时间
+    // 后清掉目标，否则之后任意一次滚动停下都会把视图拽回这一轮。
+    railJumpTimerRef.current = window.setTimeout(settleRailJumpNow, RAIL_JUMP_SETTLE_MS);
+  }, [clearRailJumpTimer, pauseAutoFollow, settleRailJumpNow]);
+
+  // 列表停稳：按实测高度收尾一次跳转，没有待清算目标时什么也不做。两条时机共用
+  // 同一份目标，先到的那条清算。
   const handleTranscriptScrollingChange = useCallback((scrolling: boolean) => {
-    const target = railJumpTargetRef.current;
-    if (scrolling || target === null) return;
-    railJumpTargetRef.current = null;
-    virtuosoRef.current?.scrollToIndex({ index: target, align: "start" });
-  }, []);
+    if (scrolling) return;
+    settleRailJumpNow();
+  }, [settleRailJumpNow]);
+
+  useEffect(() => () => {
+    railScrollCleanupRef.current?.();
+    clearRailJumpTimer();
+  }, [clearRailJumpTimer]);
 
   const computeTranscriptItemKey = useCallback(
     (index: number) => virtualTranscript.itemKeys[index],
@@ -696,6 +745,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     modelNames,
     cwd: messageCwd,
     sessionId: activeSessionId,
+    liveTailAnchorEntryId,
     sessionBusy,
     isNew,
     forkingEntryId,
@@ -706,7 +756,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     onEditContent: handleEditContent,
     t,
   }), [
-    messages, entryIds, toolResultsMap, modelNames, messageCwd, activeSessionId, sessionBusy, isNew,
+    messages, entryIds, toolResultsMap, modelNames, messageCwd, activeSessionId, liveTailAnchorEntryId, sessionBusy, isNew,
     forkingEntryId, streamState.isStreaming, onOpenFile, handleFork, handleNavigate, handleEditContent, t,
   ]);
 
@@ -883,6 +933,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             dots={railDots}
             currentDotIndex={railCurrentIndex}
             onJump={handleRailJump}
+            onVisibilityChange={handleRailVisibilityChange}
             t={t}
           />
         )}
