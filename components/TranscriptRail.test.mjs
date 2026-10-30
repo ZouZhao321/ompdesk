@@ -16,6 +16,13 @@ function declarations(selector) {
   return styles.slice(open + 1, close);
 }
 
+/** 读一条自定义属性的像素值；缺失时让用例直接失败。 */
+function customPixel(block, name) {
+  const match = new RegExp(`--${name}:\\s*([\\d.]+)px;`).exec(block);
+  assert.ok(match, `missing --${name}`);
+  return Number(match[1]);
+}
+
 test("opens the prompt tip on keyboard focus, not only on hover", () => {
   assert.match(source, /onMouseEnter=\{\(event\) => showTip\(event\.currentTarget, dot\.prompt\)\}/);
   assert.match(source, /onFocus=\{\(event\) => showTip\(event\.currentTarget, dot\.prompt\)\}/);
@@ -45,25 +52,46 @@ test("re-anchors the tip when the dot column scrolls under the focus ring", () =
   assert.match(source, /window\.removeEventListener\("scroll", onScroll, true\)/);
 });
 
-test("derives the rail geometry from the region constants", () => {
+test("derives the rail geometry from the region constants", async () => {
+  const { RAIL_INSET_PX, RAIL_LANE_QUERY_MAX_PX, RAIL_MIN_REGION_PX } = await import("../lib/transcript-rail.ts");
   const region = declarations(".chat-transcript-region");
   assert.ok(region, "missing .chat-transcript-region");
   // 同步来源写在容器上：版心与内边距来自 ChatWindow，车道宽来自 lib/transcript-rail.ts。
   assert.match(region, /--chat-column-width: 820px;/);
   assert.match(region, /--chat-column-padding: 16px;/);
   assert.match(region, /--transcript-rail-lane: 36px;/);
-  // 右偏移与最小宽度都由这几个常量算出，不再出现手抄的派生像素值。
-  assert.match(region, /--transcript-rail-inset: calc\(/);
-  assert.match(region, /--transcript-rail-min-region: calc\(/);
-  const rail = declarations(".transcript-rail {");
-  assert.ok(rail, "missing .transcript-rail");
-  assert.match(rail, /right: max\(\s*var\(--transcript-rail-margin\),\s*calc\(\s*50% \+ var\(--transcript-rail-min-region\) \/ 2 - var\(--transcript-rail-inset\) -\s*var\(--transcript-rail-lane\)/);
-  const dot = declarations(".transcript-rail-dot {");
-  assert.match(dot, /width: var\(--transcript-rail-lane\);/);
-  // 阈值同样派生：车道容器宽度 = 转写区宽度 - 最小宽度。
+  // 左缘偏移与最小宽度都由这几个常量算出，不再出现手抄的派生像素值。
+  assert.match(
+    region,
+    /--transcript-rail-inset: calc\(\s*var\(--chat-column-width\) \/ 2 \+ var\(--chat-column-padding\) \+ var\(--transcript-rail-gap\)\s*\);/,
+  );
+  assert.match(
+    region,
+    /--transcript-rail-min-region: calc\(\s*2 \* \(var\(--transcript-rail-inset\) \+ var\(--transcript-rail-lane\) \+ var\(--transcript-rail-margin\)\)\s*\);/,
+  );
+  // 阈值把内边距与缝隙一起算进去，数值与 lib/transcript-rail.ts 的几何常量一致。
+  const inset = customPixel(region, "chat-column-width") / 2
+    + customPixel(region, "chat-column-padding")
+    + customPixel(region, "transcript-rail-gap");
+  assert.equal(inset, RAIL_INSET_PX);
+  const minRegion = 2 * (
+    inset + customPixel(region, "transcript-rail-lane") + customPixel(region, "transcript-rail-margin")
+  );
+  assert.equal(minRegion, RAIL_MIN_REGION_PX);
+  // 车道容器铺满转写区，只承载隐藏判定；容器查询写不了 calc，阈值照最小宽度减一。
   const lane = declarations(".transcript-rail-lane");
   assert.ok(lane, "missing .transcript-rail-lane");
-  assert.match(lane, /width: calc\(100% - var\(--transcript-rail-min-region\)\);/);
+  assert.match(lane, /container: transcript-rail-lane \/ inline-size;/);
+  assert.doesNotMatch(lane, /width:/);
+  assert.match(styles, new RegExp(`@container transcript-rail-lane \\(max-width: ${RAIL_LANE_QUERY_MAX_PX}px\\)`));
+  const rail = declarations(".transcript-rail {");
+  assert.ok(rail, "missing .transcript-rail");
+  assert.match(
+    rail,
+    /right: max\(\s*var\(--transcript-rail-margin\),\s*calc\(50% - var\(--transcript-rail-inset\) - var\(--transcript-rail-lane\)\)\s*\);/,
+  );
+  const dot = declarations(".transcript-rail-dot {");
+  assert.match(dot, /width: var\(--transcript-rail-lane\);/);
   assert.doesNotMatch(styles, /calc\(50% - 468px\)/);
   assert.doesNotMatch(styles, /max-width: 899px/);
 });
@@ -95,11 +123,12 @@ test("keeps a disabled step visually out of reach", () => {
   assert.match(styles, /\.transcript-rail-step:hover:not\(:disabled\)/);
 });
 
-test("keeps the rail out of the tab order while it is hidden", () => {
-  // 车道容器宽度归零就是放不下：整条 display: none 收起，隐藏时元素不可聚焦。
+test("keeps the rail out of the tab order while it is hidden", async () => {
+  const { RAIL_LANE_QUERY_MAX_PX } = await import("../lib/transcript-rail.ts");
+  // 放不下整条车道就是放不下：整条 display: none 收起，隐藏时元素不可聚焦。
   assert.match(
     styles,
-    /@container transcript-rail-lane \(max-width: 0px\) \{\s*\.transcript-rail \{\s*display: none;/,
+    new RegExp(`@container transcript-rail-lane \\(max-width: ${RAIL_LANE_QUERY_MAX_PX}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`),
   );
   // 移动档与桌面档是同一个选择器、都在未分层样式里，优先级相同，靠后声明即可覆盖。
   const baseRule = styles.indexOf(".transcript-rail {");
