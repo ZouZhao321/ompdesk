@@ -788,12 +788,12 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile, sessionId }: { block: 
 }
 
 /**
- * 这条思考块的延迟内容是否已经取回过。取回过就不再当作未加载：条目滚出视野被
- * 虚拟列表卸载后重建时，内容缓存里的结果直接填回来，不重放加载态。
+ * 这条思考块的延迟内容。取回过的正文与「已加载」标记一起存在视图状态里：条目
+ * 滚出视野被虚拟列表卸载后重建，首帧直接渲染正文，既不再请求也不回落占位文案。
  */
-function isThinkingLoaded(sessionId: string | undefined, entryId: string | undefined, turnAnchorEntryId: string | undefined, blockIndex: number): boolean {
-  if (!sessionId || !entryId) return false;
-  return transcriptViewState.isLoaded(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
+function loadedThinkingContent(sessionId: string | undefined, entryId: string | undefined, turnAnchorEntryId: string | undefined, blockIndex: number): string | null {
+  if (!sessionId || !entryId) return null;
+  return transcriptViewState.loadedContent(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
 }
 
 function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId, blockIndex }: {
@@ -805,9 +805,11 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
   blockIndex: number;
 }) {
   const { t } = useI18n();
-  const [content, setContent] = useState<string | null>(null);
+  const [content, setContent] = useState<string | null>(() => (
+    block.deferred ? loadedThinkingContent(sessionId, entryId, turnAnchorEntryId, blockIndex) : null
+  ));
   const [loading, setLoading] = useState(() => (
-    block.deferred === true && !isThinkingLoaded(sessionId, entryId, turnAnchorEntryId, blockIndex)
+    block.deferred === true && loadedThinkingContent(sessionId, entryId, turnAnchorEntryId, blockIndex) === null
   ));
   const [error, setError] = useState<string | null>(null);
 
@@ -828,14 +830,25 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
       };
     }
 
-    setLoading(!isThinkingLoaded(sessionId, entryId, turnAnchorEntryId, blockIndex));
+    const stored = transcriptViewState.loadedContent(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
+    if (stored !== null) {
+      // 正文已经在手，重建后不必再请求。
+      setContent(stored);
+      setLoading(false);
+      setError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoading(true);
     setError(null);
     void loadThinkingContent(sessionId, entryId, blockIndex)
       .then((value) => {
         if (cancelled) return;
         setContent(value);
-        // 记下延迟内容已取回：条目被卸载后重建时不再回到加载态。
-        transcriptViewState.markLoaded(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
+        // 正文与标记一起记下：条目被卸载后重建不再回到加载态。
+        transcriptViewState.markLoaded(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex), value);
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
