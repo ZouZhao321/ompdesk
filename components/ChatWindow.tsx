@@ -337,8 +337,9 @@ function renderTranscriptItem(row: TranscriptRowContext, item: TranscriptListIte
           <ProcessDetailsGroup
             messageCount={item.processMessageCount}
             // 含 provider 错误的一组默认展开：折叠起来只剩一个计数，轮中部的错误横幅
-            // 就被藏掉了。
-            defaultExpanded={!item.finalAnswerMessage || item.hasProcessError}
+            // 就被藏掉了。只有最新一轮这么做——历史轮曾出错后重试成功的不再撑开，
+            // 首屏挂载量不随错误轮数增长。
+            defaultExpanded={!item.finalAnswerMessage || (item.hasProcessError && item.isLastTurn)}
             sessionId={row.sessionId}
             anchorEntryId={turnAnchorEntryId}
             t={row.t}

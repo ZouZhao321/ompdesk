@@ -53,10 +53,12 @@ export interface TranscriptItem {
   /** 过程组的消息条数：可见过程消息 + 正式回答拆出的过程块。 */
   processMessageCount: number;
   /**
-   * 过程组里是否有 provider 错误。有错误时界面默认展开这一组：折叠起来只剩一个
-   * 计数，轮中部的错误横幅会被藏掉。
+   * 过程组里是否有 provider 错误。最新一轮带着它时界面默认展开这一组：折叠起来只剩
+   * 一个计数，轮中部的错误横幅会被藏掉。
    */
   hasProcessError: boolean;
+  /** 是否是最后一轮。只有最新一轮的过程组会因 provider 错误默认展开。 */
+  isLastTurn: boolean;
   /** 过程组的工具调用数。 */
   toolCallCount: number;
   /** 本轮写入的文件；只在有正式回答时收集。 */
@@ -175,6 +177,7 @@ function buildStandaloneMessageItem(entryIds: readonly string[], index: number):
     finalAnswerMessage: null,
     processMessageCount: 0,
     hasProcessError: false,
+    isLastTurn: false,
     toolCallCount: 0,
     writtenFiles: [],
     tailIndices: [],
@@ -198,6 +201,7 @@ function buildTurn(
   const isLiveTail = Boolean(options.busy || options.isStreaming)
     && anchorIndex === lastAnchorIndex
     && endIndex === messages.length;
+  const isLastTurn = anchorIndex === lastAnchorIndex;
 
   const processIndices = sequence(anchorIndex + 1, finalAssistantIndex === -1 ? endIndex : finalAssistantIndex);
   const visibleProcessIndices = processIndices.filter((processIdx) => (
@@ -215,6 +219,7 @@ function buildTurn(
       finalAnswerMessage: null,
       processMessageCount: 0,
       hasProcessError: false,
+      isLastTurn,
       toolCallCount: 0,
       writtenFiles: [],
       tailIndices: [],
@@ -248,6 +253,7 @@ function buildTurn(
     finalAnswerMessage,
     processMessageCount: visibleProcessIndices.length + (finalProcessMessage ? 1 : 0),
     hasProcessError: hasProviderError(messages, visibleProcessIndices, displayOptions),
+    isLastTurn,
     toolCallCount: countToolCalls(messages, visibleProcessIndices, displayOptions)
       + countToolCallBlocks(finalSplit.processBlocks),
     writtenFiles,
