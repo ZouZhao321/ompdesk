@@ -93,6 +93,8 @@ function harness() {
     bashRunningRef: { current: false },
     // 跟随入口由 applyFollowRef 转发，这里只记下事件，不跑真的滚动。
     applyFollowRef: { current: (event) => effects.push(["follow", event]) },
+    // 最近一次请求的叶子；点同一节点时要靠它跳过重载。
+    activeLeafIdRef: { current: null },
     opts: {},
     closeEvents: () => effects.push(["closeEvents"]),
     onSessionForked: (...args) => effects.push(["identity", ...args]),
@@ -129,6 +131,7 @@ function harness() {
   const callbackBindings = { ...bindings, fetch: (...args) => bindings.fetch(...args) };
   bindings.loadContext = callback("loadContext", callbackBindings);
   bindings.handleNavigate = callback("handleNavigate", bindings);
+  bindings.handleLeafChange = callback("handleLeafChange", bindings);
   return { bindings, commands, effects, memory, storage, ui };
 }
 
@@ -223,6 +226,42 @@ test("treats a finished branch reload as a jump to the bottom", async () => {
   // 旧末端，交给提交后的 effect。
   assert.deepEqual(h.effects.filter(([kind]) => kind === "follow"), []);
   assert.deepEqual(h.effects.filter(([kind]) => kind === "followTicket"), [["followTicket", 1]]);
+});
+
+test("clicking the already active leaf neither reloads nor pulls the view to the end", async () => {
+  const h = harness();
+  h.bindings.activeLeafIdRef.current = "current-leaf";
+  const before = snapshot(h);
+  h.bindings.fetch = () => { throw new Error("the active leaf must not be reloaded"); };
+
+  await h.bindings.handleLeafChange("current-leaf");
+
+  // 叶子没变：不重载、不记回底票号、也不把导航命令再送一遍。视图停在用户上滚到的
+  // 位置，不会被拽回末尾。
+  assert.deepEqual(snapshot(h), before);
+  assert.deepEqual(h.effects, []);
+  assert.deepEqual(h.commands, []);
+});
+
+test("switching to another leaf reloads it and requests the follow after commit", async () => {
+  const h = harness();
+  h.bindings.activeLeafIdRef.current = "current-leaf";
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    return response(context("other branch"));
+  };
+
+  await h.bindings.handleLeafChange("other-leaf");
+  await Promise.all(h.commands);
+
+  // 叶子真的变了：载入新分支、记下新叶子，回底等到提交之后。
+  assert.equal(h.bindings.activeLeafIdRef.current, "other-leaf");
+  assert.equal(h.ui.ActiveLeafId, "other-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "other branch" }]);
+  assert.deepEqual(h.effects.filter(([kind]) => kind === "followTicket"), [["followTicket", 1]]);
+  assert.equal(h.commands.length, 1);
 });
 
 test("an owned same-runtime relocation still follows its new transcript", async () => {

@@ -391,6 +391,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
+  // 最近一次成功载入的叶子：分支导航点的就是它时叶子没变，跳过整段重载，正在上滚
+  // 阅读的视图不会被拽回末尾。载入失败不写，再点一次仍会重试。
+  const activeLeafIdRef = useRef<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
@@ -1851,15 +1854,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!sid) return;
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef).catch(() => {});
     setActiveLeafId(entryId);
-    await loadContext(sid, entryId);
+    if (await loadContext(sid, entryId)) activeLeafIdRef.current = entryId;
   }, [loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
+    // 点的就是已经激活的叶子：视图已经停在这条分支上，整段重载只会把正在上滚阅读
+    // 的视图拽回末尾，什么都不做。
+    if (leafId === activeLeafIdRef.current) return;
     setActiveLeafId(leafId);
     const sid = sessionIdRef.current;
     if (!sid) return;
     if (!await loadContext(sid, leafId)) return;
+    activeLeafIdRef.current = leafId;
     if (leafId && mountedRef.current && sessionIdRef.current) {
       sendAgentCommand(sessionIdRef.current, { type: "navigate_tree", targetId: leafId }, runtimeIdRef).catch(() => {});
     }
