@@ -220,7 +220,7 @@ test("feeds the scroll position into the follow reducer", () => {
   // 「暂停只认用户驱动、恢复按位置」的判定在 lib/transcript-follow.ts，由它的逻辑
   // 测试覆盖；跳转落点的抑制与三条状态序列由 useAgentSession.follow.test.mjs 覆盖。
   // 这里只钉住接线：滚动位置按两个字段交给判定，抑制器合着时整条观测不参与。
-  assert.match(scrollHandlerSource, /if \(followObservationHeldRef\.current\) return;/);
+  assert.match(scrollHandlerSource, /if \(followObservationHeldRef\.current\) \{\s*if \(Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/);
   assert.match(scrollHandlerSource, /type: "scroll"/);
   assert.match(scrollHandlerSource, /userDriven: Date\.now\(\) <= userScrollIntentUntilRef\.current/);
   assert.match(scrollHandlerSource, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);

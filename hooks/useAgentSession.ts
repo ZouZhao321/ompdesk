@@ -18,6 +18,7 @@ import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
 import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
 import { reduceFollow, type FollowEvent } from "@/lib/transcript-follow";
+import { RAIL_JUMP_SETTLE_MS } from "@/lib/transcript-rail-jump";
 import type { ChatDraftImage } from "@/lib/draft-store";
 import { rememberSessionContinuation, clearSessionContinuation } from "@/lib/workspace-memory";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
@@ -193,6 +194,9 @@ export interface UseAgentSessionOptions {
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 const USER_SCROLL_INTENT_MS = 1200;
+// 跟随观测抑制器的上限（ms）：跳转的两次清算各有一个 RAIL_JUMP_SETTLE_MS 的兜底，
+// 再加上一帧余量。抑制器只能由外部松开，漏配对时由这个截止时间兜住。
+const FOLLOW_OBSERVATION_HOLD_MS = RAIL_JUMP_SETTLE_MS * 2 + 500;
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
@@ -464,6 +468,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 跳转的落点由列表带着滚一串：这一串里读到的位置说明不了用户意图。一次性抑制器
   // 在跳转开始时合上，由列表停止滚动或跳转的兜底定时器松开。
   const followObservationHeldRef = useRef(false);
+  // 抑制器的截止时间：它只能由外部松开，漏配对会把跟随永久锁死且静默。到点由滚动
+  // 观测自己收回，最坏也只是这段窗口内的位置不参与判定。
+  const followObservationHoldUntilRef = useRef(0);
   // Forward reference: handleSend/executeBash are declared above applyFollow.
   const applyFollowRef = useRef<(event: FollowEvent) => void>(() => {});
   // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
@@ -2343,12 +2350,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   applyFollowRef.current = applyFollow;
 
   // 跳转自己的落点不参与跟随判定：合上抑制器，由列表停止滚动或跳转的兜底定时器松开。
+  // 每次合上都刷新截止时间，配对漏掉时由观测自己收回。
   const holdFollowObservation = useCallback(() => {
     followObservationHeldRef.current = true;
+    followObservationHoldUntilRef.current = Date.now() + FOLLOW_OBSERVATION_HOLD_MS;
   }, []);
 
   const releaseFollowObservation = useCallback(() => {
     followObservationHeldRef.current = false;
+    followObservationHoldUntilRef.current = 0;
   }, []);
 
   const resumeAutoFollow = useCallback(() => {
@@ -2369,8 +2379,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleScrollPositionChange = useCallback(() => {
-    // 跳转自己的落点还在滚：这一串位置不参与判定，读到的一律丢掉。
-    if (followObservationHeldRef.current) return;
+    // 跳转自己的落点还在滚：这一串位置不参与判定，读到的一律丢掉。抑制器到点自己
+    // 失效，调用方漏了松开也不会让跟随永久停摆。
+    if (followObservationHeldRef.current) {
+      if (Date.now() < followObservationHoldUntilRef.current) return;
+      followObservationHeldRef.current = false;
+      followObservationHoldUntilRef.current = 0;
+    }
     const container = scrollContainerRef.current;
     if (!container) return;
     // 位置判定与运行状态无关：跳转在空闲期停掉的跟随，靠用户把视图滑回底部自愈，
