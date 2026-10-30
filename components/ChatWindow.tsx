@@ -1,6 +1,6 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type {
   AgentMessage,
   BashExecutionMessage,
@@ -17,7 +17,8 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { buildRewindEntries } from "@/lib/rewind";
 import type { DisplayOptions } from "@/lib/message-display";
 import type { WrittenFile } from "@/lib/turn-written-files";
-import { buildTranscriptItems } from "@/lib/transcript-items";
+import { buildTranscriptItems, type TranscriptItem } from "@/lib/transcript-items";
+import { buildVirtualTranscriptModel } from "@/lib/transcript-virtual-list";
 import { PROCESS_DETAILS_PART, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { MessageView } from "./MessageView";
 import { MarkdownBody } from "./MarkdownBody";
@@ -33,6 +34,7 @@ import { useSyncedDisplaySettings } from "@/hooks/useDisplaySettings";
 import { formatTokenCount } from "@/lib/format-tokens";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import type { GoalStatusInfo, SessionStatsInfo } from "@/lib/omp-types";
+import { Virtuoso, type Components } from "react-virtuoso";
 
 interface Props {
   session: SessionInfo | null;
@@ -71,6 +73,41 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
 }
 
 const CHAT_COLUMN_PADDING = 16;
+
+/**
+ * 虚拟列表里每一行（页首、条目、页尾）共用的版心，等价于改造前滚动手写容器
+ * 那层 `padding: 0 16px` + `maxWidth 820 margin auto`。
+ */
+const TRANSCRIPT_ROW_STYLE: CSSProperties = {
+  boxSizing: "border-box",
+  width: "100%",
+  minWidth: 0,
+  maxWidth: 820 + CHAT_COLUMN_PADDING * 2,
+  margin: "0 auto",
+  padding: `0 ${CHAT_COLUMN_PADDING}px`,
+};
+
+interface TranscriptSlotsContext {
+  header: ReactNode;
+  footer: ReactNode;
+}
+
+/**
+ * 列表之外的部件走列表提供的页首/页尾插槽，仍然在同一条滚动流里。
+ * 插槽组件定义在模块作用域，身份不变；内容更新走 context，插槽不会被卸载重挂。
+ */
+function TranscriptHeaderSlot({ context }: { context?: TranscriptSlotsContext }) {
+  return <>{context?.header}</>;
+}
+
+function TranscriptFooterSlot({ context }: { context?: TranscriptSlotsContext }) {
+  return <>{context?.footer}</>;
+}
+
+const TRANSCRIPT_SLOTS: Components<TranscriptItem, TranscriptSlotsContext> = {
+  Header: TranscriptHeaderSlot,
+  Footer: TranscriptFooterSlot,
+};
 
 function getUserInputText(message: AgentMessage): string | null {
   if (message.role !== "user") return null;
@@ -303,6 +340,20 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     [messages, entryIds, displayOptions, streamState.isStreaming, sessionBusy, toolResultsMap, messageCwd],
   );
 
+  // 虚拟列表只消费条目数组：键与首屏定位由条目算一次，分组不参与。
+  const virtualTranscript = useMemo(() => buildVirtualTranscriptModel(transcriptItems), [transcriptItems]);
+
+  // 滚动元素由列表提供，句柄交回现有的 scrollContainerRef，
+  // 自动跟随、上滚判定与「回到最新」按钮继续挂在同一个滚动元素上。
+  const handleTranscriptScrollerRef = useCallback((element: HTMLElement | Window | null) => {
+    scrollContainerRef.current = element instanceof HTMLDivElement ? element : null;
+  }, [scrollContainerRef]);
+
+  const computeTranscriptItemKey = useCallback(
+    (index: number) => virtualTranscript.itemKeys[index],
+    [virtualTranscript],
+  );
+
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
     : null;
@@ -361,6 +412,124 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
 
   const aboveEditorWidgets = extensionWidgets.filter((widget) => widget.placement !== "belowEditor");
   const belowEditorWidgets = extensionWidgets.filter((widget) => widget.placement === "belowEditor");
+
+  // 视图状态的锚点：一轮里所有部件都挂在提问那条消息的 entryId 上，
+  // 这样过程组与工具块的展开状态不随分组结果变化；独立渲染的消息退化为自身 entryId。
+  const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; turnAnchorEntryId?: string } = {}): ReactNode => {
+    const msg = options.messageOverride ?? messages[idx];
+    const prevAssistantEntryId =
+      msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
+        ? entryIds[idx - 1]
+        : undefined;
+    const keyPrefix = options.keyPrefix ?? "message";
+    let showTimestamp = false;
+    if (msg.role === "assistant") {
+      showTimestamp = true;
+      for (let j = idx + 1; j < messages.length; j++) {
+        const r = messages[j].role;
+        if (r === "user") break;
+        if (r === "assistant") { showTimestamp = false; break; }
+      }
+      // Hide on the currently-streaming tail (the streaming bubble owns the live timestamp)
+      if (showTimestamp && streamState.isStreaming && idx === messages.length - 1) {
+        showTimestamp = false;
+      }
+    }
+    if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
+    return (
+      <MessageView
+        key={`${keyPrefix}-view-${idx}`}
+        message={msg}
+        toolResults={toolResultsMap}
+        modelNames={modelNames}
+        cwd={messageCwd}
+        onOpenFile={onOpenFile}
+        entryId={entryIds[idx]}
+        onFork={sessionBusy || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
+        forking={forkingEntryId === entryIds[idx]}
+        onNavigate={sessionBusy ? undefined : handleNavigate}
+        prevAssistantEntryId={sessionBusy ? undefined : prevAssistantEntryId}
+        onEditContent={handleEditContent}
+        showTimestamp={showTimestamp}
+        prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
+        sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+        turnAnchorEntryId={options.turnAnchorEntryId ?? entryIds[idx]}
+        writtenFiles={options.writtenFiles}
+      />
+    );
+  };
+
+  // 一个列表项就是一轮：提问、过程组、正式回答都挂在这一个项里。
+  const renderTranscriptItem = (item: TranscriptItem): ReactNode => {
+    if (item.isStandalone) {
+      return item.messageIndices.map((messageIndex) => renderMessage(messageIndex, { turnAnchorEntryId: item.key }));
+    }
+
+    const turnAnchorEntryId = item.key;
+    return (
+      <>
+        {renderMessage(item.anchorIndex, { turnAnchorEntryId })}
+        {item.processMessageCount > 0 && (
+          <div key={`process-group-${item.anchorIndex}-${item.finalAssistantIndex}`}>
+            <ProcessDetailsGroup
+              messageCount={item.processMessageCount}
+              defaultExpanded={!item.finalAnswerMessage}
+              sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+              anchorEntryId={turnAnchorEntryId}
+              t={t}
+              toolCallCount={item.toolCallCount}
+            >
+              {item.visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { keyPrefix: "process", turnAnchorEntryId }))}
+              {item.finalProcessMessage && renderMessage(item.finalAssistantIndex, { keyPrefix: "process-final", messageOverride: item.finalProcessMessage, showTimestamp: false, turnAnchorEntryId })}
+            </ProcessDetailsGroup>
+          </div>
+        )}
+        {item.finalAnswerMessage
+          && renderMessage(item.finalAssistantIndex, { messageOverride: item.finalAnswerMessage, writtenFiles: item.writtenFiles, turnAnchorEntryId })}
+        {item.tailIndices.map((messageIndex) => renderMessage(messageIndex, { turnAnchorEntryId }))}
+      </>
+    );
+  };
+
+  // 列表之外的部件走页首/页尾插槽，仍在同一条滚动流里。
+  const transcriptHeader = (
+    <div style={{ ...TRANSCRIPT_ROW_STYLE, paddingTop: 16 }}>
+      <ExtensionWidgets widgets={aboveEditorWidgets} />
+    </div>
+  );
+  const transcriptFooter = (
+    <div style={TRANSCRIPT_ROW_STYLE}>
+      {streamState.isStreaming && streamState.streamingMessage && (
+        <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} />
+      )}
+
+      {agentRunning && !streamState.streamingMessage && agentPhase && (
+        <div className="py-2 text-[13px] text-text-muted">
+          <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t)}</span>
+        </div>
+      )}
+
+      {bashRunning && !pendingBash && (
+        <div className="py-2 text-[13px] text-text-muted">
+          <span className="animate-[pulse_1.5s_infinite]">{t("chat.runningCommand")}</span>
+        </div>
+      )}
+
+      {pendingBash && (
+        <MessageView
+          message={{
+            role: "bashExecution",
+            command: pendingBash.command,
+            output: "",
+            excludeFromContext: pendingBash.excludeFromContext,
+          } as BashExecutionMessage}
+          sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+        />
+      )}
+
+      <div ref={messagesEndRef} />
+    </div>
+  );
 
   if (loading) {
     return (
@@ -490,131 +659,18 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             <NoticeShelf notices={notices} floating align="right" />
           </div>
         </div>
-        <div ref={scrollContainerRef} className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-4 [scrollbar-width:none]">
-          <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
-            <div style={{ width: "100%", minWidth: 0, maxWidth: 820, margin: "0 auto" }}>
-              <ExtensionWidgets widgets={aboveEditorWidgets} />
-
-            {(() => {
-              // 视图状态的锚点：一轮里所有部件都挂在提问那条消息的 entryId 上，
-              // 这样过程组与工具块的展开状态不随分组结果变化；独立渲染的消息退化为自身 entryId。
-              const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; turnAnchorEntryId?: string } = {}): ReactNode => {
-                const msg = options.messageOverride ?? messages[idx];
-                const prevAssistantEntryId =
-                  msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
-                    ? entryIds[idx - 1]
-                    : undefined;
-                const keyPrefix = options.keyPrefix ?? "message";
-                let showTimestamp = false;
-                if (msg.role === "assistant") {
-                  showTimestamp = true;
-                  for (let j = idx + 1; j < messages.length; j++) {
-                    const r = messages[j].role;
-                    if (r === "user") break;
-                    if (r === "assistant") { showTimestamp = false; break; }
-                  }
-                  // Hide on the currently-streaming tail (the streaming bubble owns the live timestamp)
-                  if (showTimestamp && streamState.isStreaming && idx === messages.length - 1) {
-                    showTimestamp = false;
-                  }
-                }
-                if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
-                return (
-                  <MessageView
-                    key={`${keyPrefix}-view-${idx}`}
-                    message={msg}
-                    toolResults={toolResultsMap}
-                    modelNames={modelNames}
-                    cwd={messageCwd}
-                    onOpenFile={onOpenFile}
-                    entryId={entryIds[idx]}
-                    onFork={sessionBusy || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
-                    forking={forkingEntryId === entryIds[idx]}
-                    onNavigate={sessionBusy ? undefined : handleNavigate}
-                    prevAssistantEntryId={sessionBusy ? undefined : prevAssistantEntryId}
-                    onEditContent={handleEditContent}
-                    showTimestamp={showTimestamp}
-                    prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
-                    sessionId={session?.id ?? sessionIdRef.current ?? undefined}
-                    turnAnchorEntryId={options.turnAnchorEntryId ?? entryIds[idx]}
-                    writtenFiles={options.writtenFiles}
-                  />
-                );
-              };
-
-              const rendered: ReactNode[] = [];
-              for (const item of transcriptItems) {
-                if (item.isStandalone) {
-                  for (const messageIndex of item.messageIndices) {
-                    rendered.push(renderMessage(messageIndex, { turnAnchorEntryId: item.key }));
-                  }
-                  continue;
-                }
-
-                const turnAnchorEntryId = item.key;
-                rendered.push(renderMessage(item.anchorIndex, { turnAnchorEntryId }));
-
-                if (item.processMessageCount > 0) {
-                  const processGroup = (
-                    <ProcessDetailsGroup
-                      messageCount={item.processMessageCount}
-                      defaultExpanded={!item.finalAnswerMessage}
-                      sessionId={session?.id ?? sessionIdRef.current ?? undefined}
-                      anchorEntryId={turnAnchorEntryId}
-                      t={t}
-                      toolCallCount={item.toolCallCount}
-                    >
-                      {item.visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { keyPrefix: "process", turnAnchorEntryId }))}
-                      {item.finalProcessMessage && renderMessage(item.finalAssistantIndex, { keyPrefix: "process-final", messageOverride: item.finalProcessMessage, showTimestamp: false, turnAnchorEntryId })}
-                    </ProcessDetailsGroup>
-                  );
-                  rendered.push(
-                    <div key={`process-group-${item.anchorIndex}-${item.finalAssistantIndex}`}>
-                      {processGroup}
-                    </div>,
-                  );
-                }
-
-                if (item.finalAnswerMessage) {
-                  rendered.push(renderMessage(item.finalAssistantIndex, { messageOverride: item.finalAnswerMessage, writtenFiles: item.writtenFiles, turnAnchorEntryId }));
-                }
-                for (const messageIndex of item.tailIndices) rendered.push(renderMessage(messageIndex, { turnAnchorEntryId }));
-              }
-              return <>{rendered}</>;
-            })()}
-            {streamState.isStreaming && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} />
-            )}
-
-            {agentRunning && !streamState.streamingMessage && agentPhase && (
-              <div className="py-2 text-[13px] text-text-muted">
-                <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t)}</span>
-              </div>
-            )}
-
-            {bashRunning && !pendingBash && (
-              <div className="py-2 text-[13px] text-text-muted">
-                 <span className="animate-[pulse_1.5s_infinite]">{t("chat.runningCommand")}</span>
-              </div>
-            )}
-
-            {pendingBash && (
-              <MessageView
-                message={{
-                  role: "bashExecution",
-                  command: pendingBash.command,
-                  output: "",
-                  excludeFromContext: pendingBash.excludeFromContext,
-                } as BashExecutionMessage}
-                sessionId={session?.id ?? sessionIdRef.current ?? undefined}
-              />
-            )}
-
-
-            <div ref={messagesEndRef} />
-            </div>
-          </div>
-        </div>
+        <Virtuoso<TranscriptItem, TranscriptSlotsContext>
+          data={transcriptItems}
+          computeItemKey={computeTranscriptItemKey}
+          initialTopMostItemIndex={virtualTranscript.initialTopMostItemIndex}
+          context={{ header: transcriptHeader, footer: transcriptFooter }}
+          components={TRANSCRIPT_SLOTS}
+          scrollerRef={handleTranscriptScrollerRef}
+          className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none]"
+          itemContent={(_, item) => (
+            <div style={TRANSCRIPT_ROW_STYLE}>{renderTranscriptItem(item)}</div>
+          )}
+        />
         {sessionBusy && autoFollowPaused && (
           <button
             type="button"
