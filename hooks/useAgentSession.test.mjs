@@ -290,17 +290,18 @@ test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   assert.doesNotMatch(source, /container\.scrollTo\(/);
 
   assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/);
-  // 按钮有两个来源：跟随暂停，或列表报告自己不在底部。前者管用户上滚与跳转，后者
+  // 按钮有两个来源：跟随暂停，或停稳帧实测列表不在底部。前者管用户上滚与跳转，后者
   // 让「跟随开着但列表没跟上」时也留一个恢复入口。
   assert.match(chatWindowSource, /\{\(autoFollowPaused \|\| !transcriptAtBottom\) && \(/);
-  assert.match(chatWindowSource, /atBottomStateChange=\{handleTranscriptAtBottomChange\}/);
   // 位置只在列表停稳后再确认一帧才落成状态：首屏与 load 回底途中的程序化滚动会
-  // 短暂离开底部，停止回调读到的仍是途中值。确认帧直接读列表自己的滚动位置。
+  // 短暂离开底部，列表自己的 atBottomStateChange 在途中也报 false，接进状态就会把
+  // 按钮钉出来。唯一的来源是这一帧实测。
+  assert.doesNotMatch(chatWindowSource, /atBottomStateChange=/);
   assert.match(
     chatWindowSource,
-    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*settleRailJumpNow\(\);\s*if \(transcriptAtBottomFrameRef\.current !== 0\) return;\s*transcriptAtBottomFrameRef\.current = requestAnimationFrame\(\(\) => \{\s*transcriptAtBottomFrameRef\.current = 0;\s*const atBottom = measureTranscriptAtBottom\(\);\s*transcriptAtBottomRef\.current = atBottom;\s*setTranscriptAtBottom\(atBottom\);/,
+    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*settleRailJumpNow\(\);\s*if \(transcriptAtBottomFrameRef\.current !== 0\) return;\s*transcriptAtBottomFrameRef\.current = requestAnimationFrame\(\(\) => \{\s*transcriptAtBottomFrameRef\.current = 0;\s*const atBottom = measureTranscriptAtBottom\(\);\s*if \(atBottom !== null\) setTranscriptAtBottom\(atBottom\);/,
   );
-  assert.match(chatWindowSource, /const handleTranscriptAtBottomChange = useCallback\(\(atBottom: boolean\) => \{\s*transcriptAtBottomRef\.current = atBottom;\s*\}, \[\]\);/);
+  assert.doesNotMatch(chatWindowSource, /transcriptAtBottomRef/);
   assert.doesNotMatch(chatWindowSource, /\{sessionBusy && autoFollowPaused && \(/);
   assert.match(chatWindowSource, /onClick=\{resumeAutoFollow\}/);
 });
