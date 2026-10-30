@@ -82,6 +82,16 @@ test("clears a rail jump once, whether or not the list scrolled", () => {
     source,
     /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*settleRailJumpNow\(\);/,
   );
+  // 落点那串滚动不参与跟随判定：跳转开始时合上一次性抑制器。
+  assert.match(
+    source,
+    /pauseAutoFollow\(\);[\s\S]*?holdFollowObservation\(\);[\s\S]*?railJumpRef\.current = \{ pending: itemIndex \};/,
+  );
+  // 落点停下（重定位也做完）才松开；重定位之后抑制器继续合着，由兜底定时器兜底。
+  assert.match(
+    source,
+    /if \(settled\.realign === null\) \{[\s\S]*?releaseFollowObservation\(\);[\s\S]*?railJumpTimerRef\.current = window\.setTimeout\(\(\) => settleRailJumpNowRef\.current\(\), RAIL_JUMP_SETTLE_MS\)/,
+  );
 });
 
 test("skips the rail measurement while the rail is hidden", () => {

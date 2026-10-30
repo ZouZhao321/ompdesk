@@ -217,12 +217,19 @@ test("feeds the scroll position into the follow reducer", () => {
     source.indexOf("  // Load session on mount"),
   );
 
-  // 「上滚停止跟随、程序化滚动不算数」的判定在 lib/transcript-follow.ts，由它的
-  // 逻辑测试覆盖；这里只钉住接线：滚动位置按两个字段交给判定。
+  // 「暂停只认用户驱动、恢复按位置」的判定在 lib/transcript-follow.ts，由它的逻辑
+  // 测试覆盖；跳转落点的抑制与三条状态序列由 useAgentSession.follow.test.mjs 覆盖。
+  // 这里只钉住接线：滚动位置按两个字段交给判定，抑制器合着时整条观测不参与。
+  assert.match(scrollHandlerSource, /if \(followObservationHeldRef\.current\) return;/);
   assert.match(scrollHandlerSource, /type: "scroll"/);
   assert.match(scrollHandlerSource, /userDriven: Date\.now\(\) <= userScrollIntentUntilRef\.current/);
   assert.match(scrollHandlerSource, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
-  assert.doesNotMatch(source, /programmaticWindow/);
+  // 按运行状态早退会让空闲期跳转停掉的跟随永远恢复不了。
+  assert.doesNotMatch(scrollHandlerSource, /agentRunningRef|bashRunningRef/);
+  // 旧的时间窗方案整体删掉，不留一个恒真的断言当挡箭牌。
+  assert.doesNotMatch(source, /ignoreProgrammaticScrollUntilRef/);
+  assert.doesNotMatch(source, /completionScrollAllowedRef/);
+  assert.doesNotMatch(source, /PROGRAMMATIC_SCROLL_IGNORE_MS/);
 });
 
 test("restores follow and brings the view to the end when a prompt is submitted", () => {
@@ -251,11 +258,11 @@ test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   // 单一写入点：跟随开关只由 setAutoFollow 写，状态不会和判定漂移。
   assert.match(source, /const setAutoFollow = useCallback\(\(following: boolean\) => \{\s*setAutoFollowPaused\(/);
   assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{\s*applyFollow\(\{ type: "resume" \}\);\s*\}, \[applyFollow\]\);/);
-  // 意图窗口的清理只在 applyFollow 里做：提交、「回到底部」与跳转共用同一条前置清理。
+  // 意图窗口的清理只在 applyFollow 里做，而且只跟着回底走：跳转的落点由抑制器挡住，
+  // 不再借窗口。
   assert.equal(source.match(/userScrollIntentUntilRef\.current = 0/g)?.length, 1);
-  // 跳转自己会带着列表滚一次，窗口留着的话这次滚动会被当成用户驱动。
-  assert.match(source, /if \(outcome\.scrollToEnd \|\| event\.type === "pause"\) userScrollIntentUntilRef\.current = 0;/);
-  assert.match(source, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow,/);
+  assert.match(source, /if \(outcome\.scrollToEnd\) userScrollIntentUntilRef\.current = 0;/);
+  assert.match(source, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/);
   // Scrolling is the list's job: the hook hands the jump to the list handle
   // instead of touching the scroll element itself. 入口是必填的：漏接在 typecheck 暴露，
   // 不会出现状态写着「跟随中」却没有落点。
@@ -265,8 +272,10 @@ test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   assert.doesNotMatch(source, /scrollIntoView/);
   assert.doesNotMatch(source, /container\.scrollTo\(/);
 
-  assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow,/);
-  assert.match(chatWindowSource, /\{sessionBusy && autoFollowPaused && \(/);
+  assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/);
+  // 按钮只看跟随是否暂停：空闲期跳转停掉的跟随也要能点回来。
+  assert.match(chatWindowSource, /\{autoFollowPaused && \(/);
+  assert.doesNotMatch(chatWindowSource, /\{sessionBusy && autoFollowPaused && \(/);
   assert.match(chatWindowSource, /onClick=\{resumeAutoFollow\}/);
 });
 

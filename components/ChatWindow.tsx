@@ -414,7 +414,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     isAutoModelSelection,
     agentPhase,
     isNew,
-    autoFollowPaused, resumeAutoFollow, pauseAutoFollow,
+    autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,
     goalStatus,
     sessionIdRef, scrollContainerRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange, handleRoleModelChange,
@@ -655,6 +655,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   // 跳转只把条目下标交给列表，目标位置由列表自己算。
   const railJumpRef = useRef<RailJumpState>(RAIL_JUMP_IDLE);
   const railJumpTimerRef = useRef<number | null>(null);
+  const settleRailJumpNowRef = useRef<() => void>(() => {});
 
   const clearRailJumpTimer = useCallback(() => {
     if (railJumpTimerRef.current === null) return;
@@ -668,24 +669,34 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     clearRailJumpTimer();
     const settled = settleRailJump(railJumpRef.current);
     railJumpRef.current = settled.state;
-    if (settled.realign !== null) {
-      virtuosoRef.current?.scrollToIndex({ index: settled.realign, align: "start" });
+    if (settled.realign === null) {
+      // 落点停下：松开一次性抑制器，之后的位置重新参与跟随判定。
+      releaseFollowObservation();
+      return;
     }
-  }, [clearRailJumpTimer]);
+    virtuosoRef.current?.scrollToIndex({ index: settled.realign, align: "start" });
+    // 重定位同样是一次程序化落点，抑制器继续合着：由这次滚动的停止回调松开，
+    // 等不到回调时由兜底定时器松开。
+    railJumpTimerRef.current = window.setTimeout(() => settleRailJumpNowRef.current(), RAIL_JUMP_SETTLE_MS);
+  }, [clearRailJumpTimer, releaseFollowObservation]);
+  settleRailJumpNowRef.current = settleRailJumpNow;
 
   const handleRailJump = useCallback((itemIndex: number) => {
     // 跳转是一次有意的位置改变：停掉跟随，视图不再被末尾输出拽走。
     pauseAutoFollow();
+    // 落点由列表带出来，这串滚动说明不了用户意图：合上抑制器，别让落点贴底时
+    // 又把刚停掉的跟随打开。
+    holdFollowObservation();
     railJumpRef.current = { pending: itemIndex };
     virtuosoRef.current?.scrollToIndex({ index: itemIndex, align: "start" });
     clearRailJumpTimer();
     // 兜底：点击已经在顶部的圆点不会产生滚动，等不到列表的停止回调，也要在短时间
-    // 后清掉目标，否则之后任意一次滚动停下都会把视图拽回这一轮。
+    // 后清掉目标并松开抑制器，否则之后任意一次滚动停下都会把视图拽回这一轮。
     railJumpTimerRef.current = window.setTimeout(settleRailJumpNow, RAIL_JUMP_SETTLE_MS);
-  }, [clearRailJumpTimer, pauseAutoFollow, settleRailJumpNow]);
+  }, [clearRailJumpTimer, holdFollowObservation, pauseAutoFollow, settleRailJumpNow]);
 
-  // 列表停稳：按实测高度收尾一次跳转，没有待清算目标时什么也不做。两条时机共用
-  // 同一份目标，先到的那条清算。
+  // 列表停稳：按实测高度收尾一次跳转，并松开落点抑制器。两条时机共用同一份目标，
+  // 先到的那条清算。
   const handleTranscriptScrollingChange = useCallback((scrolling: boolean) => {
     if (scrolling) return;
     settleRailJumpNow();
@@ -986,7 +997,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             itemContent={renderTranscriptRow}
           />
         </TranscriptListRefContext.Provider>
-        {sessionBusy && autoFollowPaused && (
+        {autoFollowPaused && (
           <button
             type="button"
             onClick={resumeAutoFollow}
