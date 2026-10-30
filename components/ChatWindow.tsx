@@ -33,13 +33,6 @@ import { useSyncedDisplaySettings } from "@/hooks/useDisplaySettings";
 import { formatTokenCount } from "@/lib/format-tokens";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import type { GoalStatusInfo, SessionStatsInfo } from "@/lib/omp-types";
-import {
-  captureScrollDistance,
-  getNextVisibleCount,
-  getVisibleRenderWindow,
-  restoreScrollTop,
-  VISIBLE_PAGE_SIZE,
-} from "@/lib/chat-lazy-load";
 
 interface Props {
   session: SessionInfo | null;
@@ -218,42 +211,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     registerAbortHandler(sessionBusy ? handleAbort : null);
   }, [sessionBusy, handleAbort]);
 
-  // --- Lazy-load historical messages ---
-  // Only render the last N messages initially. When the user scrolls to the
-  // top, load another page while keeping the scroll position stable.
-  const [visibleCount, setVisibleCount] = useState(VISIBLE_PAGE_SIZE);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const prevScrollDistanceRef = useRef<number | null>(null);
-
-  // IntersectionObserver on the sentinel div at the top of the message list.
-  // When it becomes visible, load the next page of older messages.
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    const container = scrollContainerRef.current;
-    if (!sentinel || !container) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          // Save distance from top before prepending to restore scroll later
-          prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
-          setVisibleCount((prev) => getNextVisibleCount(prev));
-        }
-      },
-      { root: container, threshold: 0 }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [visibleCount, messages.length, scrollContainerRef]);
-
-  // After visibleCount increases (more messages prepended), restore the
-  // scroll position so the viewport doesn't jump.
-  useEffect(() => {
-    if (prevScrollDistanceRef.current == null) return;
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    container.scrollTop = restoreScrollTop(container.scrollHeight, prevScrollDistanceRef.current);
-    prevScrollDistanceRef.current = null;
-  }, [visibleCount, scrollContainerRef]);
   // Push session stats up to AppShell for the top bar.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats
@@ -623,17 +580,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
                 }
                 for (const messageIndex of item.tailIndices) rendered.push(renderMessage(messageIndex, { turnAnchorEntryId }));
               }
-              const { startIndex, hasMore } = getVisibleRenderWindow(rendered.length, visibleCount);
-              return (
-                <>
-                  {hasMore && (
-                     <div ref={sentinelRef} className="py-3 text-center text-xs text-text-muted">
-                       {t("chat.loadEarlier", { count: startIndex })}
-                    </div>
-                  )}
-                  {rendered.slice(startIndex)}
-                </>
-              );
+              return <>{rendered}</>;
             })()}
             {streamState.isStreaming && streamState.streamingMessage && (
               <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} />
