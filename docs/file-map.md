@@ -99,7 +99,11 @@ session-map.ts       .jsonl → 轮次树，并合并 fork 文件
 session-archive.ts   归档标记读写
 session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
 session-title.ts     omp 自带标题生成器的薄封装
+transcript-items.ts  把消息数组切成“一轮一项”的扁平条目：锚点、可见过程消息、正式回答与尾部
+transcript-live-tail.ts 把流式消息作为列表末尾的合成项接到条目数组，键与定位和条目同源
 transcript-rail.ts   提问跳转条的几何：圆点、当前轮、圆点列内部滚动与逐轮步进
+transcript-view-state.ts 按会话与轮锚点保存过程组/工具块的展开状态与延迟内容已加载标记
+transcript-virtual-list.ts 虚拟列表要的条目键与首屏定位，以及跟随输出开关
 skills-service.ts    loadSkills 与会话一致性的封装
 goal-mode.ts         目标模式状态机
 git-changes.ts       工作区改动状态与单文件差异
