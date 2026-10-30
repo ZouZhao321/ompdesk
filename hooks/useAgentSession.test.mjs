@@ -294,11 +294,13 @@ test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   // 让「跟随开着但列表没跟上」时也留一个恢复入口。
   assert.match(chatWindowSource, /\{\(autoFollowPaused \|\| !transcriptAtBottom\) && \(/);
   assert.match(chatWindowSource, /atBottomStateChange=\{handleTranscriptAtBottomChange\}/);
-  // 位置只在列表停稳后落成状态：跟随途中的程序化滚动会短暂离开底部。
+  // 位置只在列表停稳后再确认一帧才落成状态：首屏与 load 回底途中的程序化滚动会
+  // 短暂离开底部，停止回调读到的仍是途中值。确认帧直接读列表自己的滚动位置。
   assert.match(
     chatWindowSource,
-    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*setTranscriptAtBottom\(transcriptAtBottomRef\.current\);/,
+    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*settleRailJumpNow\(\);\s*if \(transcriptAtBottomFrameRef\.current !== 0\) return;\s*transcriptAtBottomFrameRef\.current = requestAnimationFrame\(\(\) => \{\s*transcriptAtBottomFrameRef\.current = 0;\s*const atBottom = measureTranscriptAtBottom\(\);\s*transcriptAtBottomRef\.current = atBottom;\s*setTranscriptAtBottom\(atBottom\);/,
   );
+  assert.match(chatWindowSource, /const handleTranscriptAtBottomChange = useCallback\(\(atBottom: boolean\) => \{\s*transcriptAtBottomRef\.current = atBottom;\s*\}, \[\]\);/);
   assert.doesNotMatch(chatWindowSource, /\{sessionBusy && autoFollowPaused && \(/);
   assert.match(chatWindowSource, /onClick=\{resumeAutoFollow\}/);
 });
