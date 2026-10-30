@@ -11,6 +11,7 @@ const jiti = createJiti(import.meta.url, {
 const { MessageView } = await jiti.import("./MessageView.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 const { ImagePreviewProvider } = await jiti.import("./ImageZoom.tsx");
+const { transcriptViewState, thinkingPart } = await jiti.import("../lib/transcript-view-state.ts");
 
 function renderMessage(message, { withPreview = false } = {}) {
   const view = React.createElement(MessageView, { message });
@@ -221,6 +222,36 @@ test("renders thinking markdown directly without a collapsible card", () => {
   assert.match(html, /class="markdown-thinking"/);
   assert.match(html, /<strong>Direct thought<\/strong>/);
   assert.doesNotMatch(html, /aria-expanded/);
+});
+
+test("skips the loading state once a deferred thought has been fetched", () => {
+  const message = {
+    role: "assistant",
+    provider: "openai",
+    model: "gpt-test",
+    content: [{ type: "thinking", thinking: "", deferred: true }],
+  };
+  const renderThinking = () => renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(MessageView, {
+        message,
+        sessionId: "session-thinking",
+        entryId: "entry-thinking",
+        turnAnchorEntryId: "entry-thinking",
+      }),
+    ),
+  );
+
+  assert.match(renderThinking(), /Loading thinking\.\.\./);
+
+  // 内容取回过之后条目被卸载重建，挂载时直接落到非加载态。
+  transcriptViewState.markLoaded("session-thinking", "entry-thinking", thinkingPart("entry-thinking", 0));
+
+  const html = renderThinking();
+  assert.doesNotMatch(html, /Loading thinking/);
+  assert.match(html, /class="markdown-thinking-status"/);
 });
 
 const userImageMessage = {
