@@ -65,21 +65,23 @@ test("clears the intent window for the jump-to-bottom event too", () => {
   assert.equal(ref.current, 0);
 });
 
-test("leaves the intent window alone when the event does not move the view", () => {
-  const until = Date.now() + 1200;
-  const { applyFollow, scrolls, ref } = harness(until);
+test("walks the switch from a jump's pause to a bottom scroll", () => {
+  const { applyFollow, scrolls, followStates, ref } = harness(Date.now() + 1200);
 
+  // 跳转停掉跟随，并清掉意图窗口：它自己会带着列表滚一次，这次滚动算不上用户驱动，
+  // 落在贴底距离内也不会把刚停掉的跟随打开。
   applyFollow({ type: "pause" });
-  assert.equal(ref.current, until);
+  assert.equal(ref.current, 0);
+  assert.deepEqual(followStates, [false]);
   assert.deepEqual(scrolls, []);
 
-  // 贴底的滚动观测恢复跟随，但不是主动回底，不该清掉用户的意图窗口。
+  // 用户贴着底滚回来时恢复跟随，但不是主动回底：不滚动，也不再动意图窗口。
   applyFollow({
     type: "scroll",
     userDriven: true,
-    programmaticWindow: false,
     distanceFromBottom: FOLLOW_BOTTOM_THRESHOLD_PX,
   });
-  assert.equal(ref.current, until);
+  assert.equal(ref.current, 0);
+  assert.deepEqual(followStates, [false, true]);
   assert.deepEqual(scrolls, []);
 });

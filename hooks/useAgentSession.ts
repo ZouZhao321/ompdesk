@@ -192,7 +192,6 @@ export interface UseAgentSessionOptions {
 
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
-const PROGRAMMATIC_SCROLL_IGNORE_MS = 700;
 const USER_SCROLL_INTENT_MS = 1200;
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
@@ -462,7 +461,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [goalStatus, setGoalStatus] = useState<GoalStatusInfo | null>(null);
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
-  const ignoreProgrammaticScrollUntilRef = useRef(0);
   // Forward reference: handleSend/executeBash are declared above applyFollow.
   const applyFollowRef = useRef<(event: FollowEvent) => void>(() => {});
   // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
@@ -2326,7 +2324,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
     scrollTranscriptToEndRef.current(behavior);
   }, []);
 
@@ -2334,9 +2331,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const applyFollow = useCallback((event: FollowEvent) => {
     const outcome = reduceFollow(event);
     if (!outcome) return;
-    // 主动回底的滚动是程序化的：先清掉用户滚动意图窗口，否则这次回底自己产生的
-    // 滚动会被当成用户驱动，跟随立刻又被判回暂停。提交与「回到底部」都走这里。
-    if (outcome.scrollToEnd) userScrollIntentUntilRef.current = 0;
+    // 回底与跳转都会带着列表滚一次：先清掉用户滚动意图窗口，否则这次滚动会被当成
+    // 用户驱动——回底会被判回暂停，跳转则会立刻恢复跟随，把刚停掉的跟随抵消。提交
+    // 与「回到底部」都走这里。
+    if (outcome.scrollToEnd || event.type === "pause") userScrollIntentUntilRef.current = 0;
     setAutoFollow(!outcome.paused);
     if (outcome.scrollToEnd) scrollToBottom(outcome.scrollToEnd);
   }, [scrollToBottom, setAutoFollow]);
@@ -2366,7 +2364,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     applyFollow({
       type: "scroll",
       userDriven: Date.now() <= userScrollIntentUntilRef.current,
-      programmaticWindow: Date.now() < ignoreProgrammaticScrollUntilRef.current,
       distanceFromBottom: container.scrollHeight - container.scrollTop - container.clientHeight,
     });
   }, [applyFollow]);
