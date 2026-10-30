@@ -20,6 +20,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { buildRewindEntries } from "@/lib/rewind";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks, type DisplayOptions } from "@/lib/message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
+import { PROCESS_DETAILS_PART, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { MessageView } from "./MessageView";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -151,8 +152,9 @@ function withAssistantBlocks(
   return next;
 }
 
-function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = false, children, t }: { messageCount: number; toolCallCount: number; defaultExpanded?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = false, sessionId, anchorEntryId, children, t }: { messageCount: number; toolCallCount: number; defaultExpanded?: boolean; sessionId?: string; anchorEntryId: string; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
+  // 展开状态存在转写视图状态里，虚拟列表卸载本组后重建仍保留用户的选择。
+  const expanded = useTranscriptExpanded(sessionId, anchorEntryId, PROCESS_DETAILS_PART, defaultExpanded);
   const parts = [t("chat.processDetails"), `${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`];
   if (toolCallCount > 0) parts.push(`${toolCallCount} ${t(toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
 
@@ -161,7 +163,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
       <button
         type="button"
         aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => transcriptViewState.toggleExpanded(sessionId, anchorEntryId, PROCESS_DETAILS_PART, defaultExpanded)}
         className="process-details-toggle"
         style={{
           display: "flex",
@@ -591,7 +593,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
                 if (isGroupAnchor(messages[i])) { lastAnchorIdx = i; break; }
               }
 
-              const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[] } = {}): ReactNode => {
+              // 视图状态的锚点：一轮里所有部件都挂在提问那条消息的 entryId 上，
+              // 这样过程组与工具块的展开状态不随分组结果变化。还没落盘的轮用下标兜底。
+              const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; turnAnchorEntryId?: string } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 const prevAssistantEntryId =
                   msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
@@ -629,6 +633,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
                     showTimestamp={showTimestamp}
                     prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
                     sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                    turnAnchorEntryId={options.turnAnchorEntryId ?? entryIds[idx]}
                     writtenFiles={options.writtenFiles}
                   />
                 );
@@ -644,6 +649,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
                 }
 
                 const userIdx = idx;
+                const turnAnchorEntryId = entryIds[userIdx] ?? `turn-${userIdx}`;
                 let endIdx = userIdx + 1;
                 while (endIdx < messages.length && !isGroupAnchor(messages[endIdx])) endIdx += 1;
 
@@ -651,7 +657,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
 
                 if (finalAssistantIdx === -1) {
                   for (let renderIdx = userIdx; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
+                    rendered.push(renderMessage(renderIdx, { turnAnchorEntryId }));
                   }
                   idx = endIdx;
                   continue;
@@ -660,13 +666,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
                 const isLiveTail = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
                 if (isLiveTail) {
                   for (let renderIdx = userIdx; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
+                    rendered.push(renderMessage(renderIdx, { turnAnchorEntryId }));
                   }
                   idx = endIdx;
                   continue;
                 }
 
-                rendered.push(renderMessage(userIdx));
+                rendered.push(renderMessage(userIdx, { turnAnchorEntryId }));
 
                 const processIndices: number[] = [];
                 for (let processIdx = userIdx + 1; processIdx < finalAssistantIdx; processIdx++) {
@@ -688,11 +694,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
                     <ProcessDetailsGroup
                       messageCount={processCount}
                       defaultExpanded={!finalAnswerMessage}
+                      sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                      anchorEntryId={turnAnchorEntryId}
                       t={t}
                       toolCallCount={countToolCalls(messages, visibleProcessIndices, displayOptions) + countToolCallBlocks(finalSplit.processBlocks)}
                     >
-                      {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { keyPrefix: "process" }))}
-                      {finalProcessMessage && renderMessage(finalAssistantIdx, { keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false })}
+                      {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { keyPrefix: "process", turnAnchorEntryId }))}
+                      {finalProcessMessage && renderMessage(finalAssistantIdx, { keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false, turnAnchorEntryId })}
                     </ProcessDetailsGroup>
                   );
                   rendered.push(
@@ -715,10 +723,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
                     }
                   }
                   const writtenFiles = extractTurnWrittenFiles(turnContent, toolResultsMap, messageCwd);
-                  rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles }));
+                  rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles, turnAnchorEntryId }));
                 }
                 for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
-                  rendered.push(renderMessage(renderIdx));
+                  rendered.push(renderMessage(renderIdx, { turnAnchorEntryId }));
                 }
                 idx = endIdx;
               }
