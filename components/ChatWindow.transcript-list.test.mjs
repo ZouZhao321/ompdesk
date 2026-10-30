@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
+const hookSource = await readFile(new URL("../hooks/useAgentSession.ts", import.meta.url), "utf8");
 
 test("hands the scroll element over to the virtual list", () => {
   assert.match(source, /scrollerRef=\{handleTranscriptScrollerRef\}/);
@@ -72,6 +73,18 @@ test("parks the streaming bubble in the same bucket as the finished turn", () =>
   assert.match(source, /turnAnchorEntryId=\{row\.liveTailAnchorEntryId\}/);
   assert.match(source, /sessionId=\{row\.sessionId\}/);
   assert.match(source, /groupedTranscriptItems\[groupedTranscriptItems\.length - 1\]\?\.key/);
+});
+
+test("drops a pending rail jump when the transcript is replaced", () => {
+  // 切分支/切叶会整段换掉条目：旧的条目下标在新列表上没有对应位置，按它清算会把
+  // 刚回到底部的视图拽回旧轮次。载入次数一变就丢掉待清算目标并松开抑制器。
+  assert.match(
+    source,
+    /useEffect\(\(\) => \{\s*if \(contextFollowTicket === 0\) return;\s*railJumpRef\.current = RAIL_JUMP_IDLE;\s*clearRailJumpTimer\(\);\s*releaseFollowObservation\(\);\s*\}, \[contextFollowTicket, clearRailJumpTimer, releaseFollowObservation\]\);/,
+  );
+  // 载入次数由 hook 暴露，界面不能自己从消息数组猜整段替换。
+  assert.match(source, /holdFollowObservation, releaseFollowObservation,\s*contextFollowTicket,/);
+  assert.match(hookSource, /contextFollowTicket,\s*goalStatus,/);
 });
 
 test("clears a rail jump once, whether or not the list scrolled", () => {
