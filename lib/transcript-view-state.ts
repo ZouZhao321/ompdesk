@@ -18,7 +18,8 @@ export function thinkingPart(entryId: string, blockIndex: number): string {
 
 interface EntryViewState {
   expanded?: boolean;
-  loaded?: boolean;
+  /** 延迟内容的正文：与「已加载」标记一起留着，条目重建的首帧直接渲染。 */
+  content?: string;
 }
 
 export interface TranscriptViewStore {
@@ -26,8 +27,10 @@ export interface TranscriptViewStore {
   /** 读出展开状态；没有用户操作记录时返回 `fallback`。 */
   isExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): boolean;
   toggleExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): void;
-  isLoaded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): boolean;
-  markLoaded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): void;
+  /** 记下取回的延迟内容；正文本身就是「已加载」的标记。 */
+  markLoaded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, content: string): void;
+  /** 已取回的延迟内容；还没取回时为 null。 */
+  loadedContent(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): string | null;
 }
 
 // ASCII 单元分隔符不会出现在 entryId 或部位标识里。
@@ -66,15 +69,16 @@ export function createTranscriptViewStore(): TranscriptViewStore {
       entries.set(key, { ...entries.get(key), expanded: !current });
       emit();
     },
-    isLoaded(sessionId, anchorEntryId, part) {
-      return entries.get(entryKey(sessionId, anchorEntryId, part))?.loaded === true;
-    },
-    markLoaded(sessionId, anchorEntryId, part) {
+    markLoaded(sessionId, anchorEntryId, part, content) {
       const key = entryKey(sessionId, anchorEntryId, part);
       const current = entries.get(key);
-      if (current?.loaded === true) return;
-      entries.set(key, { ...current, loaded: true });
+      // 同一段正文再标记一次不通知订阅方：思考块加载完不该触发整段转写重渲染。
+      if (current?.content === content) return;
+      entries.set(key, { ...current, content });
       emit();
+    },
+    loadedContent(sessionId, anchorEntryId, part) {
+      return entries.get(entryKey(sessionId, anchorEntryId, part))?.content ?? null;
     },
   };
 }

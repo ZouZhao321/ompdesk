@@ -211,33 +211,53 @@ test("rehydrates handoff as busy without misreporting compaction", () => {
   );
 });
 
-test("lets a user scroll pause auto-follow mid-stream", () => {
+test("feeds the scroll position into the follow reducer", () => {
   const scrollHandlerSource = source.slice(
     source.indexOf("const handleScrollPositionChange"),
     source.indexOf("  // Load session on mount"),
   );
 
-  // The list scrolls itself while following, so gating every scroll event on the
-  // programmatic window made the follow flag impossible to clear while the model
-  // was producing output.
-  assert.match(scrollHandlerSource, /const userDriven = Date\.now\(\) <= userScrollIntentUntilRef\.current/);
-  assert.match(scrollHandlerSource, /if \(!userDriven && Date\.now\(\) < ignoreProgrammaticScrollUntilRef\.current\) return/);
-  assert.match(scrollHandlerSource, /distanceFromBottom <= AUTO_FOLLOW_BOTTOM_THRESHOLD_PX\)\s*\{\s*setAutoFollow\(true\)/);
-  assert.match(scrollHandlerSource, /if \(userDriven\) \{\s*setAutoFollow\(false\)/);
+  // 「上滚停止跟随、程序化滚动不算数」的判定在 lib/transcript-follow.ts，由它的
+  // 逻辑测试覆盖；这里只钉住接线：滚动位置按三个字段交给判定。
+  assert.match(scrollHandlerSource, /type: "scroll"/);
+  assert.match(scrollHandlerSource, /userDriven: Date\.now\(\) <= userScrollIntentUntilRef\.current/);
+  assert.match(scrollHandlerSource, /programmaticWindow: Date\.now\(\) < ignoreProgrammaticScrollUntilRef\.current/);
+  assert.match(scrollHandlerSource, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
+});
+
+test("restores follow and brings the view to the end when a prompt is submitted", () => {
+  const sendSource = source.slice(
+    source.indexOf("  const handleSend = useCallback"),
+    source.indexOf("  const executeBash = useCallback"),
+  );
+  const bashSource = source.slice(
+    source.indexOf("  const executeBash = useCallback"),
+    source.indexOf("  const handleAbort = useCallback"),
+  );
+
+  // 发送提问与执行 shell 命令都走同一条提交处置，判定在 lib/transcript-follow.ts。
+  assert.match(sendSource, /applyFollowRef\.current\(\{ type: "submit" \}\)/);
+  assert.match(bashSource, /applyFollowRef\.current\(\{ type: "submit" \}\)/);
+  // 结论落到状态与滚动入口：恢复跟随打开列表的 followOutput，回底走列表定位。
+  assert.match(
+    source,
+    /const applyFollow = useCallback\(\(event: FollowEvent\) => \{\s*const outcome = reduceFollow\(event\);\s*if \(!outcome\) return;\s*setAutoFollow\(!outcome\.paused\);\s*if \(outcome\.scrollToEnd\) scrollToBottom\(outcome\.scrollToEnd\);/,
+  );
+  assert.match(chatWindowSource, /virtuosoRef\.current\?\.scrollToIndex\(\{\s*index: "LAST",\s*align: "end",/);
 });
 
 test("exposes a paused-follow flag and a jump-to-bottom action", () => {
-  // The flag drives the list's follow switch; a single writer keeps it honest.
+  // 单一写入点：跟随开关只由 setAutoFollow 写，状态不会和判定漂移。
   assert.match(source, /const setAutoFollow = useCallback\(\(following: boolean\) => \{\s*setAutoFollowPaused\(/);
-  assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{[\s\S]*?userScrollIntentUntilRef\.current = 0;[\s\S]*?setAutoFollow\(true\);[\s\S]*?scrollToBottom\("smooth"\)/);
-  assert.match(source, /autoFollowPaused, resumeAutoFollow,/);
+  assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{[\s\S]*?userScrollIntentUntilRef\.current = 0;[\s\S]*?applyFollow\(\{ type: "resume" \}\)/);
+  assert.match(source, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow,/);
   // Scrolling is the list's job: the hook hands the jump to the list handle
   // instead of touching the scroll element itself.
   assert.match(source, /const scrollToBottom = useCallback\(\(behavior: ScrollBehavior = "smooth"\) => \{\s*ignoreProgrammaticScrollUntilRef\.current = Date\.now\(\) \+ PROGRAMMATIC_SCROLL_IGNORE_MS;\s*scrollTranscriptToEndRef\.current\?\.\(behavior\);/);
   assert.doesNotMatch(source, /scrollIntoView/);
   assert.doesNotMatch(source, /container\.scrollTo\(/);
 
-  assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow,/);
+  assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow,/);
   assert.match(chatWindowSource, /\{sessionBusy && autoFollowPaused && \(/);
   assert.match(chatWindowSource, /onClick=\{resumeAutoFollow\}/);
 });

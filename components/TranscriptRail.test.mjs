@@ -91,3 +91,33 @@ test("puts the rail ahead of the transcript in the tab order", () => {
   const down = source.lastIndexOf('className="transcript-rail-step"');
   assert.ok(up > 0 && dots > up && down > dots);
 });
+
+test("centers the dot column against its measured height", () => {
+  // 圆点列会被上下两条按钮压到上限值以下，滚动位置按量到的 clientHeight 算；
+  // 圆心落在行高一半处，落在 lib/transcript-rail.test.mjs 覆盖。
+  assert.match(source, /railScrollTop\(currentDotIndex, dots\.length, container\.clientHeight\)/);
+  assert.doesNotMatch(source, /railScrollTop\(currentDotIndex, dots\.length, RAIL_MAX_HEIGHT_PX\)/);
+  // 窗口缩放改变高度时重算，不必等当前圆点变化。
+  assert.match(source, /const observer = new ResizeObserver\(apply\);\s*observer\.observe\(container\);/);
+});
+
+test("reports whether the rail is actually visible", () => {
+  // 移动档与窄转写区由 CSS 收起，JS 侧只量结果，不复制断点。
+  assert.match(source, /onVisibilityChange\?: \(visible: boolean\) => void/);
+  assert.match(
+    source,
+    /const rect = rail\.getBoundingClientRect\(\);\s*visibilityListenerRef\.current\?\.\(rect\.width > 0 && rect\.height > 0\)/,
+  );
+  // 卸载时收回可见性，调用方不会残留「还可见」的判断。
+  assert.match(source, /visibilityListenerRef\.current\?\.\(false\)/);
+});
+
+test("describes each dot with the prompt it jumps to", () => {
+  // 悬停提示是 aria-hidden 的浮层，圆点的可访问名之外还要把提问内容交给读屏。
+  assert.match(source, /aria-describedby=\{promptId\}/);
+  assert.match(source, /className="transcript-rail-prompt"/);
+  assert.match(source, /t\("chat\.jumpToPromptDescription", \{ index: index \+ 1, prompt: dot\.prompt \}\)/);
+  assert.match(declarations(".transcript-rail-prompt"), /clip-path: inset\(50%\);/);
+  // 当前圆的语义不变：仍然只有一个 aria-current。
+  assert.equal(source.match(/aria-current/g)?.length, 1);
+});
