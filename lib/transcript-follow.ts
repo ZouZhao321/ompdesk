@@ -14,6 +14,8 @@ export type FollowEvent =
   | { type: "submit" }
   /** 点了「回到底部」。 */
   | { type: "resume" }
+  /** 分支/叶子切换：整段消息替换后回到底部。 */
+  | { type: "load" }
   /** 位置被有意改到别处，例如跳转到某一轮。 */
   | { type: "pause" }
   /** 列表报告了一次滚动位置。 */
@@ -35,7 +37,8 @@ export interface FollowOutcome {
 /**
  * 事件对跟随开关的影响；这次事件不改状态时返回 null。
  *
- * 提交与「回到底部」都恢复跟随并把视图带到末尾；跳转停掉跟随，让「回到底部」
+ * 提交与「回到底部」都恢复跟随并把视图带到末尾；分支/叶子切换是整段替换消息，
+ * 旧位置到新末尾之间没有可看的中间内容，回底直接落位；跳转停掉跟随，让「回到底部」
  * 按钮出现，跳转自己的定位不经过这里。
  *
  * 滚动观测里暂停与恢复分两条判据：暂停只认用户驱动的滚动——离开底部才停止跟随，
@@ -52,6 +55,8 @@ export function reduceFollow(event: FollowEvent): FollowOutcome | null {
       return { paused: false, scrollToEnd: "auto" };
     case "resume":
       return { paused: false, scrollToEnd: "smooth" };
+    case "load":
+      return { paused: false, scrollToEnd: "auto" };
     case "pause":
       return { paused: true, scrollToEnd: null };
     case "scroll": {

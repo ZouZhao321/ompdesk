@@ -84,7 +84,7 @@ test("clears a rail jump once, whether or not the list scrolled", () => {
   assert.match(source, /railJumpTimerRef\.current = window\.setTimeout\(settleRailJumpNow, RAIL_JUMP_SETTLE_MS\)/);
   assert.match(
     source,
-    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*settleRailJumpNow\(\);/,
+    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*setTranscriptAtBottom\(transcriptAtBottomRef\.current\);\s*settleRailJumpNow\(\);/,
   );
   // 落点那串滚动不参与跟随判定：跳转开始时合上一次性抑制器。
   assert.match(
@@ -96,6 +96,16 @@ test("clears a rail jump once, whether or not the list scrolled", () => {
     source,
     /if \(settled\.realign === null\) \{[\s\S]*?releaseFollowObservation\(\);[\s\S]*?railJumpTimerRef\.current = window\.setTimeout\(\(\) => settleRailJumpNowRef\.current\(\), RAIL_JUMP_SETTLE_MS\)/,
   );
+});
+
+test("offers a jump-to-bottom entry whenever the list is not at the bottom", () => {
+  // 按钮的第二个来源：列表报告自己不在底部。跟随开着但列表没跟上时也要能点回来。
+  assert.match(source, /atBottomStateChange=\{handleTranscriptAtBottomChange\}/);
+  assert.match(source, /\(autoFollowPaused \|\| !transcriptAtBottom\) && \(/);
+  // 位置只在列表停稳后落成状态，跟随途中的程序化滚动不会让按钮闪一下又消失。
+  assert.match(source, /setTranscriptAtBottom\(transcriptAtBottomRef\.current\)/);
+  // 换会话就是换一份列表：新列表从末尾挂载，位置跟着复位。
+  assert.match(source, /transcriptAtBottomRef\.current = true;\s*setTranscriptAtBottom\(true\);\s*\}, \[activeSessionId\]\);/);
 });
 
 test("skips the rail measurement while the rail is hidden", () => {

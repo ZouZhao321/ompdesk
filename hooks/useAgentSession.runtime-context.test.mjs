@@ -119,6 +119,12 @@ function harness() {
   };
   bindings.followSessionIdentity = callback("followSessionIdentity", bindings);
   bindings.runtimeIdRef.onIdentity = callback("onIdentity", bindings);
+  // 回底票号由 hook 的 effect 消费；这里只记下每次请求的值。
+  let followTicket = 0;
+  bindings.setContextFollowTicket = (update) => {
+    followTicket = typeof update === "function" ? update(followTicket) : update;
+    effects.push(["followTicket", followTicket]);
+  };
   // Use an indirection only for fetch so responses can be scheduled per test.
   const callbackBindings = { ...bindings, fetch: (...args) => bindings.fetch(...args) };
   bindings.loadContext = callback("loadContext", callbackBindings);
@@ -212,9 +218,11 @@ test("treats a finished branch reload as a jump to the bottom", async () => {
   const h = harness();
   h.bindings.fetch = async () => response(context("other branch"));
   assert.equal(await h.bindings.loadContext("b", "other-leaf"), true);
-  // 切分支/叶是整段替换消息，列表既不重挂也不走追加跟随；重新载入成功就当作一次
-  // 回底事件，否则视图停在中段。
-  assert.deepEqual(h.effects.filter(([kind]) => kind === "follow"), [["follow", { type: "resume" }]]);
+  // 切分支/叶是整段替换消息，列表既不重挂也不走追加跟随；重新载入成功就记一张回底
+  // 票号。滚动不在这里做：此刻新消息还没提交，量到的是旧列表的高度，落点会停在
+  // 旧末端，交给提交后的 effect。
+  assert.deepEqual(h.effects.filter(([kind]) => kind === "follow"), []);
+  assert.deepEqual(h.effects.filter(([kind]) => kind === "followTicket"), [["followTicket", 1]]);
 });
 
 test("an owned same-runtime relocation still follows its new transcript", async () => {
