@@ -8,11 +8,11 @@ test("expands process details when a completed turn has no final answer", () => 
   assert.match(source, /const expanded = useTranscriptExpanded\(sessionId, anchorEntryId, PROCESS_DETAILS_PART, defaultExpanded\)/);
   assert.match(
     source,
-    /<ProcessDetailsGroup[\s\S]*?defaultExpanded=\{!finalAnswerMessage\}/,
+    /<ProcessDetailsGroup[\s\S]*?defaultExpanded=\{!item\.finalAnswerMessage\}/,
   );
 });
 
 test("keys the process group on the turn's question anchor", () => {
-  assert.match(source, /const turnAnchorEntryId = entryIds\[userIdx\] \?\? `turn-\$\{userIdx\}`/);
+  assert.match(source, /const turnAnchorEntryId = item\.key/);
   assert.match(source, /<ProcessDetailsGroup[\s\S]*?anchorEntryId=\{turnAnchorEntryId\}/);
 });
