@@ -21,10 +21,9 @@ test("renders the parts outside the list through its header and footer slots", (
 });
 
 test("parks the streaming message as the last list item", () => {
-  assert.match(
-    source,
-    /withTranscriptLiveTail\(\s*groupedTranscriptItems,\s*streamState\.isStreaming \? streamState\.streamingMessage : null/,
-  );
+  // 数据表与键表共用同一条判据：流式已开始但消息还空时两表都不加合成项。
+  assert.match(source, /withTranscriptLiveTail\(groupedTranscriptItems, streamingTranscriptMessage\)/);
+  assert.match(source, /const transcriptLiveTailKey = hasTranscriptLiveTail\(streamingTranscriptMessage\)/);
   assert.match(source, /itemContent=\{renderTranscriptRow\}/);
   // 行组件按项记忆，流式数据块只重绘末尾这一项。
   assert.match(source, /const TranscriptRow = memo\(function TranscriptRow\(/);
@@ -74,7 +73,7 @@ test("rebuilds the item keys only when the grouping changes", () => {
   // itemKeys 与 computeItemKey 保持同一份引用。
   assert.match(
     source,
-    /const virtualTranscript = useMemo\(\s*\(\) => buildVirtualTranscriptModel\(\s*groupedTranscriptItems,\s*streamState\.isStreaming \? TRANSCRIPT_LIVE_TAIL_KEY : null,\s*\),\s*\[groupedTranscriptItems, streamState\.isStreaming\],\s*\);/,
+    /const virtualTranscript = useMemo\(\s*\(\) => buildVirtualTranscriptModel\(groupedTranscriptItems, transcriptLiveTailKey\),\s*\[groupedTranscriptItems, transcriptLiveTailKey\],\s*\);/,
   );
   assert.match(
     source,

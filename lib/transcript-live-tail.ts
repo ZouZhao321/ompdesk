@@ -27,6 +27,18 @@ export function isTranscriptLiveTailItem(item: TranscriptListItem): item is Tran
 }
 
 /**
+ * 合成项当前是否存在：数据表与键表都只从这里取判断。
+ *
+ * `agent_start` 之后、首个数据块之前 `isStreaming` 已经为真而消息还是空的。两处若各看
+ * 一种判据，键表就会比数据表多一项，虚拟列表按下标取键随之错位。
+ */
+export function hasTranscriptLiveTail(
+  streamingMessage: Partial<AgentMessage> | null | undefined,
+): streamingMessage is Partial<AgentMessage> {
+  return streamingMessage != null;
+}
+
+/**
  * 把流式消息接到条目数组末尾。
  *
  * 没有流式消息时原样返回条目数组，列表的数据引用不变；有流式消息时只新增末尾
@@ -36,7 +48,7 @@ export function withTranscriptLiveTail(
   items: readonly TranscriptItem[],
   streamingMessage: Partial<AgentMessage> | null,
 ): readonly TranscriptListItem[] {
-  if (!streamingMessage) return items;
+  if (!hasTranscriptLiveTail(streamingMessage)) return items;
   return [
     ...items,
     { kind: "live-tail", key: TRANSCRIPT_LIVE_TAIL_KEY, message: streamingMessage },
