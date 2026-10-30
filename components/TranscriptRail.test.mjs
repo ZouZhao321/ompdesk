@@ -37,6 +37,20 @@ test("opens the prompt tip on keyboard focus, not only on hover", () => {
   assert.match(declarations(".transcript-rail-dot:focus-visible"), /outline: 2px solid var\(--accent\);/);
 });
 
+test("follows layout changes while the tip is showing", () => {
+  // 缩放、面板拖拽、字体加载与圆点增减都不发滚动事件：竖条与圆点列的尺寸一变，
+  // 锚点的纵向位置就变了。提示可见期间观察这两处，回调里重新对准。
+  assert.match(
+    source,
+    /const observer = new ResizeObserver\(\(\) => \{\s*if \(anchorIsVisible\(\)\) positionTip\(\);\s*\}\);\s*if \(railRef\.current\) observer\.observe\(railRef\.current\);\s*if \(dotsRef\.current\) observer\.observe\(dotsRef\.current\);/,
+  );
+  assert.match(source, /observer\.disconnect\(\);/);
+  // 圆点数组换了：锚点可能已经不在这份列表里，还在就按新位置重算，立不住就收起。
+  assert.match(source, /if \(anchorIsVisible\(\)\) positionTip\(\);\s*return \(\) => \{/);
+  // 每次圆点变化都重新挂上观察，提示期间的布局变化不会被漏掉。
+  assert.match(source, /\}, \[tipVisible, dots, positionTip, hideTip\]\);/);
+});
+
 test("keeps the tip anchored while the transcript scrolls", () => {
   // 转写区的滚动搬不动圆点，跟随开着时每个流式块都会滚一次：只重新对准，不收提示。
   assert.match(source, /if \(!anchor \|\| !isTipAnchorVisible\(anchor\.element, dotsRef\.current\)\) \{/);
@@ -51,7 +65,7 @@ test("keeps the tip anchored while the transcript scrolls", () => {
   // 卸载时取消还没跑的那一帧。
   assert.match(source, /if \(frame !== 0\) cancelAnimationFrame\(frame\)/);
   // 收起只发生在失去锚点的分支里。
-  assert.match(source, /\) \{\s*hideTip\(\);\s*return;\s*\}/);
+  assert.match(source, /\) \{\s*hideTip\(\);\s*return false;\s*\}/);
   assert.match(source, /window\.addEventListener\("scroll", onScroll, true\)/);
   assert.match(source, /window\.removeEventListener\("scroll", onScroll, true\)/);
 });

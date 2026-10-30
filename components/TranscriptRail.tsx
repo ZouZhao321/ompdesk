@@ -135,12 +135,17 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
   useEffect(() => {
     if (!tipVisible) return;
     let frame = 0;
-    const onScroll = () => {
+    // 锚点还立着才谈位置：圆点被卸载、被圆点列裁到列外、跳转条被 CSS 收起都收起提示。
+    const anchorIsVisible = () => {
       const anchor = anchorRef.current;
       if (!anchor || !isTipAnchorVisible(anchor.element, dotsRef.current)) {
         hideTip();
-        return;
+        return false;
       }
+      return true;
+    };
+    const onScroll = () => {
+      if (!anchorIsVisible()) return;
       // 一帧只对一次：连续的滚动事件合并到同一个 rAF 里。
       if (frame !== 0) return;
       frame = requestAnimationFrame(() => {
@@ -149,11 +154,21 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
       });
     };
     window.addEventListener("scroll", onScroll, true);
+    // 缩放、面板拖拽、字体加载与圆点增减都不发滚动事件：竖条或圆点列的尺寸变了，
+    // 锚点的纵向位置就变了，浮层却还停在旧位置。尺寸一变就重新对准。
+    const observer = new ResizeObserver(() => {
+      if (anchorIsVisible()) positionTip();
+    });
+    if (railRef.current) observer.observe(railRef.current);
+    if (dotsRef.current) observer.observe(dotsRef.current);
+    // 圆点数组换了：锚点可能已经不在这份列表里，还在就按新位置重算。
+    if (anchorIsVisible()) positionTip();
     return () => {
       window.removeEventListener("scroll", onScroll, true);
+      observer.disconnect();
       if (frame !== 0) cancelAnimationFrame(frame);
     };
-  }, [tipVisible, positionTip, hideTip]);
+  }, [tipVisible, dots, positionTip, hideTip]);
 
   return (
     <div className="transcript-rail-lane">
