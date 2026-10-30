@@ -244,7 +244,7 @@ test("restores follow and brings the view to the end when a prompt is submitted"
     source,
     /const applyFollow = useCallback\(\(event: FollowEvent\) => \{\s*const outcome = reduceFollow\(event\);\s*if \(!outcome\) return;[\s\S]*?setAutoFollow\(!outcome\.paused\);\s*if \(outcome\.scrollToEnd\) scrollToBottom\(outcome\.scrollToEnd\);\s*\}, \[scrollToBottom, setAutoFollow\]\);/,
   );
-  assert.match(chatWindowSource, /virtuosoRef\.current\?\.scrollToIndex\(\{\s*index: "LAST",\s*align: "end",/);
+  assert.match(chatWindowSource, /list\.scrollToIndex\(\{ index: "LAST", align: "end", behavior: resolved \}\);/);
 });
 
 test("exposes a paused-follow flag and a jump-to-bottom action", () => {

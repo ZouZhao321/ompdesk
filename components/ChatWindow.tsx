@@ -23,8 +23,11 @@ import {
   railCurrentDotIndex,
   railTopVisibleItemIndex,
   shouldShowTranscriptRail,
+  RAIL_COLUMN_PADDING_PX,
+  RAIL_COLUMN_WIDTH_PX,
   type RailRenderedItem,
 } from "@/lib/transcript-rail";
+import { FOLLOW_BOTTOM_THRESHOLD_PX } from "@/lib/transcript-follow";
 import { RAIL_JUMP_IDLE, RAIL_JUMP_SETTLE_MS, settleRailJump, type RailJumpState } from "@/lib/transcript-rail-jump";
 import { buildVirtualTranscriptModel, transcriptFollowOutput } from "@/lib/transcript-virtual-list";
 import {
@@ -88,7 +91,7 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
   return null;
 }
 
-const CHAT_COLUMN_PADDING = 16;
+const CHAT_COLUMN_PADDING = RAIL_COLUMN_PADDING_PX;
 
 /**
  * 虚拟列表里每一行（页首、条目、页尾）共用的版心，等价于改造前滚动手写容器
@@ -98,7 +101,7 @@ const TRANSCRIPT_ROW_STYLE: CSSProperties = {
   boxSizing: "border-box",
   width: "100%",
   minWidth: 0,
-  maxWidth: 820 + CHAT_COLUMN_PADDING * 2,
+  maxWidth: RAIL_COLUMN_WIDTH_PX + CHAT_COLUMN_PADDING * 2,
   margin: "0 auto",
   padding: `0 ${CHAT_COLUMN_PADDING}px`,
 };
@@ -386,11 +389,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   // 视图跟随交给列表：hook 只决定什么时候该回到底部，定位由列表执行。
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
   const scrollTranscriptToEnd = useCallback((behavior: ScrollBehavior) => {
+    const list = virtuosoRef.current;
+    if (!list) return;
     // 列表只认 "auto" 与 "smooth"；"auto" 就是无动画的直接定位。
-    virtuosoRef.current?.scrollToIndex({
-      index: "LAST",
-      align: "end",
-      behavior: behavior === "smooth" ? "smooth" : "auto",
+    const resolved = behavior === "smooth" ? "smooth" : "auto";
+    list.scrollToIndex({ index: "LAST", align: "end", behavior: resolved });
+    // 条目的「对齐到末端」只把最后一条数据项的底边对上视口底，页脚插槽（阶段提示、
+    // 待执行命令预览）在它之后。定位那一刻页脚可能还没提交、也可能还没量到高度，
+    // 所以等这一帧的定位与页脚都落到 DOM 上，再让列表滚到真正的底部。
+    requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollTo({ top: Number.MAX_SAFE_INTEGER, behavior: resolved });
     });
   }, []);
 
@@ -420,6 +428,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     scrollTranscriptToEnd,
   });
   const sessionBusy = agentRunning || bashRunning;
+
+  // 首屏落在真正的底部：列表的初始定位只对齐到最后一轮，页脚插槽在它之后。
+  const initialBottomLandedRef = useRef(false);
+  useEffect(() => {
+    if (loading || error || initialBottomLandedRef.current) return;
+    initialBottomLandedRef.current = true;
+    scrollTranscriptToEnd("auto");
+  }, [loading, error, scrollTranscriptToEnd]);
   const rewindEntries = useMemo(
     () => buildRewindEntries(messages, entryIds),
     [messages, entryIds],
@@ -938,7 +954,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             pointerEvents: "none",
           }}
         >
-          <div style={{ maxWidth: 820, margin: "0 auto" }}>
+          <div style={{ maxWidth: RAIL_COLUMN_WIDTH_PX, margin: "0 auto" }}>
             <NoticeShelf notices={notices} floating align="right" />
           </div>
         </div>
@@ -965,6 +981,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             isScrolling={handleTranscriptScrollingChange}
             increaseViewportBy={TRANSCRIPT_VIEWPORT_BUFFER}
             followOutput={transcriptFollowOutput(autoFollowPaused)}
+            atBottomThreshold={FOLLOW_BOTTOM_THRESHOLD_PX}
             className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none]"
             itemContent={renderTranscriptRow}
           />
@@ -1010,7 +1027,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             padding: `0 ${CHAT_COLUMN_PADDING}px`,
           }}
         >
-          <div style={{ maxWidth: 820, margin: "0 auto" }}>
+          <div style={{ maxWidth: RAIL_COLUMN_WIDTH_PX, margin: "0 auto" }}>
             <GoalBar goal={goalStatus} t={t} />
             <ExtensionWidgets widgets={belowEditorWidgets} />
           </div>

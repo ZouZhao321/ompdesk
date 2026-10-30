@@ -34,9 +34,29 @@ test("parks the streaming message as the last list item", () => {
 
 test("hands follow and the jump to the list", () => {
   assert.match(source, /followOutput=\{transcriptFollowOutput\(autoFollowPaused\)\}/);
+  // 列表的贴底阈值与 hook 判定共用一个常量，两边对「还在底部」不会给出不同答案。
+  assert.match(source, /atBottomThreshold=\{FOLLOW_BOTTOM_THRESHOLD_PX\}/);
+  assert.match(source, /import \{ FOLLOW_BOTTOM_THRESHOLD_PX \} from "@\/lib\/transcript-follow"/);
   assert.match(source, /ref=\{virtuosoRef\}/);
-  assert.match(source, /virtuosoRef\.current\?\.scrollToIndex\(\{\s*index: "LAST",\s*align: "end",/);
+  assert.match(source, /list\.scrollToIndex\(\{ index: "LAST", align: "end", behavior: resolved \}\)/);
   assert.match(source, /scrollTranscriptToEnd,$/m);
+});
+
+test("lands the transcript on the real bottom after aligning the last item", () => {
+  // 「对齐到末端」只把最后一条数据项的底边对上视口底，页脚插槽在它之后；定位后
+  // 再补一次滚动元素自身的底部滚动，页脚晚一帧出现也能算进去。
+  const target = source.slice(source.indexOf("const scrollTranscriptToEnd = useCallback("), source.indexOf("const {", source.indexOf("const scrollTranscriptToEnd = useCallback(")));
+  assert.match(target, /requestAnimationFrame\(\(\) => \{\s*virtuosoRef\.current\?\.scrollTo\(\{ top: Number\.MAX_SAFE_INTEGER, behavior: resolved \}\);/);
+  // 首屏同样补一次：会话加载完成后落到底部，不差页脚那一截。
+  assert.match(source, /initialBottomLandedRef[\s\S]*?scrollTranscriptToEnd\("auto"\)/);
+});
+
+test("draws the conversation column from the rail geometry constants", () => {
+  // 行盒宽度与内边距只有一组导出常量，ChatWindow 不再手抄 820 / 16。
+  assert.match(source, /RAIL_COLUMN_PADDING_PX,\s*RAIL_COLUMN_WIDTH_PX,/);
+  assert.match(source, /const CHAT_COLUMN_PADDING = RAIL_COLUMN_PADDING_PX;/);
+  assert.match(source, /maxWidth: RAIL_COLUMN_WIDTH_PX \+ CHAT_COLUMN_PADDING \* 2,/);
+  assert.doesNotMatch(source, /maxWidth: 820\b/);
 });
 
 test("parks the streaming bubble in the same bucket as the finished turn", () => {
