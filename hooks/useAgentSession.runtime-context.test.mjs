@@ -129,6 +129,8 @@ function harness() {
     return command;
   };
   bindings.followSessionIdentity = callback("followSessionIdentity", bindings);
+  // 叶子只有一个写入口：状态与去重用的 ref 由它一起写，测试跑的是同一份代码。
+  bindings.applyActiveLeaf = callback("applyActiveLeaf", bindings);
   bindings.runtimeIdRef.onIdentity = callback("onIdentity", bindings);
   // 只载入正文、不落运行态：这条路径不需要 state 请求。
   bindings.followRuntimeState = () => false;
@@ -207,7 +209,7 @@ test("an owned expired runtime still clears its continuation and applies histori
   const h = harness();
   const historical = context("historical", { sessionId: "b", runtimeId: null });
   h.bindings.fetch = async () => response(historical);
-  assert.equal(await h.bindings.loadContext("b", null), true);
+  assert.equal(await h.bindings.loadContext("b", null), "applied");
   assert.equal(h.bindings.runtimeIdRef.current, null);
   assert.equal(h.memory.getSessionContinuation("b"), undefined);
   assert.deepEqual(h.ui.Messages, historical.context.messages);
@@ -220,7 +222,7 @@ test("a same-runtime context response still applies its messages, entry IDs and 
   const h = harness();
   const current = context("owned branch");
   h.bindings.fetch = async () => response(current);
-  assert.equal(await h.bindings.loadContext("b", "owned-leaf"), true);
+  assert.equal(await h.bindings.loadContext("b", "owned-leaf"), "applied");
   assert.equal(h.bindings.runtimeIdRef.current, "runtime:r1");
   assert.equal(h.memory.getSessionContinuation("b"), "runtime:r1");
   assert.deepEqual(h.ui.Messages, current.context.messages);
@@ -232,7 +234,7 @@ test("a same-runtime context response still applies its messages, entry IDs and 
 test("treats a finished branch reload as a jump to the bottom", async () => {
   const h = harness();
   h.bindings.fetch = async () => response(context("other branch"));
-  assert.equal(await h.bindings.loadContext("b", "other-leaf"), true);
+  assert.equal(await h.bindings.loadContext("b", "other-leaf"), "applied");
   // 切分支/叶是整段替换消息，列表既不重挂也不走追加跟随；重新载入成功就记一张回底
   // 票号。滚动不在这里做：此刻新消息还没提交，量到的是旧列表的高度，落点会停在
   // 旧末端，交给提交后的 effect。
@@ -280,7 +282,7 @@ test("an owned same-runtime relocation still follows its new transcript", async 
   const h = harness();
   const relocated = context("relocated", { sessionId: "c", runtimeId: "runtime:r1" });
   h.bindings.fetch = async () => response(relocated);
-  assert.equal(await h.bindings.loadContext("b", "owned-leaf"), true);
+  assert.equal(await h.bindings.loadContext("b", "owned-leaf"), "applied");
   assert.equal(h.bindings.sessionIdRef.current, "c");
   assert.equal(h.bindings.runtimeIdRef.current, "runtime:r1");
   assert.equal(h.memory.getSessionContinuation("c"), "runtime:r1");
@@ -301,12 +303,12 @@ test("a newer context request owns the UI even when the runtime stays the same",
   };
   const loadingOld = h.bindings.loadContext("b", "old-leaf");
   await requested.promise;
-  assert.equal(await h.bindings.loadContext("b", "latest-leaf"), true);
+  assert.equal(await h.bindings.loadContext("b", "latest-leaf"), "applied");
   assert.deepEqual(h.ui.Messages, latest.context.messages);
   const newest = snapshot(h);
   h.effects.length = 0;
   older.resolve(context("obsolete", { sessionId: "b", runtimeId: null }));
-  assert.equal(await loadingOld, false);
+  assert.equal(await loadingOld, "stale");
   assert.deepEqual(snapshot(h), newest);
   assert.deepEqual(h.effects, []);
 });
@@ -326,7 +328,7 @@ for (const superseded of ["different session selection", "unmount"]) {
     const current = snapshot(h);
     h.effects.length = 0;
     older.resolve(context("obsolete", { sessionId: "b", runtimeId: null }));
-    assert.equal(await loading, false);
+    assert.equal(await loading, "stale");
     assert.deepEqual(snapshot(h), current);
     assert.deepEqual(h.effects, []);
   });
@@ -395,4 +397,54 @@ test("a navigation already under way is not reloaded by a click on the same leaf
   await Promise.all(h.commands);
   assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
   assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target" }]);
+});
+
+/** 只有命令接口有响应：整段载入按 status 失败。 */
+function failingContext(status) {
+  return async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    return response(null, status);
+  };
+}
+
+test("a failed branch click puts the leaf state and the dedupe marker back together", async () => {
+  const h = harness();
+  h.bindings.activeLeafIdRef.current = "current-leaf";
+  h.bindings.fetch = failingContext(500);
+
+  await h.bindings.handleLeafChange("broken-leaf");
+
+  // 载入失败：状态与去重用的 ref 一起退回原叶子。只写状态、成功后才写 ref 会让两者
+  // 分叉，之后点原叶子被去重判据吞掉——既不重载也不发命令。
+  assert.equal(h.ui.ActiveLeafId, "current-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
+  assert.deepEqual(h.commands, [], "a leaf that never loaded must not be navigated to");
+
+  // 退回之后这条分支还能再点一次，去重判据不会把重试吞掉。
+  h.effects.length = 0;
+  h.bindings.fetch = async (url) => (String(url).startsWith("/api/agent/")
+    ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
+    : response(context("recovered branch")));
+  await h.bindings.handleLeafChange("broken-leaf");
+  await Promise.all(h.commands);
+
+  assert.equal(h.ui.ActiveLeafId, "broken-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "broken-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "recovered branch" }]);
+});
+
+test("a failed entry navigation rolls the leaf back with the marker", async () => {
+  const h = harness();
+  h.bindings.activeLeafIdRef.current = "current-leaf";
+  h.bindings.fetch = failingContext(503);
+
+  await h.bindings.handleNavigate("broken-leaf");
+  await Promise.all(h.commands);
+
+  // 两条导航路径同一时机：先写、失败一起退。界面不会停在一条没载入的分支上。
+  assert.equal(h.ui.ActiveLeafId, "current-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "current messages" }]);
 });

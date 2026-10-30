@@ -47,6 +47,9 @@ interface StreamingState {
   streamingMessage: Partial<AgentMessage> | null;
 }
 
+/** 一次整段载入的结果：已落到界面、本列表的请求但失败了、已被更晚的载入顶掉。 */
+type ContextLoadOutcome = "applied" | "failed" | "stale";
+
 type StreamAction =
   | { type: "start" }
   | { type: "update"; message: Partial<AgentMessage> }
@@ -395,6 +398,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 阅读的视图不会被拽回末尾。凡是写 activeLeafId 的地方都要同时写它（载入、404
   // 清空、两条导航路径），两边不一致就会把没变判成变了，或者反过来吞掉真导航。
   const activeLeafIdRef = useRef<string | null>(null);
+  // 「当前叶子」唯一的写入口：状态与去重用的 ref 在同一时机写，两条导航路径不会
+  // 各自决定先后。载入失败时调用方用同一个入口把两者一起退回。
+  const applyActiveLeaf = useCallback((leafId: string | null) => {
+    activeLeafIdRef.current = leafId;
+    setActiveLeafId(leafId);
+  }, []);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
@@ -621,8 +630,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (res.status === 404) {
         if (showLoading && ownsHistory()) {
           setData(null);
-          setActiveLeafId(null);
-          activeLeafIdRef.current = null;
+          applyActiveLeaf(null);
           setMessages([]);
           setError(null);
         }
@@ -636,11 +644,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         sid = d.sessionId;
       }
       setData(d);
-      // 载入就是一次真实的叶子切换：状态与 ref 一起写。只在导航路径写 ref 会让首屏
-      // 之后点已高亮的当前叶子被判成换了叶子，整段重载并把视图拽回末尾；一轮结束后
-      // 叶子前进了，ref 却还停在旧叶子上，点旧叶子又被去重判据静默吞掉。
-      setActiveLeafId(d.leafId);
-      activeLeafIdRef.current = d.leafId;
+      // 载入就是一次真实的叶子切换：状态与去重用的 ref 一起写。只在导航路径写 ref
+      // 会让首屏之后点已高亮的当前叶子被判成换了叶子，整段重载并把视图拽回末尾；
+      // 一轮结束后叶子前进了，ref 却还停在旧叶子上，点旧叶子又被去重判据静默吞掉。
+      applyActiveLeaf(d.leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
       setContextUsage(d.contextUsage ?? null);
@@ -689,9 +696,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (ownsHistory() && (showLoading || messagesLoaded)) setLoading(false);
     }
-  }, [followSessionIdentity, followRuntimeState, onSessionForked]);
+  }, [applyActiveLeaf, followSessionIdentity, followRuntimeState, onSessionForked]);
 
-  const loadContext = useCallback(async (sid: string, leafId: string | null) => {
+  /**
+   * 整段载入一份上下文。结果要区分「被更晚的载入顶掉」与「这次请求自己失败了」：
+   * 前者不能把调用方刚写下的叶子退回去，后者才该退回。
+   */
+  const loadContext = useCallback(async (sid: string, leafId: string | null): Promise<ContextLoadOutcome> => {
     const requestId = ++contextRequestRef.current;
     const requestedRuntimeId = runtimeIdRef.current;
     const ownsContext = () => mountedRef.current && sessionIdRef.current === sid
@@ -708,7 +719,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         context: { messages: AgentMessage[]; entryIds: string[] };
         contextUsage?: ContextUsage;
       };
-      if (!ownsContext()) return false;
+      if (!ownsContext()) return "stale";
       if (d.sessionId) followSessionIdentity(d.sessionId, d.runtimeId ?? null);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
@@ -717,10 +728,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // 信号；重新载入成功就当作一次回底事件。滚动不能在这次提交之前做，只记一张
       // 票号，由提交后的 effect 落到新列表的末尾。
       setContextFollowTicket((ticket) => ticket + 1);
-      return true;
+      return "applied";
     } catch (e) {
-      if (ownsContext()) console.error("Failed to load context:", e);
-      return false;
+      if (!ownsContext()) return "stale";
+      console.error("Failed to load context:", e);
+      return "failed";
     }
   }, [followSessionIdentity]);
 
@@ -1859,27 +1871,35 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef).catch(() => {});
-    // 先写 ref 再改状态：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
-    // 同一段上下文被重载一遍又把视图拽回末尾。
-    activeLeafIdRef.current = entryId;
-    setActiveLeafId(entryId);
-    await loadContext(sid, entryId);
-  }, [loadContext]);
+    // 先写叶子再等载入：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
+    // 同一段上下文被重载一遍又把视图拽回末尾。载入失败时状态与 ref 一起退回，原叶子
+    // 不会被这次失败留在「已经切过去了」的位置。
+    const previous = activeLeafIdRef.current;
+    applyActiveLeaf(entryId);
+    if (await loadContext(sid, entryId) !== "failed") return;
+    // 只在自己仍是最新写入者时退回：更晚的导航或一次整段载入已经把叶子挪走了。
+    if (activeLeafIdRef.current === entryId) applyActiveLeaf(previous);
+  }, [applyActiveLeaf, loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
     // 点的就是已经激活的叶子：视图已经停在这条分支上，整段重载只会把正在上滚阅读
     // 的视图拽回末尾，什么都不做。
     if (leafId === activeLeafIdRef.current) return;
-    setActiveLeafId(leafId);
+    // 与 handleNavigate 同一时机：状态与 ref 一起先写，载入失败一起退回。只在成功后
+    // 写 ref 会让失败后的状态与 ref 分开，点回原叶子被去重判据吞掉。
+    const previous = activeLeafIdRef.current;
+    applyActiveLeaf(leafId);
     const sid = sessionIdRef.current;
     if (!sid) return;
-    if (!await loadContext(sid, leafId)) return;
-    activeLeafIdRef.current = leafId;
+    if (await loadContext(sid, leafId) === "failed") {
+      if (activeLeafIdRef.current === leafId) applyActiveLeaf(previous);
+      return;
+    }
     if (leafId && mountedRef.current && sessionIdRef.current) {
       sendAgentCommand(sessionIdRef.current, { type: "navigate_tree", targetId: leafId }, runtimeIdRef).catch(() => {});
     }
-  }, [loadContext]);
+  }, [applyActiveLeaf, loadContext]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
