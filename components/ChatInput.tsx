@@ -32,6 +32,7 @@ import { usePopupPlacement } from "@/hooks/usePopupPlacement";
 import { computePopupPlacement, preferredPopupHeight, POPUP_GAP_PX, type PopupSide } from "@/lib/popup-placement";
 import { useI18n } from "@/hooks/useI18n";
 import { PRESET_DEFAULT, PRESET_FULL } from "@/lib/tool-presets";
+import { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } from "@/lib/transcript-rail";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -1363,7 +1364,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       style={{
         flexShrink: 0,
         background: "transparent",
-        padding: "0 16px 8px",
+        padding: `0 ${RAIL_COLUMN_PADDING_PX}px 8px`,
       }}
     >
       {/* Hidden file input */}
@@ -1379,7 +1380,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           e.target.value = "";
         }}
       />
-      <div style={{ maxWidth: 820, margin: "0 auto" }}>
+      <div style={{ maxWidth: RAIL_COLUMN_WIDTH_PX, margin: "0 auto" }}>
         <ModelErrorBanner error={modelError} />
         <ModelScopeWarningBanner warnings={modelScopeWarnings} />
         {/* Queued steering / follow-up messages (delivered by omp on upcoming turns) */}
