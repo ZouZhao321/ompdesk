@@ -81,6 +81,8 @@ function harness() {
   }
   bindings.followSessionIdentity = callback("followSessionIdentity", bindings);
   bindings.followRuntimeState = callback("followRuntimeState", bindings);
+  // 叶子的唯一写入口：状态与去重用的 ref 由它一起写，测试跑的是同一份代码。
+  bindings.applyActiveLeaf = callback("applyActiveLeaf", bindings);
   return { bindings, effects, continuation };
 }
 
