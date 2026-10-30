@@ -699,10 +699,18 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   }, [clearRailJumpTimer, holdFollowObservation, pauseAutoFollow, settleRailJumpNow]);
 
   // 列表停在底部与否是「回到最新」按钮的第二个来源：跟随暂停时它本来就该出现，
-  // 跟随开着而列表没跟上时也留一个恢复入口。位置只在滚动停稳时落成状态——跟随途中
-  // 的程序化滚动会短暂离开底部，逐帧落状态会让按钮闪一下又消失。
+  // 跟随开着而列表没跟上时也留一个恢复入口。位置只在列表停稳后再确认一帧才落成
+  // 状态：跟随途中、首屏与 load 回底的程序化滚动都会经过不在底部的区间，紧跟着的
+  // 停止回调读到的仍是途中值，按它落状态就会把按钮钉出来。确认帧直接读列表自己的
+  // 滚动位置，判定口径与列表的 atBottomThreshold 是同一个常量。
   const transcriptAtBottomRef = useRef(true);
   const [transcriptAtBottom, setTranscriptAtBottom] = useState(true);
+  const transcriptAtBottomFrameRef = useRef(0);
+  const measureTranscriptAtBottom = useCallback(() => {
+    const scroller = scrollContainerRef.current;
+    if (!scroller) return transcriptAtBottomRef.current;
+    return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= FOLLOW_BOTTOM_THRESHOLD_PX;
+  }, [scrollContainerRef]);
   const handleTranscriptAtBottomChange = useCallback((atBottom: boolean) => {
     transcriptAtBottomRef.current = atBottom;
   }, []);
@@ -711,9 +719,19 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   // 先到的那条清算。
   const handleTranscriptScrollingChange = useCallback((scrolling: boolean) => {
     if (scrolling) return;
-    setTranscriptAtBottom(transcriptAtBottomRef.current);
     settleRailJumpNow();
-  }, [settleRailJumpNow]);
+    if (transcriptAtBottomFrameRef.current !== 0) return;
+    transcriptAtBottomFrameRef.current = requestAnimationFrame(() => {
+      transcriptAtBottomFrameRef.current = 0;
+      const atBottom = measureTranscriptAtBottom();
+      transcriptAtBottomRef.current = atBottom;
+      setTranscriptAtBottom(atBottom);
+    });
+  }, [measureTranscriptAtBottom, settleRailJumpNow]);
+  // 卸载时取消还没落地的确认帧。
+  useEffect(() => () => {
+    if (transcriptAtBottomFrameRef.current !== 0) cancelAnimationFrame(transcriptAtBottomFrameRef.current);
+  }, []);
 
   useEffect(() => () => {
     railScrollCleanupRef.current?.();
