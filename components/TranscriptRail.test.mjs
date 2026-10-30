@@ -70,7 +70,11 @@ test("keeps a disabled step visually out of reach", () => {
 test("keeps the rail out of the tab order while it is hidden", () => {
   // 容器查询与移动档都用 display: none 收起，隐藏时元素不可聚焦。
   assert.match(styles, /@container chat-transcript \(max-width: 899px\) \{\s*\.transcript-rail \{\s*display: none;/);
-  assert.match(styles, /\.transcript-rail \{\s*display: none !important;/);
+  // 移动档与桌面档是同一个选择器、都在未分层样式里，优先级相同，靠后声明即可覆盖。
+  const baseRule = styles.indexOf(".transcript-rail {");
+  const mobileMedia = styles.lastIndexOf("@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px)");
+  assert.ok(baseRule > 0 && mobileMedia > baseRule, "the mobile rule must be declared after the desktop rule");
+  assert.match(styles.slice(mobileMedia), /\.transcript-rail \{\s*display: none;\s*\}/);
   // 只有一轮提问时干脆不渲染，圆点与按钮都不存在。
   assert.match(chatWindow, /shouldShowTranscriptRail\(railDots\.length\) && \(\s*<TranscriptRail/);
   assert.doesNotMatch(source, /tabIndex=/);
