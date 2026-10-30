@@ -31,7 +31,7 @@ export interface TranscriptItemsOptions {
 /**
  * 界面上的一个渲染条目：一轮转写，或一条不属于任何分组的独立消息。
  *
- * 分组字段（`processIndices`、`finalAssistantIndex` 等）对每一轮都会填写，
+ * 分组字段（`visibleProcessIndices`、`finalAssistantIndex` 等）对每一轮都会填写，
  * 包括按独立消息渲染的那几类（非锚点消息、没有正式回答的一轮、运行中的最后
  * 一轮）；`isStandalone` 只决定界面是否折叠过程组。
  */
@@ -40,20 +40,12 @@ export interface TranscriptItem {
   key: string;
   /** 本轮锚点的消息下标。 */
   anchorIndex: number;
-  /** 本条覆盖的消息区间结束位置（不含）。 */
-  endIndex: number;
   /** 锚点消息本身是否构成一轮（用户消息或 Compaction 摘要）。 */
   isAnchor: boolean;
-  /** 锚点之后、正式回答之前的全部过程消息下标。 */
-  processIndices: number[];
-  /** 其中界面真正会显示的过程消息下标。 */
+  /** 锚点之后、正式回答之前的过程消息里，界面真正会显示的那几条下标。 */
   visibleProcessIndices: number[];
   /** 正式回答的消息下标，本轮没有正式回答则为 -1。 */
   finalAssistantIndex: number;
-  /** 从正式回答里拆出的过程块。 */
-  finalProcessBlocks: AssistantContentBlock[];
-  /** 从正式回答里拆出的回答块。 */
-  answerBlocks: AssistantContentBlock[];
   /** 过程块单独渲染时覆盖用的消息；没有过程块则为 null。 */
   finalProcessMessage: AssistantMessage | null;
   /** 回答块单独渲染时覆盖用的消息；没有回答则为 null。 */
@@ -152,13 +144,9 @@ function buildStandaloneMessageItem(entryIds: readonly string[], index: number):
   return {
     key: itemKey(entryIds, index),
     anchorIndex: index,
-    endIndex: index + 1,
     isAnchor: false,
-    processIndices: [],
     visibleProcessIndices: [],
     finalAssistantIndex: -1,
-    finalProcessBlocks: [],
-    answerBlocks: [],
     finalProcessMessage: null,
     finalAnswerMessage: null,
     processMessageCount: 0,
@@ -195,13 +183,9 @@ function buildTurn(
     return {
       key: itemKey(entryIds, anchorIndex),
       anchorIndex,
-      endIndex,
       isAnchor: true,
-      processIndices,
       visibleProcessIndices,
       finalAssistantIndex: -1,
-      finalProcessBlocks: [],
-      answerBlocks: [],
       finalProcessMessage: null,
       finalAnswerMessage: null,
       processMessageCount: 0,
@@ -231,13 +215,9 @@ function buildTurn(
   return {
     key: itemKey(entryIds, anchorIndex),
     anchorIndex,
-    endIndex,
     isAnchor: true,
-    processIndices,
     visibleProcessIndices,
     finalAssistantIndex,
-    finalProcessBlocks: finalSplit.processBlocks,
-    answerBlocks: finalSplit.answerBlocks,
     finalProcessMessage,
     finalAnswerMessage,
     processMessageCount: visibleProcessIndices.length + (finalProcessMessage ? 1 : 0),

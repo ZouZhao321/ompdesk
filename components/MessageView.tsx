@@ -787,6 +787,15 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile, sessionId }: { block: 
   return <SafeMarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId}>{block.text}</SafeMarkdownBody>;
 }
 
+/**
+ * 这条思考块的延迟内容是否已经取回过。取回过就不再当作未加载：条目滚出视野被
+ * 虚拟列表卸载后重建时，内容缓存里的结果直接填回来，不重放加载态。
+ */
+function isThinkingLoaded(sessionId: string | undefined, entryId: string | undefined, turnAnchorEntryId: string | undefined, blockIndex: number): boolean {
+  if (!sessionId || !entryId) return false;
+  return transcriptViewState.isLoaded(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
+}
+
 function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId, blockIndex }: {
   block: ThinkingContent;
   duration?: number;
@@ -797,7 +806,9 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(block.deferred === true);
+  const [loading, setLoading] = useState(() => (
+    block.deferred === true && !isThinkingLoaded(sessionId, entryId, turnAnchorEntryId, blockIndex)
+  ));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -817,13 +828,13 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
       };
     }
 
-    setLoading(true);
+    setLoading(!isThinkingLoaded(sessionId, entryId, turnAnchorEntryId, blockIndex));
     setError(null);
     void loadThinkingContent(sessionId, entryId, blockIndex)
       .then((value) => {
         if (cancelled) return;
         setContent(value);
-        // 记下延迟内容已取回，条目被卸载重建后不必再当作未加载。
+        // 记下延迟内容已取回：条目被卸载后重建时不再回到加载态。
         transcriptViewState.markLoaded(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
       })
       .catch((reason) => {
