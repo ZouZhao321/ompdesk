@@ -122,20 +122,20 @@ test("collapse button mirrors isCollapsed through aria-expanded and its label", 
 });
 
 test("renders accessible labels and counts for running, waiting and unread activity", () => {
-  const html = renderRow({ activity: { running: 2, waiting: 1, unread: 3 } });
+  const html = renderRow({ activity: { running: 2, waiting: 1, unread: { interrupted: 3 } } });
 
   assert.ok(html.includes('aria-label="Agent running… (2)"'), "expected the running count label");
   assert.ok(html.includes('aria-label="Waiting for your answer (1)"'), "expected the waiting count label");
-  assert.ok(html.includes('aria-label="New session activity (3)"'), "expected the unread count label");
+  assert.ok(html.includes('aria-label="Interrupted (3)"'), "expected the unread count label");
 });
 
 test("renders exactly one labelled badge per non-zero activity count", () => {
-  const html = renderRow({ activity: { running: 2, waiting: 1, unread: 3 } });
+  const html = renderRow({ activity: { running: 2, waiting: 1, unread: { interrupted: 3 } } });
 
   const badges = html.match(/<span\b[^>]*role="img"[^>]*>/g) ?? [];
   assert.equal(badges.length, 3, "expected one badge per non-zero count");
 
-  for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "New session activity (3)"]) {
+  for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "Interrupted (3)"]) {
     assert.ok(
       badges.some((tag) => tag.includes(`aria-label="${label}"`)),
       `expected a badge labelled "${label}"`,
@@ -144,22 +144,58 @@ test("renders exactly one labelled badge per non-zero activity count", () => {
 });
 
 test("renders only the activity badges that have a positive count", () => {
-  const html = renderRow({ activity: { running: 0, waiting: 0, unread: 2 } });
+  const html = renderRow({ activity: { running: 0, waiting: 0, unread: { aborted: 2 } } });
 
-  assert.ok(html.includes('aria-label="New session activity (2)"'));
+  assert.ok(html.includes('aria-label="Cancelled (2)"'));
   assert.ok(!html.includes("Agent running"), "expected no running badge at zero");
   assert.ok(!html.includes("Waiting for your answer"), "expected no waiting badge at zero");
 });
 
 test("renders no activity badges when activity is absent or all zero", () => {
-  for (const activity of [undefined, { running: 0, waiting: 0, unread: 0 }]) {
+  for (const activity of [undefined, { running: 0, waiting: 0, unread: {} }]) {
     const html = renderRow({ activity });
 
     assert.doesNotMatch(html, /role="img"/, "expected no activity badge markup");
     assert.ok(!html.includes("Agent running"), "expected no running badge");
     assert.ok(!html.includes("Waiting for your answer"), "expected no waiting badge");
-    assert.ok(!html.includes("New session activity"), "expected no unread badge");
   }
+});
+
+test("colors each unread status badge with that status color", () => {
+  const html = renderRow({
+    activity: { running: 0, waiting: 0, unread: { interrupted: 2, error: 1, pending: 1 } },
+  });
+
+  const expectations = [
+    ["Interrupted (2)", "var(--warning)"],
+    ["Model error (1)", "var(--danger)"],
+    ["Awaiting reply (1)", "var(--accent)"],
+  ];
+  for (const [label, color] of expectations) {
+    const tag = roleImgTags(html).find((candidate) => candidate.includes(`aria-label="${label}"`));
+    assert.ok(tag, `expected a badge labelled "${label}"`);
+    assert.equal(stylesOf(tag).color, color, `expected "${label}" to use ${color}`);
+  }
+  assert.ok(!html.includes("#0891b2"), "expected the single cyan unread color to be gone");
+});
+
+test("renders one badge per present status in the documented order", () => {
+  const html = renderRow({
+    activity: {
+      running: 0,
+      waiting: 0,
+      unread: { pending: 1, error: 1, aborted: 1, interrupted: 1, complete: 1 },
+    },
+  });
+
+  const labels = roleImgTags(html).map((tag) => tag.match(/aria-label="([^"]*)"/)?.[1]);
+  assert.deepEqual(labels, [
+    "Completed (1)",
+    "Interrupted (1)",
+    "Cancelled (1)",
+    "Model error (1)",
+    "Awaiting reply (1)",
+  ]);
 });
 
 test("new-session button label contains the full project path", () => {
@@ -256,7 +292,7 @@ test("renders no pin mark when isPinned is false or absent", () => {
 });
 
 test("keeps the activity badges alongside the pin mark", () => {
-  const activity = { running: 2, waiting: 1, unread: 3 };
+  const activity = { running: 2, waiting: 1, unread: { interrupted: 3 } };
   const pinned = renderRow({ isPinned: true, activity });
   const unpinned = renderRow({ activity });
 
@@ -266,7 +302,7 @@ test("keeps the activity badges alongside the pin mark", () => {
     1,
     "expected the extra mark to be the pin",
   );
-  for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "New session activity (3)"]) {
+  for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "Interrupted (3)"]) {
     assert.ok(pinned.includes(`aria-label="${label}"`), `expected the badge labelled "${label}" while pinned`);
   }
 });
@@ -294,8 +330,8 @@ test("renders the localized pin mark label in zh-CN", () => {
 });
 
 test("renders full-width parentheses in the zh-CN activity labels", () => {
-  const html = renderRow({ activity: { running: 2, waiting: 0, unread: 3 } }, "zh-CN");
+  const html = renderRow({ activity: { running: 2, waiting: 0, unread: { interrupted: 3 } } }, "zh-CN");
 
   assert.ok(html.includes('aria-label="Agent 运行中…（2）"'), "expected the localized running count label");
-  assert.ok(html.includes('aria-label="会话有新活动（3）"'), "expected the localized unread count label");
+  assert.ok(html.includes('aria-label="已中断（3）"'), "expected the localized unread count label");
 });

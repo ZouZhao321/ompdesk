@@ -6,12 +6,19 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { useI18n } from "@/hooks/useI18n";
 import type { TranslationParams } from "@/lib/i18n/types";
+import { STATIC_MARKER_APPEARANCE, STATIC_MARKER_STATUSES, type StaticMarkerCounts } from "@/lib/session-marker";
 
-/** 项目行展示的活动计数：运行中、等待回答与未读会话数。 */
-interface ProjectActivity {
+/**
+ * 项目行展示的活动计数：运行中、等待回答与未读会话。
+ *
+ * 未读部分按静态状态分组，颜色与单个会话行的静态标记出自同一张外观表，
+ * 项目行汇总与行内灯因此不会出现同一状态两种颜色。
+ */
+export interface ProjectActivity {
   running: number;
   waiting: number;
-  unread: number;
+  /** 未读会话按静态状态分组的计数；没有命中的状态不出现。 */
+  unread: StaticMarkerCounts;
 }
 
 interface Props {
@@ -249,13 +256,21 @@ export function ProjectRow({
 
 /**
  * 项目行内的活动计数徽标：运行中（旋转图标 + 计数）、等待回答（黄点 + 计数）、
- * 未读（青点 + 计数）。没有活动时什么都不渲染。配色与单个会话的指示器一致。
+ * 未读按静态状态分组（每种状态一个点 + 计数，颜色与单个会话的静态标记一致）。
+ * 没有活动时什么都不渲染。
  */
 function showProjectActivity(
   activity: ProjectActivity | undefined,
   t: (key: string, params?: TranslationParams) => string,
 ): ReactNode {
-  if (!activity || (activity.running === 0 && activity.waiting === 0 && activity.unread === 0)) return null;
+  if (!activity) return null;
+  if (
+    activity.running === 0 &&
+    activity.waiting === 0 &&
+    !STATIC_MARKER_STATUSES.some((status) => (activity.unread[status] ?? 0) > 0)
+  ) {
+    return null;
+  }
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}>
       {activity.running > 0 && (
@@ -287,17 +302,23 @@ function showProjectActivity(
           {activity.waiting}
         </span>
       )}
-      {activity.unread > 0 && (
-        <span
-          title={t("sidebar.newSessionActivity")}
-          aria-label={t("sidebar.newSessionActivityWithCount", { count: activity.unread })}
-          role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
-        >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
-          {activity.unread}
-        </span>
-      )}
+      {STATIC_MARKER_STATUSES.map((status) => {
+        const count = activity.unread[status] ?? 0;
+        if (count === 0) return null;
+        const { color, labelKey, countLabelKey } = STATIC_MARKER_APPEARANCE[status];
+        return (
+          <span
+            key={status}
+            title={t(labelKey)}
+            aria-label={t(countLabelKey, { count })}
+            role="img"
+            style={{ display: "inline-flex", alignItems: "center", gap: 3, color, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
+            {count}
+          </span>
+        );
+      })}
     </span>
   );
 }
