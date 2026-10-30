@@ -36,19 +36,22 @@ test("opens the prompt tip on keyboard focus, not only on hover", () => {
   assert.match(declarations(".transcript-rail-dot:focus-visible"), /outline: 2px solid var\(--accent\);/);
 });
 
-test("re-anchors the tip when the dot column scrolls under the focus ring", () => {
-  // Tab 到容器外的圆点时浏览器会把圆点滚进来；这次滚动不该把提示收掉。
-  assert.match(source, /const insideRail = dotsRef\.current\?\.contains\(event\.target as Node\) \?\? false;/);
-  assert.match(source, /const stillFocused = anchor\.element\.ownerDocument\.activeElement === anchor\.element;/);
-  assert.match(source, /if \(insideRail \|\| stillFocused\) \{/);
+test("keeps the tip anchored while the transcript scrolls", () => {
+  // 转写区的滚动搬不动圆点，跟随开着时每个流式块都会滚一次：只重新对准，不收提示。
+  assert.match(source, /if \(!anchor \|\| !isTipAnchorVisible\(anchor\.element, dotsRef\.current\)\) \{/);
+  // 锚点只在圆点被卸载、被圆点列裁到列外或跳转条被 CSS 收起时失效。
+  assert.match(source, /if \(!element\.isConnected\) return false;/);
+  assert.match(source, /if \(rect\.width === 0 \|\| rect\.height === 0\) return false;/);
+  assert.match(source, /return rect\.bottom > columnRect\.top && rect\.top < columnRect\.bottom;/);
   // 重新对准合并到一帧里，并直接写 DOM：滚动不改状态，竖条不跟着重渲染。
   assert.match(source, /if \(frame !== 0\) return;\s*frame = requestAnimationFrame\(\(\) => \{\s*frame = 0;\s*positionTip\(\);/);
   assert.match(source, /element\.style\.top = `/);
   assert.doesNotMatch(source, /setTip\(/);
   // 卸载时取消还没跑的那一帧。
   assert.match(source, /if \(frame !== 0\) cancelAnimationFrame\(frame\)/);
-  // 其余滚动（鼠标悬停时转写向前向后）仍让提示失去锚点。
-  assert.match(source, /hideTip\(\);\s*\};\s*window\.addEventListener\("scroll", onScroll, true\);/);
+  // 收起只发生在失去锚点的分支里。
+  assert.match(source, /\) \{\s*hideTip\(\);\s*return;\s*\}/);
+  assert.match(source, /window\.addEventListener\("scroll", onScroll, true\)/);
   assert.match(source, /window\.removeEventListener\("scroll", onScroll, true\)/);
 });
 
