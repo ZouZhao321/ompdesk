@@ -17,6 +17,7 @@ import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
 import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
+import { reduceFollow, type FollowEvent } from "@/lib/transcript-follow";
 import type { ChatDraftImage } from "@/lib/draft-store";
 import { rememberSessionContinuation, clearSessionContinuation } from "@/lib/workspace-memory";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
@@ -193,7 +194,6 @@ export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" 
 
 const PROGRAMMATIC_SCROLL_IGNORE_MS = 700;
 const USER_SCROLL_INTENT_MS = 1200;
-const AUTO_FOLLOW_BOTTOM_THRESHOLD_PX = 72;
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
@@ -463,8 +463,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
   const ignoreProgrammaticScrollUntilRef = useRef(0);
-  // Forward reference: handleSend/executeBash are declared above setAutoFollow.
-  const setAutoFollowRef = useRef<(following: boolean) => void>(() => {});
+  // Forward reference: handleSend/executeBash are declared above applyFollow.
+  const applyFollowRef = useRef<(event: FollowEvent) => void>(() => {});
   // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
   const scrollTranscriptToEndRef = useRef(opts.scrollTranscriptToEnd);
   scrollTranscriptToEndRef.current = opts.scrollTranscriptToEnd;
@@ -1669,7 +1669,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentRunning(true);
     setAgentPhase(isSlashCommandPrompt ? { kind: "running_command" } : { kind: "waiting_model" });
     dispatch({ type: "start" });
-    setAutoFollowRef.current(true);
+    // 提交后一律回到底部：上滚过的视图不会停在历史中间。
+    applyFollowRef.current({ type: "submit" });
 
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
     let sentSessionId: string | null = null;
@@ -1756,7 +1757,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (agentRunningRef.current || bashRunningRef.current) return;
     const inputText = `${excludeFromContext ? "!!" : "!"}${command}`;
     bashRunningRef.current = true;
-    setAutoFollowRef.current(true);
+    // 执行 shell 命令同样把视图带到末尾。
+    applyFollowRef.current({ type: "submit" });
     setPendingBash({ command, excludeFromContext });
     setBashRunning(true);
     try {
@@ -2322,20 +2324,32 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const setAutoFollow = useCallback((following: boolean) => {
     setAutoFollowPaused((paused) => (paused === !following ? paused : !following));
   }, []);
-  setAutoFollowRef.current = setAutoFollow;
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
     scrollTranscriptToEndRef.current?.(behavior);
   }, []);
 
+  // 跟随状态的唯一写入口：判定在 lib/transcript-follow.ts，这里只落状态与滚动。
+  const applyFollow = useCallback((event: FollowEvent) => {
+    const outcome = reduceFollow(event);
+    if (!outcome) return;
+    setAutoFollow(!outcome.paused);
+    if (outcome.scrollToEnd) scrollToBottom(outcome.scrollToEnd);
+  }, [scrollToBottom, setAutoFollow]);
+  applyFollowRef.current = applyFollow;
+
   const resumeAutoFollow = useCallback(() => {
     // Clear any lingering intent window so the smooth scroll we are about to
     // start is not mistaken for the user scrolling away again.
     userScrollIntentUntilRef.current = 0;
-    setAutoFollow(true);
-    scrollToBottom("smooth");
-  }, [scrollToBottom, setAutoFollow]);
+    applyFollow({ type: "resume" });
+  }, [applyFollow]);
+
+  // 跳转是一次有意的位置改变：停掉跟随，「回到底部」按钮因此出现。
+  const pauseAutoFollow = useCallback(() => {
+    applyFollow({ type: "pause" });
+  }, [applyFollow]);
 
   const markUserScrollIntent = useCallback((event: Event) => {
     if (event instanceof KeyboardEvent) {
@@ -2349,20 +2363,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!agentRunningRef.current && !bashRunningRef.current) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    // 列表自己跟随滚动时也会触发 scroll；那不是用户操作，别让它改跟随开关。
-    // 用户真正驱动的滚动（滚轮/触摸/指针/方向键）要照常生效，否则输出中途
-    // 永远停不下跟随。
-    const userDriven = Date.now() <= userScrollIntentUntilRef.current;
-    if (!userDriven && Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
-    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distanceFromBottom <= AUTO_FOLLOW_BOTTOM_THRESHOLD_PX) {
-      setAutoFollow(true);
-      return;
-    }
-    if (userDriven) {
-      setAutoFollow(false);
-    }
-  }, [setAutoFollow]);
+    applyFollow({
+      type: "scroll",
+      userDriven: Date.now() <= userScrollIntentUntilRef.current,
+      programmaticWindow: Date.now() < ignoreProgrammaticScrollUntilRef.current,
+      distanceFromBottom: container.scrollHeight - container.scrollTop - container.clientHeight,
+    });
+  }, [applyFollow]);
 
   const displayedSessionIdRef = useRef(session?.id);
   useEffect(() => {
@@ -2506,7 +2513,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
     isNew,
-    autoFollowPaused, resumeAutoFollow,
+    autoFollowPaused, resumeAutoFollow, pauseAutoFollow,
     goalStatus,
     // Refs
     sessionIdRef, eventSourceRef, scrollContainerRef,
