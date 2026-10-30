@@ -1750,6 +1750,13 @@ span.linenumber {
     display: none;
   }
 }
+/* 不支持内联尺寸容器查询的浏览器读不到上一条隐藏规则，跳转条会一直显示并在窄转写区
+   压住正文右缘。这里按同一选择器整体收起：宁可没有跳转条，也不让它盖住正文。 */
+@supports not (container-type: inline-size) {
+  .transcript-rail {
+    display: none;
+  }
+}
 
 /* Keep the panel border as the idle separator; this element only expands the hit target. */
 .panel-resize-handle {
