@@ -36,6 +36,7 @@ import { getInitialNavigation } from "@/lib/initial-navigation";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { clearUnreadSessionIds } from "@/lib/session-unread";
 import { clearLastOpen, getLastOpenSession, setLastOpenSession, getSessionContinuation, clearSessionContinuation, rememberSessionContinuation, restoreSessionContinuation } from "@/lib/workspace-memory";
+import { transcriptViewState } from "@/lib/transcript-view-state";
 import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
@@ -898,6 +899,8 @@ export function AppShell() {
 
   const handleSessionDeleted = useCallback((sessionId: string) => {
     invalidateWorkspaceRestore();
+    // 会话没了，它的展开状态与延迟正文也没有再用到的地方。
+    transcriptViewState.forgetSession(sessionId);
     setRefreshKey((k) => k + 1);
     if (selectedSession?.id === sessionId) {
       const cwd = selectedSession.cwd;

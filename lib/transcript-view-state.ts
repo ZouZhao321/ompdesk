@@ -31,10 +31,17 @@ export interface TranscriptViewStore {
   markLoaded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, content: string): void;
   /** 已取回的延迟内容；还没取回时为 null。 */
   loadedContent(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): string | null;
+  /** 只留下这个会话的条目；切到别的会话后上一会话的正文与展开状态不再需要。 */
+  retainSession(sessionId: string | undefined): void;
+  /** 丢掉这个会话的条目：会话被删除后它的正文不该继续占着内存。 */
+  forgetSession(sessionId: string | undefined): void;
 }
 
 // ASCII 单元分隔符不会出现在 entryId 或部位标识里。
 const KEY_SEPARATOR = "\u001f";
+
+/** 一个视图仓库保存的条目上限：超出后按最早写入淘汰。 */
+export const MAX_VIEW_ENTRIES = 1000;
 
 // 还没落盘的新会话没有 id，统一落到同一个空会话桶里。
 function entryKey(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): string {
@@ -42,8 +49,8 @@ function entryKey(sessionId: string | undefined, anchorEntryId: string | undefin
 }
 
 /**
- * 建一个视图状态仓库。会话之间彼此隔离；会话被删除后遗留的键随进程生命周期
- * 自然过期，不做显式清理。
+ * 建一个视图状态仓库。会话之间彼此隔离；条目按会话成桶清理，整体另有数量上限，
+ * 长会话不会让延迟正文无限堆积。
  */
 export function createTranscriptViewStore(): TranscriptViewStore {
   const entries = new Map<string, EntryViewState>();
@@ -51,6 +58,26 @@ export function createTranscriptViewStore(): TranscriptViewStore {
 
   function emit(): void {
     for (const listener of [...listeners]) listener();
+  }
+
+  function write(key: string, state: EntryViewState): void {
+    entries.set(key, state);
+    // Map 保持插入顺序：超出上限时从最早写入的那条开始淘汰。
+    while (entries.size > MAX_VIEW_ENTRIES) {
+      const oldest = entries.keys().next();
+      if (oldest.done) break;
+      entries.delete(oldest.value);
+    }
+  }
+
+  function dropWhere(predicate: (key: string) => boolean): void {
+    let dropped = false;
+    for (const key of entries.keys()) {
+      if (!predicate(key)) continue;
+      entries.delete(key);
+      dropped = true;
+    }
+    if (dropped) emit();
   }
 
   return {
@@ -66,7 +93,7 @@ export function createTranscriptViewStore(): TranscriptViewStore {
     toggleExpanded(sessionId, anchorEntryId, part, fallback) {
       const key = entryKey(sessionId, anchorEntryId, part);
       const current = entries.get(key)?.expanded ?? fallback;
-      entries.set(key, { ...entries.get(key), expanded: !current });
+      write(key, { ...entries.get(key), expanded: !current });
       emit();
     },
     markLoaded(sessionId, anchorEntryId, part, content) {
@@ -74,11 +101,22 @@ export function createTranscriptViewStore(): TranscriptViewStore {
       const current = entries.get(key);
       // 同一段正文再标记一次不通知订阅方：思考块加载完不该触发整段转写重渲染。
       if (current?.content === content) return;
-      entries.set(key, { ...current, content });
+      write(key, { ...current, content });
       emit();
     },
     loadedContent(sessionId, anchorEntryId, part) {
       return entries.get(entryKey(sessionId, anchorEntryId, part))?.content ?? null;
+    },
+    retainSession(sessionId) {
+      // 还没落盘的新会话不知道下一次点击会落到哪一桶，先不动已存的状态。
+      if (sessionId === undefined) return;
+      // 分隔符不会出现在 id 里，前缀匹配因此没有歧义。
+      const prefix = `${sessionId}${KEY_SEPARATOR}`;
+      dropWhere((key) => !key.startsWith(prefix));
+    },
+    forgetSession(sessionId) {
+      const prefix = `${sessionId ?? ""}${KEY_SEPARATOR}`;
+      dropWhere((key) => key.startsWith(prefix));
     },
   };
 }
