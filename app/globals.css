@@ -1836,9 +1836,10 @@ span.linenumber {
   .chat-stats-center {
     display: none !important;
   }
-  /* 移动档不出跳转条：纯 CSS 隐藏，首帧就生效，不会先画出来再消失。 */
+  /* 移动档不出跳转条：纯 CSS 隐藏，首帧就生效，不会先画出来再消失。
+     与桌面档的 .transcript-rail 同优先级，靠后面的声明覆盖，不需要 !important。 */
   .transcript-rail {
-    display: none !important;
+    display: none;
   }
   .sidebar-container {
     position: fixed !important;

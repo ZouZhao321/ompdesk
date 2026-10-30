@@ -4,10 +4,8 @@ import type { TranscriptItem } from "./transcript-items";
 export const RAIL_WIDTH_PX = 36;
 /** 圆点直径（px）。 */
 export const RAIL_DOT_SIZE_PX = 6;
-/** 相邻圆点的间隙（px）。 */
-export const RAIL_DOT_GAP_PX = 14;
-/** 一行圆点的固定高度（px）：圆点加间隙，圆点列表按它换算滚动位置。 */
-export const RAIL_ROW_PX = RAIL_DOT_SIZE_PX + RAIL_DOT_GAP_PX;
+/** 相邻圆点的中心距（px）：圆点 6px、间隙 8px，圆点列表按它换算滚动位置。 */
+export const RAIL_ROW_PX = 14;
 /** 圆点容器的最高高度（px），超出后容器内部滚动。 */
 export const RAIL_MAX_HEIGHT_PX = 180;
 /** 悬停提示里保留的提问字符数，超出由两行省略收起。 */
