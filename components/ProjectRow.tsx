@@ -264,11 +264,10 @@ function showProjectActivity(
   t: (key: string, params?: TranslationParams) => string,
 ): ReactNode {
   if (!activity) return null;
-  if (
-    activity.running === 0 &&
-    activity.waiting === 0 &&
-    !STATIC_MARKER_STATUSES.some((status) => (activity.unread[status] ?? 0) > 0)
-  ) {
+  const unreadBadges = STATIC_MARKER_STATUSES
+    .map((status) => ({ status, count: activity.unread?.[status] ?? 0 }))
+    .filter(({ count }) => count > 0);
+  if (activity.running === 0 && activity.waiting === 0 && unreadBadges.length === 0) {
     return null;
   }
   return (
@@ -302,9 +301,7 @@ function showProjectActivity(
           {activity.waiting}
         </span>
       )}
-      {STATIC_MARKER_STATUSES.map((status) => {
-        const count = activity.unread[status] ?? 0;
-        if (count === 0) return null;
+      {unreadBadges.map(({ status, count }) => {
         const { color, labelKey, countLabelKey } = STATIC_MARKER_APPEARANCE[status];
         return (
           <span
