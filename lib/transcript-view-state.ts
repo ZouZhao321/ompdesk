@@ -155,6 +155,27 @@ export function createTranscriptViewStore(): TranscriptViewStore {
 /** 转写里共用的一份视图状态。 */
 export const transcriptViewState = createTranscriptViewStore();
 
+/** 延迟正文的下一步：渲染已取回的正文、按需请求，还是取不回来。 */
+export type DeferredContentPlan =
+  | { kind: "stored"; content: string }
+  | { kind: "fetch"; sessionId: string; entryId: string }
+  | { kind: "unavailable" };
+
+/**
+ * 延迟正文的行动计划。视图状态里已有正文就先渲染它——正文按 entryId 定位，与会话
+ * id 无关，所以会话还没落盘也不会把正文换成错误文案；只有确实没有正文、又拿不到
+ * 请求所需的会话 id 或 entryId 时才算取不回来。
+ */
+export function planDeferredContent(
+  stored: string | null,
+  sessionId: string | undefined,
+  entryId: string | undefined,
+): DeferredContentPlan {
+  if (stored !== null) return { kind: "stored", content: stored };
+  if (sessionId === undefined || entryId === undefined) return { kind: "unavailable" };
+  return { kind: "fetch", sessionId, entryId };
+}
+
 function subscribeToViewState(listener: () => void): () => void {
   return transcriptViewState.subscribe(listener);
 }
