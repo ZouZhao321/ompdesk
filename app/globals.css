@@ -1641,6 +1641,19 @@ span.linenumber {
   width: 12px;
   background: var(--accent);
 }
+/* 圆点的可访问描述：提问开头的文字版，只有屏幕阅读器读得到；
+   悬停提示本身是 aria-hidden 的浮层，读屏无法取用。 */
+.transcript-rail-prompt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .transcript-rail-step {
   display: flex;
   flex: 0 0 auto;

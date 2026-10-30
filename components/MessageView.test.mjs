@@ -246,12 +246,15 @@ test("skips the loading state once a deferred thought has been fetched", () => {
 
   assert.match(renderThinking(), /Loading thinking\.\.\./);
 
-  // 内容取回过之后条目被卸载重建，挂载时直接落到非加载态。
-  transcriptViewState.markLoaded("session-thinking", "entry-thinking", thinkingPart("entry-thinking", 0));
+  // 内容取回过之后条目被卸载重建：正文与标记一起在视图状态里，首帧就是正文，
+  // 既不再请求也不回落占位文案。
+  transcriptViewState.markLoaded("session-thinking", "entry-thinking", thinkingPart("entry-thinking", 0), "先看一下这条消息");
 
   const html = renderThinking();
   assert.doesNotMatch(html, /Loading thinking/);
-  assert.match(html, /class="markdown-thinking-status"/);
+  assert.match(html, /markdown-thinking-body/);
+  assert.match(html, /先看一下这条消息/);
+  assert.doesNotMatch(html, /class="markdown-thinking-status"/);
 });
 
 const userImageMessage = {
