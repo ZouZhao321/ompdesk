@@ -112,22 +112,23 @@ test("clears a rail jump once, whether or not the list scrolled", () => {
 });
 
 test("offers a jump-to-bottom entry whenever the list is not at the bottom", () => {
-  // 按钮的第二个来源：列表报告自己不在底部。跟随开着但列表没跟上时也要能点回来。
-  assert.match(source, /atBottomStateChange=\{handleTranscriptAtBottomChange\}/);
+  // 按钮的第二个来源：列表不在底部。跟随开着但列表没跟上时也要能点回来。
   assert.match(source, /\(autoFollowPaused \|\| !transcriptAtBottom\) && \(/);
-  // 位置只在列表停稳后再确认一帧才落成状态，而且读的是列表自己的滚动位置：首屏与
-  // load 回底途中的程序化滚动会经过不在底部的区间，按途中报告落状态会把按钮钉出来。
+  // 位置只有一个来源：列表停稳后再确认一帧，读的是列表自己的滚动位置。首屏与
+  // load 回底途中的程序化滚动会经过不在底部的区间，列表自己的 atBottomStateChange
+  // 在途中也报 false，接进状态就会把按钮钉出来，所以不接。
+  assert.doesNotMatch(source, /atBottomStateChange=/);
+  assert.doesNotMatch(source, /transcriptAtBottomRef/);
   assert.match(
     source,
-    /const measureTranscriptAtBottom = useCallback\(\(\) => \{\s*const scroller = scrollContainerRef\.current;\s*if \(!scroller\) return transcriptAtBottomRef\.current;\s*return scroller\.scrollHeight - scroller\.scrollTop - scroller\.clientHeight <= FOLLOW_BOTTOM_THRESHOLD_PX;/,
+    /const measureTranscriptAtBottom = useCallback\(\(\) => \{\s*const scroller = scrollContainerRef\.current;\s*if \(!scroller\) return null;\s*return scroller\.scrollHeight - scroller\.scrollTop - scroller\.clientHeight <= FOLLOW_BOTTOM_THRESHOLD_PX;/,
   );
   assert.match(
     source,
-    /transcriptAtBottomFrameRef\.current = requestAnimationFrame\(\(\) => \{\s*transcriptAtBottomFrameRef\.current = 0;\s*const atBottom = measureTranscriptAtBottom\(\);\s*transcriptAtBottomRef\.current = atBottom;\s*setTranscriptAtBottom\(atBottom\);/,
+    /transcriptAtBottomFrameRef\.current = requestAnimationFrame\(\(\) => \{\s*transcriptAtBottomFrameRef\.current = 0;\s*const atBottom = measureTranscriptAtBottom\(\);\s*if \(atBottom !== null\) setTranscriptAtBottom\(atBottom\);/,
   );
-  assert.doesNotMatch(source, /setTranscriptAtBottom\(transcriptAtBottomRef\.current\)/);
   // 换会话就是换一份列表：新列表从末尾挂载，位置跟着复位。
-  assert.match(source, /transcriptAtBottomRef\.current = true;\s*setTranscriptAtBottom\(true\);\s*\}, \[activeSessionId\]\);/);
+  assert.match(source, /setTranscriptAtBottom\(true\);\s*\}, \[activeSessionId\]\);/);
 });
 
 test("skips the rail measurement while the rail is hidden", () => {
