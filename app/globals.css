@@ -1581,43 +1581,40 @@ span.linenumber {
   --chat-column-width: 820px;
   --chat-column-padding: 16px;
   --transcript-rail-lane: 36px;
-  /* 跳转条贴住对话列时与正文之间留的缝隙。 */
+  /* 跳转条与对话列之间留的缝隙。 */
   --transcript-rail-gap: 6px;
   /* 跳转条右边缘的最小留白。 */
   --transcript-rail-margin: 4px;
-  /* 跳转条右边缘相对转写区中线偏右的量：版心一半 + 内边距 + 缝隙。 */
+  /* 跳转条左缘相对转写区中线的偏移：版心一半 + 内边距 + 缝隙。 */
   --transcript-rail-inset: calc(
     var(--chat-column-width) / 2 + var(--chat-column-padding) + var(--transcript-rail-gap)
   );
-  /* 放得下车道的最小转写区宽度：正文左右各要最小留白，右侧还要一条车道。 */
+  /* 放得下车道的最小转写区宽度：中线到跳转条左缘、车道、右边缘留白两侧对称。 */
   --transcript-rail-min-region: calc(
-    var(--chat-column-width) + 2 * var(--transcript-rail-margin) + var(--transcript-rail-lane)
+    2 * (var(--transcript-rail-inset) + var(--transcript-rail-lane) + var(--transcript-rail-margin))
   );
 }
-/* 跳转条车道：宽度就是「转写区宽度 - 放得下车道的最小宽度」。车道没有宽度时
-   跳转条整条隐藏；容器查询只问它是否还有宽度，不必再手抄一个像素阈值。 */
+/* 跳转条车道：铺满转写区，只承载隐藏判定。位置一律按转写区中线算，容器查询的条件
+   里写不了 calc，阈值照 --transcript-rail-min-region 减一写成字面量。 */
 .transcript-rail-lane {
   position: absolute;
   top: 0;
   bottom: 0;
+  left: 0;
   right: 0;
-  width: calc(100% - var(--transcript-rail-min-region));
   pointer-events: none;
   container: transcript-rail-lane / inline-size;
 }
 
-/* 提问跳转条：贴在对话列右外侧，绝对定位，不参与布局。右边缘相对车道容器
-   计算，所以把车道容器的宽度差补回来才是相对转写区中线的位置。 */
+/* 提问跳转条：绝对定位，不参与布局。左缘钉在对话列右侧的缝隙上，右缘与转写区
+   右边缘至少留 --transcript-rail-margin。 */
 .transcript-rail {
   position: absolute;
   top: 0;
   bottom: 0;
   right: max(
     var(--transcript-rail-margin),
-    calc(
-      50% + var(--transcript-rail-min-region) / 2 - var(--transcript-rail-inset) -
-        var(--transcript-rail-lane)
-    )
+    calc(50% - var(--transcript-rail-inset) - var(--transcript-rail-lane))
   );
   z-index: 30;
   display: flex;
@@ -1740,8 +1737,9 @@ span.linenumber {
   overflow: hidden;
   pointer-events: none;
 }
-/* 车道宽度归零即放不下：整条隐藏，避免压到正文。 */
-@container transcript-rail-lane (max-width: 0px) {
+/* 放不下整条车道即藏起来：943 是 --transcript-rail-min-region (944px) 减一，宽度小于
+   最小宽度就收起，避免跳转条压到正文右缘、抢走点击。 */
+@container transcript-rail-lane (max-width: 943px) {
   .transcript-rail {
     display: none;
   }
