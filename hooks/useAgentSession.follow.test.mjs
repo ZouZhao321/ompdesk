@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 import { FOLLOW_BOTTOM_THRESHOLD_PX, reduceFollow } from "../lib/transcript-follow.ts";
+import { RAIL_JUMP_SETTLE_MS } from "../lib/transcript-rail-jump.ts";
+
+/** 抑制器截止时间与 hook 里的常量同源：跳转的两次兜底清算再加一帧余量。 */
+const FOLLOW_OBSERVATION_HOLD_MS = RAIL_JUMP_SETTLE_MS * 2 + 500;
 
 const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
 const ast = ts.createSourceFile("useAgentSession.ts", source, ts.ScriptTarget.Latest, true);
@@ -37,7 +41,7 @@ const { outputText } = ts.transpileModule(
   { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
 );
 
-function harness({ intentUntil = 0, scrollHeight = 4000, clientHeight = 800 } = {}) {
+function harness({ intentUntil = 0, scrollHeight = 4000, clientHeight = 800, now = () => Date.now() } = {}) {
   const container = { scrollHeight, clientHeight, scrollTop: scrollHeight - clientHeight };
   const intentUntilRef = { current: intentUntil };
   const followStates = [];
@@ -47,9 +51,12 @@ function harness({ intentUntil = 0, scrollHeight = 4000, clientHeight = 800 } = 
     "reduceFollow",
     "userScrollIntentUntilRef",
     "followObservationHeldRef",
+    "followObservationHoldUntilRef",
     "scrollContainerRef",
     "setAutoFollow",
     "scrollToBottom",
+    "FOLLOW_OBSERVATION_HOLD_MS",
+    "Date",
     `${outputText}\nreturn {
       applyFollow, holdFollowObservation, releaseFollowObservation, handleScrollPositionChange,
     };`,
@@ -57,12 +64,16 @@ function harness({ intentUntil = 0, scrollHeight = 4000, clientHeight = 800 } = 
     reduceFollow,
     intentUntilRef,
     { current: false },
+    { current: 0 },
     { current: container },
     (following) => {
       paused = !following;
       followStates.push(following);
     },
     (behavior) => scrolls.push({ behavior, intentUntilAtScroll: intentUntilRef.current }),
+    FOLLOW_OBSERVATION_HOLD_MS,
+    // 回调里的 Date 走这个替身：截止时间与意图窗口的先后由用例摆布。
+    { now },
   );
 
   return {
@@ -151,6 +162,40 @@ test("reads the scroll position no matter whether the session is running", () =>
 
   // 按运行状态早退会让空闲期跳转停掉的跟随永远等不到恢复：观测本身与运行状态无关。
   assert.doesNotMatch(handler, /agentRunningRef|bashRunningRef/);
-  assert.match(handler, /if \(followObservationHeldRef\.current\) return;/);
+  assert.match(handler, /if \(followObservationHeldRef\.current\) \{\s*if \(Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/);
   assert.match(handler, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
+});
+
+test("bounds the observation hold with a deadline", () => {
+  // 抑制器只能由外部松开：漏配对时它必须自己到点失效，否则跟随既不能暂停也不能恢复。
+  assert.match(source, /const FOLLOW_OBSERVATION_HOLD_MS = RAIL_JUMP_SETTLE_MS \* 2 \+ 500;/);
+  assert.match(
+    callbackSource("holdFollowObservation"),
+    /followObservationHeldRef\.current = true;\s*followObservationHoldUntilRef\.current = Date\.now\(\) \+ FOLLOW_OBSERVATION_HOLD_MS;/,
+  );
+  // 正常松开时把截止时间一起清掉，下一次合上重新计时。
+  assert.match(
+    callbackSource("releaseFollowObservation"),
+    /followObservationHeldRef\.current = false;\s*followObservationHoldUntilRef\.current = 0;/,
+  );
+});
+
+test("recovers following once a forgotten hold expires", () => {
+  let clock = 1_000_000;
+  const h = harness({ now: () => clock });
+  // 空闲期点圆点跳转：停掉跟随并合上抑制器，之后没有任何一次 release。
+  h.applyFollow({ type: "pause" });
+  h.holdFollowObservation();
+
+  // 窗口内照旧挡住落点：贴底也不恢复。
+  clock += 100;
+  h.reading(0);
+  assert.equal(h.isPaused(), true);
+
+  // 过了截止时间，滚动观测自己收回抑制器：位置重新参与判定，滑到底就把跟随带回来。
+  clock += FOLLOW_OBSERVATION_HOLD_MS;
+  h.reading(0);
+  assert.equal(h.isPaused(), false);
+  // 恢复不下发滚动：位置已经到底，别再把视图拽一次。
+  assert.deepEqual(h.scrolls, []);
 });
