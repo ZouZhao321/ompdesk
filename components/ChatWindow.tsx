@@ -616,6 +616,20 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     setTopItemIndex((current) => (current === next ? current : next));
   }, [scrollContainerRef]);
 
+  // 测量合并成一帧一次，滚动与列表报告共用这一个调度：流式期间每个数据块都会报告
+  // 一次已渲染条目，在报告里直接测量等于每个块都强制布局两次。
+  const railMeasureFrameRef = useRef(0);
+  const scheduleRailMeasure = useCallback(() => {
+    if (railMeasureFrameRef.current !== 0) return;
+    railMeasureFrameRef.current = requestAnimationFrame(() => {
+      railMeasureFrameRef.current = 0;
+      syncRailTopItem();
+    });
+  }, [syncRailTopItem]);
+  useEffect(() => () => {
+    if (railMeasureFrameRef.current !== 0) cancelAnimationFrame(railMeasureFrameRef.current);
+  }, []);
+
   // 是否可见由跳转条自己量：移动档与窄转写区都由 CSS 收起，这里不重复判定断点。
   const handleRailVisibilityChange = useCallback((visible: boolean) => {
     railVisibleRef.current = visible;
@@ -623,9 +637,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   }, [syncRailTopItem]);
 
   const handleTranscriptItemsRendered = useCallback((items: ListItem<TranscriptListItem>[]) => {
+    // 只登记，不在这里测量。
     railRenderedItemsRef.current = items.map(({ index, offset, size }) => ({ index, offset, size }));
-    syncRailTopItem();
-  }, [syncRailTopItem]);
+    scheduleRailMeasure();
+  }, [scheduleRailMeasure]);
 
   // 滚动元素由列表提供，句柄交回现有的 scrollContainerRef，
   // 自动跟随、上滚判定与「回到最新」按钮继续挂在同一个滚动元素上；
@@ -635,21 +650,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     railScrollCleanupRef.current?.();
     railScrollCleanupRef.current = null;
     if (!(element instanceof HTMLDivElement)) return;
-    let frame = 0;
-    const handleScroll = () => {
-      if (frame !== 0) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        syncRailTopItem();
-      });
-    };
-    element.addEventListener("scroll", handleScroll, { passive: true });
-    railScrollCleanupRef.current = () => {
-      element.removeEventListener("scroll", handleScroll);
-      if (frame !== 0) cancelAnimationFrame(frame);
-    };
+    element.addEventListener("scroll", scheduleRailMeasure, { passive: true });
+    railScrollCleanupRef.current = () => element.removeEventListener("scroll", scheduleRailMeasure);
     syncRailTopItem();
-  }, [scrollContainerRef, syncRailTopItem]);
+  }, [scrollContainerRef, scheduleRailMeasure, syncRailTopItem]);
 
   const railCurrentIndex = useMemo(
     () => (topItemIndex === null ? -1 : railCurrentDotIndex(railDots, topItemIndex)),

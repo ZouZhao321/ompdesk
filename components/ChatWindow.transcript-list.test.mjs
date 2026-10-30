@@ -137,6 +137,34 @@ test("skips the rail measurement while the rail is hidden", () => {
   assert.match(source, /onVisibilityChange=\{handleRailVisibilityChange\}/);
 });
 
+test("measures the rail once per frame instead of per streamed chunk", () => {
+  // 流式期间每个数据块都会让列表报告一次已渲染条目。报告只登记，测量与滚动共用
+  // 同一个 rAF 调度，因此每个块不会各触发一次强制布局。
+  assert.match(
+    source,
+    /const scheduleRailMeasure = useCallback\(\(\) => \{\s*if \(railMeasureFrameRef\.current !== 0\) return;\s*railMeasureFrameRef\.current = requestAnimationFrame\(\(\) => \{\s*railMeasureFrameRef\.current = 0;\s*syncRailTopItem\(\);/,
+  );
+  const itemsRenderedSource = source.slice(
+    source.indexOf("const handleTranscriptItemsRendered = useCallback("),
+    source.indexOf("const handleTranscriptScrollerRef = useCallback("),
+  );
+  assert.ok(itemsRenderedSource.length > 0, "the itemsRendered slice is empty");
+  assert.match(itemsRenderedSource, /railRenderedItemsRef\.current = items\.map\(/);
+  assert.match(itemsRenderedSource, /scheduleRailMeasure\(\)/);
+  assert.doesNotMatch(itemsRenderedSource, /syncRailTopItem\(/);
+  // 滚动路径不再自带一个 rAF，两条来源合成同一个调度。
+  assert.match(source, /element\.addEventListener\("scroll", scheduleRailMeasure, \{ passive: true \}\);/);
+  assert.match(source, /element\.removeEventListener\("scroll", scheduleRailMeasure\)/);
+  const scrollerSource = source.slice(
+    source.indexOf("const handleTranscriptScrollerRef = useCallback("),
+    source.indexOf("const railCurrentIndex = useMemo("),
+  );
+  assert.ok(scrollerSource.length > 0, "the scrollerRef slice is empty");
+  assert.doesNotMatch(scrollerSource, /requestAnimationFrame/);
+  // 卸载时取消还没跑的那一帧。
+  assert.match(source, /cancelAnimationFrame\(railMeasureFrameRef\.current\);/);
+});
+
 test("rebuilds the item keys only when the grouping changes", () => {
   // 流式数据块只换末尾合成项的正文，键不变：键与首屏定位只由分组结果算，流式期间
   // itemKeys 与 computeItemKey 保持同一份引用。
