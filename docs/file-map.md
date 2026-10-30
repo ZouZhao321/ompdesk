@@ -150,7 +150,7 @@ PanelViewIcon.tsx   视图标签与入口的图标
 FileViewer.tsx      文件标签页的内容
 TabBar.tsx          右侧面板标签栏（文件浏览器 / 子代理 / 已打开文件）
 TurnWrittenFiles.tsx 单轮写入文件列表
-TranscriptRail.tsx  对话列左外侧的提问跳转条：圆点、悬停提示、上一条与下一条
+TranscriptRail.tsx  对话列右外侧的提问跳转条：圆点、悬停提示、上一条与下一条
 ```
 
 ## hooks/

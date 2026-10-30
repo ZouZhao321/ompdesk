@@ -39,7 +39,7 @@ function Chevron({ direction }: { direction: "up" | "down" }) {
 }
 
 /**
- * 贴在对话列左外侧的提问跳转条。
+ * 贴在对话列右外侧的提问跳转条。
  *
  * 圆点从条目数组的分组结果来，点击只把条目下标交给列表；当前圆点由列表报告的
  * 顶部可见条目决定。圆点放不下时容器内部滚动，当前圆点保持在正中。移动档与
@@ -209,7 +209,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
           <Chevron direction="down" />
         </button>
         {tipAnchor && (
-          <div ref={tipRef} className="transcript-rail-tip" style={{ left: RAIL_WIDTH_PX + 8 }} aria-hidden="true">
+          <div ref={tipRef} className="transcript-rail-tip" style={{ right: RAIL_WIDTH_PX + 8 }} aria-hidden="true">
             {tipAnchor.text}
           </div>
         )}
