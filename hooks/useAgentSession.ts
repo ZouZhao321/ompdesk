@@ -185,9 +185,9 @@ export interface UseAgentSessionOptions {
   setToolPreset?: (preset: "none" | "default" | "full") => void;
   /**
    * 把转写视图带到末尾。定位由虚拟列表执行，hook 只负责决定什么时候该带，
-   * 不再自己动滚动元素。
+   * 不再自己动滚动元素。必填：缺了它「跟随中」的状态就没有落点，漏接由 typecheck 兜住。
    */
-  scrollTranscriptToEnd?: (behavior: ScrollBehavior) => void;
+  scrollTranscriptToEnd: (behavior: ScrollBehavior) => void;
 }
 
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -2327,7 +2327,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-    scrollTranscriptToEndRef.current?.(behavior);
+    scrollTranscriptToEndRef.current(behavior);
   }, []);
 
   // 跟随状态的唯一写入口：判定在 lib/transcript-follow.ts，这里只落状态与滚动。
