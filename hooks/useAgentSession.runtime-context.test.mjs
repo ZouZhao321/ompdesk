@@ -91,6 +91,8 @@ function harness() {
     eventSourceSessionIdRef: { current: "b" },
     eventSourceRuntimeIdRef: { current: null },
     bashRunningRef: { current: false },
+    // 跟随入口由 applyFollowRef 转发，这里只记下事件，不跑真的滚动。
+    applyFollowRef: { current: (event) => effects.push(["follow", event]) },
     opts: {},
     closeEvents: () => effects.push(["closeEvents"]),
     onSessionForked: (...args) => effects.push(["identity", ...args]),
@@ -204,6 +206,15 @@ test("a same-runtime context response still applies its messages, entry IDs and 
   assert.deepEqual(h.ui.EntryIds, current.context.entryIds);
   assert.deepEqual(h.ui.ContextUsage, current.contextUsage);
   assert.equal(h.effects.some(([kind]) => kind === "identity" || kind === "storage:remove"), false);
+});
+
+test("treats a finished branch reload as a jump to the bottom", async () => {
+  const h = harness();
+  h.bindings.fetch = async () => response(context("other branch"));
+  assert.equal(await h.bindings.loadContext("b", "other-leaf"), true);
+  // 切分支/叶是整段替换消息，列表既不重挂也不走追加跟随；重新载入成功就当作一次
+  // 回底事件，否则视图停在中段。
+  assert.deepEqual(h.effects.filter(([kind]) => kind === "follow"), [["follow", { type: "resume" }]]);
 });
 
 test("an owned same-runtime relocation still follows its new transcript", async () => {
