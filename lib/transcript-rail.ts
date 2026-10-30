@@ -2,8 +2,6 @@ import type { TranscriptItem } from "./transcript-items";
 
 /** 跳转条车道的宽度（px）：贴在对话列左外侧。 */
 export const RAIL_WIDTH_PX = 36;
-/** 圆点直径（px）。 */
-export const RAIL_DOT_SIZE_PX = 6;
 /** 相邻圆点的中心距（px）：圆点 6px、间隙 8px，圆点列表按它换算滚动位置。 */
 export const RAIL_ROW_PX = 14;
 /** 圆点容器的最高高度（px），超出后容器内部滚动。 */
@@ -70,8 +68,10 @@ export function railCurrentDotIndex(dots: readonly TranscriptRailDot[], topItemI
 /**
  * 圆点容器的内部滚动位置：把当前圆点放到容器正中，再夹回内容范围。
  *
- * 内容高度由固定行高乘圆点数得出，容器高度是它的可见高度（调用方传上限值）。
- * 只有当前圆点变化才重算，滚动位置不随列表滚动抖动。
+ * 行高是圆点的节距，圆点在行内垂直居中，圆心因此在行高的一半处。内容高度由
+ * 固定行高乘圆点数得出，容器高度是圆点列的可见高度（调用方读实际 clientHeight，
+ * 上下两条按钮挤占后它比上限值小）。只有当前圆点变化才重算，滚动位置不随列表
+ * 滚动抖动。
  */
 export function railScrollTop(currentDotIndex: number, dotCount: number, containerHeight: number): number {
   if (dotCount <= 0 || containerHeight <= 0) return 0;
@@ -79,7 +79,7 @@ export function railScrollTop(currentDotIndex: number, dotCount: number, contain
   const maxScroll = Math.max(contentHeight - containerHeight, 0);
   if (maxScroll === 0) return 0;
   const index = Math.min(Math.max(currentDotIndex, 0), dotCount - 1);
-  const dotCenter = index * RAIL_ROW_PX + RAIL_DOT_SIZE_PX / 2;
+  const dotCenter = index * RAIL_ROW_PX + RAIL_ROW_PX / 2;
   return Math.min(Math.max(dotCenter - containerHeight / 2, 0), maxScroll);
 }
 

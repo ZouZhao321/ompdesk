@@ -16,6 +16,11 @@ interface Props {
   currentDotIndex: number;
   /** 跳到某个条目：下标交给列表的定位接口，这里不换算像素。 */
   onJump: (itemIndex: number) => void;
+  /**
+   * 跳转条是否真的可见。移动档与窄转写区由 CSS 收起，可见性因此由本组件自己量，
+   * 调用方据此跳过不可见时的测量。
+   */
+  onVisibilityChange?: (visible: boolean) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -46,7 +51,7 @@ function Chevron({ direction }: { direction: "up" | "down" }) {
  * 顶部可见条目决定。圆点放不下时容器内部滚动，当前圆点保持在正中。移动档与
  * 没有多余车道时由 CSS 隐藏，首帧不会闪现。
  */
-export function TranscriptRail({ dots, currentDotIndex, onJump, t }: Props) {
+export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChange, t }: Props) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const dotsRef = useRef<HTMLDivElement | null>(null);
   const anchorRef = useRef<TipAnchor | null>(null);
@@ -55,11 +60,37 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, t }: Props) {
   const previousItemIndex = railStepItemIndex(dots, currentDotIndex, -1);
   const nextItemIndex = railStepItemIndex(dots, currentDotIndex, 1);
 
+  // 圆点列的实际高度可能被上下两条按钮挤到上限值以下，滚动位置按量到的算。
   useLayoutEffect(() => {
     const container = dotsRef.current;
     if (!container) return;
-    container.scrollTop = railScrollTop(currentDotIndex, dots.length, RAIL_MAX_HEIGHT_PX);
+    const apply = () => {
+      container.scrollTop = railScrollTop(currentDotIndex, dots.length, container.clientHeight);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(container);
+    return () => observer.disconnect();
   }, [currentDotIndex, dots.length]);
+
+  // 移动档与窄转写区都用 display: none 收起，量到零尺寸即不可见。
+  const visibilityListenerRef = useRef(onVisibilityChange);
+  visibilityListenerRef.current = onVisibilityChange;
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const report = () => {
+      const rect = rail.getBoundingClientRect();
+      visibilityListenerRef.current?.(rect.width > 0 && rect.height > 0);
+    };
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(rail);
+    return () => {
+      observer.disconnect();
+      visibilityListenerRef.current?.(false);
+    };
+  }, []);
 
   const tipAt = useCallback((element: HTMLElement, text: string): RailTip | null => {
     const rail = railRef.current;
@@ -128,23 +159,31 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, t }: Props) {
         <Chevron direction="up" />
       </button>
       <div ref={dotsRef} className="transcript-rail-dots" style={{ maxHeight: RAIL_MAX_HEIGHT_PX }}>
-        {dots.map((dot, index) => (
-          <button
-            key={dot.itemIndex}
-            type="button"
-            className="transcript-rail-dot"
-            style={{ height: RAIL_ROW_PX }}
-            aria-label={t("chat.jumpToPrompt", { index: index + 1 })}
-            aria-current={index === currentDotIndex ? "true" : undefined}
-            onClick={() => onJump(dot.itemIndex)}
-            onMouseEnter={(event) => showTip(event.currentTarget, dot.prompt)}
-            onMouseLeave={hideTip}
-            onFocus={(event) => showTip(event.currentTarget, dot.prompt)}
-            onBlur={hideTip}
-          >
-            <span className="transcript-rail-dot-mark" aria-hidden="true" />
-          </button>
-        ))}
+        {dots.map((dot, index) => {
+          const promptId = `transcript-rail-prompt-${dot.itemIndex}`;
+          return (
+            <button
+              key={dot.itemIndex}
+              type="button"
+              className="transcript-rail-dot"
+              style={{ height: RAIL_ROW_PX }}
+              aria-label={t("chat.jumpToPrompt", { index: index + 1 })}
+              aria-describedby={promptId}
+              aria-current={index === currentDotIndex ? "true" : undefined}
+              onClick={() => onJump(dot.itemIndex)}
+              onMouseEnter={(event) => showTip(event.currentTarget, dot.prompt)}
+              onMouseLeave={hideTip}
+              onFocus={(event) => showTip(event.currentTarget, dot.prompt)}
+              onBlur={hideTip}
+            >
+              <span className="transcript-rail-dot-mark" aria-hidden="true" />
+              {/* 提示框是 aria-hidden 的浮层，提问内容另放一份只给屏幕阅读器读。 */}
+              <span id={promptId} className="transcript-rail-prompt">
+                {t("chat.jumpToPromptDescription", { index: index + 1, prompt: dot.prompt })}
+              </span>
+            </button>
+          );
+        })}
       </div>
       <button
         type="button"
