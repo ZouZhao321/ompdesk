@@ -160,6 +160,12 @@ test("keeps the rail out of the tab order while it is hidden", () => {
     styles,
     new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`),
   );
+  // 不支持内联尺寸容器查询的浏览器读不到那条规则：回退按同一选择器收起，跳转条不会
+  // 一直显示、在 769–943px 的转写区压住正文右缘。
+  assert.match(
+    styles,
+    /@supports not \(container-type: inline-size\) \{\s*\.transcript-rail \{\s*display: none;\s*\}\s*\}/,
+  );
   // 移动档与桌面档是同一个选择器、都在未分层样式里，优先级相同，靠后声明即可覆盖。
   const baseRule = styles.indexOf(".transcript-rail {");
   const mobileMedia = styles.lastIndexOf("@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px)");
