@@ -8,7 +8,8 @@ const chatWindow = await readFile(new URL("./ChatWindow.tsx", import.meta.url), 
 
 /** 取一条 CSS 规则的声明块；规则不存在时返回 null。 */
 function declarations(selector) {
-  const start = styles.indexOf(selector);
+  // 按行首找规则本身：注释里提到同一个选择器时不会截到注释后面的那条规则上。
+  const start = styles.search(new RegExp(`^${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "m"));
   if (start === -1) return null;
   const open = styles.indexOf("{", start);
   const close = styles.indexOf("}", open);
@@ -58,12 +59,13 @@ test("keeps the tip anchored while the transcript scrolls", () => {
 /** 跳转条几何：车道、缝隙与最小留白只写在 CSS 与这里，版心常量从 lib 读。 */
 const LANE_PX = 36;
 const GAP_PX = 6;
-const EDGE_MARGIN_PX = 4;
+/** 转写滚动条的宽度：右留白不小于它，跳转条才不会压在滚动条上截获拖动。 */
+const SCROLLBAR_PX = 8;
 
 test("derives the rail geometry from the region constants", async () => {
   const { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } = await import("../lib/transcript-rail.ts");
   const insetPx = RAIL_COLUMN_WIDTH_PX / 2 + RAIL_COLUMN_PADDING_PX + GAP_PX;
-  const minRegionPx = 2 * (insetPx + LANE_PX + EDGE_MARGIN_PX);
+  const minRegionPx = 2 * (insetPx + LANE_PX + SCROLLBAR_PX);
   const laneQueryMaxPx = minRegionPx - 1;
   const region = declarations(".chat-transcript-region");
   assert.ok(region, "missing .chat-transcript-region");
@@ -76,7 +78,12 @@ test("derives the rail geometry from the region constants", async () => {
   assert.match(region, new RegExp(`--chat-column-padding: ${RAIL_COLUMN_PADDING_PX}px;`));
   assert.match(region, new RegExp(`--transcript-rail-lane: ${LANE_PX}px;`));
   assert.equal(customPixel(region, "transcript-rail-gap"), GAP_PX);
-  assert.equal(customPixel(region, "transcript-rail-margin"), EDGE_MARGIN_PX);
+  // 右留白不小于转写滚动条的宽度，两处共用一个变量：滚动条带稳定留白，跳转条压上去
+  // 会盖住一条并截获拖动。留白跟着滚动条宽度走，不再出现两组独立的像素值。
+  assert.equal(customPixel(region, "chat-scrollbar-width"), SCROLLBAR_PX);
+  assert.match(region, /--transcript-rail-margin: var\(--chat-scrollbar-width\);/);
+  assert.match(declarations(".chat-session-scroll"), /scrollbar-gutter: stable;/);
+  assert.match(declarations(".chat-session-scroll::-webkit-scrollbar"), /width: var\(--chat-scrollbar-width\);/);
   // 左缘偏移与最小宽度都由这几个常量算出，不再出现手抄的派生像素值。
   assert.match(
     region,
@@ -86,24 +93,24 @@ test("derives the rail geometry from the region constants", async () => {
     region,
     /--transcript-rail-min-region: calc\(\s*2 \* \(var\(--transcript-rail-inset\) \+ var\(--transcript-rail-lane\) \+ var\(--transcript-rail-margin\)\)\s*\);/,
   );
-  // 阈值把内边距与缝隙一起算进去：版心一半 + 内边距 + 缝隙 = 432，最小宽度 944。
+  // 阈值把内边距与缝隙一起算进去：版心一半 + 内边距 + 缝隙 = 432，最小宽度 952。
   const inset = customPixel(region, "chat-column-width") / 2
     + customPixel(region, "chat-column-padding")
     + customPixel(region, "transcript-rail-gap");
   assert.equal(inset, insetPx);
   assert.equal(inset, 432);
   const minRegion = 2 * (
-    inset + customPixel(region, "transcript-rail-lane") + customPixel(region, "transcript-rail-margin")
+    inset + customPixel(region, "transcript-rail-lane") + customPixel(region, "chat-scrollbar-width")
   );
   assert.equal(minRegion, minRegionPx);
-  assert.equal(minRegion, 944);
+  assert.equal(minRegion, 952);
   // 车道容器铺满转写区，只承载隐藏判定；容器查询写不了 calc，阈值照最小宽度减一。
   const lane = declarations(".transcript-rail-lane");
   assert.ok(lane, "missing .transcript-rail-lane");
   assert.match(lane, /container: transcript-rail-lane \/ inline-size;/);
   assert.doesNotMatch(lane, /width:/);
   assert.match(styles, new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\)`));
-  assert.equal(laneQueryMaxPx, 943);
+  assert.equal(laneQueryMaxPx, 951);
   const rail = declarations(".transcript-rail {");
   assert.ok(rail, "missing .transcript-rail");
   assert.match(
@@ -161,14 +168,14 @@ test("keeps the rail out of the tab order while it is hidden", () => {
   const inset = customPixel(region, "chat-column-width") / 2
     + customPixel(region, "chat-column-padding")
     + GAP_PX;
-  const laneQueryMaxPx = 2 * (inset + LANE_PX + EDGE_MARGIN_PX) - 1;
+  const laneQueryMaxPx = 2 * (inset + LANE_PX + SCROLLBAR_PX) - 1;
   // 放不下整条车道就是放不下：整条 display: none 收起，隐藏时元素不可聚焦。
   assert.match(
     styles,
     new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`),
   );
   // 不支持内联尺寸容器查询的浏览器读不到那条规则：回退按同一选择器收起，跳转条不会
-  // 一直显示、在 769–943px 的转写区压住正文右缘。
+  // 一直显示、在 769–951px 的转写区压住正文右缘。
   assert.match(
     styles,
     /@supports not \(container-type: inline-size\) \{\s*\.transcript-rail \{\s*display: none;\s*\}\s*\}/,

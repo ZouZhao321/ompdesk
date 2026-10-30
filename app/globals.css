@@ -167,7 +167,8 @@ body {
 }
 
 .chat-session-scroll::-webkit-scrollbar {
-  width: 8px;
+  /* 宽度与跳转条的右留白共用一个变量（.chat-transcript-region 声明）。 */
+  width: var(--chat-scrollbar-width);
 }
 
 .chat-session-scroll::-webkit-scrollbar-thumb {
@@ -1587,8 +1588,11 @@ span.linenumber {
   --transcript-rail-lane: 36px;
   /* 跳转条与对话列之间留的缝隙。 */
   --transcript-rail-gap: 6px;
-  /* 跳转条右边缘的最小留白。 */
-  --transcript-rail-margin: 4px;
+  /* 转写滚动条的宽度：滚动条用同一个变量定宽，下面的最小留白不小于它。滚动条带稳定
+     留白（scrollbar-gutter: stable），留白比它窄就会盖住滚动条并截获拖动。 */
+  --chat-scrollbar-width: 8px;
+  /* 跳转条右边缘的最小留白：让开滚动条占用的那条稳定留白。 */
+  --transcript-rail-margin: var(--chat-scrollbar-width);
   /* 悬停提示与车道之间的间距。 */
   --transcript-rail-tip-gap: 8px;
   /* 跳转条左缘相对转写区中线的偏移：版心一半 + 内边距 + 缝隙。 */
@@ -1746,9 +1750,9 @@ span.linenumber {
   overflow: hidden;
   pointer-events: none;
 }
-/* 放不下整条车道即藏起来：943 是 --transcript-rail-min-region (944px) 减一，宽度小于
+/* 放不下整条车道即藏起来：951 是 --transcript-rail-min-region (952px) 减一，宽度小于
    最小宽度就收起，避免跳转条压到正文右缘、抢走点击。 */
-@container transcript-rail-lane (max-width: 943px) {
+@container transcript-rail-lane (max-width: 951px) {
   .transcript-rail {
     display: none;
   }
