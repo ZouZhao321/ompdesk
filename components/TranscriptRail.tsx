@@ -149,69 +149,71 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
   }, [tipVisible, positionTip, hideTip]);
 
   return (
-    <div
-      ref={railRef}
-      className="transcript-rail"
-      role="navigation"
-      aria-label={t("chat.transcriptRail")}
-      style={{ width: RAIL_WIDTH_PX }}
-    >
-      <button
-        type="button"
-        className="transcript-rail-step"
-        aria-label={t("chat.previousPrompt")}
-        title={t("chat.previousPrompt")}
-        disabled={previousItemIndex === null}
-        onClick={() => {
-          if (previousItemIndex !== null) onJump(previousItemIndex);
-        }}
+    <div className="transcript-rail-lane">
+      <div
+        ref={railRef}
+        className="transcript-rail"
+        role="navigation"
+        aria-label={t("chat.transcriptRail")}
+        style={{ width: RAIL_WIDTH_PX }}
       >
-        <Chevron direction="up" />
-      </button>
-      <div ref={dotsRef} className="transcript-rail-dots" style={{ maxHeight: RAIL_MAX_HEIGHT_PX }}>
-        {dots.map((dot, index) => {
-          const promptId = `transcript-rail-prompt-${dot.itemIndex}`;
-          return (
-            <button
-              key={dot.itemIndex}
-              type="button"
-              className="transcript-rail-dot"
-              style={{ height: RAIL_ROW_PX }}
-              aria-label={t("chat.jumpToPrompt", { index: index + 1 })}
-              aria-describedby={promptId}
-              aria-current={index === currentDotIndex ? "true" : undefined}
-              onClick={() => onJump(dot.itemIndex)}
-              onMouseEnter={(event) => showTip(event.currentTarget, dot.prompt)}
-              onMouseLeave={hideTip}
-              onFocus={(event) => showTip(event.currentTarget, dot.prompt)}
-              onBlur={hideTip}
-            >
-              <span className="transcript-rail-dot-mark" aria-hidden="true" />
-              {/* 提示框是 aria-hidden 的浮层，提问内容另放一份只给屏幕阅读器读。 */}
-              <span id={promptId} className="transcript-rail-prompt">
-                {t("chat.jumpToPromptDescription", { index: index + 1, prompt: dot.prompt })}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <button
-        type="button"
-        className="transcript-rail-step"
-        aria-label={t("chat.nextPrompt")}
-        title={t("chat.nextPrompt")}
-        disabled={nextItemIndex === null}
-        onClick={() => {
-          if (nextItemIndex !== null) onJump(nextItemIndex);
-        }}
-      >
-        <Chevron direction="down" />
-      </button>
-      {tipAnchor && (
-        <div ref={tipRef} className="transcript-rail-tip" style={{ left: RAIL_WIDTH_PX + 8 }} aria-hidden="true">
-          {tipAnchor.text}
+        <button
+          type="button"
+          className="transcript-rail-step"
+          aria-label={t("chat.previousPrompt")}
+          title={t("chat.previousPrompt")}
+          disabled={previousItemIndex === null}
+          onClick={() => {
+            if (previousItemIndex !== null) onJump(previousItemIndex);
+          }}
+        >
+          <Chevron direction="up" />
+        </button>
+        <div ref={dotsRef} className="transcript-rail-dots" style={{ maxHeight: RAIL_MAX_HEIGHT_PX }}>
+          {dots.map((dot, index) => {
+            const promptId = `transcript-rail-prompt-${dot.itemIndex}`;
+            return (
+              <button
+                key={dot.itemIndex}
+                type="button"
+                className="transcript-rail-dot"
+                style={{ height: RAIL_ROW_PX }}
+                aria-label={t("chat.jumpToPrompt", { index: index + 1 })}
+                aria-describedby={promptId}
+                aria-current={index === currentDotIndex ? "true" : undefined}
+                onClick={() => onJump(dot.itemIndex)}
+                onMouseEnter={(event) => showTip(event.currentTarget, dot.prompt)}
+                onMouseLeave={hideTip}
+                onFocus={(event) => showTip(event.currentTarget, dot.prompt)}
+                onBlur={hideTip}
+              >
+                <span className="transcript-rail-dot-mark" aria-hidden="true" />
+                {/* 提示框是 aria-hidden 的浮层，提问内容另放一份只给屏幕阅读器读。 */}
+                <span id={promptId} className="transcript-rail-prompt">
+                  {t("chat.jumpToPromptDescription", { index: index + 1, prompt: dot.prompt })}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      )}
+        <button
+          type="button"
+          className="transcript-rail-step"
+          aria-label={t("chat.nextPrompt")}
+          title={t("chat.nextPrompt")}
+          disabled={nextItemIndex === null}
+          onClick={() => {
+            if (nextItemIndex !== null) onJump(nextItemIndex);
+          }}
+        >
+          <Chevron direction="down" />
+        </button>
+        {tipAnchor && (
+          <div ref={tipRef} className="transcript-rail-tip" style={{ left: RAIL_WIDTH_PX + 8 }} aria-hidden="true">
+            {tipAnchor.text}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

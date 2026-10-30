@@ -45,6 +45,29 @@ test("re-anchors the tip when the dot column scrolls under the focus ring", () =
   assert.match(source, /window\.removeEventListener\("scroll", onScroll, true\)/);
 });
 
+test("derives the rail geometry from the region constants", () => {
+  const region = declarations(".chat-transcript-region");
+  assert.ok(region, "missing .chat-transcript-region");
+  // 同步来源写在容器上：版心与内边距来自 ChatWindow，车道宽来自 lib/transcript-rail.ts。
+  assert.match(region, /--chat-column-width: 820px;/);
+  assert.match(region, /--chat-column-padding: 16px;/);
+  assert.match(region, /--transcript-rail-lane: 36px;/);
+  // 左偏移与最小宽度都由这四个常量算出，不再出现手抄的派生像素值。
+  assert.match(region, /--transcript-rail-offset: calc\(/);
+  assert.match(region, /--transcript-rail-min-region: calc\(/);
+  const rail = declarations(".transcript-rail {");
+  assert.ok(rail, "missing .transcript-rail");
+  assert.match(rail, /left: max\(\s*var\(--transcript-rail-margin\),\s*calc\(50% - var\(--transcript-rail-offset\)/);
+  const dot = declarations(".transcript-rail-dot {");
+  assert.match(dot, /width: var\(--transcript-rail-lane\);/);
+  // 阈值同样派生：车道容器宽度 = 转写区宽度 - 最小宽度。
+  const lane = declarations(".transcript-rail-lane");
+  assert.ok(lane, "missing .transcript-rail-lane");
+  assert.match(lane, /width: calc\(100% - var\(--transcript-rail-min-region\)\);/);
+  assert.doesNotMatch(styles, /calc\(50% - 468px\)/);
+  assert.doesNotMatch(styles, /max-width: 899px/);
+});
+
 test("marks the current dot and nothing else", () => {
   assert.match(source, /aria-current=\{index === currentDotIndex \? "true" : undefined\}/);
   assert.equal(source.match(/aria-current/g)?.length, 1);
@@ -73,8 +96,11 @@ test("keeps a disabled step visually out of reach", () => {
 });
 
 test("keeps the rail out of the tab order while it is hidden", () => {
-  // 容器查询与移动档都用 display: none 收起，隐藏时元素不可聚焦。
-  assert.match(styles, /@container chat-transcript \(max-width: 899px\) \{\s*\.transcript-rail \{\s*display: none;/);
+  // 车道容器宽度归零就是放不下：整条 display: none 收起，隐藏时元素不可聚焦。
+  assert.match(
+    styles,
+    /@container transcript-rail-lane \(max-width: 0px\) \{\s*\.transcript-rail \{\s*display: none;/,
+  );
   // 移动档与桌面档是同一个选择器、都在未分层样式里，优先级相同，靠后声明即可覆盖。
   const baseRule = styles.indexOf(".transcript-rail {");
   const mobileMedia = styles.lastIndexOf("@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px)");
