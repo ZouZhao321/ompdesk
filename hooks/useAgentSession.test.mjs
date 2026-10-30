@@ -254,6 +254,23 @@ test("restores follow and brings the view to the end when a prompt is submitted"
   assert.match(chatWindowSource, /list\.scrollToIndex\(\{ index: "LAST", align: "end", behavior: resolved \}\);/);
 });
 
+test("defers the post-load follow until the new transcript commits", () => {
+  const loadContextSource = source.slice(
+    source.indexOf("const loadContext = useCallback"),
+    source.indexOf("const loadTools = useCallback"),
+  );
+
+  // 载入与滚动不能在同一个同步块里：此刻新的那份消息还没提交，量到的是旧列表的
+  // 高度，落点会停在旧末端。载入只记票号。
+  assert.doesNotMatch(loadContextSource, /applyFollowRef\.current/);
+  assert.match(loadContextSource, /setContextFollowTicket\(\(ticket\) => ticket \+ 1\);/);
+  // 提交后再等两帧：一帧给 React 提交新条目，一帧给列表量到新高度。
+  assert.match(
+    source,
+    /useEffect\(\(\) => \{\s*if \(contextFollowTicket === 0\) return;\s*let inner = 0;\s*const outer = requestAnimationFrame\(\(\) => \{\s*inner = requestAnimationFrame\(\(\) => applyFollowRef\.current\(\{ type: "load" \}\)\);\s*\}\);[\s\S]*?\}, \[contextFollowTicket\]\);/,
+  );
+});
+
 test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   // 单一写入点：跟随开关只由 setAutoFollow 写，状态不会和判定漂移。
   assert.match(source, /const setAutoFollow = useCallback\(\(following: boolean\) => \{\s*setAutoFollowPaused\(/);
@@ -273,8 +290,15 @@ test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   assert.doesNotMatch(source, /container\.scrollTo\(/);
 
   assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/);
-  // 按钮只看跟随是否暂停：空闲期跳转停掉的跟随也要能点回来。
-  assert.match(chatWindowSource, /\{autoFollowPaused && \(/);
+  // 按钮有两个来源：跟随暂停，或列表报告自己不在底部。前者管用户上滚与跳转，后者
+  // 让「跟随开着但列表没跟上」时也留一个恢复入口。
+  assert.match(chatWindowSource, /\{\(autoFollowPaused \|\| !transcriptAtBottom\) && \(/);
+  assert.match(chatWindowSource, /atBottomStateChange=\{handleTranscriptAtBottomChange\}/);
+  // 位置只在列表停稳后落成状态：跟随途中的程序化滚动会短暂离开底部。
+  assert.match(
+    chatWindowSource,
+    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*setTranscriptAtBottom\(transcriptAtBottomRef\.current\);/,
+  );
   assert.doesNotMatch(chatWindowSource, /\{sessionBusy && autoFollowPaused && \(/);
   assert.match(chatWindowSource, /onClick=\{resumeAutoFollow\}/);
 });

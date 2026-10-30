@@ -698,10 +698,20 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     railJumpTimerRef.current = window.setTimeout(settleRailJumpNow, RAIL_JUMP_SETTLE_MS);
   }, [clearRailJumpTimer, holdFollowObservation, pauseAutoFollow, settleRailJumpNow]);
 
+  // 列表停在底部与否是「回到最新」按钮的第二个来源：跟随暂停时它本来就该出现，
+  // 跟随开着而列表没跟上时也留一个恢复入口。位置只在滚动停稳时落成状态——跟随途中
+  // 的程序化滚动会短暂离开底部，逐帧落状态会让按钮闪一下又消失。
+  const transcriptAtBottomRef = useRef(true);
+  const [transcriptAtBottom, setTranscriptAtBottom] = useState(true);
+  const handleTranscriptAtBottomChange = useCallback((atBottom: boolean) => {
+    transcriptAtBottomRef.current = atBottom;
+  }, []);
+
   // 列表停稳：按实测高度收尾一次跳转，并松开落点抑制器。两条时机共用同一份目标，
   // 先到的那条清算。
   const handleTranscriptScrollingChange = useCallback((scrolling: boolean) => {
     if (scrolling) return;
+    setTranscriptAtBottom(transcriptAtBottomRef.current);
     settleRailJumpNow();
   }, [settleRailJumpNow]);
 
@@ -781,6 +791,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   // 在这里丢掉，模块级视图状态不随会话数增长。
   useEffect(() => {
     transcriptViewState.retainSession(activeSessionId);
+  }, [activeSessionId]);
+
+  // 换会话就是换一份列表：新列表从末尾挂载，按钮的第二个来源跟着复位，别把上一份
+  // 列表的上滚位置留在新会话上。
+  useEffect(() => {
+    transcriptAtBottomRef.current = true;
+    setTranscriptAtBottom(true);
   }, [activeSessionId]);
 
   const transcriptRowContext = useMemo<TranscriptRowContext>(() => ({
@@ -993,6 +1010,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             scrollerRef={handleTranscriptScrollerRef}
             itemsRendered={handleTranscriptItemsRendered}
             isScrolling={handleTranscriptScrollingChange}
+            atBottomStateChange={handleTranscriptAtBottomChange}
             increaseViewportBy={TRANSCRIPT_VIEWPORT_BUFFER}
             followOutput={transcriptFollowOutput(autoFollowPaused)}
             atBottomThreshold={FOLLOW_BOTTOM_THRESHOLD_PX}
@@ -1000,7 +1018,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             itemContent={renderTranscriptRow}
           />
         </TranscriptListRefContext.Provider>
-        {autoFollowPaused && (
+        {(autoFollowPaused || !transcriptAtBottom) && (
           <button
             type="button"
             onClick={resumeAutoFollow}

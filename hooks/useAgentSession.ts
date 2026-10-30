@@ -462,6 +462,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const bashRecoveryIdRef = useRef(0);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   const [autoFollowPaused, setAutoFollowPaused] = useState(false);
+  // 载入后的回底票号：载入与滚动在同一个同步块里时，滚的还是提交前的旧列表。
+  const [contextFollowTicket, setContextFollowTicket] = useState(0);
   const [goalStatus, setGoalStatus] = useState<GoalStatusInfo | null>(null);
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
@@ -703,8 +705,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setEntryIds(d.context.entryIds ?? []);
       setContextUsage(d.contextUsage ?? null);
       // 切分支或切叶是整段替换消息，既不会重挂列表也不走追加路径，跟随看不到任何
-      // 信号；重新载入成功就当作一次回底事件，视图落在新分支的末尾。
-      applyFollowRef.current({ type: "resume" });
+      // 信号；重新载入成功就当作一次回底事件。滚动不能在这次提交之前做，只记一张
+      // 票号，由提交后的 effect 落到新列表的末尾。
+      setContextFollowTicket((ticket) => ticket + 1);
       return true;
     } catch (e) {
       if (ownsContext()) console.error("Failed to load context:", e);
@@ -2351,6 +2354,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (outcome.scrollToEnd) scrollToBottom(outcome.scrollToEnd);
   }, [scrollToBottom, setAutoFollow]);
   applyFollowRef.current = applyFollow;
+
+  // 载入后的回底排在提交之后：请求发出时新的那份消息还没提交，量到的是旧列表的
+  // 高度，落点会停在旧末端（新分支更长时尤其明显）。两帧分别给 React 提交新条目与
+  // 列表量到新高度，之后按载入事件一口气落到末尾。
+  useEffect(() => {
+    if (contextFollowTicket === 0) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => applyFollowRef.current({ type: "load" }));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [contextFollowTicket]);
 
   // 跳转自己的落点不参与跟随判定：合上抑制器，由列表停止滚动或跳转的兜底定时器松开。
   // 每次合上都刷新截止时间，配对漏掉时由观测自己收回。
