@@ -99,6 +99,7 @@ session-map.ts       .jsonl → 轮次树，并合并 fork 文件
 session-archive.ts   归档标记读写
 session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
 session-title.ts     omp 自带标题生成器的薄封装
+transcript-rail.ts   提问跳转条的几何：圆点、当前轮、圆点列内部滚动与逐轮步进
 skills-service.ts    loadSkills 与会话一致性的封装
 goal-mode.ts         目标模式状态机
 git-changes.ts       工作区改动状态与单文件差异
@@ -143,6 +144,7 @@ PanelViewIcon.tsx   视图标签与入口的图标
 FileViewer.tsx      文件标签页的内容
 TabBar.tsx          右侧面板标签栏（文件浏览器 / 子代理 / 已打开文件）
 TurnWrittenFiles.tsx 单轮写入文件列表
+TranscriptRail.tsx  对话列左外侧的提问跳转条：圆点、悬停提示、上一条与下一条
 ```
 
 ## hooks/
