@@ -1047,7 +1047,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             increaseViewportBy={TRANSCRIPT_VIEWPORT_BUFFER}
             followOutput={transcriptFollowOutput(autoFollowPaused)}
             atBottomThreshold={FOLLOW_BOTTOM_THRESHOLD_PX}
-            className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none]"
+            className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
             itemContent={renderTranscriptRow}
           />
         </TranscriptListRefContext.Provider>

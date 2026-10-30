@@ -160,14 +160,18 @@ body {
   background: var(--text-dim);
 }
 
+/* 转写滚动条的宽度只有一处来源：下面 ::-webkit-scrollbar 的 width。这条规则不要再写
+   scrollbar-width / scrollbar-color：Chromium 只要看到其中任意一个标准属性就改用原生
+   滚动条，::-webkit-scrollbar 的定宽与滑块样式一起失效（thin 的实际宽度由平台与缩放
+   决定，Windows 上是 10px），跳转条按 8px 留白就会压住那条滚动条并截获拖动。
+   scrollbar-gutter: stable 常驻留白，滚动条出现与否都不让正文左右跳。 */
 .chat-session-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
   scrollbar-gutter: stable;
 }
 
 .chat-session-scroll::-webkit-scrollbar {
-  /* 宽度与跳转条的右留白共用一个变量（.chat-transcript-region 声明）。 */
+  /* 这里的宽度就是滚动条实际占的宽度，跳转条的右留白直接引用同一个变量
+     （.chat-transcript-region 声明）。 */
   width: var(--chat-scrollbar-width);
 }
 
@@ -1588,8 +1592,9 @@ span.linenumber {
   --transcript-rail-lane: 36px;
   /* 跳转条与对话列之间留的缝隙。 */
   --transcript-rail-gap: 6px;
-  /* 转写滚动条的宽度：滚动条用同一个变量定宽，下面的最小留白不小于它。滚动条带稳定
-     留白（scrollbar-gutter: stable），留白比它窄就会盖住滚动条并截获拖动。 */
+  /* 转写滚动条的宽度：::-webkit-scrollbar 用这个变量定宽，是它唯一的宽度来源，
+     所以这里的值就是稳定留白（scrollbar-gutter: stable）实际占的宽度，下面的最小
+     留白等于它；留白比它窄就会盖住滚动条并截获拖动。 */
   --chat-scrollbar-width: 8px;
   /* 跳转条右边缘的最小留白：让开滚动条占用的那条稳定留白。 */
   --transcript-rail-margin: var(--chat-scrollbar-width);
