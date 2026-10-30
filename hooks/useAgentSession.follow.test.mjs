@@ -163,6 +163,9 @@ test("reads the scroll position no matter whether the session is running", () =>
   // 按运行状态早退会让空闲期跳转停掉的跟随永远等不到恢复：观测本身与运行状态无关。
   assert.doesNotMatch(handler, /agentRunningRef|bashRunningRef/);
   assert.match(handler, /if \(followObservationHeldRef\.current\) \{\s*if \(Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/);
+  // 到期收回走同一个松开入口：合上状态与截止时间的写入只有 releaseFollowObservation 一处。
+  assert.match(handler, /if \(Date\.now\(\) < followObservationHoldUntilRef\.current\) return;\s*\/\/[^\n]*\n\s*releaseFollowObservation\(\);/);
+  assert.doesNotMatch(handler, /followObservationHeldRef\.current = false/);
   assert.match(handler, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
 });
 
