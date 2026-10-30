@@ -33,8 +33,13 @@ test("re-anchors the tip when the dot column scrolls under the focus ring", () =
   // Tab 到容器外的圆点时浏览器会把圆点滚进来；这次滚动不该把提示收掉。
   assert.match(source, /const insideRail = dotsRef\.current\?\.contains\(event\.target as Node\) \?\? false;/);
   assert.match(source, /const stillFocused = anchor\.element\.ownerDocument\.activeElement === anchor\.element;/);
-  assert.match(source, /if \(insideRail \|\| stillFocused\) \{\s*reposition\(anchor\);/);
-  assert.match(source, /setTip\(\(previous\) => \(previous && previous\.top === next\.top \? previous : next\)\)/);
+  assert.match(source, /if \(insideRail \|\| stillFocused\) \{/);
+  // 重新对准合并到一帧里，并直接写 DOM：滚动不改状态，竖条不跟着重渲染。
+  assert.match(source, /if \(frame !== 0\) return;\s*frame = requestAnimationFrame\(\(\) => \{\s*frame = 0;\s*positionTip\(\);/);
+  assert.match(source, /element\.style\.top = `/);
+  assert.doesNotMatch(source, /setTip\(/);
+  // 卸载时取消还没跑的那一帧。
+  assert.match(source, /if \(frame !== 0\) cancelAnimationFrame\(frame\)/);
   // 其余滚动（鼠标悬停时转写向前向后）仍让提示失去锚点。
   assert.match(source, /hideTip\(\);\s*\};\s*window\.addEventListener\("scroll", onScroll, true\);/);
   assert.match(source, /window\.removeEventListener\("scroll", onScroll, true\)/);

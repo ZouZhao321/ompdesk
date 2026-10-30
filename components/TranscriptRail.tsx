@@ -24,12 +24,6 @@ interface Props {
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
-interface RailTip {
-  text: string;
-  /** 提示框相对跳转条顶边的位置（px）。 */
-  top: number;
-}
-
 /** 提示框当前对准的元素：滚动后用它重新算位置，而不是丢掉提示。 */
 interface TipAnchor {
   element: HTMLElement;
@@ -54,8 +48,10 @@ function Chevron({ direction }: { direction: "up" | "down" }) {
 export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChange, t }: Props) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const dotsRef = useRef<HTMLDivElement | null>(null);
+  const tipRef = useRef<HTMLDivElement | null>(null);
   const anchorRef = useRef<TipAnchor | null>(null);
-  const [tip, setTip] = useState<RailTip | null>(null);
+  // 提示框只由锚点驱动：位置是 DOM 写入，不进状态。
+  const [tipAnchor, setTipAnchor] = useState<TipAnchor | null>(null);
 
   const previousItemIndex = railStepItemIndex(dots, currentDotIndex, -1);
   const nextItemIndex = railStepItemIndex(dots, currentDotIndex, 1);
@@ -92,34 +88,40 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
     };
   }, []);
 
-  const tipAt = useCallback((element: HTMLElement, text: string): RailTip | null => {
+  // 提示框的位置只写进 DOM：滚动时每帧都 setState 会连带整条竖条重渲染，
+  // 而这里只挪一个浮层，React 不必知道它挪到了哪。
+  const positionTip = useCallback(() => {
+    const anchor = anchorRef.current;
+    const element = tipRef.current;
     const rail = railRef.current;
-    if (!rail) return null;
-    const rect = element.getBoundingClientRect();
-    return { text, top: rect.top - rail.getBoundingClientRect().top + rect.height / 2 };
+    if (!anchor || !element || !rail) return;
+    const rect = anchor.element.getBoundingClientRect();
+    element.style.top = `${rect.top - rail.getBoundingClientRect().top + rect.height / 2}px`;
   }, []);
 
   const showTip = useCallback((element: HTMLElement, text: string) => {
-    anchorRef.current = { element, text };
-    setTip(tipAt(element, text));
-  }, [tipAt]);
+    const anchor = { element, text };
+    anchorRef.current = anchor;
+    setTipAnchor(anchor);
+  }, []);
 
   const hideTip = useCallback(() => {
     anchorRef.current = null;
-    setTip(null);
+    setTipAnchor(null);
   }, []);
+
+  // 首帧在绘制前就对到锚点上。
+  useLayoutEffect(() => {
+    if (tipAnchor !== null) positionTip();
+  }, [tipAnchor, positionTip]);
 
   // 提示框是固定绘制的浮层：转写滚动后锚点失效就收起。两种例外都只需重新对准：
   // 圆点列自己滚动（Tab 到容器外的圆点时浏览器会把它滚进来），以及圆点仍持有
   // 键盘焦点（回车跳转会滚转写，但焦点圆点没动，提示不该跟着消失）。
-  const tipVisible = tip !== null;
+  const tipVisible = tipAnchor !== null;
   useEffect(() => {
     if (!tipVisible) return;
-    const reposition = (anchor: TipAnchor) => {
-      const next = tipAt(anchor.element, anchor.text);
-      if (!next) return;
-      setTip((previous) => (previous && previous.top === next.top ? previous : next));
-    };
+    let frame = 0;
     const onScroll = (event: Event) => {
       const anchor = anchorRef.current;
       if (!anchor) {
@@ -129,14 +131,22 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
       const insideRail = dotsRef.current?.contains(event.target as Node) ?? false;
       const stillFocused = anchor.element.ownerDocument.activeElement === anchor.element;
       if (insideRail || stillFocused) {
-        reposition(anchor);
+        // 一帧只对一次：连续的滚动事件合并到同一个 rAF 里。
+        if (frame !== 0) return;
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          positionTip();
+        });
         return;
       }
       hideTip();
     };
     window.addEventListener("scroll", onScroll, true);
-    return () => window.removeEventListener("scroll", onScroll, true);
-  }, [tipVisible, tipAt, hideTip]);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+  }, [tipVisible, positionTip, hideTip]);
 
   return (
     <div
@@ -197,9 +207,9 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
       >
         <Chevron direction="down" />
       </button>
-      {tip && (
-        <div className="transcript-rail-tip" style={{ top: tip.top, left: RAIL_WIDTH_PX + 8 }} aria-hidden="true">
-          {tip.text}
+      {tipAnchor && (
+        <div ref={tipRef} className="transcript-rail-tip" style={{ left: RAIL_WIDTH_PX + 8 }} aria-hidden="true">
+          {tipAnchor.text}
         </div>
       )}
     </div>
