@@ -3,11 +3,8 @@ import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   AgentMessage,
-  AssistantContentBlock,
-  AssistantMessage,
   BashExecutionMessage,
   BlockingExtensionUiRequest,
-  CustomMessage,
   ExtensionUiRequest,
   SessionInfo,
   SessionTreeNode,
@@ -18,8 +15,9 @@ import type {
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { buildRewindEntries } from "@/lib/rewind";
-import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks, type DisplayOptions } from "@/lib/message-display";
-import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
+import type { DisplayOptions } from "@/lib/message-display";
+import type { WrittenFile } from "@/lib/turn-written-files";
+import { buildTranscriptItems } from "@/lib/transcript-items";
 import { MessageView } from "./MessageView";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -80,23 +78,6 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
 
 const CHAT_COLUMN_PADDING = 16;
 
-function hasFinalAssistantAnswer(message: AgentMessage, options: DisplayOptions): boolean {
-  if (message.role !== "assistant") return false;
-  return splitFinalAssistantBlocks(message as AssistantMessage, options).answerBlocks.some((block) => (
-    block.type === "image" || (block.type === "text" && block.text.trim().length > 0)
-  ));
-}
-
-function findFinalAssistantIndex(messages: AgentMessage[], userIdx: number, endIdx: number, options: DisplayOptions): number {
-  for (let candidateIdx = endIdx - 1; candidateIdx > userIdx; candidateIdx--) {
-    if (hasFinalAssistantAnswer(messages[candidateIdx], options)) return candidateIdx;
-  }
-  for (let candidateIdx = endIdx - 1; candidateIdx > userIdx; candidateIdx--) {
-    if (messages[candidateIdx]?.role === "assistant") return candidateIdx;
-  }
-  return -1;
-}
-
 function getUserInputText(message: AgentMessage): string | null {
   if (message.role !== "user") return null;
   if (typeof message.content === "string") {
@@ -109,46 +90,6 @@ function getUserInputText(message: AgentMessage): string | null {
     .join("\n")
     .trim();
   return text.length > 0 ? text : null;
-}
-
-function countToolCalls(messages: AgentMessage[], indices: number[], options: DisplayOptions): number {
-  let count = 0;
-  for (const idx of indices) {
-    const msg = messages[idx];
-    if (msg?.role !== "assistant") continue;
-    count += countToolCallBlocks(getDisplayableAssistantBlocks(msg as AssistantMessage, options));
-  }
-  return count;
-}
-
-function hasDisplayableProcessMessage(message: AgentMessage, options: DisplayOptions): boolean {
-  if (message.role === "assistant") {
-    return getDisplayableAssistantBlocks(message as AssistantMessage, options).length > 0;
-  }
-  return message.role === "custom";
-}
-
-// A user message normally anchors a turn (user prompt → process → final
-// answer), and the process messages in between get folded into a collapsed
-// ProcessDetailsGroup. When compaction fires mid-turn, omp drops the original
-// user prompt and inserts a compaction summary (role "custom", customType
-// "compaction") in its place; the agent then keeps producing tool calls and a
-// final answer with no user message left to anchor them. Treat a compaction
-// summary as an anchor too, otherwise every post-compaction message renders
-// standalone and never collapses.
-function isGroupAnchor(message: AgentMessage): boolean {
-  if (message.role === "user") return true;
-  return message.role === "custom" && (message as CustomMessage).customType === "compaction";
-}
-
-function withAssistantBlocks(
-  message: AssistantMessage,
-  content: AssistantContentBlock[],
-  options: { omitUsage?: boolean } = {},
-): AssistantMessage {
-  const next = { ...message, content };
-  if (options.omitUsage) next.usage = undefined;
-  return next;
 }
 
 function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = false, children, t }: { messageCount: number; toolCallCount: number; defaultExpanded?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
@@ -391,6 +332,18 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
 
+  // 分组判定只在这里发生一次；渲染循环按条目顺序输出，不再自己判断轮次。
+  const transcriptItems = useMemo(
+    () => buildTranscriptItems(messages, entryIds, {
+      displayOptions,
+      isStreaming: streamState.isStreaming,
+      busy: sessionBusy,
+      toolResults: toolResultsMap,
+      cwd: messageCwd,
+    }),
+    [messages, entryIds, displayOptions, streamState.isStreaming, sessionBusy, toolResultsMap, messageCwd],
+  );
+
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
     : null;
@@ -584,13 +537,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
               <ExtensionWidgets widgets={aboveEditorWidgets} />
 
             {(() => {
-              // Anchor for live-tail detection: the last user message, or a
-              // compaction summary when compaction has replaced it mid-turn.
-              let lastAnchorIdx = -1;
-              for (let i = messages.length - 1; i >= 0; i--) {
-                if (isGroupAnchor(messages[i])) { lastAnchorIdx = i; break; }
-              }
-
               const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[] } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 const prevAssistantEntryId =
@@ -635,92 +581,37 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
               };
 
               const rendered: ReactNode[] = [];
-              for (let idx = 0; idx < messages.length;) {
-                const msg = messages[idx];
-                if (!isGroupAnchor(msg)) {
-                  rendered.push(renderMessage(idx));
-                  idx += 1;
+              for (const item of transcriptItems) {
+                if (item.isStandalone) {
+                  for (const messageIndex of item.messageIndices) rendered.push(renderMessage(messageIndex));
                   continue;
                 }
 
-                const userIdx = idx;
-                let endIdx = userIdx + 1;
-                while (endIdx < messages.length && !isGroupAnchor(messages[endIdx])) endIdx += 1;
+                rendered.push(renderMessage(item.anchorIndex));
 
-                const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx, displayOptions);
-
-                if (finalAssistantIdx === -1) {
-                  for (let renderIdx = userIdx; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
-                  }
-                  idx = endIdx;
-                  continue;
-                }
-
-                const isLiveTail = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
-                if (isLiveTail) {
-                  for (let renderIdx = userIdx; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
-                  }
-                  idx = endIdx;
-                  continue;
-                }
-
-                rendered.push(renderMessage(userIdx));
-
-                const processIndices: number[] = [];
-                for (let processIdx = userIdx + 1; processIdx < finalAssistantIdx; processIdx++) {
-                  processIndices.push(processIdx);
-                }
-                const visibleProcessIndices = processIndices.filter((processIdx) => hasDisplayableProcessMessage(messages[processIdx], displayOptions));
-                const finalAssistant = messages[finalAssistantIdx] as AssistantMessage;
-                const finalSplit = splitFinalAssistantBlocks(finalAssistant, displayOptions);
-                const finalProcessMessage = finalSplit.processBlocks.length > 0
-                  ? withAssistantBlocks(finalAssistant, finalSplit.processBlocks, { omitUsage: true })
-                  : null;
-                const finalAnswerMessage = finalSplit.answerBlocks.length > 0 || getAssistantErrorMessage(finalAssistant)
-                  ? withAssistantBlocks(finalAssistant, finalSplit.answerBlocks)
-                  : null;
-
-                const processCount = visibleProcessIndices.length + (finalProcessMessage ? 1 : 0);
-                if (processCount > 0) {
+                if (item.processMessageCount > 0) {
                   const processGroup = (
                     <ProcessDetailsGroup
-                      messageCount={processCount}
-                      defaultExpanded={!finalAnswerMessage}
+                      messageCount={item.processMessageCount}
+                      defaultExpanded={!item.finalAnswerMessage}
                       t={t}
-                      toolCallCount={countToolCalls(messages, visibleProcessIndices, displayOptions) + countToolCallBlocks(finalSplit.processBlocks)}
+                      toolCallCount={item.toolCallCount}
                     >
-                      {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { keyPrefix: "process" }))}
-                      {finalProcessMessage && renderMessage(finalAssistantIdx, { keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false })}
+                      {item.visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { keyPrefix: "process" }))}
+                      {item.finalProcessMessage && renderMessage(item.finalAssistantIndex, { keyPrefix: "process-final", messageOverride: item.finalProcessMessage, showTimestamp: false })}
                     </ProcessDetailsGroup>
                   );
                   rendered.push(
-                    <div key={`process-group-${userIdx}-${finalAssistantIdx}`}>
+                    <div key={`process-group-${item.anchorIndex}-${item.finalAssistantIndex}`}>
                       {processGroup}
                     </div>,
                   );
                 }
 
-                if (finalAnswerMessage) {
-                  // Each tool call is stored as its own assistant entry, so the
-                  // final answer alone carries no record of what the turn wrote.
-                  // Gather the turn's assistant blocks and derive the file list
-                  // from the write/edit calls among them.
-                  const turnContent: AssistantContentBlock[] = [];
-                  for (let i = userIdx + 1; i <= finalAssistantIdx; i++) {
-                    const m = messages[i];
-                    if (m?.role === "assistant") {
-                      for (const b of (m as AssistantMessage).content ?? []) turnContent.push(b);
-                    }
-                  }
-                  const writtenFiles = extractTurnWrittenFiles(turnContent, toolResultsMap, messageCwd);
-                  rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles }));
+                if (item.finalAnswerMessage) {
+                  rendered.push(renderMessage(item.finalAssistantIndex, { messageOverride: item.finalAnswerMessage, writtenFiles: item.writtenFiles }));
                 }
-                for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
-                  rendered.push(renderMessage(renderIdx));
-                }
-                idx = endIdx;
+                for (const messageIndex of item.tailIndices) rendered.push(renderMessage(messageIndex));
               }
               const { startIndex, hasMore } = getVisibleRenderWindow(rendered.length, visibleCount);
               return (

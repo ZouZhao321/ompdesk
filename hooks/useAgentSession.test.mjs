@@ -248,10 +248,14 @@ test("renders the transcript with omp's hideThinkingBlock setting", () => {
   assert.match(chatWindowSource, /useSyncedDisplaySettings\(/);
   assert.match(chatWindowSource, /displayOptions = useMemo<DisplayOptions>\(\(\) => \(\{ hideThinking: hideThinkingBlock \}\)/);
   // Turn grouping has to agree with what MessageView renders, or a message
-  // made only of thinking blocks leaves an empty row behind.
-  assert.match(chatWindowSource, /hasDisplayableProcessMessage\(messages\[processIdx\], displayOptions\)/);
-  assert.match(chatWindowSource, /splitFinalAssistantBlocks\(finalAssistant, displayOptions\)/);
-  assert.match(chatWindowSource, /findFinalAssistantIndex\(messages, userIdx, endIdx, displayOptions\)/);
+  // made only of thinking blocks leaves an empty row behind. The judgment
+  // lives in lib/transcript-items.ts; the transcript only consumes its items
+  // and hands its own display options to the builder.
+  const transcriptItemsSource = readFileSync(new URL("../lib/transcript-items.ts", import.meta.url), "utf8");
+  assert.match(chatWindowSource, /buildTranscriptItems\(messages, entryIds, \{\s*displayOptions,/);
+  assert.match(transcriptItemsSource, /hasDisplayableProcessMessage\(messages\[processIdx\], displayOptions\)/);
+  assert.match(transcriptItemsSource, /splitFinalAssistantBlocks\(finalAssistant, displayOptions\)/);
+  assert.match(transcriptItemsSource, /findFinalAssistantIndex\(messages, anchorIndex, endIndex, displayOptions\)/);
 });
 
 test("/branch and /rewind reach the rewind plan through a normalized command name", () => {
