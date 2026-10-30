@@ -53,7 +53,7 @@ test("re-anchors the tip when the dot column scrolls under the focus ring", () =
 });
 
 test("derives the rail geometry from the region constants", async () => {
-  const { RAIL_INSET_PX, RAIL_LANE_QUERY_MAX_PX, RAIL_MIN_REGION_PX } = await import("../lib/transcript-rail.ts");
+  const { RAIL_INSET_PX, RAIL_LANE_QUERY_MAX_PX, RAIL_MIN_REGION_PX, RAIL_WIDTH_PX } = await import("../lib/transcript-rail.ts");
   const region = declarations(".chat-transcript-region");
   assert.ok(region, "missing .chat-transcript-region");
   // 同步来源写在容器上：版心与内边距来自 ChatWindow，车道宽来自 lib/transcript-rail.ts。
@@ -92,8 +92,22 @@ test("derives the rail geometry from the region constants", async () => {
   );
   const dot = declarations(".transcript-rail-dot {");
   assert.match(dot, /width: var\(--transcript-rail-lane\);/);
+  // 车道宽只有一处来源：CSS 变量与 lib 常量必须是同一个数，单边改动会在这里失败。
+  assert.equal(customPixel(region, "transcript-rail-lane"), RAIL_WIDTH_PX);
   assert.doesNotMatch(styles, /calc\(50% - 468px\)/);
   assert.doesNotMatch(styles, /max-width: 899px/);
+});
+
+test("keeps the tip offset on the lane variables", () => {
+  const region = declarations(".chat-transcript-region");
+  assert.match(region, /--transcript-rail-tip-gap: 8px;/);
+  // 提示间距与车道宽都由 CSS 变量算出，组件里不再出现 RAIL_WIDTH_PX + 8 这种手算。
+  assert.match(
+    declarations(".transcript-rail-tip"),
+    /right: calc\(var\(--transcript-rail-lane\) \+ var\(--transcript-rail-tip-gap\)\);/,
+  );
+  assert.match(declarations(".transcript-rail {"), /width: var\(--transcript-rail-lane\);/);
+  assert.doesNotMatch(source, /RAIL_WIDTH_PX/);
 });
 
 test("marks the current dot and nothing else", () => {
