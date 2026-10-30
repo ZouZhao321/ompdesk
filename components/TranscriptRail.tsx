@@ -25,6 +25,12 @@ interface RailTip {
   top: number;
 }
 
+/** 提示框当前对准的元素：滚动后用它重新算位置，而不是丢掉提示。 */
+interface TipAnchor {
+  element: HTMLElement;
+  text: string;
+}
+
 function Chevron({ direction }: { direction: "up" | "down" }) {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -43,6 +49,7 @@ function Chevron({ direction }: { direction: "up" | "down" }) {
 export function TranscriptRail({ dots, currentDotIndex, onJump, t }: Props) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const dotsRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<TipAnchor | null>(null);
   const [tip, setTip] = useState<RailTip | null>(null);
 
   const previousItemIndex = railStepItemIndex(dots, currentDotIndex, -1);
@@ -54,20 +61,51 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, t }: Props) {
     container.scrollTop = railScrollTop(currentDotIndex, dots.length, RAIL_MAX_HEIGHT_PX);
   }, [currentDotIndex, dots.length]);
 
-  // 提示框是固定绘制的浮层，转写或圆点列一滚动就失去锚点，直接收起。
-  useEffect(() => {
-    if (!tip) return;
-    const hide = () => setTip(null);
-    window.addEventListener("scroll", hide, true);
-    return () => window.removeEventListener("scroll", hide, true);
-  }, [tip]);
+  const tipAt = useCallback((element: HTMLElement, text: string): RailTip | null => {
+    const rail = railRef.current;
+    if (!rail) return null;
+    const rect = element.getBoundingClientRect();
+    return { text, top: rect.top - rail.getBoundingClientRect().top + rect.height / 2 };
+  }, []);
 
   const showTip = useCallback((element: HTMLElement, text: string) => {
-    const rail = railRef.current;
-    if (!rail) return;
-    const rect = element.getBoundingClientRect();
-    setTip({ text, top: rect.top - rail.getBoundingClientRect().top + rect.height / 2 });
+    anchorRef.current = { element, text };
+    setTip(tipAt(element, text));
+  }, [tipAt]);
+
+  const hideTip = useCallback(() => {
+    anchorRef.current = null;
+    setTip(null);
   }, []);
+
+  // 提示框是固定绘制的浮层：转写滚动后锚点失效就收起。两种例外都只需重新对准：
+  // 圆点列自己滚动（Tab 到容器外的圆点时浏览器会把它滚进来），以及圆点仍持有
+  // 键盘焦点（回车跳转会滚转写，但焦点圆点没动，提示不该跟着消失）。
+  const tipVisible = tip !== null;
+  useEffect(() => {
+    if (!tipVisible) return;
+    const reposition = (anchor: TipAnchor) => {
+      const next = tipAt(anchor.element, anchor.text);
+      if (!next) return;
+      setTip((previous) => (previous && previous.top === next.top ? previous : next));
+    };
+    const onScroll = (event: Event) => {
+      const anchor = anchorRef.current;
+      if (!anchor) {
+        hideTip();
+        return;
+      }
+      const insideRail = dotsRef.current?.contains(event.target as Node) ?? false;
+      const stillFocused = anchor.element.ownerDocument.activeElement === anchor.element;
+      if (insideRail || stillFocused) {
+        reposition(anchor);
+        return;
+      }
+      hideTip();
+    };
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, [tipVisible, tipAt, hideTip]);
 
   return (
     <div
@@ -100,9 +138,9 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, t }: Props) {
             aria-current={index === currentDotIndex ? "true" : undefined}
             onClick={() => onJump(dot.itemIndex)}
             onMouseEnter={(event) => showTip(event.currentTarget, dot.prompt)}
-            onMouseLeave={() => setTip(null)}
+            onMouseLeave={hideTip}
             onFocus={(event) => showTip(event.currentTarget, dot.prompt)}
-            onBlur={() => setTip(null)}
+            onBlur={hideTip}
           >
             <span className="transcript-rail-dot-mark" aria-hidden="true" />
           </button>
