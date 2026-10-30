@@ -261,13 +261,37 @@ test("skips the loading state once a deferred thought has been fetched", () => {
 });
 
 test("renders an available thought ahead of loading and error markup", () => {
-  // SSR 不跑 effect：正文与错误同时在手的那一帧由 lib/message-display.test.mjs 的
-  // thinkingDisplayState 用例锁住，这里锁组件真的按这个优先级排版。
-  assert.match(source, /const display = thinkingDisplayState\(hasText, loading, error\);/);
-  assert.match(
-    source,
-    /display === "text" \? \(\s*<MarkdownBody className="markdown-thinking-body">\{text \?\? ""\}<\/MarkdownBody>\s*\) : display === "loading" \?/,
+  // 正文与思考错误同时在手的那一帧要跑 effect 才可能出现，SSR 走不到；这里锁真实排版：
+  // 正文在，加载态与错误文案的类名都不在。优先级本身由 lib/message-display.test.mjs
+  // 的 thinkingDisplayState 用例覆盖。
+  transcriptViewState.markLoaded(
+    "session-precedence",
+    "entry-precedence",
+    thinkingPart("entry-precedence", 0),
+    "先想一下再回答",
   );
+
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(MessageView, {
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "gpt-test",
+          content: [{ type: "thinking", thinking: "", deferred: true }],
+        },
+        sessionId: "session-precedence",
+        entryId: "entry-precedence",
+        turnAnchorEntryId: "entry-precedence",
+      }),
+    ),
+  );
+
+  assert.match(html, /先想一下再回答/);
+  assert.doesNotMatch(html, /class="markdown-thinking-status"/);
+  assert.doesNotMatch(html, /class="markdown-thinking-error"/);
 });
 
 test("keeps bash and todo blocks off the expand-state subscription", () => {
