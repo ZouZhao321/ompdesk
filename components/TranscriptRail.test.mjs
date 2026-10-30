@@ -67,6 +67,10 @@ test("derives the rail geometry from the region constants", async () => {
   const laneQueryMaxPx = minRegionPx - 1;
   const region = declarations(".chat-transcript-region");
   assert.ok(region, "missing .chat-transcript-region");
+  // 车道与跳转条绝对定位，定位祖先写在转写区自己的规则里：行盒不再靠 Tailwind 的
+  // relative 兜底，那个类被删掉时跳转条也不会静默改挂到整列上。
+  assert.match(region, /position: relative;/);
+  assert.doesNotMatch(chatWindow, /chat-transcript-region relative/);
   // 同步来源写在容器上：版心与内边距来自 ChatWindow 的行盒常量，车道宽来自 CSS。
   assert.match(region, new RegExp(`--chat-column-width: ${RAIL_COLUMN_WIDTH_PX}px;`));
   assert.match(region, new RegExp(`--chat-column-padding: ${RAIL_COLUMN_PADDING_PX}px;`));
