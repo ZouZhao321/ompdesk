@@ -745,6 +745,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
 
   // 每行共用同一份上下文；流式数据块不重建它，已挂载条目的行组件因此不重绘。
   const activeSessionId = session?.id ?? sessionIdRef.current ?? undefined;
+
+  // 转写同一时刻只显示一个会话：切走之后上一会话的正文与展开状态不再有用，
+  // 在这里丢掉，模块级视图状态不随会话数增长。
+  useEffect(() => {
+    transcriptViewState.retainSession(activeSessionId);
+  }, [activeSessionId]);
+
   const transcriptRowContext = useMemo<TranscriptRowContext>(() => ({
     messages,
     entryIds,
