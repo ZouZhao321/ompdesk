@@ -956,7 +956,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
         </div>
       ) : (
       <>
-      <div className="chat-transcript-region relative flex min-w-0 flex-1 overflow-hidden">
+      <div className="chat-transcript-region flex min-w-0 flex-1 overflow-hidden">
         <div
           style={{
             position: "absolute",

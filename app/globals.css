@@ -1579,6 +1579,9 @@ span.linenumber {
  * - 车道 36px、缝隙与最小留白只在这里声明，跳转条宽度也由这里给出。
  */
 .chat-transcript-region {
+  /* 车道与跳转条都绝对定位：定位祖先由这条规则自己给出，不再隐含依赖行盒上的
+     Tailwind relative——那个类一被删，跳转条就会静默改挂到整列上。 */
+  position: relative;
   --chat-column-width: 820px;
   --chat-column-padding: 16px;
   --transcript-rail-lane: 36px;
