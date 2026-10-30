@@ -787,13 +787,41 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile, sessionId }: { block: 
   return <SafeMarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId}>{block.text}</SafeMarkdownBody>;
 }
 
+/** 思考块在视图状态里的位置：会话、锚点与部位标识。 */
+interface ThinkingViewKey {
+  entryId: string;
+  sessionId: string | undefined;
+  anchorEntryId: string;
+  part: string;
+}
+
+/**
+ * 思考块的视图状态键，读写共用这一条推导。锚点取本轮提问的 entryId，没有就退回
+ * 思考块自己的；只有 entryId 是必需的——还没落盘的会话共用空会话桶，读和写因此
+ * 落在同一处。
+ */
+function thinkingViewKey(
+  sessionId: string | undefined,
+  entryId: string | undefined,
+  turnAnchorEntryId: string | undefined,
+  blockIndex: number,
+): ThinkingViewKey | null {
+  if (!entryId) return null;
+  return {
+    entryId,
+    sessionId,
+    anchorEntryId: turnAnchorEntryId ?? entryId,
+    part: thinkingPart(entryId, blockIndex),
+  };
+}
+
 /**
  * 这条思考块的延迟内容。取回过的正文与「已加载」标记一起存在视图状态里：条目
  * 滚出视野被虚拟列表卸载后重建，首帧直接渲染正文，既不再请求也不回落占位文案。
  */
-function loadedThinkingContent(sessionId: string | undefined, entryId: string | undefined, turnAnchorEntryId: string | undefined, blockIndex: number): string | null {
-  if (!sessionId || !entryId) return null;
-  return transcriptViewState.loadedContent(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
+function readThinkingContent(key: ThinkingViewKey | null): string | null {
+  if (key === null) return null;
+  return transcriptViewState.loadedContent(key.sessionId, key.anchorEntryId, key.part);
 }
 
 function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId, blockIndex }: {
@@ -805,11 +833,12 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
   blockIndex: number;
 }) {
   const { t } = useI18n();
+  const viewKey = thinkingViewKey(sessionId, entryId, turnAnchorEntryId, blockIndex);
   const [content, setContent] = useState<string | null>(() => (
-    block.deferred ? loadedThinkingContent(sessionId, entryId, turnAnchorEntryId, blockIndex) : null
+    block.deferred ? readThinkingContent(viewKey) : null
   ));
   const [loading, setLoading] = useState(() => (
-    block.deferred === true && loadedThinkingContent(sessionId, entryId, turnAnchorEntryId, blockIndex) === null
+    block.deferred === true && readThinkingContent(viewKey) === null
   ));
   const [error, setError] = useState<string | null>(null);
 
@@ -822,7 +851,9 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
     }
 
     let cancelled = false;
-    if (!sessionId || !entryId) {
+    // 取回正文需要会话 id；视图状态的读写则只看 entryId，守卫由 thinkingViewKey 统一。
+    const key = thinkingViewKey(sessionId, entryId, turnAnchorEntryId, blockIndex);
+    if (!sessionId || key === null) {
       setLoading(false);
       setError(t("i18n.thinkingUnavailable"));
       return () => {
@@ -830,7 +861,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
       };
     }
 
-    const stored = transcriptViewState.loadedContent(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex));
+    const stored = readThinkingContent(key);
     if (stored !== null) {
       // 正文已经在手，重建后不必再请求。
       setContent(stored);
@@ -843,12 +874,12 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
 
     setLoading(true);
     setError(null);
-    void loadThinkingContent(sessionId, entryId, blockIndex)
+    void loadThinkingContent(sessionId, key.entryId, blockIndex)
       .then((value) => {
         if (cancelled) return;
         setContent(value);
         // 正文与标记一起记下：条目被卸载后重建不再回到加载态。
-        transcriptViewState.markLoaded(sessionId, turnAnchorEntryId ?? entryId, thinkingPart(entryId, blockIndex), value);
+        transcriptViewState.markLoaded(key.sessionId, key.anchorEntryId, key.part, value);
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
