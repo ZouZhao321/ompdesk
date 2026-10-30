@@ -29,6 +29,19 @@ interface TipAnchor {
   text: string;
 }
 
+/**
+ * 提示框的锚点是否还立着：圆点被卸载、被圆点列的滚动裁到列外，或整条跳转条
+ * 被 CSS 收起（量到零尺寸）都让提示无处可对。
+ */
+function isTipAnchorVisible(element: HTMLElement, column: HTMLElement | null): boolean {
+  if (!element.isConnected) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return false;
+  if (!column) return true;
+  const columnRect = column.getBoundingClientRect();
+  return rect.bottom > columnRect.top && rect.top < columnRect.bottom;
+}
+
 function Chevron({ direction }: { direction: "up" | "down" }) {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -114,31 +127,26 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
     if (tipAnchor !== null) positionTip();
   }, [tipAnchor, positionTip]);
 
-  // 提示框是固定绘制的浮层：转写滚动后锚点失效就收起。两种例外都只需重新对准：
-  // 圆点列自己滚动（Tab 到容器外的圆点时浏览器会把它滚进来），以及圆点仍持有
-  // 键盘焦点（回车跳转会滚转写，但焦点圆点没动，提示不该跟着消失）。
+  // 提示框是固定绘制的浮层，位置由锚点重算：只要圆点还挂载着、还在圆点列的可见区里，
+  // 任何滚动都只重新对准。转写区的滚动搬不动圆点，跟随开着时每个流式块都会滚一次，
+  // 在那条路上收起提示等于让悬停几乎读不到内容。圆点被卸载、被圆点列裁掉，或整条
+  // 跳转条被 CSS 收起时才失去锚点。
   const tipVisible = tipAnchor !== null;
   useEffect(() => {
     if (!tipVisible) return;
     let frame = 0;
-    const onScroll = (event: Event) => {
+    const onScroll = () => {
       const anchor = anchorRef.current;
-      if (!anchor) {
+      if (!anchor || !isTipAnchorVisible(anchor.element, dotsRef.current)) {
         hideTip();
         return;
       }
-      const insideRail = dotsRef.current?.contains(event.target as Node) ?? false;
-      const stillFocused = anchor.element.ownerDocument.activeElement === anchor.element;
-      if (insideRail || stillFocused) {
-        // 一帧只对一次：连续的滚动事件合并到同一个 rAF 里。
-        if (frame !== 0) return;
-        frame = requestAnimationFrame(() => {
-          frame = 0;
-          positionTip();
-        });
-        return;
-      }
-      hideTip();
+      // 一帧只对一次：连续的滚动事件合并到同一个 rAF 里。
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        positionTip();
+      });
     };
     window.addEventListener("scroll", onScroll, true);
     return () => {
