@@ -1,6 +1,6 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
-import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { Fragment, createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type {
   AgentMessage,
   BashExecutionMessage,
@@ -17,7 +17,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { buildRewindEntries } from "@/lib/rewind";
 import type { DisplayOptions } from "@/lib/message-display";
 import type { WrittenFile } from "@/lib/turn-written-files";
-import { buildTranscriptItems, type TranscriptItem } from "@/lib/transcript-items";
+import { buildTranscriptItems } from "@/lib/transcript-items";
 import {
   buildTranscriptRailDots,
   railCurrentDotIndex,
@@ -25,7 +25,12 @@ import {
   shouldShowTranscriptRail,
   type RailRenderedItem,
 } from "@/lib/transcript-rail";
-import { buildVirtualTranscriptModel } from "@/lib/transcript-virtual-list";
+import { buildVirtualTranscriptModel, transcriptFollowOutput } from "@/lib/transcript-virtual-list";
+import {
+  isTranscriptLiveTailItem,
+  withTranscriptLiveTail,
+  type TranscriptListItem,
+} from "@/lib/transcript-live-tail";
 import { PROCESS_DETAILS_PART, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { MessageView } from "./MessageView";
 import { TranscriptRail } from "./TranscriptRail";
@@ -138,7 +143,7 @@ function TranscriptListSlot({ ref: measurementRef, "data-testid": testId, style,
   return <div data-testid={testId} style={style} ref={attach}>{children}</div>;
 }
 
-const TRANSCRIPT_SLOTS: Components<TranscriptItem, TranscriptSlotsContext> = {
+const TRANSCRIPT_SLOTS: Components<TranscriptListItem, TranscriptSlotsContext> = {
   Header: TranscriptHeaderSlot,
   Footer: TranscriptFooterSlot,
   List: TranscriptListSlot,
@@ -203,6 +208,147 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = fa
   );
 }
 
+/**
+ * 条目渲染要用的一切，流式消息本身除外。
+ *
+ * 这个对象只在会话、消息或设置变化时重建；流式数据块到达时它保持同一引用，
+ * 已挂载条目的行组件因此整块跳过重绘，只有末尾的合成项跟着消息走。
+ */
+interface TranscriptRowContext {
+  messages: AgentMessage[];
+  entryIds: readonly string[];
+  toolResults: Map<string, ToolResultMessage>;
+  modelNames: Record<string, string>;
+  cwd?: string;
+  /** 用于按会话分桶展开状态。 */
+  sessionId?: string;
+  sessionBusy: boolean;
+  isNew: boolean;
+  forkingEntryId: string | null;
+  isStreaming: boolean;
+  onOpenFile?: (filePath: string) => void;
+  onFork: (entryId: string) => void;
+  onNavigate: (entryId: string) => void;
+  onEditContent: (message: UserMessage) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}
+
+interface RowMessageOptions {
+  keyPrefix?: string;
+  messageOverride?: AgentMessage;
+  showTimestamp?: boolean;
+  writtenFiles?: WrittenFile[];
+  turnAnchorEntryId?: string;
+}
+
+function previousTimestampOf(messages: AgentMessage[], idx: number): number | undefined {
+  if (idx <= 0) return undefined;
+  const previous = messages[idx - 1];
+  return previous && "timestamp" in previous && typeof previous.timestamp === "number"
+    ? previous.timestamp
+    : undefined;
+}
+
+// 视图状态的锚点：一轮里所有部件都挂在提问那条消息的 entryId 上，
+// 这样过程组与工具块的展开状态不随分组结果变化；独立渲染的消息退化为自身 entryId。
+function renderRowMessage(row: TranscriptRowContext, idx: number, options: RowMessageOptions = {}): ReactNode {
+  const msg = options.messageOverride ?? row.messages[idx];
+  const prevAssistantEntryId =
+    msg.role === "user" && idx > 0 && row.messages[idx - 1].role === "assistant"
+      ? row.entryIds[idx - 1]
+      : undefined;
+  const keyPrefix = options.keyPrefix ?? "message";
+  let showTimestamp = false;
+  if (msg.role === "assistant") {
+    showTimestamp = true;
+    for (let j = idx + 1; j < row.messages.length; j++) {
+      const r = row.messages[j].role;
+      if (r === "user") break;
+      if (r === "assistant") { showTimestamp = false; break; }
+    }
+    // Hide on the currently-streaming tail (the streaming bubble owns the live timestamp)
+    if (showTimestamp && row.isStreaming && idx === row.messages.length - 1) {
+      showTimestamp = false;
+    }
+  }
+  if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
+  return (
+    <MessageView
+      key={`${keyPrefix}-view-${idx}`}
+      message={msg}
+      toolResults={row.toolResults}
+      modelNames={row.modelNames}
+      cwd={row.cwd}
+      onOpenFile={row.onOpenFile}
+      entryId={row.entryIds[idx]}
+      onFork={row.sessionBusy || row.isNew || (idx === 0 && msg.role === "user") ? undefined : row.onFork}
+      forking={row.forkingEntryId === row.entryIds[idx]}
+      onNavigate={row.sessionBusy ? undefined : row.onNavigate}
+      prevAssistantEntryId={row.sessionBusy ? undefined : prevAssistantEntryId}
+      onEditContent={row.onEditContent}
+      showTimestamp={showTimestamp}
+      prevTimestamp={previousTimestampOf(row.messages, idx)}
+      sessionId={row.sessionId}
+      turnAnchorEntryId={options.turnAnchorEntryId ?? row.entryIds[idx]}
+      writtenFiles={options.writtenFiles}
+    />
+  );
+}
+
+// 一个列表项就是一轮：提问、过程组、正式回答都挂在这一个项里。
+function renderTranscriptItem(row: TranscriptRowContext, item: TranscriptListItem): ReactNode {
+  if (isTranscriptLiveTailItem(item)) {
+    // 流式消息是边到边补全的 Partial，MessageView 按 AgentMessage 的字段逐个读取。
+    const streamingMessage = item.message as AgentMessage;
+    return (
+      <MessageView
+        message={streamingMessage}
+        isStreaming
+        modelNames={row.modelNames}
+        cwd={row.cwd}
+        onOpenFile={row.onOpenFile}
+      />
+    );
+  }
+
+  if (item.isStandalone) {
+    return item.messageIndices.map((messageIndex) => renderRowMessage(row, messageIndex, { turnAnchorEntryId: item.key }));
+  }
+
+  const turnAnchorEntryId = item.key;
+  return (
+    <>
+      {renderRowMessage(row, item.anchorIndex, { turnAnchorEntryId })}
+      {item.processMessageCount > 0 && (
+        <div key={`process-group-${item.anchorIndex}-${item.finalAssistantIndex}`}>
+          <ProcessDetailsGroup
+            messageCount={item.processMessageCount}
+            defaultExpanded={!item.finalAnswerMessage}
+            sessionId={row.sessionId}
+            anchorEntryId={turnAnchorEntryId}
+            t={row.t}
+            toolCallCount={item.toolCallCount}
+          >
+            {item.visibleProcessIndices.map((processIdx) => renderRowMessage(row, processIdx, { keyPrefix: "process", turnAnchorEntryId }))}
+            {item.finalProcessMessage && renderRowMessage(row, item.finalAssistantIndex, { keyPrefix: "process-final", messageOverride: item.finalProcessMessage, showTimestamp: false, turnAnchorEntryId })}
+          </ProcessDetailsGroup>
+        </div>
+      )}
+      {item.finalAnswerMessage
+        && renderRowMessage(row, item.finalAssistantIndex, { messageOverride: item.finalAnswerMessage, writtenFiles: item.writtenFiles, turnAnchorEntryId })}
+      {item.tailIndices.map((messageIndex) => renderRowMessage(row, messageIndex, { turnAnchorEntryId }))}
+    </>
+  );
+}
+
+/**
+ * 列表的一行。条目对象在流式期间保持原引用，上下文同理，所以只有末尾的合成项
+ * 会随数据块重绘。
+ */
+const TranscriptRow = memo(function TranscriptRow({ item, row }: { item: TranscriptListItem; row: TranscriptRowContext }) {
+  return <div style={TRANSCRIPT_ROW_STYLE}>{renderTranscriptItem(row, item)}</div>;
+});
+
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onSubagentsChange, onOpenFile, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t } = useI18n();
 
@@ -227,6 +373,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     chatInputRef?.current?.replaceMessage(message);
   }, [chatInputRef]);
 
+  // 视图跟随交给列表：hook 只决定什么时候该回到底部，定位由列表执行。
+  const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+  const scrollTranscriptToEnd = useCallback((behavior: ScrollBehavior) => {
+    // 列表只认 "auto" 与 "smooth"；"auto" 就是无动画的直接定位。
+    virtuosoRef.current?.scrollToIndex({
+      index: "LAST",
+      align: "end",
+      behavior: behavior === "smooth" ? "smooth" : "auto",
+    });
+  }, []);
+
   const {
     loading, error, messages, entryIds, streamState,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, modelRoles, toolPreset, thinkingLevel,
@@ -241,7 +398,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     isNew,
     autoFollowPaused, resumeAutoFollow,
     goalStatus,
-    sessionIdRef, messagesEndRef, scrollContainerRef,
+    sessionIdRef, scrollContainerRef,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange, handleRoleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
@@ -250,6 +407,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSessionStatsPanelOpen,
+    scrollTranscriptToEnd,
   });
   const sessionBusy = agentRunning || bashRunning;
   const rewindEntries = useMemo(
@@ -364,7 +522,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
 
   // 分组判定只在这里发生一次；渲染循环按条目顺序输出，不再自己判断轮次。
-  const transcriptItems = useMemo(
+  const groupedTranscriptItems = useMemo(
     () => buildTranscriptItems(messages, entryIds, {
       displayOptions,
       isStreaming: streamState.isStreaming,
@@ -375,19 +533,28 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     [messages, entryIds, displayOptions, streamState.isStreaming, sessionBusy, toolResultsMap, messageCwd],
   );
 
+  // 流式消息是列表的最后一项：它跟着数据块更新，前面的条目保持原对象。
+  const transcriptItems = useMemo(
+    () => withTranscriptLiveTail(
+      groupedTranscriptItems,
+      streamState.isStreaming ? streamState.streamingMessage : null,
+    ),
+    [groupedTranscriptItems, streamState.isStreaming, streamState.streamingMessage],
+  );
+
   // 虚拟列表只消费条目数组：键与首屏定位由条目算一次，分组不参与。
   const virtualTranscript = useMemo(() => buildVirtualTranscriptModel(transcriptItems), [transcriptItems]);
 
-  // 跳转条与列表共用同一份分组结果，只为锚点轮取提问原文，不重新扫描消息。
+  // 跳转条与列表共用同一份分组结果，只为锚点轮取提问原文，不重新扫描消息；
+  // 流式合成项不是一轮，圆点数只随正式轮次变化。
   const railDots = useMemo(
-    () => buildTranscriptRailDots(transcriptItems, (item) => {
+    () => buildTranscriptRailDots(groupedTranscriptItems, (item) => {
       const anchor = messages[item.anchorIndex];
       return anchor ? getUserInputText(anchor) : null;
     }),
-    [transcriptItems, messages],
+    [groupedTranscriptItems, messages],
   );
 
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const transcriptListRef = useRef<HTMLDivElement | null>(null);
   const railRenderedItemsRef = useRef<RailRenderedItem[]>([]);
   const railScrollCleanupRef = useRef<(() => void) | null>(null);
@@ -404,7 +571,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     setTopItemIndex((current) => (current === next ? current : next));
   }, [scrollContainerRef]);
 
-  const handleTranscriptItemsRendered = useCallback((items: ListItem<TranscriptItem>[]) => {
+  const handleTranscriptItemsRendered = useCallback((items: ListItem<TranscriptListItem>[]) => {
     railRenderedItemsRef.current = items.map(({ index, offset, size }) => ({ index, offset, size }));
     syncRailTopItem();
   }, [syncRailTopItem]);
@@ -520,83 +687,33 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   const aboveEditorWidgets = extensionWidgets.filter((widget) => widget.placement !== "belowEditor");
   const belowEditorWidgets = extensionWidgets.filter((widget) => widget.placement === "belowEditor");
 
-  // 视图状态的锚点：一轮里所有部件都挂在提问那条消息的 entryId 上，
-  // 这样过程组与工具块的展开状态不随分组结果变化；独立渲染的消息退化为自身 entryId。
-  const renderMessage = (idx: number, options: { keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; turnAnchorEntryId?: string } = {}): ReactNode => {
-    const msg = options.messageOverride ?? messages[idx];
-    const prevAssistantEntryId =
-      msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
-        ? entryIds[idx - 1]
-        : undefined;
-    const keyPrefix = options.keyPrefix ?? "message";
-    let showTimestamp = false;
-    if (msg.role === "assistant") {
-      showTimestamp = true;
-      for (let j = idx + 1; j < messages.length; j++) {
-        const r = messages[j].role;
-        if (r === "user") break;
-        if (r === "assistant") { showTimestamp = false; break; }
-      }
-      // Hide on the currently-streaming tail (the streaming bubble owns the live timestamp)
-      if (showTimestamp && streamState.isStreaming && idx === messages.length - 1) {
-        showTimestamp = false;
-      }
-    }
-    if (options.showTimestamp !== undefined) showTimestamp = options.showTimestamp;
-    return (
-      <MessageView
-        key={`${keyPrefix}-view-${idx}`}
-        message={msg}
-        toolResults={toolResultsMap}
-        modelNames={modelNames}
-        cwd={messageCwd}
-        onOpenFile={onOpenFile}
-        entryId={entryIds[idx]}
-        onFork={sessionBusy || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
-        forking={forkingEntryId === entryIds[idx]}
-        onNavigate={sessionBusy ? undefined : handleNavigate}
-        prevAssistantEntryId={sessionBusy ? undefined : prevAssistantEntryId}
-        onEditContent={handleEditContent}
-        showTimestamp={showTimestamp}
-        prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
-        sessionId={session?.id ?? sessionIdRef.current ?? undefined}
-        turnAnchorEntryId={options.turnAnchorEntryId ?? entryIds[idx]}
-        writtenFiles={options.writtenFiles}
-      />
-    );
-  };
+  // 每行共用同一份上下文；流式数据块不重建它，已挂载条目的行组件因此不重绘。
+  const activeSessionId = session?.id ?? sessionIdRef.current ?? undefined;
+  const transcriptRowContext = useMemo<TranscriptRowContext>(() => ({
+    messages,
+    entryIds,
+    toolResults: toolResultsMap,
+    modelNames,
+    cwd: messageCwd,
+    sessionId: activeSessionId,
+    sessionBusy,
+    isNew,
+    forkingEntryId,
+    isStreaming: streamState.isStreaming,
+    onOpenFile,
+    onFork: handleFork,
+    onNavigate: handleNavigate,
+    onEditContent: handleEditContent,
+    t,
+  }), [
+    messages, entryIds, toolResultsMap, modelNames, messageCwd, activeSessionId, sessionBusy, isNew,
+    forkingEntryId, streamState.isStreaming, onOpenFile, handleFork, handleNavigate, handleEditContent, t,
+  ]);
 
-  // 一个列表项就是一轮：提问、过程组、正式回答都挂在这一个项里。
-  const renderTranscriptItem = (item: TranscriptItem): ReactNode => {
-    if (item.isStandalone) {
-      return item.messageIndices.map((messageIndex) => renderMessage(messageIndex, { turnAnchorEntryId: item.key }));
-    }
-
-    const turnAnchorEntryId = item.key;
-    return (
-      <>
-        {renderMessage(item.anchorIndex, { turnAnchorEntryId })}
-        {item.processMessageCount > 0 && (
-          <div key={`process-group-${item.anchorIndex}-${item.finalAssistantIndex}`}>
-            <ProcessDetailsGroup
-              messageCount={item.processMessageCount}
-              defaultExpanded={!item.finalAnswerMessage}
-              sessionId={session?.id ?? sessionIdRef.current ?? undefined}
-              anchorEntryId={turnAnchorEntryId}
-              t={t}
-              toolCallCount={item.toolCallCount}
-            >
-              {item.visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { keyPrefix: "process", turnAnchorEntryId }))}
-              {item.finalProcessMessage && renderMessage(item.finalAssistantIndex, { keyPrefix: "process-final", messageOverride: item.finalProcessMessage, showTimestamp: false, turnAnchorEntryId })}
-            </ProcessDetailsGroup>
-          </div>
-        )}
-        {item.finalAnswerMessage
-          && renderMessage(item.finalAssistantIndex, { messageOverride: item.finalAnswerMessage, writtenFiles: item.writtenFiles, turnAnchorEntryId })}
-        {item.tailIndices.map((messageIndex) => renderMessage(messageIndex, { turnAnchorEntryId }))}
-      </>
-    );
-  };
+  const renderTranscriptRow = useCallback(
+    (_index: number, item: TranscriptListItem) => <TranscriptRow item={item} row={transcriptRowContext} />,
+    [transcriptRowContext],
+  );
 
   // 列表之外的部件走页首/页尾插槽，仍在同一条滚动流里。
   const transcriptHeader = (
@@ -606,10 +723,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   );
   const transcriptFooter = (
     <div style={TRANSCRIPT_ROW_STYLE}>
-      {streamState.isStreaming && streamState.streamingMessage && (
-        <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} />
-      )}
-
       {agentRunning && !streamState.streamingMessage && agentPhase && (
         <div className="py-2 text-[13px] text-text-muted">
           <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t)}</span>
@@ -633,8 +746,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
           sessionId={session?.id ?? sessionIdRef.current ?? undefined}
         />
       )}
-
-      <div ref={messagesEndRef} />
     </div>
   );
 
@@ -767,7 +878,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
           </div>
         </div>
         <TranscriptListRefContext.Provider value={transcriptListRef}>
-          <Virtuoso<TranscriptItem, TranscriptSlotsContext>
+          <Virtuoso<TranscriptListItem, TranscriptSlotsContext>
             ref={virtuosoRef}
             data={transcriptItems}
             computeItemKey={computeTranscriptItemKey}
@@ -778,10 +889,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             itemsRendered={handleTranscriptItemsRendered}
             isScrolling={handleTranscriptScrollingChange}
             increaseViewportBy={TRANSCRIPT_VIEWPORT_BUFFER}
+            followOutput={transcriptFollowOutput(autoFollowPaused)}
             className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none]"
-            itemContent={(_, item) => (
-              <div style={TRANSCRIPT_ROW_STYLE}>{renderTranscriptItem(item)}</div>
-            )}
+            itemContent={renderTranscriptRow}
           />
         </TranscriptListRefContext.Provider>
         {shouldShowTranscriptRail(railDots.length) && (
