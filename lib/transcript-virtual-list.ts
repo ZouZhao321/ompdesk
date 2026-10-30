@@ -18,18 +18,26 @@ export interface TranscriptListItemKey {
  *
  * 键取一轮的锚点 entryId，条目滚出视野被卸载后重建仍是同一条；旧会话缺 id 时
  * 分组模块退回 `index-N`，万一仍撞车这里再补一次下标，列表不接受重复键。
+ *
+ * `liveTailKey` 是流式合成项固定追加在末尾的键。它的正文每个数据块都在变，键却
+ * 不变，因此输入只需分组结果：流式期间键数组与首屏下标保持同一份。
  */
-export function buildVirtualTranscriptModel(items: readonly TranscriptListItemKey[]): VirtualTranscriptModel {
+export function buildVirtualTranscriptModel(
+  items: readonly TranscriptListItemKey[],
+  liveTailKey: string | null = null,
+): VirtualTranscriptModel {
+  const bases = items.map((item, index) => item.key || `index-${index}`);
+  if (liveTailKey !== null) bases.push(liveTailKey);
   const used = new Set<string>();
-  const itemKeys = items.map((item, index) => {
-    const base = item.key || `index-${index}`;
+  const itemKeys: string[] = [];
+  for (const base of bases) {
     let key = base;
     for (let suffix = 1; used.has(key); suffix += 1) key = `${base}#${suffix}`;
     used.add(key);
-    return key;
-  });
+    itemKeys.push(key);
+  }
   return {
-    initialTopMostItemIndex: { index: Math.max(items.length - 1, 0), align: "end" },
+    initialTopMostItemIndex: { index: Math.max(itemKeys.length - 1, 0), align: "end" },
     itemKeys,
   };
 }

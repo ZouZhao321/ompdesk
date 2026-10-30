@@ -551,8 +551,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     [groupedTranscriptItems, streamState.isStreaming, streamState.streamingMessage],
   );
 
-  // 虚拟列表只消费条目数组：键与首屏定位由条目算一次，分组不参与。
-  const virtualTranscript = useMemo(() => buildVirtualTranscriptModel(transcriptItems), [transcriptItems]);
+  // 键与首屏定位只由分组结果决定：流式合成项的键固定追加。流式数据块因此不重建
+  // 键数组，列表每块拿到的 itemKeys 与 computeItemKey 都是同一份引用。
+  const virtualTranscript = useMemo(
+    () => buildVirtualTranscriptModel(
+      groupedTranscriptItems,
+      streamState.isStreaming ? TRANSCRIPT_LIVE_TAIL_KEY : null,
+    ),
+    [groupedTranscriptItems, streamState.isStreaming],
+  );
 
   // 流式合成项不属于分组，锚点取当前最后一轮的键：流结束后定稿的正是这一轮，
   // 展开状态因此落在同一个桶里。还没有任何一轮时退回合成项自己的键。
