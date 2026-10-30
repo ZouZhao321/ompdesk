@@ -57,6 +57,9 @@ test("draws the conversation column from the rail geometry constants", () => {
   assert.match(source, /const CHAT_COLUMN_PADDING = RAIL_COLUMN_PADDING_PX;/);
   assert.match(source, /maxWidth: RAIL_COLUMN_WIDTH_PX \+ CHAT_COLUMN_PADDING \* 2,/);
   assert.doesNotMatch(source, /maxWidth: 820\b/);
+  // 空会话的占位块用同一个版心，外层 px-4 已经是那 16px 内边距，这里不再加一份。
+  assert.match(source, /<div className="w-full" style=\{\{ maxWidth: RAIL_COLUMN_WIDTH_PX \}\}>/);
+  assert.doesNotMatch(source, /max-w-\[820px\]/);
 });
 
 test("parks the streaming bubble in the same bucket as the finished turn", () => {

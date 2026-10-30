@@ -911,7 +911,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
 
       {isEmptyNew ? (
         <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8">
-          <div className="w-full max-w-[820px]">
+          <div className="w-full" style={{ maxWidth: RAIL_COLUMN_WIDTH_PX }}>
             <div
               className="mb-3"
               style={{
