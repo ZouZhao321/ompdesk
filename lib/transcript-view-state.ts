@@ -163,9 +163,11 @@ export type DeferredContentPlan =
   | { kind: "unavailable" };
 
 /**
- * 延迟正文的行动计划。视图状态里已有正文就先渲染它——正文按 entryId 定位，与会话
- * id 无关，所以会话还没落盘也不会把正文换成错误文案；只有确实没有正文、又拿不到
- * 请求所需的会话 id 或 entryId 时才算取不回来。
+ * 延迟正文的行动计划。视图状态里已有正文就先渲染它，这时不再要求会话 id：正文按
+ * 「会话 id + 本轮锚点 entryId + 部位」保存，缺会话 id 的新会话落在共用的空桶里，
+ * 读回正文不必知道会话 id，会话还没落盘也不会把正文换成错误文案。只有确实没有正文、
+ * 又拿不到请求所需的会话 id 或 entryId 时才算取不回来。空桶只服务还没落盘的会话：
+ * 切到有 id 的会话时它和其它会话的桶一起被清理，那之后再重建条目会重新请求。
  */
 export function planDeferredContent(
   stored: string | null,
