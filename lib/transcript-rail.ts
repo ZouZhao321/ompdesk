@@ -1,54 +1,15 @@
 import type { TranscriptItem } from "./transcript-items";
 
-/** 跳转条车道的宽度（px）：贴在对话列右外侧。 */
-export const RAIL_WIDTH_PX = 36;
-/** 对话版心宽度（px）：与 components/ChatWindow.tsx 的行盒同源。 */
+/** 对话版心宽度（px）：行盒宽度由它给出，app/globals.css 的 --chat-column-width 与它同值。 */
 export const RAIL_COLUMN_WIDTH_PX = 820;
-/** 版心内边距（px）：行盒两侧各留一份，与 ChatWindow 的 CHAT_COLUMN_PADDING 同源。 */
+/** 版心内边距（px）：行盒两侧各留一份，app/globals.css 的 --chat-column-padding 与它同值。 */
 export const RAIL_COLUMN_PADDING_PX = 16;
-/** 跳转条左缘与对话列右边缘之间的缝隙（px）。 */
-export const RAIL_COLUMN_GAP_PX = 6;
-/** 跳转条右缘与转写区右边缘之间的最小留白（px）。 */
-export const RAIL_EDGE_MARGIN_PX = 4;
-/** 跳转条左缘相对转写区中线的偏移（px）：版心一半 + 内边距 + 缝隙。 */
-export const RAIL_INSET_PX = RAIL_COLUMN_WIDTH_PX / 2 + RAIL_COLUMN_PADDING_PX + RAIL_COLUMN_GAP_PX;
-/**
- * 放得下整条跳转区的最小转写区宽度（px）：中线到跳转条左缘的偏移、车道与右边缘
- * 留白在两侧对称出现，右侧那半边正好是这三段之和。
- */
-export const RAIL_MIN_REGION_PX = 2 * (RAIL_INSET_PX + RAIL_WIDTH_PX + RAIL_EDGE_MARGIN_PX);
-/**
- * 车道容器隐藏的容器查询上限（px）：宽度不超过它即收起。容器查询的条件里写不了
- * calc，只能写字面量，所以这里取「最小宽度减一」——转写区宽度恰好等于最小宽度时
- * 仍然放得下。
- */
-export const RAIL_LANE_QUERY_MAX_PX = RAIL_MIN_REGION_PX - 1;
 /** 相邻圆点的中心距（px）：圆点 6px、间隙 8px，圆点列表按它换算滚动位置。 */
 export const RAIL_ROW_PX = 14;
 /** 圆点容器的最高高度（px），超出后容器内部滚动。 */
 export const RAIL_MAX_HEIGHT_PX = 180;
 /** 悬停提示里保留的提问字符数，超出由两行省略收起。 */
-export const RAIL_PROMPT_CHARS = 160;
-
-/** 跳转条在转写区里的落位：左右缘相对中线的偏移（向右为正），以及是否还放得下。 */
-export interface TranscriptRailPlacement {
-  visible: boolean;
-  left: number;
-  right: number;
-}
-
-/**
- * 按转写区宽度算跳转条的落位，与 app/globals.css 的 .transcript-rail 同一套算式：
- * 放不下整条车道就整条隐藏；放得下时左缘钉在对话列右侧的缝隙上，右缘与转写区
- * 右边缘至少留 RAIL_EDGE_MARGIN_PX。
- */
-export function placeTranscriptRail(regionWidth: number): TranscriptRailPlacement {
-  const center = regionWidth / 2;
-  const visible = regionWidth > RAIL_LANE_QUERY_MAX_PX;
-  // 跳转条右缘相对转写区右边缘的位置：中线减去左缘偏移与车道宽，车道刚够时正好等于最小留白。
-  const edge = Math.max(RAIL_EDGE_MARGIN_PX, center - RAIL_INSET_PX - RAIL_WIDTH_PX);
-  return { visible, left: center - edge - RAIL_WIDTH_PX, right: center - edge };
-}
+const RAIL_PROMPT_CHARS = 160;
 
 /** 跳转条上的一个圆点。 */
 export interface TranscriptRailDot {

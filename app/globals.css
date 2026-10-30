@@ -1574,8 +1574,9 @@ span.linenumber {
 
 /*
  * 转写区的宽度常数集中在这里声明，下面所有位置与阈值都由它们派生：
- * - 版心 820px 与内边距 16px 与 components/ChatWindow.tsx 的 820 / CHAT_COLUMN_PADDING 同源；
- * - 车道 36px 与 lib/transcript-rail.ts 的 RAIL_WIDTH_PX 同源，跳转条宽度也由这里给出。
+ * - 版心 820px 与内边距 16px 由 lib/transcript-rail.ts 的 RAIL_COLUMN_WIDTH_PX /
+ *   RAIL_COLUMN_PADDING_PX 给出，components/ChatWindow.tsx 的行盒读同一组常量；
+ * - 车道 36px、缝隙与最小留白只在这里声明，跳转条宽度也由这里给出。
  */
 .chat-transcript-region {
   --chat-column-width: 820px;
