@@ -931,42 +931,19 @@ function ToolCallBlock({ block, result, duration, sessionId, turnAnchorEntryId }
     normalizedToolName.endsWith("_edit") ||
     normalizedToolName.includes("str_replace") ||
     normalizedToolName.includes("replace_editor");
-  // 编辑类工具调用默认展开；展开状态记在视图状态里，条目卸载重建后保留。
-  const part = toolCallPart(block.toolCallId);
-  const anchorEntryId = turnAnchorEntryId ?? block.toolCallId;
-  const expanded = useTranscriptExpanded(sessionId, anchorEntryId, part, isEditTool);
   const isTodoTool = isTodoToolCall(block.toolName);
   const isBashTool = normalizedToolName === "bash" || normalizedToolName.startsWith("bash ") || normalizedToolName.endsWith(".bash") || normalizedToolName.endsWith("_bash");
-  // 输入序列化与 diff 统计是整段转写里最贵的计算，按引用收住：条目因展开状态、
-  // 延迟正文或其他无关状态重渲染时不再重算。
-  const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
-  const resultDiff = useMemo(
-    () => (result && !result.isError ? getResultDiff(result) : null),
-    [result],
-  );
-  const diffStats = useMemo(() => {
-    if (!resultDiff) return null;
-    let added = 0;
-    let removed = 0;
-    for (const line of resultDiff.text.split(/\r?\n/)) {
-      if (line.startsWith("+") && !line.startsWith("+++")) added += 1;
-      if (line.startsWith("-") && !line.startsWith("---")) removed += 1;
-    }
-    return { added, removed };
-  }, [resultDiff]);
-  const todoPhases = useMemo(
-    () => (isTodoToolCall(block.toolName) ? getTodoPreviewPhases(block, result) : null),
-    [block, result],
-  );
+  const isError = result?.isError ?? false;
   const resultText = useMemo(
     () => (result
       ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
       : null),
     [result],
   );
-  const headerPreview = useMemo(() => getStructuredToolPreview(block, todoPhases), [block, todoPhases]);
-  const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
-  const isError = result?.isError ?? false;
+  const todoPhases = useMemo(
+    () => (isTodoTool ? getTodoPreviewPhases(block, result) : null),
+    [isTodoTool, block, result],
+  );
 
   if (isBashTool) {
     return (
@@ -985,7 +962,59 @@ function ToolCallBlock({ block, result, duration, sessionId, turnAnchorEntryId }
     return <TodoChecklistPreview phases={todoPhases} />;
   }
 
-  const hasStructuredPreview = Boolean(todoPhases || resultDiff);
+  // 折叠卡片自己订展开状态：bash 与待办在上面两条提前返回里已经走掉，不必因为
+  // 视图仓库里别处的展开重渲染。
+  return (
+    <ToolCallCard
+      block={block}
+      result={result}
+      resultText={resultText}
+      duration={duration}
+      sessionId={sessionId}
+      anchorEntryId={turnAnchorEntryId ?? block.toolCallId}
+      part={toolCallPart(block.toolCallId)}
+      defaultExpanded={isEditTool}
+    />
+  );
+}
+
+/**
+ * 可折叠的工具调用卡片。展开状态的订阅与最贵的输入序列化、diff 统计都在这里，
+ * 只有真正画出卡片的工具调用才付这份开销。
+ */
+function ToolCallCard({ block, result, resultText, duration, sessionId, anchorEntryId, part, defaultExpanded }: {
+  block: ToolCallContent;
+  result?: ToolResultMessage;
+  resultText: string | null;
+  duration?: number;
+  sessionId?: string;
+  anchorEntryId: string;
+  part: string;
+  defaultExpanded: boolean;
+}) {
+  // 展开状态记在视图状态里，条目卸载重建后回到用户最后一次的选择。
+  const expanded = useTranscriptExpanded(sessionId, anchorEntryId, part, defaultExpanded);
+  // 输入序列化与 diff 统计是整段转写里最贵的计算，按引用收住：条目因展开状态、
+  // 延迟正文或其他无关状态重渲染时不再重算。
+  const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
+  const resultDiff = useMemo(
+    () => (result && !result.isError ? getResultDiff(result) : null),
+    [result],
+  );
+  const diffStats = useMemo(() => {
+    if (!resultDiff) return null;
+    let added = 0;
+    let removed = 0;
+    for (const line of resultDiff.text.split(/\r?\n/)) {
+      if (line.startsWith("+") && !line.startsWith("+++")) added += 1;
+      if (line.startsWith("-") && !line.startsWith("---")) removed += 1;
+    }
+    return { added, removed };
+  }, [resultDiff]);
+  const headerPreview = useMemo(() => getToolPreview(block), [block]);
+  const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
+  const isError = result?.isError ?? false;
+  const hasStructuredPreview = Boolean(resultDiff);
 
   return (
     <div
@@ -999,7 +1028,7 @@ function ToolCallBlock({ block, result, duration, sessionId, turnAnchorEntryId }
     >
 
       <button
-        onClick={() => transcriptViewState.toggleExpanded(sessionId, anchorEntryId, part, isEditTool)}
+        onClick={() => transcriptViewState.toggleExpanded(sessionId, anchorEntryId, part, defaultExpanded)}
         aria-expanded={expanded}
         className="tool-call-toggle"
         style={{
@@ -1357,7 +1386,11 @@ function TodoChecklistRow({ task }: { task: TodoPreviewTask }) {
   );
 }
 
-function ConsoleOutputPreview({
+/**
+ * bash 输出预览。入参全是原始值，因此整体记忆：条目因别处的展开状态、延迟正文或
+ * 其他无关状态重渲染时，命令高亮与逐行 ANSI 解析都不再重跑。
+ */
+const ConsoleOutputPreview = memo(function ConsoleOutputPreview({
   command,
   output,
   pending,
@@ -1374,9 +1407,35 @@ function ConsoleOutputPreview({
 }) {
   const { isDark } = useTheme();
   const { t } = useI18n();
-  const normalizedLines = normalizeCustomPanelLines(output.split(/\r?\n/));
-  const outputLines = normalizedLines.length === 1 && normalizedLines[0] === "" ? [] : normalizedLines;
+  const outputLines = useMemo(() => {
+    const normalized = normalizeCustomPanelLines(output.split(/\r?\n/));
+    return normalized.length === 1 && normalized[0] === "" ? [] : normalized;
+  }, [output]);
   const statusLabel = pending ? t("chat.runningCommand") : isError ? "failed" : "";
+  // 行分类与 ANSI 解析只随输出与错误态变：一条长命令的输出不会每帧重新高亮一遍。
+  const lineElements = useMemo(
+    () => outputLines.map((line, lineIndex) => {
+      const plainLine = stripAnsi(line).trimStart();
+      const lineClass = isError || /^(?:error|fatal|failed|failure|✖|x\b)/i.test(plainLine)
+        ? "is-error"
+        : /^(?:warning|warn|!)/i.test(plainLine)
+        ? "is-warning"
+        : /^(?:success|passed|ok\b|✓|\+)/i.test(plainLine)
+        ? "is-success"
+        : "";
+      return (
+        <div key={lineIndex} className={`shell-output-line ${lineClass}`.trim()}>
+          {parseAnsiLine(line).map((segment, segmentIndex) => (
+            Object.keys(segment.style).length > 0
+              ? <span key={segmentIndex} style={segment.style}>{segment.text}</span>
+              : <span key={segmentIndex}>{segment.text}</span>
+          ))}
+          {line === "" ? "\u00a0" : null}
+        </div>
+      );
+    }),
+    [outputLines, isError],
+  );
 
   return (
     <div className={`shell-output-preview${isError ? " is-error" : ""}`}>
@@ -1420,26 +1479,7 @@ function ConsoleOutputPreview({
           {outputLines.length === 0 && !pending && (
             <span className="shell-output-empty">{t("i18n.noOutput")}</span>
           )}
-          {outputLines.map((line, lineIndex) => {
-            const plainLine = stripAnsi(line).trimStart();
-            const lineClass = isError || /^(?:error|fatal|failed|failure|✖|x\b)/i.test(plainLine)
-              ? "is-error"
-              : /^(?:warning|warn|!)/i.test(plainLine)
-              ? "is-warning"
-              : /^(?:success|passed|ok\b|✓|\+)/i.test(plainLine)
-              ? "is-success"
-              : "";
-            return (
-              <div key={lineIndex} className={`shell-output-line ${lineClass}`.trim()}>
-                {parseAnsiLine(line).map((segment, segmentIndex) => (
-                  Object.keys(segment.style).length > 0
-                    ? <span key={segmentIndex} style={segment.style}>{segment.text}</span>
-                    : <span key={segmentIndex}>{segment.text}</span>
-                ))}
-                {line === "" ? "\u00a0" : null}
-              </div>
-            );
-          })}
+          {lineElements}
           {pending && (
             <span className="shell-output-pending" aria-label={t("chat.runningCommand")}>▋</span>
           )}
@@ -1451,17 +1491,8 @@ function ConsoleOutputPreview({
       )}
     </div>
   );
-}
+});
 
-
-function getStructuredToolPreview(block: ToolCallContent, phases: TodoPreviewPhase[] | null): string {
-  if (phases) {
-    const tasks = phases.flatMap((phase) => phase.tasks);
-    const completed = tasks.filter((task) => task.status === "completed" || task.status === "abandoned").length;
-    return `${completed}/${tasks.length} tasks`;
-  }
-  return getToolPreview(block);
-}
 
 interface ResultDiff {
   text: string;
