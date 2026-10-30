@@ -1,6 +1,6 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type {
   AgentMessage,
   BashExecutionMessage,
@@ -18,9 +18,17 @@ import { buildRewindEntries } from "@/lib/rewind";
 import type { DisplayOptions } from "@/lib/message-display";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import { buildTranscriptItems, type TranscriptItem } from "@/lib/transcript-items";
+import {
+  buildTranscriptRailDots,
+  railCurrentDotIndex,
+  railTopVisibleItemIndex,
+  shouldShowTranscriptRail,
+  type RailRenderedItem,
+} from "@/lib/transcript-rail";
 import { buildVirtualTranscriptModel } from "@/lib/transcript-virtual-list";
 import { PROCESS_DETAILS_PART, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { MessageView } from "./MessageView";
+import { TranscriptRail } from "./TranscriptRail";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
@@ -34,7 +42,7 @@ import { useSyncedDisplaySettings } from "@/hooks/useDisplaySettings";
 import { formatTokenCount } from "@/lib/format-tokens";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import type { GoalStatusInfo, SessionStatsInfo } from "@/lib/omp-types";
-import { Virtuoso, type Components } from "react-virtuoso";
+import { Virtuoso, type Components, type ListItem, type ListProps, type VirtuosoHandle } from "react-virtuoso";
 
 interface Props {
   session: SessionInfo | null;
@@ -93,6 +101,12 @@ interface TranscriptSlotsContext {
 }
 
 /**
+ * 列表容器的 ref 单独走一份 context：Virtuoso 的渲染 context 只放插槽内容，
+ * 跳转条需要列表容器本身的位置来换算顶部可见条目。
+ */
+const TranscriptListRefContext = createContext<RefObject<HTMLDivElement | null> | null>(null);
+
+/**
  * 视口上下各预留 400px：快速滚动时先有内容，挂载量仍是一屏加固定缓冲，
  * 与会话总长度无关。
  */
@@ -110,9 +124,24 @@ function TranscriptFooterSlot({ context }: { context?: TranscriptSlotsContext })
   return <>{context?.footer}</>;
 }
 
+/**
+ * 列表容器自己画：Virtuoso 的测量 ref 与跳转条的位置 ref 一起挂上。
+ * 只透传 `ListProps` 里的三个属性，渲染 context 不落到 DOM 上。
+ */
+function TranscriptListSlot({ ref: measurementRef, "data-testid": testId, style, children }: ListProps) {
+  const railListRef = useContext(TranscriptListRefContext);
+  const attach = useCallback((node: HTMLDivElement | null) => {
+    if (typeof measurementRef === "function") measurementRef(node);
+    else if (measurementRef) measurementRef.current = node;
+    if (railListRef) railListRef.current = node;
+  }, [measurementRef, railListRef]);
+  return <div data-testid={testId} style={style} ref={attach}>{children}</div>;
+}
+
 const TRANSCRIPT_SLOTS: Components<TranscriptItem, TranscriptSlotsContext> = {
   Header: TranscriptHeaderSlot,
   Footer: TranscriptFooterSlot,
+  List: TranscriptListSlot,
 };
 
 function getUserInputText(message: AgentMessage): string | null {
@@ -349,11 +378,83 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   // 虚拟列表只消费条目数组：键与首屏定位由条目算一次，分组不参与。
   const virtualTranscript = useMemo(() => buildVirtualTranscriptModel(transcriptItems), [transcriptItems]);
 
+  // 跳转条与列表共用同一份分组结果，只为锚点轮取提问原文，不重新扫描消息。
+  const railDots = useMemo(
+    () => buildTranscriptRailDots(transcriptItems, (item) => {
+      const anchor = messages[item.anchorIndex];
+      return anchor ? getUserInputText(anchor) : null;
+    }),
+    [transcriptItems, messages],
+  );
+
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const transcriptListRef = useRef<HTMLDivElement | null>(null);
+  const railRenderedItemsRef = useRef<RailRenderedItem[]>([]);
+  const railScrollCleanupRef = useRef<(() => void) | null>(null);
+  const [topItemIndex, setTopItemIndex] = useState<number | null>(null);
+
+  // 顶部可见条目以列表报告的已渲染条目为准：偏移是列表的测量值，这里只补一个
+  // 滚动容器与列表容器的矩形差，不按平均高度反推。
+  const syncRailTopItem = useCallback(() => {
+    const scroller = scrollContainerRef.current;
+    const list = transcriptListRef.current;
+    if (!scroller || !list) return;
+    const visibleTop = scroller.getBoundingClientRect().top - list.getBoundingClientRect().top;
+    const next = railTopVisibleItemIndex(railRenderedItemsRef.current, visibleTop);
+    setTopItemIndex((current) => (current === next ? current : next));
+  }, [scrollContainerRef]);
+
+  const handleTranscriptItemsRendered = useCallback((items: ListItem<TranscriptItem>[]) => {
+    railRenderedItemsRef.current = items.map(({ index, offset, size }) => ({ index, offset, size }));
+    syncRailTopItem();
+  }, [syncRailTopItem]);
+
   // 滚动元素由列表提供，句柄交回现有的 scrollContainerRef，
-  // 自动跟随、上滚判定与「回到最新」按钮继续挂在同一个滚动元素上。
+  // 自动跟随、上滚判定与「回到最新」按钮继续挂在同一个滚动元素上；
+  // 跳转条的当前轮跟着同一个滚动元素的每一帧更新。
   const handleTranscriptScrollerRef = useCallback((element: HTMLElement | Window | null) => {
     scrollContainerRef.current = element instanceof HTMLDivElement ? element : null;
-  }, [scrollContainerRef]);
+    railScrollCleanupRef.current?.();
+    railScrollCleanupRef.current = null;
+    if (!(element instanceof HTMLDivElement)) return;
+    let frame = 0;
+    const handleScroll = () => {
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        syncRailTopItem();
+      });
+    };
+    element.addEventListener("scroll", handleScroll, { passive: true });
+    railScrollCleanupRef.current = () => {
+      element.removeEventListener("scroll", handleScroll);
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+    syncRailTopItem();
+  }, [scrollContainerRef, syncRailTopItem]);
+
+  useEffect(() => () => railScrollCleanupRef.current?.(), []);
+
+  const railCurrentIndex = useMemo(
+    () => (topItemIndex === null ? -1 : railCurrentDotIndex(railDots, topItemIndex)),
+    [railDots, topItemIndex],
+  );
+
+  // 跳转只把条目下标交给列表，目标位置由列表自己算。
+  const railJumpTargetRef = useRef<number | null>(null);
+  const handleRailJump = useCallback((itemIndex: number) => {
+    railJumpTargetRef.current = itemIndex;
+    virtuosoRef.current?.scrollToIndex({ index: itemIndex, align: "start" });
+  }, []);
+
+  // 目标附近的行第一次被量出来之前，列表只能按估计高度落点。滚动停下后再调一次
+  // 定位接口，让它按实测高度重新对齐；目标位置依旧由列表算，这里不碰像素。
+  const handleTranscriptScrollingChange = useCallback((scrolling: boolean) => {
+    const target = railJumpTargetRef.current;
+    if (scrolling || target === null) return;
+    railJumpTargetRef.current = null;
+    virtuosoRef.current?.scrollToIndex({ index: target, align: "start" });
+  }, []);
 
   const computeTranscriptItemKey = useCallback(
     (index: number) => virtualTranscript.itemKeys[index],
@@ -649,7 +750,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
         </div>
       ) : (
       <>
-      <div className="relative flex min-w-0 flex-1 overflow-hidden">
+      <div className="chat-transcript-region relative flex min-w-0 flex-1 overflow-hidden">
         <div
           style={{
             position: "absolute",
@@ -665,19 +766,32 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             <NoticeShelf notices={notices} floating align="right" />
           </div>
         </div>
-        <Virtuoso<TranscriptItem, TranscriptSlotsContext>
-          data={transcriptItems}
-          computeItemKey={computeTranscriptItemKey}
-          initialTopMostItemIndex={virtualTranscript.initialTopMostItemIndex}
-          context={{ header: transcriptHeader, footer: transcriptFooter }}
-          components={TRANSCRIPT_SLOTS}
-          scrollerRef={handleTranscriptScrollerRef}
-          increaseViewportBy={TRANSCRIPT_VIEWPORT_BUFFER}
-          className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none]"
-          itemContent={(_, item) => (
-            <div style={TRANSCRIPT_ROW_STYLE}>{renderTranscriptItem(item)}</div>
-          )}
-        />
+        <TranscriptListRefContext.Provider value={transcriptListRef}>
+          <Virtuoso<TranscriptItem, TranscriptSlotsContext>
+            ref={virtuosoRef}
+            data={transcriptItems}
+            computeItemKey={computeTranscriptItemKey}
+            initialTopMostItemIndex={virtualTranscript.initialTopMostItemIndex}
+            context={{ header: transcriptHeader, footer: transcriptFooter }}
+            components={TRANSCRIPT_SLOTS}
+            scrollerRef={handleTranscriptScrollerRef}
+            itemsRendered={handleTranscriptItemsRendered}
+            isScrolling={handleTranscriptScrollingChange}
+            increaseViewportBy={TRANSCRIPT_VIEWPORT_BUFFER}
+            className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-width:none]"
+            itemContent={(_, item) => (
+              <div style={TRANSCRIPT_ROW_STYLE}>{renderTranscriptItem(item)}</div>
+            )}
+          />
+        </TranscriptListRefContext.Provider>
+        {shouldShowTranscriptRail(railDots.length) && (
+          <TranscriptRail
+            dots={railDots}
+            currentDotIndex={railCurrentIndex}
+            onJump={handleRailJump}
+            t={t}
+          />
+        )}
         {sessionBusy && autoFollowPaused && (
           <button
             type="button"
