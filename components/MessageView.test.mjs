@@ -273,8 +273,10 @@ test("renders an available thought ahead of loading and error markup", () => {
 test("keeps bash and todo blocks off the expand-state subscription", () => {
   // 展开状态只在折叠卡片里读：bash 与待办在前面就提前返回，不该订整个视图仓库。
   assert.equal(source.match(/useTranscriptExpanded\(/g)?.length, 1);
+  const cardIndex = source.indexOf("function ToolCallCard(");
+  assert.ok(cardIndex !== -1, "MessageView must declare ToolCallCard");
   assert.ok(
-    source.indexOf("useTranscriptExpanded(") > source.indexOf("function ToolCallCard("),
+    source.indexOf("useTranscriptExpanded(") > cardIndex,
     "useTranscriptExpanded must live in ToolCallCard",
   );
   // bash 输出预览记忆化，行切分与高亮都收在 useMemo 里，展开别处的块不再重跑。
