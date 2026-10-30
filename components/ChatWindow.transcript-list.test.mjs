@@ -69,6 +69,20 @@ test("skips the rail measurement while the rail is hidden", () => {
   assert.match(source, /onVisibilityChange=\{handleRailVisibilityChange\}/);
 });
 
+test("rebuilds the item keys only when the grouping changes", () => {
+  // 流式数据块只换末尾合成项的正文，键不变：键与首屏定位只由分组结果算，流式期间
+  // itemKeys 与 computeItemKey 保持同一份引用。
+  assert.match(
+    source,
+    /const virtualTranscript = useMemo\(\s*\(\) => buildVirtualTranscriptModel\(\s*groupedTranscriptItems,\s*streamState\.isStreaming \? TRANSCRIPT_LIVE_TAIL_KEY : null,\s*\),\s*\[groupedTranscriptItems, streamState\.isStreaming\],\s*\);/,
+  );
+  assert.match(
+    source,
+    /const computeTranscriptItemKey = useCallback\(\s*\(index: number\) => virtualTranscript\.itemKeys\[index\],\s*\[virtualTranscript\],\s*\)/,
+  );
+  assert.doesNotMatch(source, /buildVirtualTranscriptModel\(transcriptItems\)/);
+});
+
 test("keeps no paging leftovers in the transcript", () => {
   assert.doesNotMatch(source, /chat\.loadEarlier/);
   assert.doesNotMatch(source, /IntersectionObserver/);
