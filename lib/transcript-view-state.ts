@@ -27,7 +27,7 @@ export interface TranscriptViewStore {
   /** 读出展开状态；没有用户操作记录时返回 `fallback`。 */
   isExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): boolean;
   toggleExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): void;
-  /** 记下取回的延迟内容；正文本身就是「已加载」的标记，写入不通知订阅方。 */
+  /** 记下取回的延迟内容；正文本身就是「已加载」的标记，写入通常不通知订阅方。 */
   markLoaded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, content: string): void;
   /** 已取回的延迟内容；还没取回时为 null。 */
   loadedContent(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): string | null;
@@ -40,7 +40,7 @@ export interface TranscriptViewStore {
 // ASCII 单元分隔符不会出现在 entryId 或部位标识里。
 const KEY_SEPARATOR = "\u001f";
 
-/** 一个视图仓库保存的条目上限：超出后按最早写入淘汰。 */
+/** 一个视图仓库保存的条目上限：超出后淘汰最久没碰过的条目，优先只带正文的。 */
 export const MAX_VIEW_ENTRIES = 1000;
 
 // 还没落盘的新会话没有 id，统一落到同一个空会话桶里。
@@ -60,14 +60,44 @@ export function createTranscriptViewStore(): TranscriptViewStore {
     for (const listener of [...listeners]) listener();
   }
 
-  function write(key: string, state: EntryViewState): void {
-    entries.set(key, state);
-    // Map 保持插入顺序：超出上限时从最早写入的那条开始淘汰。
-    while (entries.size > MAX_VIEW_ENTRIES) {
-      const oldest = entries.keys().next();
-      if (oldest.done) break;
-      entries.delete(oldest.value);
+  /**
+   * 淘汰一条，`keep` 是刚写入的键、不参与本轮的挑选。优先丢只带正文的条目：展开
+   * 状态是用户的选择，正文按需重新取回。返回丢掉的是哪一类，写入方据此决定要不要
+   * 通知订阅方。
+   */
+  function evictOne(keep: string): "empty" | "content" | "expanded" {
+    let contentOnly: string | null = null;
+    let oldest: string | null = null;
+    for (const [key, state] of entries) {
+      if (key === keep) continue;
+      if (oldest === null) oldest = key;
+      if (state.expanded === undefined) {
+        contentOnly = key;
+        break;
+      }
     }
+    const victim = contentOnly ?? oldest;
+    if (victim === null) return "empty";
+    const victimCarriesExpanded = entries.get(victim)?.expanded !== undefined;
+    entries.delete(victim);
+    return victimCarriesExpanded ? "expanded" : "content";
+  }
+
+  /**
+   * 写入并维持上限。已有键先删后写：Map 的插入顺序因此就是访问顺序，最近写过或
+   * 读过的那条不会因为「写得早」被当成最久没用的。返回淘汰是否丢了展开状态——
+   * 那时已挂载的订阅方快照已经过期，写入方要补一次通知。
+   */
+  function write(key: string, state: EntryViewState): boolean {
+    entries.delete(key);
+    entries.set(key, state);
+    let droppedExpanded = false;
+    while (entries.size > MAX_VIEW_ENTRIES) {
+      const evicted = evictOne(key);
+      if (evicted === "empty") break;
+      if (evicted === "expanded") droppedExpanded = true;
+    }
+    return droppedExpanded;
   }
 
   function dropWhere(predicate: (key: string) => boolean): void {
@@ -101,8 +131,9 @@ export function createTranscriptViewStore(): TranscriptViewStore {
       const current = entries.get(key);
       if (current?.content === content) return;
       // 正文只服务下一次挂载的首帧，读者在渲染期直接取。这里不通知订阅方：展开状态
-      // 的订阅者是所有已挂载的工具块，一条延迟正文取回不该让它们全部重渲染。
-      write(key, { ...current, content });
+      // 的订阅者是所有已挂载的工具块，一条延迟正文取回不该让它们全部重渲染；只有
+      // 淘汰顺手带走了展开状态时才补一次通知，否则那边的快照会停在旧值。
+      if (write(key, { ...current, content })) emit();
     },
     loadedContent(sessionId, anchorEntryId, part) {
       return entries.get(entryKey(sessionId, anchorEntryId, part))?.content ?? null;
