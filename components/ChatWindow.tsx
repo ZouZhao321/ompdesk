@@ -430,6 +430,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSessionStatsPanelOpen,
     scrollTranscriptToEnd,
+    t,
   });
   const sessionBusy = agentRunning || bashRunning;
 
@@ -810,8 +811,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     />
   );
 
-  const aboveEditorWidgets = extensionWidgets.filter((widget) => widget.placement !== "belowEditor");
-  const belowEditorWidgets = extensionWidgets.filter((widget) => widget.placement === "belowEditor");
+  // 两个派生数组也按内容收住：每次渲染新算会让页首插槽每帧换引用，context 一变，
+  // 整份条目的 itemContent 就跟着全量重跑。
+  const aboveEditorWidgets = useMemo(
+    () => extensionWidgets.filter((widget) => widget.placement !== "belowEditor"),
+    [extensionWidgets],
+  );
+  const belowEditorWidgets = useMemo(
+    () => extensionWidgets.filter((widget) => widget.placement === "belowEditor"),
+    [extensionWidgets],
+  );
 
   // 每行共用同一份上下文；流式数据块不重建它，已挂载条目的行组件因此不重绘。
   const activeSessionId = session?.id ?? sessionIdRef.current ?? undefined;
