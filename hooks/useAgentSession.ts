@@ -394,10 +394,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
-  // 最近一次载入的叶子：分支导航点的就是它时叶子没变，跳过整段重载，正在上滚
-  // 阅读的视图不会被拽回末尾。凡是写 activeLeafId 的地方都要同时写它（载入、404
-  // 清空、两条导航路径），两边不一致就会把没变判成变了，或者反过来吞掉真导航。
+  // 当前叶子：分支导航点的就是它时叶子没变，跳过整段重载，正在上滚阅读的视图不会
+  // 被拽回末尾。凡是写 activeLeafId 的地方都要同时写它（载入、404 清空、两条导航
+  // 路径），两边不一致就会把没变判成变了，或者反过来吞掉真导航。
   const activeLeafIdRef = useRef<string | null>(null);
+  // 最近一次真的载入成功的叶子，只在整段载入应用后写（含首屏载入与 404 清空）。
+  // 载入失败的退回目标只能是它：上一次请求的叶子可能自己也没载入成功，退回去会把
+  // 界面停在一条从没载入过的分支上。
+  const appliedLeafIdRef = useRef<string | null>(null);
   // 「当前叶子」唯一的写入口：状态与去重用的 ref 在同一时机写，两条导航路径不会
   // 各自决定先后。载入失败时调用方用同一个入口把两者一起退回。
   const applyActiveLeaf = useCallback((leafId: string | null) => {
@@ -630,6 +634,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (res.status === 404) {
         if (showLoading && ownsHistory()) {
           setData(null);
+          appliedLeafIdRef.current = null;
           applyActiveLeaf(null);
           setMessages([]);
           setError(null);
@@ -647,6 +652,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // 载入就是一次真实的叶子切换：状态与去重用的 ref 一起写。只在导航路径写 ref
       // 会让首屏之后点已高亮的当前叶子被判成换了叶子，整段重载并把视图拽回末尾；
       // 一轮结束后叶子前进了，ref 却还停在旧叶子上，点旧叶子又被去重判据静默吞掉。
+      appliedLeafIdRef.current = d.leafId;
       applyActiveLeaf(d.leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
@@ -720,6 +726,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         contextUsage?: ContextUsage;
       };
       if (!ownsContext()) return "stale";
+      appliedLeafIdRef.current = leafId;
       if (d.sessionId) followSessionIdentity(d.sessionId, d.runtimeId ?? null);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
@@ -1870,15 +1877,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
+    // 退回目标取最近一次真的载入成功的叶子，而不是上一次请求的叶子：连点 A→B→C 时
+    // B 自己也可能没载入成功，退回 B 会把界面停在一条从没载入过的分支上。
+    const applied = appliedLeafIdRef.current ?? activeLeafIdRef.current;
+    // 跳转条先动运行时：这条命令负责把运行时的活动叶子换过去。载入失败时补一条反
+    // 方向的命令，界面与运行时的活动叶子不会各停一条分支。
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef).catch(() => {});
     // 先写叶子再等载入：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
-    // 同一段上下文被重载一遍又把视图拽回末尾。载入失败时状态与 ref 一起退回，原叶子
-    // 不会被这次失败留在「已经切过去了」的位置。
-    const previous = activeLeafIdRef.current;
+    // 同一段上下文被重载一遍又把视图拽回末尾。
     applyActiveLeaf(entryId);
-    if (await loadContext(sid, entryId) !== "failed") return;
+    const outcome = await loadContext(sid, entryId);
+    // 只认自己这次载入：stale 说明更晚的载入已经接管界面，退回会把它刚写下的叶子盖掉。
+    if (outcome !== "failed") return;
     // 只在自己仍是最新写入者时退回：更晚的导航或一次整段载入已经把叶子挪走了。
-    if (activeLeafIdRef.current === entryId) applyActiveLeaf(previous);
+    if (activeLeafIdRef.current !== entryId) return;
+    applyActiveLeaf(applied);
+    if (!applied) return;
+    sendAgentCommand(sid, { type: "navigate_tree", targetId: applied }, runtimeIdRef).catch(() => {});
+    // 退回后补一次载入：消息区要与高亮的叶子一致，不能留在没载入成功的那条上。
+    await loadContext(sid, applied);
   }, [applyActiveLeaf, loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
@@ -1886,18 +1903,24 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // 点的就是已经激活的叶子：视图已经停在这条分支上，整段重载只会把正在上滚阅读
     // 的视图拽回末尾，什么都不做。
     if (leafId === activeLeafIdRef.current) return;
-    // 与 handleNavigate 同一时机：状态与 ref 一起先写，载入失败一起退回。只在成功后
-    // 写 ref 会让失败后的状态与 ref 分开，点回原叶子被去重判据吞掉。
-    const previous = activeLeafIdRef.current;
-    applyActiveLeaf(leafId);
     const sid = sessionIdRef.current;
     if (!sid) return;
-    if (await loadContext(sid, leafId) === "failed") {
-      if (activeLeafIdRef.current === leafId) applyActiveLeaf(previous);
+    const applied = appliedLeafIdRef.current ?? activeLeafIdRef.current;
+    // 与 handleNavigate 同一时机：状态与 ref 一起先写，载入失败一起退回。只在成功后
+    // 写 ref 会让失败后的状态与 ref 分开，点回原叶子被去重判据吞掉。
+    applyActiveLeaf(leafId);
+    const outcome = await loadContext(sid, leafId);
+    // 只有这次载入真的应用了才动运行时。stale 说明更晚的载入已经接管界面与运行时，
+    // 拿这条可能已属于别的会话的叶子发命令，会把那边刚换过去的叶子改走。
+    if (outcome !== "applied") {
+      if (outcome === "failed" && activeLeafIdRef.current === leafId) {
+        applyActiveLeaf(applied);
+        if (applied) await loadContext(sid, applied);
+      }
       return;
     }
-    if (leafId && mountedRef.current && sessionIdRef.current) {
-      sendAgentCommand(sessionIdRef.current, { type: "navigate_tree", targetId: leafId }, runtimeIdRef).catch(() => {});
+    if (leafId && mountedRef.current) {
+      sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }, runtimeIdRef).catch(() => {});
     }
   }, [applyActiveLeaf, loadContext]);
 
