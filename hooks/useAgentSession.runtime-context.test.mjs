@@ -107,6 +107,7 @@ function harness() {
     // 最近一次真的载入成功的叶子：载入失败的退回目标。
     appliedLeafIdRef: { current: null },
     opts: {},
+    addNotice: (notice) => effects.push(["notice", notice]),
     closeEvents: () => effects.push(["closeEvents"]),
     onSessionForked: (...args) => effects.push(["identity", ...args]),
     rememberSessionContinuation: memory.rememberSessionContinuation,
@@ -146,6 +147,7 @@ function harness() {
   const callbackBindings = { ...bindings, fetch: (...args) => bindings.fetch(...args) };
   bindings.loadSession = callback("loadSession", callbackBindings);
   bindings.loadContext = callback("loadContext", callbackBindings);
+  bindings.settleContextNavigation = callback("settleContextNavigation", bindings);
   bindings.handleNavigate = callback("handleNavigate", bindings);
   bindings.handleLeafChange = callback("handleLeafChange", bindings);
   return { bindings, commands, effects, memory, storage, ui };
@@ -203,14 +205,25 @@ for (const [label, identity] of [
       { url: "/api/agent/b", command: { type: "navigate_tree", targetId: "old-leaf" } },
     ]);
     const reopened = snapshot(h);
+    const commandsBefore = h.commands.length;
     h.effects.length = 0;
 
     // The response body completes only after the production expiry retry has
     // rebound the same transcript to R2 and persisted that continuation.
     oldContext.resolve(context("obsolete branch", identity));
     await navigating;
-    assert.deepEqual(snapshot(h), reopened, "stale context must not clear R2 or replace its UI/storage");
-    assert.deepEqual(h.effects, [], "stale context must not notify the parent or invoke any setter");
+    // 运行时被重绑，这次载入作废，而且没有更晚的载入来纠正叶子：退回最近一次真的
+    // 载入成功过的值（这里一次都没有，因此是 null）。留在 old-leaf 上会让去重判据
+    // 从此吞掉对它的重试。
+    assert.equal(h.bindings.sessionIdRef.current, "b");
+    assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
+    assert.equal(h.memory.getSessionContinuation("b"), "runtime:r2");
+    assert.deepEqual([...h.storage], reopened.storage, "a stale context must not touch the stored continuation");
+    assert.deepEqual(h.ui.Messages, reopened.ui.Messages, "a stale context must not replace the transcript");
+    assert.equal(h.ui.ActiveLeafId, null);
+    assert.equal(h.bindings.activeLeafIdRef.current, null);
+    assert.deepEqual(h.effects, [["ActiveLeafId", null]], "the stale navigation only rolls its own leaf marker back");
+    assert.equal(h.commands.length, commandsBefore, "a stale navigation must not move the runtime leaf");
   });
 }
 
@@ -317,12 +330,17 @@ test("a newer context request owns the UI even when the runtime stays the same",
   const newest = snapshot(h);
   h.effects.length = 0;
   older.resolve(context("obsolete", { sessionId: "b", runtimeId: null }));
-  assert.equal(await loadingOld, "stale");
+  assert.equal(await loadingOld, "superseded");
   assert.deepEqual(snapshot(h), newest);
   assert.deepEqual(h.effects, []);
 });
 
-for (const superseded of ["different session selection", "unmount"]) {
+for (const [superseded, outcome] of [
+  // 换会话由 followSessionIdentity 换掉请求号，旧响应归那次新载入，属于被接管。
+  ["different session selection", "superseded"],
+  // 卸载没有更晚的载入来接，这次结果只是作废。
+  ["unmount", "invalidated"],
+]) {
   test(`context does not apply after ${superseded}`, async () => {
     const h = harness();
     const older = deferred();
@@ -337,7 +355,7 @@ for (const superseded of ["different session selection", "unmount"]) {
     const current = snapshot(h);
     h.effects.length = 0;
     older.resolve(context("obsolete", { sessionId: "b", runtimeId: null }));
-    assert.equal(await loading, "stale");
+    assert.equal(await loading, outcome);
     assert.deepEqual(snapshot(h), current);
     assert.deepEqual(h.effects, []);
   });
@@ -522,4 +540,116 @@ test("an entry navigation moves the runtime leaf only after the branch is applie
   ]);
   assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
   assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target branch" }]);
+});
+
+test("a leaf click invalidated by a runtime rebind rolls the marker back so the retry is not swallowed", async () => {
+  const h = harness();
+  // 这一叶真的载入成功过，是唯一的退回目标。
+  h.bindings.appliedLeafIdRef.current = "current-leaf";
+  h.bindings.activeLeafIdRef.current = "current-leaf";
+  const requested = deferred();
+  const pendingContext = deferred();
+  let contextRequests = 0;
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r2" });
+    }
+    contextRequests += 1;
+    if (contextRequests === 1) {
+      requested.resolve();
+      return { ok: true, json: () => pendingContext.promise };
+    }
+    return response(context("recovered branch"));
+  };
+
+  const clicking = h.bindings.handleLeafChange("broken-leaf");
+  await requested.promise;
+  // 载入在途期间运行时被重绑：这次载入作废，又没有更晚的载入来纠正叶子。
+  h.bindings.runtimeIdRef.current = "runtime:r2";
+  pendingContext.resolve(context("obsolete branch"));
+  await clicking;
+
+  // 退回载入成功过的叶子，界面不停在没载入成功的那条分支上，也不多发一次载入。
+  assert.equal(h.ui.ActiveLeafId, "current-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
+  assert.equal(contextRequests, 1);
+  assert.deepEqual(h.commands, []);
+
+  // 去重判据不会把重试吞掉：退回之后同一条分支还能再点一次。
+  await h.bindings.handleLeafChange("broken-leaf");
+  await Promise.all(h.commands);
+
+  assert.equal(h.ui.ActiveLeafId, "broken-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "recovered branch" }]);
+});
+
+test("a superseded navigation leaves the leaf to the newer load", async () => {
+  const h = harness();
+  const requested = deferred();
+  const pendingContext = deferred();
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    if (String(url).endsWith("leafId=old-leaf")) {
+      requested.resolve();
+      return { ok: true, json: () => pendingContext.promise };
+    }
+    return response(context("latest branch"));
+  };
+
+  const navigatingOld = h.bindings.handleNavigate("old-leaf");
+  await requested.promise;
+  await h.bindings.handleNavigate("latest-leaf");
+  await Promise.all(h.commands);
+  h.effects.length = 0;
+  pendingContext.resolve(context("obsolete branch"));
+  await navigatingOld;
+
+  // 更晚的载入已经接管界面与运行时：作废的那次既不退回叶子也不发命令。
+  assert.equal(h.ui.ActiveLeafId, "latest-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "latest-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "latest branch" }]);
+  assert.deepEqual(h.effects, []);
+  assert.equal(h.commands.length, 1);
+});
+
+test("sends the branch command to the session id the load migrated to", async () => {
+  const h = harness();
+  const requests = [];
+  h.bindings.fetch = async (url, options) => {
+    requests.push({ url, command: options ? JSON.parse(options.body) : null });
+    if (String(url).startsWith("/api/agent/")) return response({ success: true, data: {} });
+    return response(context("migrated branch", { sessionId: "c", runtimeId: null }));
+  };
+
+  await h.bindings.handleNavigate("target-leaf");
+  await Promise.all(h.commands);
+
+  // 载入把会话迁到 c 并让运行时失效：命令要发给当前的会话 id，而不是请求开始时
+  // 捕获的那个——发给 b 等于把命令投到另一份会话上。
+  assert.equal(h.bindings.sessionIdRef.current, "c");
+  assert.equal(h.bindings.runtimeIdRef.current, null);
+  assert.deepEqual(requests, [
+    { url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=target-leaf", command: null },
+    { url: "/api/agent/c", command: { type: "navigate_tree", targetId: "target-leaf" } },
+  ]);
+});
+
+test("a failed branch command leaves a notice instead of failing silently", async () => {
+  const h = harness();
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) return response({ error: "target branch is gone" }, 500);
+    return response(context("target branch"));
+  };
+
+  await h.bindings.handleLeafChange("target-leaf");
+  await Promise.allSettled(h.commands);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // 载入成功、运行时那半失败：界面已经换到新分支，失败必须有回执，不能静默。
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target branch" }]);
+  assert.deepEqual(h.effects.filter(([kind]) => kind === "notice"), [
+    ["notice", { type: "error", message: "Failed to switch branch: target branch is gone" }],
+  ]);
 });
