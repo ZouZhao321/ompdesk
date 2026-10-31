@@ -63,7 +63,10 @@ test("reuses an open event stream and hides an empty agent phase", () => {
   assert.match(ensureSource, /eventSourceSessionIdRef\.current === sid/);
   assert.match(ensureSource, /current\.readyState === EventSource\.OPEN/);
   assert.match(ensureSource, /attempt\?\.source === current && attempt\.pending/);
-  assert.match(chatWindowSource, /agentRunning && !streamState\.streamingMessage && agentPhase/);
+  // 页尾只在没有流式正文、且有阶段可显示时画阶段标签；流式正文已经是列表最后一项，
+  // 页尾只关心它在不在，整份 streamState 不能当依赖。
+  assert.match(chatWindowSource, /const streamingMessageInList = streamState\.streamingMessage !== null;/);
+  assert.match(chatWindowSource, /agentRunning && !streamingMessageInList && agentPhase/);
   assert.match(chatWindowSource, /return null;/);
 });
 

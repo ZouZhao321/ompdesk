@@ -16,7 +16,16 @@ test("renders the parts outside the list through its header and footer slots", (
     source,
     /const TRANSCRIPT_SLOTS: Components<TranscriptListItem, TranscriptSlotsContext> = \{\s*Header: TranscriptHeaderSlot,\s*Footer: TranscriptFooterSlot/,
   );
-  assert.match(source, /context=\{\{ header: transcriptHeader, footer: transcriptFooter \}\}/);
+  // 列表把 context 当作状态发布：页首、页尾与承载它们的对象都要按内容收成稳定引用，
+  // 否则每次渲染都换引用，整份条目的 itemContent 跟着重跑。
+  assert.match(source, /const transcriptHeader = useMemo\(/);
+  assert.match(source, /const transcriptFooter = useMemo\(/);
+  assert.match(
+    source,
+    /const transcriptSlots = useMemo<TranscriptSlotsContext>\(\s*\(\) => \(\{ header: transcriptHeader, footer: transcriptFooter \}\),\s*\[transcriptHeader, transcriptFooter\],\s*\);/,
+  );
+  assert.match(source, /context=\{transcriptSlots\}/);
+  assert.doesNotMatch(source, /context=\{\{ header: transcriptHeader, footer: transcriptFooter \}\}/);
   // 没有第二个滚动锚点：滚动位置只归列表管。
   assert.doesNotMatch(source, /messagesEndRef/);
 });
@@ -29,7 +38,7 @@ test("parks the streaming message as the last list item", () => {
   // 行组件按项记忆，流式数据块只重绘末尾这一项。
   assert.match(source, /const TranscriptRow = memo\(function TranscriptRow\(/);
   // 页尾不再渲染流式气泡，它已经是列表最后一项。
-  const footerSource = source.slice(source.indexOf("const transcriptFooter = ("), source.indexOf("if (loading) {"));
+  const footerSource = source.slice(source.indexOf("const transcriptFooter = useMemo("), source.indexOf("if (loading) {"));
   // 锚点一旦找不到切片就是空串，下面的否定断言会静默通过。
   assert.ok(footerSource.length > 0, "the transcript footer slice is empty");
   assert.doesNotMatch(footerSource, /streamingMessage as AgentMessage/);
