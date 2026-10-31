@@ -54,6 +54,13 @@ function deferred() {
 }
 
 const response = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
+// 一次整段载入的响应体（不是 fetch 响应）：叶子、正文与 entryIds 一起给出。
+const sessionSnapshot = (leafId, label) => ({
+  sessionId: "b",
+  runtimeId: "runtime:r1",
+  leafId,
+  context: { messages: [{ role: "user", content: label }], entryIds: [`${label}-entry`] },
+});
 const context = (label, identity = { sessionId: "b", runtimeId: "runtime:r1" }) => ({
   ...identity,
   context: {
@@ -458,12 +465,11 @@ test("a branch that lands first is not pulled back by an older session load", as
   assert.deepEqual(h.ui.EntryIds, ["target-entry"]);
 });
 
-test("a session load issued while a branch is loading leaves the leaf to that navigation", async () => {
+test("a session load issued while a branch is loading is replayed once the navigation settles", async () => {
   const h = harness();
   const navigationRequested = deferred();
   const navigationBody = deferred();
-  const historyRequested = deferred();
-  const historyBody = deferred();
+  const historyRequests = [];
   h.bindings.fetch = async (url) => {
     if (String(url).startsWith("/api/agent/")) {
       return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
@@ -472,34 +478,132 @@ test("a session load issued while a branch is loading leaves the leaf to that na
       navigationRequested.resolve();
       return { ok: true, json: () => navigationBody.promise };
     }
-    historyRequested.resolve();
-    return { ok: true, json: () => historyBody.promise };
+    const body = deferred();
+    historyRequests.push(body);
+    return { ok: true, json: () => body.promise };
   };
 
   // 导航挂着、高亮已经写在目标叶上，agent_end 此时才触发这次整段载入。
   const navigating = h.bindings.handleNavigate("target-leaf");
   await navigationRequested.promise;
   const loading = h.bindings.loadSession("b", true);
-  await historyRequested.promise;
-  historyBody.resolve(response({
-    sessionId: "b",
-    runtimeId: "runtime:r1",
-    leafId: "persisted-leaf",
-    context: { messages: [{ role: "user", content: "persisted" }], entryIds: ["persisted-entry"] },
-  }));
+  assert.equal(historyRequests.length, 1);
+  historyRequests[0].resolve(sessionSnapshot("persisted-leaf", "persisted"));
 
-  assert.equal(await loading, null);
+  // 让位与失败分开报：这次没有回写，但导航收尾会补发，命令侧的门控不会凭空消失。
+  assert.deepEqual(await loading, { deferred: true });
   // 导航还没落定：叶子与正文归它，载入不许抢在它前面写一遍持久化值。
   assert.equal(h.ui.ActiveLeafId, "target-leaf");
   assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
   assert.equal(h.bindings.appliedLeafIdRef.current, null);
   assert.deepEqual(h.ui.Messages, [{ role: "user", content: "current messages" }]);
+  assert.equal(historyRequests.length, 1);
 
   navigationBody.resolve(context("target"));
   await navigating;
   await Promise.all(h.commands);
   assert.equal(h.bindings.appliedLeafIdRef.current, "target-leaf");
   assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target" }]);
+  // 导航落定后补发一次：读到的正是导航写下的持久化视图，正文与 entryIds 一起跟上。
+  assert.equal(historyRequests.length, 2);
+  historyRequests[1].resolve(sessionSnapshot("target-leaf", "target"));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(h.bindings.appliedLeafIdRef.current, "target-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
+  assert.equal(h.bindings.runtimeLeafIdRef.current, "target-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target" }]);
+  assert.deepEqual(h.ui.EntryIds, ["target-entry"]);
+});
+
+test("every refresh swallowed by the same navigation is replayed exactly once", async () => {
+  const h = harness();
+  const navigationRequested = deferred();
+  const navigationBody = deferred();
+  const historyRequests = [];
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    if (String(url).includes("/context?")) {
+      navigationRequested.resolve();
+      return { ok: true, json: () => navigationBody.promise };
+    }
+    const body = deferred();
+    historyRequests.push(body);
+    return { ok: true, json: () => body.promise };
+  };
+
+  const navigating = h.bindings.handleNavigate("target-leaf");
+  await navigationRequested.promise;
+  // 导航在途时先后到达的两条刷新：/compact 与 agent_end 各发一次整段载入。
+  const compacted = h.bindings.loadSession("b", true);
+  assert.equal(historyRequests.length, 1);
+  historyRequests[0].resolve(sessionSnapshot("persisted-leaf", "persisted"));
+  assert.deepEqual(await compacted, { deferred: true });
+
+  const settled = h.bindings.loadSession("b");
+  assert.equal(historyRequests.length, 2);
+  historyRequests[1].resolve(sessionSnapshot("persisted-leaf", "persisted"));
+  assert.deepEqual(await settled, { deferred: true });
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "current messages" }]);
+
+  navigationBody.resolve(context("target"));
+  await navigating;
+  await Promise.all(h.commands);
+  // 两次让位合并成一次补发：导航落定后重读一份视图，不是每让一次就补一次。
+  assert.equal(historyRequests.length, 3);
+  historyRequests[2].resolve({
+    sessionId: "b",
+    runtimeId: "runtime:r1",
+    leafId: "target-leaf",
+    context: {
+      messages: [{ role: "user", content: "target" }, { role: "assistant", content: "compacted" }],
+      entryIds: ["target-entry", "compacted-entry"],
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(h.ui.Messages, [
+    { role: "user", content: "target" },
+    { role: "assistant", content: "compacted" },
+  ]);
+  assert.deepEqual(h.ui.EntryIds, ["target-entry", "compacted-entry"]);
+  assert.equal(h.bindings.appliedLeafIdRef.current, "target-leaf");
+});
+
+test("a deferred refresh is dropped when the session has moved on by the time the navigation settles", async () => {
+  const h = harness();
+  const navigationRequested = deferred();
+  const navigationBody = deferred();
+  const historyRequests = [];
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    if (String(url).includes("/context?")) {
+      navigationRequested.resolve();
+      return { ok: true, json: () => navigationBody.promise };
+    }
+    const body = deferred();
+    historyRequests.push(body);
+    return { ok: true, json: () => body.promise };
+  };
+
+  const navigating = h.bindings.handleNavigate("target-leaf");
+  await navigationRequested.promise;
+  const loading = h.bindings.loadSession("b");
+  historyRequests[0].resolve(sessionSnapshot("persisted-leaf", "persisted"));
+  assert.deepEqual(await loading, { deferred: true });
+
+  // 用户切去了别的会话：这次导航连正文都没应用，更不该替旧会话补发载入。
+  h.bindings.sessionIdRef.current = "other";
+  navigationBody.resolve(context("target"));
+  await navigating;
+  await Promise.all(h.commands);
+
+  assert.equal(historyRequests.length, 1);
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "current messages" }]);
 });
 
 test("a navigation already under way is not reloaded by a click on the same leaf", async () => {
