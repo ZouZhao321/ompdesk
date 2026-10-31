@@ -1638,7 +1638,9 @@ span.linenumber {
 .transcript-rail-dots::-webkit-scrollbar {
   display: none;
 }
-/* 行高由 lib/transcript-rail.ts 的 RAIL_ROW_PX 给出；这里只画 6px 圆点与胶囊。 */
+/* 行高由 lib/transcript-rail.ts 的 RAIL_ROW_PX 给出：24px 既是节距也是命中区高度
+   （WCAG 2.5.8 的最小目标），每个圆点各占一行、相邻命中区不重叠，也不用伪元素再
+   向外扩；这里只画 6px 圆点与胶囊。 */
 .transcript-rail-dot {
   position: relative;
   display: flex;
@@ -1650,17 +1652,6 @@ span.linenumber {
   border: 0;
   background: transparent;
   cursor: pointer;
-}
-/* 命中区：行高就是 14px 节距，视觉与滚动几何都不动，用伪元素上下各扩 5px 补到
-   24px 高（WCAG 2.5.8 的最小目标），左右沿用车道宽度。上下相邻两点因此会重叠，
-   重叠处归排在后面画的那个点。圆点列裁掉首末两点超出列外的部分。 */
-.transcript-rail-dot::before {
-  content: "";
-  position: absolute;
-  top: -5px;
-  right: 0;
-  bottom: -5px;
-  left: 0;
 }
 .transcript-rail-dot:focus-visible {
   outline: 2px solid var(--accent);
