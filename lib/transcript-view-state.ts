@@ -179,6 +179,23 @@ export function planDeferredContent(
   return { kind: "fetch", sessionId, entryId };
 }
 
+/**
+ * 延迟正文取回后的落点：正文先写进视图状态，再交给这次挂载。`render` 为 null 表示
+ * 这次挂载已经不在了（条目在请求途中被虚拟列表卸载），正文仍然留下，滚回来重建的
+ * 首帧直接从视图状态渲染，不重新请求、也不再闪加载态。
+ */
+export function settleDeferredContent(
+  store: TranscriptViewStore,
+  sessionId: string | undefined,
+  anchorEntryId: string | undefined,
+  part: string,
+  content: string,
+  render: ((content: string) => void) | null,
+): void {
+  store.markLoaded(sessionId, anchorEntryId, part, content);
+  render?.(content);
+}
+
 function subscribeToViewState(listener: () => void): () => void {
   return transcriptViewState.subscribe(listener);
 }

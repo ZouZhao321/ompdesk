@@ -11,7 +11,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, isHiddenAssistantBlock, thinkingDisplayState } from "@/lib/message-display";
 import { useDisplaySettings } from "@/hooks/useDisplaySettings";
-import { planDeferredContent, thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
+import { planDeferredContent, settleDeferredContent, thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
@@ -876,10 +876,16 @@ function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId,
     setError(null);
     void loadThinkingContent(plan.sessionId, plan.entryId, blockIndex)
       .then((value) => {
-        if (cancelled) return;
-        setContent(value);
-        // 正文与标记一起记下：条目被卸载后重建不再回到加载态。
-        transcriptViewState.markLoaded(key.sessionId, key.anchorEntryId, key.part, value);
+        // 正文先落视图状态，再由这次挂载决定要不要上屏：请求途中条目被虚拟列表卸载
+        // 时这里已经 cancelled，滚回来重建直接从视图状态渲染，不重新请求、不闪加载态。
+        settleDeferredContent(
+          transcriptViewState,
+          key.sessionId,
+          key.anchorEntryId,
+          key.part,
+          value,
+          cancelled ? null : setContent,
+        );
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));

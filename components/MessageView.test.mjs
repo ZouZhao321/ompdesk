@@ -260,6 +260,16 @@ test("skips the loading state once a deferred thought has been fetched", () => {
   assert.doesNotMatch(html, /class="markdown-thinking-error"/);
 });
 
+test("settles a fetched thought through the view state even after unmounting", () => {
+  // 请求途中条目被虚拟列表卸载时这次挂载不再收正文（cancelled），但正文必须先落进
+  // 视图状态，滚回来重建才不用重新请求。SSR 不跑 effect，这里只锁调用形状；落库与
+  // 「重建不再请求」由 lib/transcript-view-state.test.mjs 的 settleDeferredContent 用例覆盖。
+  const start = source.indexOf("void loadThinkingContent");
+  const handler = source.slice(start, source.indexOf("}, [block.deferred", start));
+  assert.match(handler, /settleDeferredContent\([\s\S]*?cancelled \? null : setContent/);
+  assert.doesNotMatch(handler, /if \(cancelled\) return;/);
+});
+
 test("renders an available thought ahead of loading and error markup", () => {
   // 正文与思考错误同时在手的那一帧要跑 effect 才可能出现，SSR 走不到；这里锁真实排版：
   // 正文在，加载态与错误文案的类名都不在。优先级本身由 lib/message-display.test.mjs
