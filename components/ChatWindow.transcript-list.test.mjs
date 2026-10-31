@@ -24,6 +24,20 @@ test("renders the parts outside the list through its header and footer slots", (
     source,
     /const transcriptSlots = useMemo<TranscriptSlotsContext>\(\s*\(\) => \(\{ header: transcriptHeader, footer: transcriptFooter \}\),\s*\[transcriptHeader, transcriptFooter\],\s*\);/,
   );
+  // 页首的内容来自派生数组：同一份 extensionWidgets 下它们也必须保持同一引用，否则
+  // 页首每帧重建，transcriptSlots 跟着换引用，整份 itemContent 全量重跑。
+  assert.match(
+    source,
+    /const aboveEditorWidgets = useMemo\(\s*\(\) => extensionWidgets\.filter\(\(widget\) => widget\.placement !== "belowEditor"\),\s*\[extensionWidgets\],\s*\);/,
+  );
+  assert.match(
+    source,
+    /const belowEditorWidgets = useMemo\(\s*\(\) => extensionWidgets\.filter\(\(widget\) => widget\.placement === "belowEditor"\),\s*\[extensionWidgets\],\s*\);/,
+  );
+  assert.doesNotMatch(source, /const aboveEditorWidgets = extensionWidgets\.filter/);
+  assert.doesNotMatch(source, /const belowEditorWidgets = extensionWidgets\.filter/);
+  // 依赖链闭合：extensionWidgets 不变 → 派生数组不变 → 页首不变 → slots 不变。
+  assert.match(source, /const transcriptHeader = useMemo\([\s\S]*?\n  \), \[aboveEditorWidgets\]\);/);
   assert.match(source, /context=\{transcriptSlots\}/);
   assert.doesNotMatch(source, /context=\{\{ header: transcriptHeader, footer: transcriptFooter \}\}/);
   // 没有第二个滚动锚点：滚动位置只归列表管。
