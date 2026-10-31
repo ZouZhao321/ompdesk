@@ -572,6 +572,47 @@ test("every refresh swallowed by the same navigation is replayed exactly once", 
   assert.equal(h.bindings.appliedLeafIdRef.current, "target-leaf");
 });
 
+test("a deferred reload is replayed with its agent state read", async () => {
+  const h = harness();
+  const navigationRequested = deferred();
+  const navigationBody = deferred();
+  const historyRequests = [];
+  const stateRequests = [];
+  h.bindings.fetch = async (url, options) => {
+    if (String(url).startsWith("/api/agent/")) {
+      // 命令带 init，运行态读没有：只统计后者。
+      if (options) return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+      stateRequests.push(String(url));
+      return { ok: true, json: async () => ({ running: false }) };
+    }
+    if (String(url).includes("/context?")) {
+      navigationRequested.resolve();
+      return { ok: true, json: () => navigationBody.promise };
+    }
+    const body = deferred();
+    historyRequests.push(body);
+    return { ok: true, json: () => body.promise };
+  };
+
+  const navigating = h.bindings.handleNavigate("target-leaf");
+  await navigationRequested.promise;
+  // /reload 的整段载入连同运行态一起读：让位后补发的那次不能只剩正文。
+  const reloading = h.bindings.loadSession("b", false, true);
+  historyRequests[0].resolve(sessionSnapshot("persisted-leaf", "persisted"));
+  assert.deepEqual(await reloading, { deferred: true });
+  assert.deepEqual(stateRequests, []);
+
+  navigationBody.resolve(context("target"));
+  await navigating;
+  await Promise.all(h.commands);
+  assert.equal(historyRequests.length, 2);
+  historyRequests[1].resolve(sessionSnapshot("target-leaf", "target"));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(stateRequests, ["/api/agent/runtime%3Ar1"]);
+  assert.deepEqual(h.ui.EntryIds, ["target-entry"]);
+});
+
 test("a deferred refresh is dropped when the session has moved on by the time the navigation settles", async () => {
   const h = harness();
   const navigationRequested = deferred();
