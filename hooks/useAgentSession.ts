@@ -57,6 +57,22 @@ interface StreamingState {
  */
 type ContextLoadOutcome = "applied" | "failed" | "superseded" | "invalidated";
 
+/**
+ * 一次在途导航：目标叶子，以及被它让位、等它收尾补发的整段载入。null 本身是合法
+ * 目标（分支根），所以用一层对象把「没有导航」与「正导航到分支根」分开。
+ */
+type PendingNavigation = {
+  leafId: string | null;
+  deferredLoad?: { sessionId: string; includeState: boolean };
+};
+
+/**
+ * 整段载入被在途导航让位时的返回值。这次没有回写，但导航收尾会补发一次，与 `null`
+ * （请求失败、被更晚的载入接管、会话不存在）分开：`promoteNewSession` 这类「载入
+ * 成功才继续」的门控不该因为一次让位被静默丢掉。
+ */
+type SessionLoadDeferred = { deferred: true };
+
 type StreamAction =
   | { type: "start" }
   | { type: "update"; message: Partial<AgentMessage> }
@@ -417,9 +433,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 也一起写）。高亮在载入前就写下了，命令失败后运行时仍停在旧叶子上，只看高亮会把
   // 同一条分支的重试静默吞掉。
   const runtimeLeafIdRef = useRef<string | null>(null);
-  // 在途导航的目标叶子。null 本身是合法目标（分支根），所以用一层对象把「没有导航」
-  // 与「正导航到分支根」分开。
-  const navigatingLeafRef = useRef<{ leafId: string | null } | null>(null);
+  // 在途导航的目标叶子与被它让位的整段载入（见 PendingNavigation）。
+  const navigatingLeafRef = useRef<PendingNavigation | null>(null);
   // 导航代数：每开始一次导航就加一。整段载入在发出时记下它，解析后据此判断自己
   // 代表的是不是发出那一刻的持久化视图——导航已经把叶子与正文写下去了，慢一步的
   // 整段载入不能把它们拉回去。
@@ -645,7 +660,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return false;
   }, [followSessionIdentity]);
 
-  const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
+  const loadSession = useCallback(async (
+    sid: string,
+    showLoading = false,
+    includeState = false,
+  ): Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | null> => {
     const requestId = ++historyRequestRef.current;
     const ownsHistory = () => mountedRef.current && sessionIdRef.current === sid && historyRequestRef.current === requestId;
     // 发出这次请求时的导航代数与在途目标。导航会自己写叶子与正文，这次载入只代表
@@ -673,9 +692,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!ownsHistory()) return null;
       // 请求在途期间有导航开始、结束或仍挂着：叶子、正文与运行态都归那次导航。这次
       // 载入读到的是发出那一刻的持久化视图，照常回写会把在途导航已写下的高亮拉回
-      // 旧叶子，界面先错一次。整段让位，连会话身份也不跟。
-      if (navigatingAtRequest !== null || navigatingLeafRef.current !== null
-        || navigationGenerationRef.current !== navigationGeneration) return null;
+      // 旧叶子。导航还挂着就把会话记在它身上，由它的 finally 补发一次——命令与事件
+      // 触发的刷新（compact、handoff、改名、reload、rewind、agent_end 等）不该在导航
+      // 窗口里整段丢掉，否则 entryIds 会一直落后于 messages，promoteNewSession 这类
+      // 门控也跟着消失。导航已经落定（只有代数不同）说明没有人在等这次回写，丢弃。
+      const navigating = navigatingLeafRef.current;
+      if (navigatingAtRequest !== null || navigating !== null
+        || navigationGenerationRef.current !== navigationGeneration) {
+        if (!navigating) return null;
+        navigating.deferredLoad = {
+          sessionId: sid,
+          includeState: navigating.deferredLoad?.sessionId === sid
+            ? navigating.deferredLoad.includeState || includeState
+            : includeState,
+        };
+        return { deferred: true };
+      }
       if (d.runtimeId || d.sessionId !== sid) {
         followSessionIdentity(d.sessionId, d.runtimeId);
         sid = d.sessionId;
@@ -1960,7 +1992,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
-    const navigation = { leafId: entryId };
+    const navigation: PendingNavigation = { leafId: entryId };
     navigationGenerationRef.current += 1;
     navigatingLeafRef.current = navigation;
     try {
@@ -1975,9 +2007,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!commandSessionId) return;
       await moveRuntimeLeaf(commandSessionId, entryId);
     } finally {
+      // 被这次导航让位的整段载入在落定后补发一次：它只是晚了一步，落定后的持久化
+      // 视图才是它本来要读的那份。会话已经换走则不补——界面归新会话的载入。
+      const deferredLoad = navigation.deferredLoad;
       if (navigatingLeafRef.current === navigation) navigatingLeafRef.current = null;
+      if (deferredLoad && mountedRef.current && sessionIdRef.current === deferredLoad.sessionId) {
+        void loadSession(deferredLoad.sessionId, false, deferredLoad.includeState);
+      }
     }
-  }, [applyActiveLeaf, loadContext, moveRuntimeLeaf, settleContextNavigation]);
+  }, [applyActiveLeaf, loadContext, loadSession, moveRuntimeLeaf, settleContextNavigation]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
@@ -1988,7 +2026,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       && (leafId === runtimeLeafIdRef.current || navigating?.leafId === leafId)) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
-    const navigation = { leafId };
+    const navigation: PendingNavigation = { leafId };
     navigationGenerationRef.current += 1;
     navigatingLeafRef.current = navigation;
     try {
@@ -2003,9 +2041,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!commandSessionId) return;
       await moveRuntimeLeaf(commandSessionId, leafId);
     } finally {
+      // 与 handleNavigate 同一收尾：让位的整段载入在这里补发一次，会话换走则不补。
+      const deferredLoad = navigation.deferredLoad;
       if (navigatingLeafRef.current === navigation) navigatingLeafRef.current = null;
+      if (deferredLoad && mountedRef.current && sessionIdRef.current === deferredLoad.sessionId) {
+        void loadSession(deferredLoad.sessionId, false, deferredLoad.includeState);
+      }
     }
-  }, [applyActiveLeaf, loadContext, moveRuntimeLeaf, settleContextNavigation]);
+  }, [applyActiveLeaf, loadContext, loadSession, moveRuntimeLeaf, settleContextNavigation]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
@@ -2575,7 +2618,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       loadSession(session.id, true, true).then((agentState) => {
         const sid = sessionIdRef.current;
         if (!mountedRef.current || !sid) return;
-        if (agentState?.running) {
+        // 首屏载入没有在途导航可让位；这里只是把「让位」从结果类型里摘掉。
+        if (!agentState || "deferred" in agentState) return;
+        if (agentState.running) {
           loadTools(sid);
           if (
             agentState.state?.isStreaming
