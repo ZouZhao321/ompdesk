@@ -4,9 +4,12 @@ import type { TranscriptItem } from "./transcript-items";
 export const RAIL_COLUMN_WIDTH_PX = 820;
 /** 版心内边距（px）：行盒两侧各留一份，app/globals.css 的 --chat-column-padding 与它同值。 */
 export const RAIL_COLUMN_PADDING_PX = 16;
-/** 相邻圆点的中心距（px）：圆点 6px、间隙 8px，圆点列表按它换算滚动位置。 */
-export const RAIL_ROW_PX = 14;
-/** 圆点容器的最高高度（px），超出后容器内部滚动。 */
+/**
+ * 相邻圆点的中心距（px），也就是每个圆点的行高。行高同时就是命中区高度（WCAG 2.5.8
+ * 的最小目标），相邻命中区因此正好相邻、不重叠也不留死区；圆点 6px 在行内居中。
+ */
+export const RAIL_ROW_PX = 24;
+/** 圆点容器的最高高度（px）：按节距放下 7 个整圆点，超出后容器内部滚动。 */
 export const RAIL_MAX_HEIGHT_PX = 180;
 /** 悬停提示里保留的提问字符数，超出由两行省略收起。 */
 const RAIL_PROMPT_CHARS = 160;

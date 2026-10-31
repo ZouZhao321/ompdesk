@@ -145,6 +145,16 @@ test("derives the rail geometry from the region constants", async () => {
   assert.doesNotMatch(styles, /max-width: 899px/);
 });
 
+test("gives every dot a hit area as tall as its row", async () => {
+  const { RAIL_MAX_HEIGHT_PX, RAIL_ROW_PX } = await import("../lib/transcript-rail.ts");
+  // 节距就是命中区高度：24px 达标，相邻两点的命中区正好相接，不再靠伪元素外扩。
+  assert.equal(RAIL_ROW_PX, 24);
+  assert.equal(Math.floor(RAIL_MAX_HEIGHT_PX / RAIL_ROW_PX), 7, "180px 的圆点列放下 7 个整圆点");
+  assert.match(source, /style=\{\{ height: RAIL_ROW_PX \}\}/);
+  assert.doesNotMatch(styles, /\.transcript-rail-dot::before/);
+  assert.match(declarations(".transcript-rail-dot {"), /width: var\(--transcript-rail-lane\);/);
+});
+
 test("keeps the tip offset on the lane variables", () => {
   const region = declarations(".chat-transcript-region");
   assert.match(region, /--transcript-rail-tip-gap: 8px;/);
