@@ -110,6 +110,8 @@ function harness() {
     runtimeLeafIdRef: { current: null },
     // 在途导航的目标叶子；外层对象把「没有导航」与「正导航到分支根(null)」分开。
     navigatingLeafRef: { current: null },
+    // 导航代数：每开始一次导航 +1，整段载入靠它判断自己的提交是否过期。
+    navigationGenerationRef: { current: 0 },
     opts: {},
     // 界面文案由组件注入；这里按词条给出英文，回执断言保持可读。
     t: (key) => ({
@@ -410,6 +412,94 @@ test("a missing session clears the recorded leaf together with the state", async
   assert.equal(h.ui.ActiveLeafId, null);
   assert.equal(h.bindings.activeLeafIdRef.current, null);
   assert.equal(h.bindings.runtimeLeafIdRef.current, null);
+});
+
+test("a branch that lands first is not pulled back by an older session load", async () => {
+  const h = harness();
+  const historyRequested = deferred();
+  const historyBody = deferred();
+  const navigationRequested = deferred();
+  const navigationBody = deferred();
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    if (String(url).includes("/context?")) {
+      navigationRequested.resolve();
+      return { ok: true, json: () => navigationBody.promise };
+    }
+    historyRequested.resolve();
+    return { ok: true, json: () => historyBody.promise };
+  };
+
+  // agent_end / prompt_done 触发的整段载入先发出。
+  const loading = h.bindings.loadSession("b", true);
+  await historyRequested.promise;
+  // 载入在途时用户点了另一条分支，导航先落定。
+  const navigating = h.bindings.handleNavigate("target-leaf");
+  await navigationRequested.promise;
+  navigationBody.resolve(context("target"));
+  await navigating;
+  await Promise.all(h.commands);
+
+  // 慢一步的持久化视图随后到达：叶子与正文都归那次导航，不许把它们拉回旧值。
+  historyBody.resolve(response({
+    sessionId: "b",
+    runtimeId: "runtime:r1",
+    leafId: "persisted-leaf",
+    context: { messages: [{ role: "user", content: "persisted" }], entryIds: ["persisted-entry"] },
+  }));
+  assert.equal(await loading, null);
+  assert.equal(h.ui.ActiveLeafId, "target-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
+  assert.equal(h.bindings.appliedLeafIdRef.current, "target-leaf");
+  assert.equal(h.bindings.runtimeLeafIdRef.current, "target-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target" }]);
+  assert.deepEqual(h.ui.EntryIds, ["target-entry"]);
+});
+
+test("a session load issued while a branch is loading leaves the leaf to that navigation", async () => {
+  const h = harness();
+  const navigationRequested = deferred();
+  const navigationBody = deferred();
+  const historyRequested = deferred();
+  const historyBody = deferred();
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    if (String(url).includes("/context?")) {
+      navigationRequested.resolve();
+      return { ok: true, json: () => navigationBody.promise };
+    }
+    historyRequested.resolve();
+    return { ok: true, json: () => historyBody.promise };
+  };
+
+  // 导航挂着、高亮已经写在目标叶上，agent_end 此时才触发这次整段载入。
+  const navigating = h.bindings.handleNavigate("target-leaf");
+  await navigationRequested.promise;
+  const loading = h.bindings.loadSession("b", true);
+  await historyRequested.promise;
+  historyBody.resolve(response({
+    sessionId: "b",
+    runtimeId: "runtime:r1",
+    leafId: "persisted-leaf",
+    context: { messages: [{ role: "user", content: "persisted" }], entryIds: ["persisted-entry"] },
+  }));
+
+  assert.equal(await loading, null);
+  // 导航还没落定：叶子与正文归它，载入不许抢在它前面写一遍持久化值。
+  assert.equal(h.ui.ActiveLeafId, "target-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
+  assert.equal(h.bindings.appliedLeafIdRef.current, null);
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "current messages" }]);
+
+  navigationBody.resolve(context("target"));
+  await navigating;
+  await Promise.all(h.commands);
+  assert.equal(h.bindings.appliedLeafIdRef.current, "target-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target" }]);
 });
 
 test("a navigation already under way is not reloaded by a click on the same leaf", async () => {
