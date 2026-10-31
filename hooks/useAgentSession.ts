@@ -420,6 +420,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 在途导航的目标叶子。null 本身是合法目标（分支根），所以用一层对象把「没有导航」
   // 与「正导航到分支根」分开。
   const navigatingLeafRef = useRef<{ leafId: string | null } | null>(null);
+  // 导航代数：每开始一次导航就加一。整段载入在发出时记下它，解析后据此判断自己
+  // 代表的是不是发出那一刻的持久化视图——导航已经把叶子与正文写下去了，慢一步的
+  // 整段载入不能把它们拉回去。
+  const navigationGenerationRef = useRef(0);
   // 「当前叶子」唯一的写入口：状态与去重用的 ref 在同一时机写，两条导航路径不会
   // 各自决定先后。载入失败时调用方用同一个入口把两者一起退回。
   const applyActiveLeaf = useCallback((leafId: string | null) => {
@@ -644,6 +648,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     const requestId = ++historyRequestRef.current;
     const ownsHistory = () => mountedRef.current && sessionIdRef.current === sid && historyRequestRef.current === requestId;
+    // 发出这次请求时的导航代数与在途目标。导航会自己写叶子与正文，这次载入只代表
+    // 发出那一刻的持久化视图。
+    const navigationGeneration = navigationGenerationRef.current;
+    const navigatingAtRequest = navigatingLeafRef.current;
     let messagesLoaded = false;
     try {
       if (showLoading) setLoading(true);
@@ -663,6 +671,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
       if (!ownsHistory()) return null;
+      // 请求在途期间有导航开始、结束或仍挂着：叶子、正文与运行态都归那次导航。这次
+      // 载入读到的是发出那一刻的持久化视图，照常回写会把在途导航已写下的高亮拉回
+      // 旧叶子，界面先错一次。整段让位，连会话身份也不跟。
+      if (navigatingAtRequest !== null || navigatingLeafRef.current !== null
+        || navigationGenerationRef.current !== navigationGeneration) return null;
       if (d.runtimeId || d.sessionId !== sid) {
         followSessionIdentity(d.sessionId, d.runtimeId);
         sid = d.sessionId;
@@ -1948,6 +1961,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     const navigation = { leafId: entryId };
+    navigationGenerationRef.current += 1;
     navigatingLeafRef.current = navigation;
     try {
       // 先写叶子再等载入：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
@@ -1975,6 +1989,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     const navigation = { leafId };
+    navigationGenerationRef.current += 1;
     navigatingLeafRef.current = navigation;
     try {
       // 状态与 ref 一起先写，载入失败或作废时一起退回。只在成功后写 ref 会让失败后的

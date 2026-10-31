@@ -59,6 +59,9 @@ function harness() {
     appliedLeafIdRef: { current: null },
     // 运行时确认停在上面的叶子：整段载入与成功的导航命令一起写。
     runtimeLeafIdRef: { current: null },
+    // 在途导航与导航代数：整段载入靠它们判断自己的提交是否已过期。
+    navigatingLeafRef: { current: null },
+    navigationGenerationRef: { current: 0 },
     opts: {},
     onSessionForked: (...args) => effects.push(["identity", ...args]),
     rememberSessionContinuation: (sessionId, runtimeId) => { continuation.current = { sessionId, runtimeId }; },
