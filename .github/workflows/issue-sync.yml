@@ -1,0 +1,38 @@
+name: Issue sync
+
+# External feedback arrives as GitHub issues. This copies each issue into the
+# Feishu Base row that tracks it, so the internal board never needs manual entry.
+# The Base row keeps the internal status; GitHub only holds the public thread.
+on:
+  issues:
+    types: [opened, edited, closed, reopened]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: issue-sync-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Copy issue into Feishu
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Sync issue
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_BASE_TOKEN: XymgbNnuFaeKHFs2b5jcfvsunTg
+          FEISHU_TABLE_ID: tblalc9kzxvVThKd
+        run: node .github/scripts/sync-issue-to-feishu.mjs
