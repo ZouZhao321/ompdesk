@@ -9,8 +9,12 @@ export const RAIL_COLUMN_PADDING_PX = 16;
  * 的最小目标），相邻命中区因此正好相邻、不重叠也不留死区；圆点 6px 在行内居中。
  */
 export const RAIL_ROW_PX = 24;
-/** 圆点容器的最高高度（px）：按节距放下 7 个整圆点，超出后容器内部滚动。 */
-export const RAIL_MAX_HEIGHT_PX = 180;
+/**
+ * 圆点容器的最高高度（px）：7 个整圆点。必须是节距的整数倍——非整倍数时容器底边会
+ * 切在行中间，那里露出的半个圆点既看不全也点不到，与「行高即命中区」冲突；168px 让
+ * 底边落在行边界上，放得下的圆点整块可点，放不下的整块由容器内部滚动带走。
+ */
+export const RAIL_MAX_HEIGHT_PX = 168;
 /** 悬停提示里保留的提问字符数，超出由两行省略收起。 */
 const RAIL_PROMPT_CHARS = 160;
 
