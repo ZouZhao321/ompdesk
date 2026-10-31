@@ -165,7 +165,7 @@ for (const [label, identity] of [
   ["missing runtime", { sessionId: "b" }],
   ["old live runtime", { sessionId: "b", runtimeId: "runtime:r1" }],
 ]) {
-  test(`navigation ignores delayed context with ${label} after its command reopens B/R2`, async () => {
+  test(`navigation drops a delayed context after the runtime reopens with ${label}`, async () => {
     const h = harness();
     const expiredCommand = deferred();
     const oldContext = deferred();
@@ -181,18 +181,25 @@ for (const [label, identity] of [
       return { ok: true, json: () => { contextRequested.resolve(); return oldContext.promise; } };
     };
 
+    // 载入先发：跳转条等载入应用之后才动运行时。
     const navigating = h.bindings.handleNavigate("old-leaf");
     await contextRequested.promise;
+    // 载入在途期间，另一个命令撞上过期句柄，把同一个会话重绑到 R2。
+    const reopening = h.bindings.sendAgentCommand(
+      "b",
+      { type: "navigate_tree", targetId: "old-leaf" },
+      h.bindings.runtimeIdRef,
+    );
     expiredCommand.resolve(response({
       error: "Runtime session expired", code: "runtime_expired", accepted: false, sessionId: "b",
     }, 404));
-    await Promise.all(h.commands);
+    await reopening;
     assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
     assert.equal(h.memory.getSessionContinuation("b"), "runtime:r2");
     assert.equal(h.bindings.contextRequestRef.current, 1, "same-transcript reopening keeps the context request number");
     assert.deepEqual(requests, [
-      { url: "/api/agent/runtime%3Ar1", command: { type: "navigate_tree", targetId: "old-leaf" } },
       { url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=old-leaf", command: null },
+      { url: "/api/agent/runtime%3Ar1", command: { type: "navigate_tree", targetId: "old-leaf" } },
       { url: "/api/agent/b", command: { type: "navigate_tree", targetId: "old-leaf" } },
     ]);
     const reopened = snapshot(h);
@@ -413,6 +420,8 @@ function failingContext(status) {
 
 test("a failed branch click puts the leaf state and the dedupe marker back together", async () => {
   const h = harness();
+  // 这一叶真的载入成功过，是唯一的退回目标。
+  h.bindings.appliedLeafIdRef.current = "current-leaf";
   h.bindings.activeLeafIdRef.current = "current-leaf";
   h.bindings.fetch = failingContext(500);
 
@@ -439,14 +448,78 @@ test("a failed branch click puts the leaf state and the dedupe marker back toget
 
 test("a failed entry navigation rolls the leaf back with the marker", async () => {
   const h = harness();
+  h.bindings.appliedLeafIdRef.current = "current-leaf";
   h.bindings.activeLeafIdRef.current = "current-leaf";
   h.bindings.fetch = failingContext(503);
 
   await h.bindings.handleNavigate("broken-leaf");
   await Promise.all(h.commands);
 
-  // 两条导航路径同一时机：先写、失败一起退。界面不会停在一条没载入的分支上。
+  // 两条导航路径同一规则：先写、失败一起退。界面不会停在一条没载入的分支上。
   assert.equal(h.ui.ActiveLeafId, "current-leaf");
   assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
   assert.deepEqual(h.ui.Messages, [{ role: "user", content: "current messages" }]);
+});
+
+test("a failed branch click with nothing loaded rolls back to no leaf, not the one in flight", async () => {
+  const h = harness();
+  // 一条导航还在途：activeLeafIdRef 指向它，但它从没载入成功。
+  h.bindings.activeLeafIdRef.current = "pending-leaf";
+  assert.equal(h.bindings.appliedLeafIdRef.current, null);
+  h.bindings.fetch = failingContext(500);
+
+  await h.bindings.handleLeafChange("broken-leaf");
+
+  // 退回目标只认真的载入成功过的叶子：在途的那条同样没载入成功，退回去会把界面停在
+  // 一条从没载入过的分支上，之后去重判据还会永久吞掉对它的重试。
+  assert.equal(h.ui.ActiveLeafId, null);
+  assert.equal(h.bindings.activeLeafIdRef.current, null);
+  assert.deepEqual(h.commands, []);
+
+  // 退回 null 之后同一条分支还能再点一次。
+  h.bindings.fetch = async (url) => (String(url).startsWith("/api/agent/")
+    ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
+    : response(context("recovered branch")));
+  await h.bindings.handleLeafChange("broken-leaf");
+  await Promise.all(h.commands);
+
+  assert.equal(h.ui.ActiveLeafId, "broken-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "recovered branch" }]);
+});
+
+test("a failed entry navigation with nothing loaded rolls back to no leaf", async () => {
+  const h = harness();
+  h.bindings.activeLeafIdRef.current = "pending-leaf";
+  h.bindings.fetch = failingContext(503);
+
+  await h.bindings.handleNavigate("broken-leaf");
+
+  // 与切叶同一规则：没有载入成功过的叶子就退回 null，运行时也不动。
+  assert.equal(h.ui.ActiveLeafId, null);
+  assert.equal(h.bindings.activeLeafIdRef.current, null);
+  assert.deepEqual(h.commands, []);
+});
+
+test("an entry navigation moves the runtime leaf only after the branch is applied", async () => {
+  const h = harness();
+  const requests = [];
+  h.bindings.fetch = async (url, options) => {
+    requests.push({ url, command: options ? JSON.parse(options.body) : null });
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    return response(context("target branch"));
+  };
+
+  await h.bindings.handleNavigate("target-leaf");
+  await Promise.all(h.commands);
+
+  // 先载入、应用成功后才发命令：载入失败就不发，运行时不会停在没载入的分支上，
+  // 也就不需要「先发后补反向命令」。
+  assert.deepEqual(requests, [
+    { url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=target-leaf", command: null },
+    { url: "/api/agent/runtime%3Ar1", command: { type: "navigate_tree", targetId: "target-leaf" } },
+  ]);
+  assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
+  assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target branch" }]);
 });
