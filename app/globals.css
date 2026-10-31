@@ -1640,6 +1640,7 @@ span.linenumber {
 }
 /* 行高由 lib/transcript-rail.ts 的 RAIL_ROW_PX 给出；这里只画 6px 圆点与胶囊。 */
 .transcript-rail-dot {
+  position: relative;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -1649,6 +1650,17 @@ span.linenumber {
   border: 0;
   background: transparent;
   cursor: pointer;
+}
+/* 命中区：行高就是 14px 节距，视觉与滚动几何都不动，用伪元素上下各扩 5px 补到
+   24px 高（WCAG 2.5.8 的最小目标），左右沿用车道宽度。上下相邻两点因此会重叠，
+   重叠处归排在后面画的那个点。圆点列裁掉首末两点超出列外的部分。 */
+.transcript-rail-dot::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  right: 0;
+  bottom: -5px;
+  left: 0;
 }
 .transcript-rail-dot:focus-visible {
   outline: 2px solid var(--accent);
@@ -1686,6 +1698,7 @@ span.linenumber {
   white-space: nowrap;
 }
 .transcript-rail-step {
+  position: relative;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -1698,6 +1711,16 @@ span.linenumber {
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
+}
+/* 命中区：可见高度 20px 不变，上下各扩 2px 补到 24px；扩出的部分落在与圆点列之间
+   的 4px 间隙里，不压住相邻圆点。 */
+.transcript-rail-step::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: 0;
+  bottom: -2px;
+  left: 0;
 }
 .transcript-rail-step:hover:not(:disabled),
 .transcript-rail-step:focus-visible {
