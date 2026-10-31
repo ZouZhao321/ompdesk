@@ -1877,25 +1877,28 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
-    // 退回目标取最近一次真的载入成功的叶子，而不是上一次请求的叶子：连点 A→B→C 时
-    // B 自己也可能没载入成功，退回 B 会把界面停在一条从没载入过的分支上。
-    const applied = appliedLeafIdRef.current ?? activeLeafIdRef.current;
-    // 跳转条先动运行时：这条命令负责把运行时的活动叶子换过去。载入失败时补一条反
-    // 方向的命令，界面与运行时的活动叶子不会各停一条分支。
-    sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef).catch(() => {});
+    // 退回目标只能是最近一次真的载入成功的叶子：连点 A→B→C 时 B 自己也可能没载入
+    // 成功，退回 B 会把界面停在一条从没载入过的分支上；一次都没载入成功过就退回 null，
+    // 不能退到还在途的那条叶子上——它同样没载入成功。
+    const applied = appliedLeafIdRef.current;
     // 先写叶子再等载入：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
     // 同一段上下文被重载一遍又把视图拽回末尾。
     applyActiveLeaf(entryId);
     const outcome = await loadContext(sid, entryId);
-    // 只认自己这次载入：stale 说明更晚的载入已经接管界面，退回会把它刚写下的叶子盖掉。
-    if (outcome !== "failed") return;
-    // 只在自己仍是最新写入者时退回：更晚的导航或一次整段载入已经把叶子挪走了。
-    if (activeLeafIdRef.current !== entryId) return;
-    applyActiveLeaf(applied);
-    if (!applied) return;
-    sendAgentCommand(sid, { type: "navigate_tree", targetId: applied }, runtimeIdRef).catch(() => {});
-    // 退回后补一次载入：消息区要与高亮的叶子一致，不能留在没载入成功的那条上。
-    await loadContext(sid, applied);
+    // 只有这次载入真的应用了才动运行时。stale 说明更晚的载入已经接管界面与运行时，
+    // 拿这条可能已属于别的会话的叶子发命令，会把那边刚换过去的叶子改走。
+    if (outcome !== "applied") {
+      // 只在自己仍是最新写入者时退回：更晚的导航或一次整段载入已经把叶子挪走了。
+      if (outcome === "failed" && activeLeafIdRef.current === entryId) {
+        applyActiveLeaf(applied);
+        // 退回后补一次载入：消息区要与高亮的叶子一致，不能留在没载入成功的那条上。
+        if (applied) await loadContext(sid, applied);
+      }
+      return;
+    }
+    // 载入成功后才动运行时：这条命令负责把运行时的活动叶子换过去。载入失败就不发，
+    // 运行时不会停在一条没载入成功的分支上，也就不需要「先发后补反向命令」。
+    sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef).catch(() => {});
   }, [applyActiveLeaf, loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
@@ -1905,9 +1908,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (leafId === activeLeafIdRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
-    const applied = appliedLeafIdRef.current ?? activeLeafIdRef.current;
-    // 与 handleNavigate 同一时机：状态与 ref 一起先写，载入失败一起退回。只在成功后
-    // 写 ref 会让失败后的状态与 ref 分开，点回原叶子被去重判据吞掉。
+    // 与 handleNavigate 同一规则：只退回真的载入成功过的叶子，没有就退回 null。
+    const applied = appliedLeafIdRef.current;
+    // 状态与 ref 一起先写，载入失败一起退回。只在成功后写 ref 会让失败后的状态与 ref
+    // 分开，点回原叶子被去重判据吞掉。
     applyActiveLeaf(leafId);
     const outcome = await loadContext(sid, leafId);
     // 只有这次载入真的应用了才动运行时。stale 说明更晚的载入已经接管界面与运行时，
