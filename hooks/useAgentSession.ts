@@ -24,6 +24,7 @@ import { rememberSessionContinuation, clearSessionContinuation } from "@/lib/wor
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { ContextUsage, GoalStatusInfo, SessionStatsInfo, SlashCommandInfo } from "@/lib/omp-types";
 import type { ModelRoleAssignment } from "@/lib/api-types";
+import type { TranslationParams } from "@/lib/i18n/types";
 
 export interface SessionData {
   runtimeId?: string;
@@ -198,6 +199,10 @@ export interface UseAgentSessionOptions {
    * 不再自己动滚动元素。必填：缺了它「跟随中」的状态就没有落点，漏接由 typecheck 兜住。
    */
   scrollTranscriptToEnd: (behavior: ScrollBehavior) => void;
+  /**
+   * 导航失败的回执走当前界面语言。与滚动落点同理，由调用方注入，hook 不猜文案。
+   */
+  t: (key: string, params?: TranslationParams) => string;
 }
 
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -391,7 +396,7 @@ type SlashCommandsResponse = {
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     session, newSessionCwd, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
-    modelsRefreshKey, onBranchDataChange, onSessionStatsPanelOpen,
+    modelsRefreshKey, onBranchDataChange, onSessionStatsPanelOpen, t,
   } = opts;
 
   const isNew = session === null && newSessionCwd !== null;
@@ -408,6 +413,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 导航载入失败或本次作废时，退回目标只能是它：上一次请求的叶子可能自己也没
   // 载入成功，退回去会把界面停在一条从没载入过的分支上。
   const appliedLeafIdRef = useRef<string | null>(null);
+  // 运行时真的已经停在上面的叶子：只在该叶的导航命令成功后写（整段载入同时反映运行态，
+  // 也一起写）。高亮在载入前就写下了，命令失败后运行时仍停在旧叶子上，只看高亮会把
+  // 同一条分支的重试静默吞掉。
+  const runtimeLeafIdRef = useRef<string | null>(null);
+  // 在途导航的目标叶子。null 本身是合法目标（分支根），所以用一层对象把「没有导航」
+  // 与「正导航到分支根」分开。
+  const navigatingLeafRef = useRef<{ leafId: string | null } | null>(null);
   // 「当前叶子」唯一的写入口：状态与去重用的 ref 在同一时机写，两条导航路径不会
   // 各自决定先后。载入失败时调用方用同一个入口把两者一起退回。
   const applyActiveLeaf = useCallback((leafId: string | null) => {
@@ -641,6 +653,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (showLoading && ownsHistory()) {
           setData(null);
           appliedLeafIdRef.current = null;
+          runtimeLeafIdRef.current = null;
           applyActiveLeaf(null);
           setMessages([]);
           setError(null);
@@ -655,10 +668,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         sid = d.sessionId;
       }
       setData(d);
-      // 载入就是一次真实的叶子切换：状态与去重用的 ref 一起写。只在导航路径写 ref
-      // 会让首屏之后点已高亮的当前叶子被判成换了叶子，整段重载并把视图拽回末尾；
-      // 一轮结束后叶子前进了，ref 却还停在旧叶子上，点旧叶子又被去重判据静默吞掉。
+      // 载入就是一次真实的叶子切换，界面与运行态同时落到这条叶上：高亮、载入成功
+      // 过的叶子与运行时确认值一起写。只在导航路径写 ref 会让首屏之后点已高亮的
+      // 当前叶子被判成换了叶子，整段重载并把视图拽回末尾；一轮结束后叶子前进了，
+      // ref 却还停在旧叶子上，点旧叶子又被去重判据静默吞掉。
       appliedLeafIdRef.current = d.leafId;
+      runtimeLeafIdRef.current = d.leafId;
       applyActiveLeaf(d.leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
@@ -1902,62 +1917,80 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (outcome === "invalidated" && sessionIdRef.current !== sid) return false;
     // 只在自己仍是最新写入者时退回：更晚的导航或一次整段载入已经把叶子挪走了。
     if (activeLeafIdRef.current !== leafId) return false;
-    const applied = appliedLeafIdRef.current;
-    applyActiveLeaf(applied);
-    // 请求自己失败时消息区仍停在旧一段，补一次载入让它与高亮的叶子一致；会话或运行时
-    // 失效时界面本来就停在 applied 那条分支上，只把标记退回去，不再发一次载入。
-    if (outcome === "failed" && applied) await loadContext(sid, applied);
+    applyActiveLeaf(appliedLeafIdRef.current);
+    // 请求自己失败时消息区仍停在旧一段：补一条回执，用户才知道高亮为什么弹了回去。
+    // 这里不再补发一次载入——第二次载入同样可能失败，成功时还会把正在上滚阅读的视图
+    // 拽回末尾，与「失败就别动视图」正好相反。会话或运行时失效时界面本来就停在
+    // applied 那条分支上，连回执都不需要。
+    if (outcome === "failed") {
+      addNotice({ type: "error", message: t("chat.branchLoadFailed") });
+    }
     return false;
-  }, [applyActiveLeaf, loadContext]);
+  }, [addNotice, applyActiveLeaf, t]);
+
+  /**
+   * 把运行时叶子挪到目标。只有命令成功才说明运行时真的停在那条分支上，确认值因此
+   * 只在成功后写：失败时它停在旧叶子上，同一叶子的重试不会被切叶的去重判据吞掉。
+   * 失败只留一条通用回执，命令的原始异常留在日志里。
+   */
+  const moveRuntimeLeaf = useCallback(async (sid: string, leafId: string) => {
+    try {
+      await sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }, runtimeIdRef);
+      runtimeLeafIdRef.current = leafId;
+    } catch (e) {
+      console.error("Failed to move the runtime leaf:", e);
+      addNotice({ type: "error", message: t("chat.branchSwitchFailed") });
+    }
+  }, [addNotice, t]);
 
   const handleNavigate = useCallback(async (entryId: string) => {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
-    // 先写叶子再等载入：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
-    // 同一段上下文被重载一遍又把视图拽回末尾。
-    applyActiveLeaf(entryId);
-    // 载入没应用（失败或本次作废）就不动运行时：拿一条没载入成功的叶子发命令，会把
-    // 运行时停在那条分支上。退回叶子统一由 settleContextNavigation 负责。
-    if (!await settleContextNavigation(sid, entryId, await loadContext(sid, entryId))) return;
-    // 载入可能把会话迁移到别的 id，命令要发给当前的会话，而不是请求开始时那个。
-    const commandSessionId = sessionIdRef.current;
-    if (!commandSessionId) return;
-    sendAgentCommand(commandSessionId, { type: "navigate_tree", targetId: entryId }, runtimeIdRef)
-      .catch((e) => {
-        console.error("Failed to move the runtime leaf:", e);
-        addNotice({
-          type: "error",
-          message: `Failed to switch branch: ${e instanceof Error ? e.message : String(e)}`,
-        });
-      });
-  }, [addNotice, applyActiveLeaf, loadContext, settleContextNavigation]);
+    const navigation = { leafId: entryId };
+    navigatingLeafRef.current = navigation;
+    try {
+      // 先写叶子再等载入：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
+      // 同一段上下文被重载一遍又把视图拽回末尾。
+      applyActiveLeaf(entryId);
+      // 载入没应用（失败或本次作废）就不动运行时：拿一条没载入成功的叶子发命令，会把
+      // 运行时停在那条分支上。退回叶子统一由 settleContextNavigation 负责。
+      if (!await settleContextNavigation(sid, entryId, await loadContext(sid, entryId))) return;
+      // 载入可能把会话迁移到别的 id，命令要发给当前的会话，而不是请求开始时那个。
+      const commandSessionId = sessionIdRef.current;
+      if (!commandSessionId) return;
+      await moveRuntimeLeaf(commandSessionId, entryId);
+    } finally {
+      if (navigatingLeafRef.current === navigation) navigatingLeafRef.current = null;
+    }
+  }, [applyActiveLeaf, loadContext, moveRuntimeLeaf, settleContextNavigation]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
-    // 点的就是已经激活的叶子：视图已经停在这条分支上，整段重载只会把正在上滚阅读
-    // 的视图拽回末尾，什么都不做。
-    if (leafId === activeLeafIdRef.current) return;
+    // 只有高亮、运行时与在途导航都没有别的说法时才跳过：高亮在载入前就写下了，命令
+    // 失败后运行时仍停在旧叶子上，只看高亮会把同一条分支的重试静默吞掉。
+    const navigating = navigatingLeafRef.current;
+    if (leafId === activeLeafIdRef.current
+      && (leafId === runtimeLeafIdRef.current || navigating?.leafId === leafId)) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
-    // 状态与 ref 一起先写，载入失败或作废时一起退回。只在成功后写 ref 会让失败后的
-    // 状态与 ref 分开，点回原叶子被去重判据吞掉。
-    applyActiveLeaf(leafId);
-    // 与 handleNavigate 同一规则：载入没应用就不动运行时，退回叶子同上。
-    if (!await settleContextNavigation(sid, leafId, await loadContext(sid, leafId))) return;
-    // 分支根（null）没有可指的运行时叶子；其余同样按载入后的会话 id 发命令。
-    if (!leafId) return;
-    const commandSessionId = sessionIdRef.current;
-    if (!commandSessionId) return;
-    sendAgentCommand(commandSessionId, { type: "navigate_tree", targetId: leafId }, runtimeIdRef)
-      .catch((e) => {
-        console.error("Failed to move the runtime leaf:", e);
-        addNotice({
-          type: "error",
-          message: `Failed to switch branch: ${e instanceof Error ? e.message : String(e)}`,
-        });
-      });
-  }, [addNotice, applyActiveLeaf, loadContext, settleContextNavigation]);
+    const navigation = { leafId };
+    navigatingLeafRef.current = navigation;
+    try {
+      // 状态与 ref 一起先写，载入失败或作废时一起退回。只在成功后写 ref 会让失败后的
+      // 状态与 ref 分开，点回原叶子被去重判据吞掉。
+      applyActiveLeaf(leafId);
+      // 与 handleNavigate 同一规则：载入没应用就不动运行时，退回叶子同上。
+      if (!await settleContextNavigation(sid, leafId, await loadContext(sid, leafId))) return;
+      // 分支根（null）没有可指的运行时叶子；其余同样按载入后的会话 id 发命令。
+      if (!leafId) return;
+      const commandSessionId = sessionIdRef.current;
+      if (!commandSessionId) return;
+      await moveRuntimeLeaf(commandSessionId, leafId);
+    } finally {
+      if (navigatingLeafRef.current === navigation) navigatingLeafRef.current = null;
+    }
+  }, [applyActiveLeaf, loadContext, moveRuntimeLeaf, settleContextNavigation]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
@@ -2665,7 +2698,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
-    handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages,
+    handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,
     bashRunning, pendingBash,
     // Subscriptions

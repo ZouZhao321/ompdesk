@@ -343,6 +343,8 @@ export const enLocale: LocalePlugin = {
     "chat.goalBudgetLeft": "{left} left",
     "chat.goalTokensUsed": "{used} used",
     "chat.jumpToBottom": "Jump to bottom",
+    "chat.branchLoadFailed": "Failed to load the selected branch",
+    "chat.branchSwitchFailed": "Failed to switch branch",
     "chat.transcriptRail": "Prompt navigation",
     "chat.previousPrompt": "Previous prompt",
     "chat.nextPrompt": "Next prompt",

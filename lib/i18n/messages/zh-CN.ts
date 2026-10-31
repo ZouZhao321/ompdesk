@@ -343,6 +343,8 @@ export const zhCNLocale: LocalePlugin = {
     "chat.goalBudgetLeft": "剩余 {left}",
     "chat.goalTokensUsed": "已用 {used}",
     "chat.jumpToBottom": "回到底部",
+    "chat.branchLoadFailed": "载入所选分支失败",
+    "chat.branchSwitchFailed": "切换分支失败",
     "chat.transcriptRail": "提问跳转",
     "chat.previousPrompt": "上一条提问",
     "chat.nextPrompt": "下一条提问",

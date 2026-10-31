@@ -106,7 +106,16 @@ function harness() {
     activeLeafIdRef: { current: null },
     // 最近一次真的载入成功的叶子：载入失败的退回目标。
     appliedLeafIdRef: { current: null },
+    // 运行时确认停在上面的叶子：只在导航命令成功后写。
+    runtimeLeafIdRef: { current: null },
+    // 在途导航的目标叶子；外层对象把「没有导航」与「正导航到分支根(null)」分开。
+    navigatingLeafRef: { current: null },
     opts: {},
+    // 界面文案由组件注入；这里按词条给出英文，回执断言保持可读。
+    t: (key) => ({
+      "chat.branchLoadFailed": "Failed to load the selected branch",
+      "chat.branchSwitchFailed": "Failed to switch branch",
+    })[key] ?? key,
     addNotice: (notice) => effects.push(["notice", notice]),
     closeEvents: () => effects.push(["closeEvents"]),
     onSessionForked: (...args) => effects.push(["identity", ...args]),
@@ -148,6 +157,8 @@ function harness() {
   bindings.loadSession = callback("loadSession", callbackBindings);
   bindings.loadContext = callback("loadContext", callbackBindings);
   bindings.settleContextNavigation = callback("settleContextNavigation", bindings);
+  // 两条导航路径共用同一个运行时搬移：命令成功才写运行时确认值，失败只留回执。
+  bindings.moveRuntimeLeaf = callback("moveRuntimeLeaf", bindings);
   bindings.handleNavigate = callback("handleNavigate", bindings);
   bindings.handleLeafChange = callback("handleLeafChange", bindings);
   return { bindings, commands, effects, memory, storage, ui };
@@ -267,6 +278,8 @@ test("treats a finished branch reload as a jump to the bottom", async () => {
 test("clicking the already active leaf neither reloads nor pulls the view to the end", async () => {
   const h = harness();
   h.bindings.activeLeafIdRef.current = "current-leaf";
+  // 一次整段载入同时写下高亮与运行时确认值；只有两者都指向这一叶才跳过重载。
+  h.bindings.runtimeLeafIdRef.current = "current-leaf";
   const before = snapshot(h);
   h.bindings.fetch = () => { throw new Error("the active leaf must not be reloaded"); };
 
@@ -372,9 +385,11 @@ test("a fresh load records the leaf it landed on, so clicking that leaf changes 
 
   await h.bindings.loadSession("b", true);
 
-  // 载入就是一次真实的叶子切换：状态与去重用的 ref 一起写。
+  // 载入就是一次真实的叶子切换：状态与去重用的 ref 一起写，运行时确认值跟着落到
+  // 同一叶上——它确实来自运行态。
   assert.equal(h.ui.ActiveLeafId, "current-leaf");
   assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
+  assert.equal(h.bindings.runtimeLeafIdRef.current, "current-leaf");
   h.effects.length = 0;
   h.bindings.fetch = () => { throw new Error("the loaded leaf must not be reloaded"); };
 
@@ -394,6 +409,7 @@ test("a missing session clears the recorded leaf together with the state", async
 
   assert.equal(h.ui.ActiveLeafId, null);
   assert.equal(h.bindings.activeLeafIdRef.current, null);
+  assert.equal(h.bindings.runtimeLeafIdRef.current, null);
 });
 
 test("a navigation already under way is not reloaded by a click on the same leaf", async () => {
@@ -647,9 +663,96 @@ test("a failed branch command leaves a notice instead of failing silently", asyn
   await Promise.allSettled(h.commands);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  // 载入成功、运行时那半失败：界面已经换到新分支，失败必须有回执，不能静默。
+  // 载入成功、运行时那半失败：界面已经换到新分支，失败必须有回执，不能静默。回执只
+  // 说明失败这件事，命令的原始异常留在日志里。
   assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target branch" }]);
   assert.deepEqual(h.effects.filter(([kind]) => kind === "notice"), [
-    ["notice", { type: "error", message: "Failed to switch branch: target branch is gone" }],
+    ["notice", { type: "error", message: "Failed to switch branch" }],
   ]);
+});
+
+test("a failed branch command leaves the same leaf retryable", async () => {
+  const h = harness();
+  let commands = 0;
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      commands += 1;
+      // 第一次命令失败，运行时因此还停在旧叶子上。
+      return commands === 1
+        ? response({ error: "runtime is busy" }, 500)
+        : response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    return response(context("target branch"));
+  };
+
+  await h.bindings.handleLeafChange("target-leaf");
+  await Promise.allSettled(h.commands);
+
+  // 载入应用了，高亮停在新叶上；命令失败，运行时确认值不能跟着写。
+  assert.equal(h.ui.ActiveLeafId, "target-leaf");
+  assert.equal(h.bindings.runtimeLeafIdRef.current, null);
+
+  // 再点同一叶：只看高亮会把它当成「已经在这条分支上」而吞掉，重试必须真的重载并
+  // 重发命令。
+  let contextRequests = 0;
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) {
+      return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+    }
+    contextRequests += 1;
+    return response(context("target branch"));
+  };
+  const commandsBefore = h.commands.length;
+
+  await h.bindings.handleLeafChange("target-leaf");
+  await Promise.allSettled(h.commands);
+
+  assert.equal(contextRequests, 1, "the retry must reload the branch");
+  assert.equal(h.commands.length, commandsBefore + 1, "the retry must send the command again");
+  assert.equal(h.bindings.runtimeLeafIdRef.current, "target-leaf");
+});
+
+test("a failed branch load reports once and never reloads the branch", async () => {
+  const h = harness();
+  // 这一叶真的载入成功过，失败时高亮退回它。
+  h.bindings.appliedLeafIdRef.current = "current-leaf";
+  h.bindings.activeLeafIdRef.current = "current-leaf";
+  h.bindings.runtimeLeafIdRef.current = "current-leaf";
+  let contextRequests = 0;
+  h.bindings.fetch = async (url) => {
+    if (String(url).startsWith("/api/agent/")) return response({ success: true, data: {} });
+    contextRequests += 1;
+    return response(null, 500);
+  };
+
+  await h.bindings.handleLeafChange("broken-leaf");
+
+  // 失败只退回标记并留一条回执：不补第二次载入，视图不会被拽回末尾，用户也知道
+  // 高亮为什么弹了回去。
+  assert.equal(contextRequests, 1);
+  assert.equal(h.ui.ActiveLeafId, "current-leaf");
+  assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
+  assert.deepEqual(h.commands, []);
+  assert.deepEqual(h.effects.filter(([kind]) => kind === "notice"), [
+    ["notice", { type: "error", message: "Failed to load the selected branch" }],
+  ]);
+});
+
+test("clicking the leaf the runtime already confirmed changes nothing", async () => {
+  const h = harness();
+  h.bindings.fetch = async (url) => (String(url).startsWith("/api/agent/")
+    ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
+    : response(context("target branch")));
+
+  await h.bindings.handleLeafChange("target-leaf");
+  assert.equal(h.bindings.runtimeLeafIdRef.current, "target-leaf");
+  h.effects.length = 0;
+  const commandsBefore = h.commands.length;
+  h.bindings.fetch = () => { throw new Error("the confirmed leaf must not be reloaded"); };
+
+  await h.bindings.handleLeafChange("target-leaf");
+
+  // 高亮与运行时都在这一叶上：不重载、不记回底票号、也不再发命令。
+  assert.deepEqual(h.effects, []);
+  assert.equal(h.commands.length, commandsBefore);
 });
