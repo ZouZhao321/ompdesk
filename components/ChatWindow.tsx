@@ -855,15 +855,19 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     [transcriptRowContext],
   );
 
-  // 列表之外的部件走页首/页尾插槽，仍在同一条滚动流里。
-  const transcriptHeader = (
+  // 列表之外的部件走页首/页尾插槽，仍在同一条滚动流里。列表把 context 当作状态发布：
+  // 引用一变，整份条目的 itemContent 都会重跑，所以页首、页尾与承载它们的对象都要按
+  // 内容收成稳定引用。流式正文是列表自己的最后一项，页尾只关心它在不在列表里——整份
+  // streamState 每个数据块都换引用，不能拿来当依赖。
+  const streamingMessageInList = streamState.streamingMessage !== null;
+  const transcriptHeader = useMemo(() => (
     <div style={{ ...TRANSCRIPT_ROW_STYLE, paddingTop: 16 }}>
       <ExtensionWidgets widgets={aboveEditorWidgets} />
     </div>
-  );
-  const transcriptFooter = (
+  ), [aboveEditorWidgets]);
+  const transcriptFooter = useMemo(() => (
     <div style={TRANSCRIPT_ROW_STYLE}>
-      {agentRunning && !streamState.streamingMessage && agentPhase && (
+      {agentRunning && !streamingMessageInList && agentPhase && (
         <div className="py-2 text-[13px] text-text-muted">
           <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t)}</span>
         </div>
@@ -883,10 +887,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             output: "",
             excludeFromContext: pendingBash.excludeFromContext,
           } as BashExecutionMessage}
-          sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+          sessionId={activeSessionId}
         />
       )}
     </div>
+  ), [agentRunning, streamingMessageInList, agentPhase, t, bashRunning, pendingBash, activeSessionId]);
+  const transcriptSlots = useMemo<TranscriptSlotsContext>(
+    () => ({ header: transcriptHeader, footer: transcriptFooter }),
+    [transcriptHeader, transcriptFooter],
   );
 
   if (loading) {
@@ -1033,7 +1041,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             data={transcriptItems}
             computeItemKey={computeTranscriptItemKey}
             initialTopMostItemIndex={virtualTranscript.initialTopMostItemIndex}
-            context={{ header: transcriptHeader, footer: transcriptFooter }}
+            context={transcriptSlots}
             components={TRANSCRIPT_SLOTS}
             scrollerRef={handleTranscriptScrollerRef}
             itemsRendered={handleTranscriptItemsRendered}
