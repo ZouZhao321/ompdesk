@@ -104,6 +104,8 @@ function harness() {
     applyFollowRef: { current: (event) => effects.push(["follow", event]) },
     // 最近一次请求的叶子；点同一节点时要靠它跳过重载。
     activeLeafIdRef: { current: null },
+    // 最近一次真的载入成功的叶子：载入失败的退回目标。
+    appliedLeafIdRef: { current: null },
     opts: {},
     closeEvents: () => effects.push(["closeEvents"]),
     onSessionForked: (...args) => effects.push(["identity", ...args]),

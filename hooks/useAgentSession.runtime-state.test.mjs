@@ -55,6 +55,8 @@ function harness() {
     bashRunningRef: { current: true },
     modelSwitchPendingRef: { current: false },
     activeLeafIdRef: { current: null },
+    // 最近一次真的载入成功的叶子：载入失败的退回目标。
+    appliedLeafIdRef: { current: null },
     opts: {},
     onSessionForked: (...args) => effects.push(["identity", ...args]),
     rememberSessionContinuation: (sessionId, runtimeId) => { continuation.current = { sessionId, runtimeId }; },
