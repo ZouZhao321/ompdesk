@@ -9,7 +9,15 @@ import {
   formatFileModified,
   formatFileSize,
   LOG_LEVEL_OPTIONS,
+  LOGS_ERROR_INVALID_JSON,
+  LOGS_ERROR_TIMEOUT,
 } from "@/lib/logs-view";
+
+/** 客户端错误码到翻译 key 的映射；服务端原文不在此表内，原样显示。 */
+const LOCAL_LOG_ERROR_KEYS: Record<string, string> = {
+  [LOGS_ERROR_INVALID_JSON]: "settings.logs.invalidResponse",
+  [LOGS_ERROR_TIMEOUT]: "settings.logs.timeout",
+};
 
 /**
  * Presentational half of the Logs panel. Kept free of CSS-module imports so
@@ -124,8 +132,9 @@ export function LogsPanelView({
     ? null
     : {
         title: t(`settings.logs.state.${state.kind}.title`),
-        // error 的详情是服务端原文，不做翻译。
-        detail: state.kind === "error" ? state.detail : t(`settings.logs.state.${state.kind}.detail`),
+        detail: state.kind === "error"
+          ? (LOCAL_LOG_ERROR_KEYS[state.detail ?? ""] ? t(LOCAL_LOG_ERROR_KEYS[state.detail ?? ""]) : state.detail ?? "")
+          : t(`settings.logs.state.${state.kind}.detail`),
       };
 
   return (

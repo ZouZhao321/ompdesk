@@ -48,4 +48,6 @@ export const chromeLogs: Record<string, string> = {
     "Only the newest part of this file is read; try a broader level, another keyword, or an older rotation.",
   "settings.logs.state.empty.title": "This log file is empty",
   "settings.logs.state.empty.detail": "No entries have been written to it yet.",
+  "settings.logs.invalidResponse": "The logs response was not valid JSON",
+  "settings.logs.timeout": "Reading logs timed out; try again.",
 };

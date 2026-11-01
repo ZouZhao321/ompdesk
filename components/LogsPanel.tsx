@@ -5,6 +5,8 @@ import type { LogEntry, LogFileInfo, LogLevelName, LogsResponse } from "@/lib/ap
 import {
   buildLogsRequest,
   isScrolledToBottom,
+  LOGS_ERROR_INVALID_JSON,
+  LOGS_ERROR_TIMEOUT,
   mergeLogEntries,
   selectFileAfterFollow,
   shouldPollLogs,
@@ -67,7 +69,7 @@ const fetchLogsPage: LogsClient = async (input) => {
   }
   if (!response.ok) throw new Error(data?.error ?? `HTTP ${response.status}`);
   if (data?.error) throw new Error(data.error);
-  if (!data) throw new Error("The logs response was not valid JSON");
+  if (!data) throw new Error(LOGS_ERROR_INVALID_JSON);
   return data;
 };
 
@@ -186,7 +188,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
         setCatchingUp(false);
         setError(
           (caught as { name?: string } | null)?.name === "AbortError"
-            ? "Reading logs timed out; try again."
+            ? LOGS_ERROR_TIMEOUT
             : caught instanceof Error ? caught.message : String(caught),
         );
       } finally {
