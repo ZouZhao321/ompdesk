@@ -79,9 +79,9 @@ Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 
 
 ## 测试工作区
 
-界面、地图与交互的手工测试在 `C:\Users\ZouZhao\Desktop\Project\ompdesk-lab` 进行：
+界面、地图与交互的手工测试在独立测试工作区进行，例如与仓库同级的 `ompdesk-lab`：
 把 ompdesk 的工作目录切到那里再开会话。真实项目目录不作为测试数据的写入位置；该
-目录的 `AGENTS.md` 记录复现步骤与预期结果。
+工作区的 `AGENTS.md` 记录复现步骤与预期结果。
 
 ## 界面改动
 
