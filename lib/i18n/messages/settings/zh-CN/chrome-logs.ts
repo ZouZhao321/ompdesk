@@ -47,4 +47,6 @@ export const chromeLogs: Record<string, string> = {
     "这里只读取该文件的最新部分；可以试试更宽的级别、其它关键词，或更早的轮转文件。",
   "settings.logs.state.empty.title": "该日志文件为空",
   "settings.logs.state.empty.detail": "还没有向它写入任何条目。",
+  "settings.logs.invalidResponse": "日志响应不是有效的 JSON",
+  "settings.logs.timeout": "读取日志超时，请重试。",
 };

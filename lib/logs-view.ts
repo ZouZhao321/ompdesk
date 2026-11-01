@@ -115,9 +115,13 @@ export type LogsEmptyKind = "loading" | "error" | "no-files" | "empty" | "no-mat
 
 export interface LogsStateDescription {
   kind: LogsEmptyKind | "ready";
-  title: string;
-  detail: string;
+  /** 仅错误状态携带服务端原始错误，供界面原样显示。 */
+  detail?: string;
 }
+
+/** 客户端自己产生的日志错误码，界面按码换成当前语言。 */
+export const LOGS_ERROR_INVALID_JSON = "logs.invalidJson";
+export const LOGS_ERROR_TIMEOUT = "logs.timeout";
 
 export interface DescribeLogsStateInput {
   loading: boolean;
@@ -133,36 +137,24 @@ export interface DescribeLogsStateInput {
 /** Distinguish "still loading", "load failed", "no file yet", "empty file", and "filters match nothing". */
 export function describeLogsState(input: DescribeLogsStateInput): LogsStateDescription {
   if (input.error && input.entryCount === 0) {
-    return { kind: "error", title: "Could not load logs", detail: input.error };
+    return { kind: "error", detail: input.error };
   }
   if (input.loading && input.entryCount === 0) {
-    return { kind: "loading", title: "Loading logs…", detail: "Reading the current process log." };
+    return { kind: "loading" };
   }
   if (input.fileCount === 0) {
-    return {
-      kind: "no-files",
-      title: "No log file yet",
-      detail: "ompdesk creates this process's log file with its first record. Send a message or retry a request, then refresh.",
-    };
+    return { kind: "no-files" };
   }
   if (input.catchingUp && input.entryCount === 0) {
-    return {
-      kind: "catching-up",
-      title: "Catching up…",
-      detail: "The log file is longer than one page; reading the backlog before showing matches.",
-    };
+    return { kind: "catching-up" };
   }
   if (input.entryCount === 0 && (input.level !== "all" || input.keyword.trim())) {
-    return {
-      kind: "no-matches",
-      title: "No matching entries",
-      detail: "Only the newest part of this file is read; try a broader level, another keyword, or an older rotation.",
-    };
+    return { kind: "no-matches" };
   }
   if (input.entryCount === 0) {
-    return { kind: "empty", title: "This log file is empty", detail: "No entries have been written to it yet." };
+    return { kind: "empty" };
   }
-  return { kind: "ready", title: "", detail: "" };
+  return { kind: "ready" };
 }
 
 /** Hidden tabs and paused panels never schedule a poll. */
