@@ -82,7 +82,7 @@ export function extractCommentEntries(files: CommentSourceFile[]): CommentExtrac
   const ordered = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
   for (const file of ordered) {
-    for (const comment of mergeLineComments(readComments(file.content))) {
+    for (const comment of mergeLineComments(readComments(file.path, file.content))) {
       const body = comment.kind === "block"
         ? comment.body.split("\n").map((line) => line.replace(/^\s*\*+\s?/, "")).join("\n")
         : comment.body;
@@ -125,70 +125,49 @@ function lineAt(starts: readonly number[], position: number): number {
 }
 
 /**
- * 扫描到这些 token 之后，`/` 是除号；其余位置按正则字面量的起点处理，
- * 由 reScanSlashToken 一并消费正则内部的反斜杠与字符类。
+ * 用 TypeScript 语法树收集注释区间。解析器自己消费字符串、正则、模板与 JSX，
+ * 注释只可能出现在某个 token 的前导或尾随 trivia 里；逐 token 取这两类区间
+ * 就覆盖全文，包括空块内部与文件末尾。
  */
-const EXPRESSION_END_TOKENS = new Set<ts.SyntaxKind>([
-  ts.SyntaxKind.Identifier,
-  ts.SyntaxKind.PrivateIdentifier,
-  ts.SyntaxKind.NumericLiteral,
-  ts.SyntaxKind.BigIntLiteral,
-  ts.SyntaxKind.StringLiteral,
-  ts.SyntaxKind.RegularExpressionLiteral,
-  ts.SyntaxKind.NoSubstitutionTemplateLiteral,
-  ts.SyntaxKind.TemplateTail,
-  ts.SyntaxKind.CloseParenToken,
-  ts.SyntaxKind.CloseBracketToken,
-  ts.SyntaxKind.CloseBraceToken,
-  ts.SyntaxKind.ThisKeyword,
-  ts.SyntaxKind.SuperKeyword,
-  ts.SyntaxKind.TrueKeyword,
-  ts.SyntaxKind.FalseKeyword,
-  ts.SyntaxKind.NullKeyword,
-  ts.SyntaxKind.PlusPlusToken,
-  ts.SyntaxKind.MinusMinusToken,
-]);
+function readComments(path: string, content: string): RawComment[] {
+  const sourceFile = ts.createSourceFile(
+    path,
+    content,
+    ts.ScriptTarget.Latest,
+    false,
+    path.toLowerCase().endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
 
-/**
- * 用 TypeScript 扫描器取注释 trivia。字符串、模板与正则字面量由扫描器整体消费，
- * 其中的引号、反斜杠与 `//` 不会被当成注释。
- */
-function readComments(content: string): RawComment[] {
-  const starts = lineStarts(content);
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, content);
-  const comments: RawComment[] = [];
-  let expectExpression = true;
-
-  while (true) {
-    let token = scanner.scan();
-    if (token === ts.SyntaxKind.EndOfFileToken) break;
-    if (token === ts.SyntaxKind.SlashToken && expectExpression) {
-      token = scanner.reScanSlashToken();
+  const ranges = new Map<number, ts.CommentRange>();
+  const collect = (found: readonly ts.CommentRange[] | undefined): void => {
+    if (!found) return;
+    for (const range of found) ranges.set(range.pos, range);
+  };
+  const visit = (node: ts.Node): void => {
+    for (const child of node.getChildren(sourceFile)) {
+      collect(ts.getLeadingCommentRanges(content, child.getFullStart()));
+      collect(ts.getTrailingCommentRanges(content, child.end));
+      visit(child);
     }
+  };
+  visit(sourceFile);
 
-    const text = scanner.getTokenText();
-    const start = scanner.getTokenPos();
-    const end = scanner.getTextPos();
-
-    if (token >= ts.SyntaxKind.FirstTriviaToken && token <= ts.SyntaxKind.LastTriviaToken) {
-      if (token === ts.SyntaxKind.SingleLineCommentTrivia) {
-        const line = lineAt(starts, start);
-        comments.push({ kind: "line", startLine: line, endLine: line, body: text.slice(2) });
-      } else if (token === ts.SyntaxKind.MultiLineCommentTrivia) {
-        const body = text.slice(2, text.endsWith("*/") ? -2 : undefined);
-        comments.push({
-          kind: "block",
-          startLine: lineAt(starts, start),
-          endLine: lineAt(starts, Math.max(start, end - 1)),
-          body,
-        });
-      }
+  const starts = lineStarts(content);
+  const comments: RawComment[] = [];
+  for (const range of [...ranges.values()].sort((a, b) => a.pos - b.pos)) {
+    const text = content.slice(range.pos, range.end);
+    if (range.kind === ts.SyntaxKind.SingleLineCommentTrivia) {
+      const line = lineAt(starts, range.pos);
+      comments.push({ kind: "line", startLine: line, endLine: line, body: text.slice(2) });
       continue;
     }
-
-    expectExpression = !EXPRESSION_END_TOKENS.has(token);
+    comments.push({
+      kind: "block",
+      startLine: lineAt(starts, range.pos),
+      endLine: lineAt(starts, Math.max(range.pos, range.end - 1)),
+      body: text.slice(2, text.endsWith("*/") ? -2 : undefined),
+    });
   }
-
   return comments;
 }
 
