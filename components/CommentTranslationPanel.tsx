@@ -10,6 +10,7 @@ import {
   type CommentLanguage,
 } from "@/lib/comment-entries";
 import type { CommentTranslationRecord } from "@/lib/comment-dictionary";
+import type { ProtectedFragment } from "@/lib/comment-translation-validation";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 
 interface Props {
@@ -36,6 +37,26 @@ interface EditingTranslation {
   entry: CommentEntry;
   targetLanguage: CommentLanguage;
   value: string;
+}
+
+type RowFailure = ProtectedFragment[] | "noOutput";
+
+interface CommentTranslationResult {
+  key: string;
+  status: "generated" | "cached" | "failed";
+  reason?: "no_output" | "missing_fragments";
+  missing?: ProtectedFragment[];
+}
+
+interface GenerateResponse {
+  model: string;
+  results: CommentTranslationResult[];
+  translations: Record<string, CommentTranslationRecord>;
+}
+
+/** 行身份用文件与起始行，同一句原文出现在两个文件里时仍能分别勾选。 */
+function rowId(entry: CommentEntry): string {
+  return `${entry.filePath}\u0000${entry.startLine}`;
 }
 
 const messageStyle = {
@@ -104,6 +125,42 @@ const sourceBadgeStyle = {
   lineHeight: 1.4,
 } as const;
 
+const toolbarRowStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  marginTop: 6,
+} as const;
+
+const fileHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "5px 12px",
+  borderBottom: "1px solid var(--border)",
+  background: "var(--bg-panel)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  color: "var(--text-dim)",
+  overflowWrap: "anywhere",
+} as const;
+
+const rowHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  color: "var(--text-dim)",
+} as const;
+
+const failureStyle = {
+  marginTop: 3,
+  fontSize: 11,
+  color: "var(--danger)",
+  overflowWrap: "anywhere",
+} as const;
+
 export function CommentTranslationPanel({ cwd, active }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
@@ -115,6 +172,10 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<"noModel" | "failed" | null>(null);
+  const [rowFailures, setRowFailures] = useState<Record<string, RowFailure>>({});
 
   useEffect(() => {
     if (!active || !cwd) return;
@@ -126,12 +187,20 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return (await response.json()) as CommentEntriesResponse;
       })
-      .then((payload) => setLoaded({
-        cwd,
-        entries: payload.entries,
-        excluded: payload.excluded,
-        translations: payload.translations,
-      }))
+      .then((payload) => {
+        setLoaded({
+          cwd,
+          entries: payload.entries,
+          excluded: payload.excluded,
+          translations: payload.translations,
+        });
+        // 重新扫描后丢弃已不存在的行，勾选数量与实际条目保持一致。
+        setSelected((previous) => {
+          const visibleIds = new Set(payload.entries.map(rowId));
+          const next = new Set([...previous].filter((id) => visibleIds.has(id)));
+          return next.size === previous.size ? previous : next;
+        });
+      })
       .catch(() => {
         if (!controller.signal.aborted) setFailedCwd(cwd);
       })
@@ -141,10 +210,13 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
     return () => controller.abort();
   }, [active, cwd]);
 
-  // 切换项目时丢弃上一项目的编辑状态，避免把译文写进看不见的项目。
+  // 切换项目时丢弃上一项目的编辑与勾选状态，避免把译文写进看不见的项目。
   useEffect(() => {
     setEditing(null);
     setSaveError(null);
+    setSelected(new Set());
+    setGenerateError(null);
+    setRowFailures({});
   }, [cwd]);
 
   const beginEdit = (entry: CommentEntry, targetLanguage: CommentLanguage, key: string, value: string) => {
@@ -202,12 +274,90 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
     }
   }
 
+  const toggleSelection = (ids: readonly string[], checked: boolean) => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  async function generateSelected() {
+    if (generating) return;
+    const loadedHere = loaded?.cwd === cwd ? loaded : null;
+    if (!loadedHere) return;
+    const rows = loadedHere.entries.filter((entry) => selected.has(rowId(entry)));
+    if (rows.length === 0) return;
+
+    // 同一句原文同一目标语言只发一次；已有译文的条目直接命中，不再请求。
+    const seenKeys = new Set<string>();
+    const entries: Array<{
+      original: string;
+      originalLanguage: CommentLanguage;
+      targetLanguage: CommentLanguage;
+    }> = [];
+    for (const entry of rows) {
+      const targetLanguage = translationTargetLanguage(entry.language);
+      const key = commentEntryKey(entry.text, targetLanguage);
+      if (seenKeys.has(key) || loadedHere.translations[key]) continue;
+      seenKeys.add(key);
+      entries.push({ original: entry.text, originalLanguage: entry.language, targetLanguage });
+    }
+    if (entries.length === 0) return;
+
+    setGenerating(true);
+    setGenerateError(null);
+    setRowFailures({});
+    try {
+      const response = await fetch("/api/comment-translations/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entries }),
+      });
+      if (response.status === 409) {
+        setGenerateError("noModel");
+        return;
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = (await response.json()) as GenerateResponse;
+      setLoaded((previous) => previous && previous.cwd === cwd
+        ? { ...previous, translations: { ...previous.translations, ...payload.translations } }
+        : previous);
+      const failures: Record<string, RowFailure> = {};
+      for (const result of payload.results) {
+        if (result.status !== "failed") continue;
+        failures[result.key] = result.reason === "no_output" ? "noOutput" : (result.missing ?? []);
+      }
+      setRowFailures(failures);
+    } catch {
+      setGenerateError("failed");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   if (!cwd) return <div style={messageStyle}>{t("files.noProject")}</div>;
 
   // 只显示当前项目的词条：切换项目时旧响应不会进入画面。
   const current = loaded?.cwd === cwd ? loaded : null;
   const failed = failedCwd === cwd;
   const translatedCount = current ? Object.keys(current.translations).length : 0;
+  const allSelected = Boolean(
+    current
+    && current.entries.length > 0
+    && current.entries.every((entry) => selected.has(rowId(entry))),
+  );
+
+  // 按文件分组，文件头提供按文件全选。
+  const groups: Array<{ filePath: string; rows: CommentEntry[] }> = [];
+  for (const entry of current?.entries ?? []) {
+    const last = groups.at(-1);
+    if (last && last.filePath === entry.filePath) last.rows.push(entry);
+    else groups.push({ filePath: entry.filePath, rows: [entry] });
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -234,8 +384,53 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
           )}
         </div>
         <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{t("comments.scope")}</div>
+        <div style={toolbarRowStyle}>
+          <label style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 11,
+            color: "var(--text-dim)",
+          }}>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              disabled={!current || current.entries.length === 0}
+              onChange={(event) => toggleSelection(
+                current ? current.entries.map(rowId) : [],
+                event.target.checked,
+              )}
+              style={{
+                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+              }}
+            />
+            {t("comments.selectAll")}
+          </label>
+          <div style={{ flex: 1, fontSize: 11, color: "var(--text-dim)" }}>
+            {t("comments.selectedCount", { selected: selected.size })}
+          </div>
+          <button
+            type="button"
+            onClick={() => void generateSelected()}
+            disabled={generating || selected.size === 0}
+            style={{
+              ...actionButtonStyle,
+              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+            }}
+          >
+            {generating
+              ? t("comments.generating")
+              : t("comments.generateSelected", { count: selected.size })}
+          </button>
+        </div>
         {deleteFailed && (
           <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>{t("comments.deleteFailed")}</div>
+        )}
+        {generateError && (
+          <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>
+            {generateError === "noModel" ? t("comments.noModel") : t("comments.generateFailed")}
+          </div>
         )}
       </div>
       <div style={{
@@ -263,112 +458,148 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
         {!failed && current && current.entries.length === 0 && (
           <div style={messageStyle}>{t("comments.empty")}</div>
         )}
-        {!failed && current?.entries.map((entry) => {
-          const targetLanguage = translationTargetLanguage(entry.language);
-          const key = commentEntryKey(entry.text, targetLanguage);
-          const record = current.translations[key];
-          const activeEdit = editing && editing.key === key ? editing : null;
-          const originalColumn = <div style={entryTextStyle}>{entry.text}</div>;
-          const translationColumn = (
-            <div>
-              {activeEdit ? (
-                <>
-                  <textarea
-                    autoFocus
-                    value={activeEdit.value}
-                    onChange={(event) => setEditing({ ...activeEdit, value: event.target.value })}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        setEditing(null);
-                      } else if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        void saveTranslation(activeEdit);
-                      }
-                    }}
-                    placeholder={t("comments.translationPlaceholder")}
-                    style={{
-                      ...editorStyle,
-                      minHeight: isMobile ? MOBILE_HIT_TARGET_PX : 60,
-                    }}
-                  />
-                  <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                    <button
-                      type="button"
-                      disabled={savingKey === key}
-                      onClick={() => void saveTranslation(activeEdit)}
-                      style={{
-                        ...actionButtonStyle,
-                        minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                      }}
-                    >
-                      {t("comments.save")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditing(null)}
-                      style={{
-                        ...actionButtonStyle,
-                        minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                      }}
-                    >
-                      {t("comments.cancel")}
-                    </button>
-                  </div>
-                  {saveError && (
-                    <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>{saveError}</div>
-                  )}
-                </>
-              ) : record ? (
-                <>
-                  <button
-                    type="button"
-                    title={t("comments.editTranslation")}
-                    onClick={() => beginEdit(entry, targetLanguage, key, record.translation)}
-                    style={translationButtonStyle}
-                  >
-                    {record.translation}
-                  </button>
-                  <span style={{
-                    ...sourceBadgeStyle,
-                    color: record.origin === "manual" ? "var(--accent)" : "var(--text-dim)",
-                  }}>
-                    {record.origin === "manual" ? t("comments.sourceManual") : t("comments.sourceModel")}
-                  </span>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => beginEdit(entry, targetLanguage, key, "")}
+        {!failed && current && groups.map((group) => {
+          const groupSelected = group.rows.every((entry) => selected.has(rowId(entry)));
+          return (
+            <div key={group.filePath}>
+              <div style={fileHeaderStyle}>
+                <input
+                  type="checkbox"
+                  checked={groupSelected}
+                  onChange={(event) => toggleSelection(group.rows.map(rowId), event.target.checked)}
+                  title={t("comments.selectFile")}
+                  aria-label={`${t("comments.selectFile")}: ${group.filePath}`}
                   style={{
-                    ...translationButtonStyle,
-                    color: "var(--text-dim)",
+                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                     minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                   }}
-                >
-                  {t("comments.addTranslation")}
-                </button>
-              )}
-            </div>
-          );
+                />
+                <span>{group.filePath}</span>
+              </div>
+              {group.rows.map((entry) => {
+                const targetLanguage = translationTargetLanguage(entry.language);
+                const key = commentEntryKey(entry.text, targetLanguage);
+                const record = current.translations[key];
+                const activeEdit = editing && editing.key === key ? editing : null;
+                const originalColumn = <div style={entryTextStyle}>{entry.text}</div>;
+                const translationColumn = (
+                  <div>
+                    {activeEdit ? (
+                      <>
+                        <textarea
+                          autoFocus
+                          value={activeEdit.value}
+                          onChange={(event) => setEditing({ ...activeEdit, value: event.target.value })}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              setEditing(null);
+                            } else if (event.key === "Enter" && !event.shiftKey) {
+                              event.preventDefault();
+                              void saveTranslation(activeEdit);
+                            }
+                          }}
+                          placeholder={t("comments.translationPlaceholder")}
+                          style={{
+                            ...editorStyle,
+                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : 60,
+                          }}
+                        />
+                        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                          <button
+                            type="button"
+                            disabled={savingKey === key}
+                            onClick={() => void saveTranslation(activeEdit)}
+                            style={{
+                              ...actionButtonStyle,
+                              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                            }}
+                          >
+                            {t("comments.save")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            style={{
+                              ...actionButtonStyle,
+                              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                            }}
+                          >
+                            {t("comments.cancel")}
+                          </button>
+                        </div>
+                        {saveError && (
+                          <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>{saveError}</div>
+                        )}
+                      </>
+                    ) : record ? (
+                      <>
+                        <button
+                          type="button"
+                          title={t("comments.editTranslation")}
+                          onClick={() => beginEdit(entry, targetLanguage, key, record.translation)}
+                          style={translationButtonStyle}
+                        >
+                          {record.translation}
+                        </button>
+                        <span style={{
+                          ...sourceBadgeStyle,
+                          color: record.origin === "manual" ? "var(--accent)" : "var(--text-dim)",
+                        }}>
+                          {record.origin === "manual" ? t("comments.sourceManual") : t("comments.sourceModel")}
+                        </span>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(entry, targetLanguage, key, "")}
+                        style={{
+                          ...translationButtonStyle,
+                          color: "var(--text-dim)",
+                          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                        }}
+                      >
+                        {t("comments.addTranslation")}
+                      </button>
+                    )}
+                    {rowFailures[key] && (
+                      <div style={failureStyle}>
+                        {rowFailures[key] === "noOutput"
+                          ? t("comments.noOutput")
+                          : t("comments.missingFragments", {
+                            missing: rowFailures[key].map((fragment) => fragment.value).join(", "),
+                          })}
+                      </div>
+                    )}
+                  </div>
+                );
 
-          return (
-            <div
-              key={`${entry.filePath}:${entry.startLine}`}
-              style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}
-            >
-              <div style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                color: "var(--text-dim)",
-                overflowWrap: "anywhere",
-              }}>
-                {entry.filePath}:{entry.startLine}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 3 }}>
-                {entry.language === "zh" ? originalColumn : translationColumn}
-                {entry.language === "en" ? originalColumn : translationColumn}
-              </div>
+                const id = rowId(entry);
+                return (
+                  <div
+                    key={id}
+                    style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}
+                  >
+                    <div style={rowHeaderStyle}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(id)}
+                        onChange={(event) => toggleSelection([id], event.target.checked)}
+                        aria-label={`${t("comments.selectEntry")}: ${entry.filePath}:${entry.startLine}`}
+                        style={{
+                          minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                        }}
+                      />
+                      <span>{t("comments.line", { line: entry.startLine })}</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 3 }}>
+                      {entry.language === "zh" ? originalColumn : translationColumn}
+                      {entry.language === "en" ? originalColumn : translationColumn}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
