@@ -1,3 +1,4 @@
+import { settingsEnMessages } from "./settings/en";
 import type { LocalePlugin } from "../types";
 
 /** ompdesk 内置英语语言包。 */
@@ -5,6 +6,7 @@ export const enLocale: LocalePlugin = {
   id: "en",
   label: "English",
   messages: {
+    ...settingsEnMessages,
     "common.ok": "OK",
     "common.language": "Language",
     "common.models": "Models",

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getLocalePlugin, getSupportedLocales, resolveBrowserLocale } from "@/lib/i18n/registry";
 import { translateMessage } from "@/lib/i18n/format";
+import { resolveSettingText } from "@/lib/i18n/settings";
 import type { Locale, LocalePlugin, TranslationParams } from "@/lib/i18n/types";
 
 const LOCALE_STORAGE_KEY = "pi-locale";
@@ -12,6 +13,8 @@ interface I18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
   t: (key: string, params?: TranslationParams) => string;
+  /** 查询文案，缺失时返回调用方给出的服务端原文。 */
+  tOr: (key: string, fallback: string) => string;
   supportedLocales: LocalePlugin[];
 }
 
@@ -67,7 +70,8 @@ export function I18nProvider({ children, initialLocale = defaultLocale }: { chil
   }, []);
 
   const t = useCallback((key: string, params?: TranslationParams) => translateMessage(locale, key, messages, params), [locale, messages]);
-  const value = useMemo(() => ({ locale: hydrated ? locale : initialLocale, setLocale, t, supportedLocales }), [hydrated, initialLocale, locale, setLocale, t, supportedLocales]);
+  const tOr = useCallback((key: string, fallback: string) => resolveSettingText(locale, key, messages, fallback), [locale, messages]);
+  const value = useMemo(() => ({ locale: hydrated ? locale : initialLocale, setLocale, t, tOr, supportedLocales }), [hydrated, initialLocale, locale, setLocale, t, tOr, supportedLocales]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
