@@ -1,15 +1,9 @@
 "use client";
 
-import { memo, useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
-import {
-  Prism as SyntaxHighlighter,
-  createElement as renderSyntaxNode,
-  type SyntaxHighlighterProps,
-} from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { useEffect, useState, useRef, useCallback, useMemo, type MouseEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import { useTheme } from "@/hooks/useTheme";
+import { SourceView, SOURCE_CODE_STYLE, SOURCE_LINE_NUMBER_STYLE } from "./SourceCodeView";
 import {
   DOCX_PREVIEW_MAX_BYTES,
   getFileExt,
@@ -28,6 +22,14 @@ import { FrontmatterCard } from "./FrontmatterCard";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
 import { useI18n } from "@/hooks/useI18n";
+import { useCommentTranslationLookup, useCommentTranslationPreference } from "@/hooks/useCommentTranslation";
+import { extractCommentEntries } from "@/lib/comment-entries";
+import {
+  commentTranslationKeys,
+  commentTranslationRows,
+  commentTranslationTarget,
+} from "@/lib/comment-translation-render";
+import { setCommentTranslationPreference } from "@/lib/comment-translation-preference";
 
 interface Props {
   filePath: string;
@@ -57,34 +59,6 @@ const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   diff: "Diff",
 };
 
-const FILE_CODE_STYLE: CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 13,
-  lineHeight: 1.6,
-};
-
-const FILE_LINE_NUMBER_STYLE: CSSProperties = {
-  width: 48,
-  minWidth: 48,
-  padding: "0 10px",
-  textAlign: "right",
-  color: "var(--text-dim)",
-  background: "var(--bg-panel)",
-  borderRight: "1px solid var(--border)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  fontStyle: "normal",
-  fontVariantNumeric: "tabular-nums",
-  lineHeight: "20.8px",
-  userSelect: "none",
-  flexShrink: 0,
-  verticalAlign: "top",
-};
-
-type SourceCodeRendererProps = Parameters<NonNullable<SyntaxHighlighterProps["renderer"]>>[0] & {
-  wrapLines: boolean;
-};
-
 interface SelectedLineRange {
   startLine: number;
   endLine: number;
@@ -99,11 +73,29 @@ function MentionIcon() {
   );
 }
 
+/** 相邻的源码行，跳过不占行号的译文行。 */
+function adjacentSourceLine(element: HTMLElement, direction: "next" | "previous"): HTMLElement | null {
+  let sibling = direction === "next" ? element.nextElementSibling : element.previousElementSibling;
+  while (sibling) {
+    if (sibling instanceof HTMLElement && sibling.matches(".file-source-line[data-line-number]")) return sibling;
+    sibling = direction === "next" ? sibling.nextElementSibling : sibling.previousElementSibling;
+  }
+  return null;
+}
+
 function closestSourceLine(node: Node): HTMLElement | null {
   const element = node.nodeType === Node.ELEMENT_NODE
     ? node as Element
     : node.parentElement;
-  return element?.closest<HTMLElement>(".file-source-line[data-line-number]") ?? null;
+  if (!element) return null;
+
+  const sourceLine = element.closest<HTMLElement>(".file-source-line[data-line-number]");
+  if (sourceLine) return sourceLine;
+
+  // 译文行属于它上方那条源码行：选区落进译文行时按该行取行号，
+  // 引用到对话的行号与关闭译文时完全一致。
+  const translation = element.closest<HTMLElement>(".file-comment-translation");
+  return translation ? adjacentSourceLine(translation, "previous") : null;
 }
 
 function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | null): SelectedLineRange | null {
@@ -130,8 +122,8 @@ function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | nu
       selectedSuffix.selectNodeContents(startContent);
       selectedSuffix.setStart(range.startContainer, range.startOffset);
       if (selectedSuffix.toString().length === 0) {
-        const nextLine = startElement.nextElementSibling;
-        if (nextLine instanceof HTMLElement && nextLine.matches(".file-source-line[data-line-number]")) {
+        const nextLine = adjacentSourceLine(startElement, "next");
+        if (nextLine) {
           startElement = nextLine;
           startLine = Number(startElement.dataset.lineNumber);
         }
@@ -144,8 +136,8 @@ function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | nu
       selectedPrefix.selectNodeContents(endContent);
       selectedPrefix.setEnd(range.endContainer, range.endOffset);
       if (selectedPrefix.toString().length === 0) {
-        const previousLine = endElement.previousElementSibling;
-        if (previousLine instanceof HTMLElement && previousLine.matches(".file-source-line[data-line-number]")) {
+        const previousLine = adjacentSourceLine(endElement, "previous");
+        if (previousLine) {
           endElement = previousLine;
           endLine = Number(endElement.dataset.lineNumber);
         }
@@ -227,97 +219,6 @@ function useFileWatch({
 
   return watching;
 }
-
-function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: SourceCodeRendererProps) {
-  return rows.map((row, lineIndex) => {
-    const children = row.children ?? [];
-    const firstChildClasses = children[0]?.properties?.className;
-    const hasLineNumber = Array.isArray(firstChildClasses)
-      && firstChildClasses.includes("react-syntax-highlighter-line-number");
-    const lineNumberNode = hasLineNumber ? children[0] : null;
-    const contentNodes = hasLineNumber ? children.slice(1) : children;
-
-    return (
-      <span
-        className="file-source-line"
-        data-line-number={lineIndex + 1}
-        key={`source-line-${lineIndex}`}
-        style={{ display: "flex", minWidth: "100%" }}
-      >
-        {lineNumberNode && renderSyntaxNode({
-          node: lineNumberNode,
-          stylesheet,
-          useInlineStyles,
-          key: `source-line-number-${lineIndex}`,
-        })}
-        <span
-          className="file-source-line-content"
-          style={{
-            flex: "1 1 auto",
-            minWidth: 0,
-            overflowWrap: wrapLines ? "anywhere" : "normal",
-            whiteSpace: wrapLines ? "pre-wrap" : "pre",
-          }}
-        >
-          {contentNodes.map((node, tokenIndex) => renderSyntaxNode({
-            node,
-            stylesheet,
-            useInlineStyles,
-            key: `source-token-${lineIndex}-${tokenIndex}`,
-          }))}
-        </span>
-      </span>
-    );
-  });
-}
-
-/** 源码高亮结果按内容与主题缓存，父级重渲染（如子代理快照更新）不再重新分词。 */
-const SourceView = memo(function SourceView({
-  content,
-  language,
-  wrapLines,
-  isDark,
-}: {
-  content: string;
-  language: string;
-  wrapLines: boolean;
-  isDark: boolean;
-}) {
-  return (
-    <SyntaxHighlighter
-      className={wrapLines ? "file-source-view is-wrapped" : "file-source-view"}
-      language={language === "text" ? "plaintext" : language}
-      style={isDark ? vscDarkPlus : vs}
-      showLineNumbers
-      lineNumberStyle={{
-        ...FILE_LINE_NUMBER_STYLE,
-      }}
-      customStyle={{
-        margin: 0,
-        padding: 0,
-        border: 0,
-        background: "var(--bg)",
-        ...FILE_CODE_STYLE,
-        width: wrapLines ? "100%" : "max-content",
-        minWidth: "100%",
-        minHeight: "100%",
-        overflow: "visible",
-      }}
-      codeTagProps={{
-        style: {
-          fontFamily: "var(--font-mono)",
-          overflowWrap: wrapLines ? "anywhere" : "normal",
-        },
-      }}
-      renderer={(rendererProps) => (
-        <SourceCodeRenderer {...rendererProps} wrapLines={wrapLines} />
-      )}
-      wrapLongLines={wrapLines}
-    >
-      {content}
-    </SyntaxHighlighter>
-  );
-});
 
 function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceSessionId?: string | null }) {
   const { t } = useI18n();
@@ -436,7 +337,7 @@ function DiffView({ patch }: { patch: string }) {
       style={{
         width: "max-content",
         minWidth: "100%",
-        ...FILE_CODE_STYLE,
+        ...SOURCE_CODE_STYLE,
       }}
     >
       {segments.map((seg, si) => {
@@ -486,7 +387,7 @@ function DiffView({ patch }: { patch: string }) {
               }}
             >
               <span
-                style={FILE_LINE_NUMBER_STYLE}
+                style={SOURCE_LINE_NUMBER_STYLE}
               >
                 {line.type === "removed" ? line.oldLineNo : line.newLineNo}
               </span>
@@ -829,7 +730,7 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMenti
 
 function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode, active = true }: Props) {
   const { isDark } = useTheme();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
   const [gitDiffLoading, setGitDiffLoading] = useState(false);
@@ -948,6 +849,40 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const frontmatter = useMemo(
     () => (data?.language === "markdown" ? parseFrontmatter(data.content) : null),
     [data],
+  );
+
+  // 注释译文只对 .ts/.tsx 生效；开关默认关闭，关闭时不产生任何译文行。
+  const supportsCommentTranslation = /\.(ts|tsx)$/i.test(filePath);
+  const commentTranslationEnabled = useCommentTranslationPreference();
+  const translationTarget = commentTranslationTarget(locale);
+  const showCommentTranslations = supportsCommentTranslation
+    && commentTranslationEnabled
+    && displayMode === "source"
+    && !isDeletedDiff;
+
+  const commentEntries = useMemo(
+    () => (supportsCommentTranslation && data
+      ? extractCommentEntries([{ path: filePath, content: data.content }]).entries
+      : []),
+    [data, filePath, supportsCommentTranslation],
+  );
+
+  const translationKeys = useMemo(
+    () => (showCommentTranslations ? commentTranslationKeys(commentEntries, translationTarget) : []),
+    [commentEntries, showCommentTranslations, translationTarget],
+  );
+
+  const commentTranslations = useCommentTranslationLookup(translationKeys, active && showCommentTranslations);
+
+  // 译文行按源码行号索引；字典或开关变化都会让这个映射重建，查看器随之更新。
+  const translationRows = useMemo(
+    () => commentTranslationRows({
+      entries: commentEntries,
+      translations: commentTranslations,
+      targetLanguage: translationTarget,
+      enabled: showCommentTranslations,
+    }),
+    [commentEntries, commentTranslations, showCommentTranslations, translationTarget],
   );
 
   useEffect(() => {
@@ -1143,6 +1078,24 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                     <path d="M3 18h7" />
                   </svg>
                 </button>
+                {supportsCommentTranslation && (
+                  <button
+                    type="button"
+                    onClick={() => setCommentTranslationPreference(!commentTranslationEnabled)}
+                    title={commentTranslationEnabled ? t("i18n.hideCommentTranslations") : t("i18n.showCommentTranslations")}
+                    aria-label={commentTranslationEnabled ? t("i18n.hideCommentTranslations") : t("i18n.showCommentTranslations")}
+                    aria-pressed={commentTranslationEnabled}
+                    className="file-viewer-icon-button"
+                    style={{
+                      background: commentTranslationEnabled ? "var(--bg-selected)" : "transparent",
+                      color: commentTranslationEnabled ? "var(--text)" : "var(--text-muted)",
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" />
+                    </svg>
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -1236,6 +1189,8 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
             language={language}
             wrapLines={wrapLines}
             isDark={isDark}
+            translations={translationRows}
+            translationLabel={t("comments.translationPrefix")}
           />
         )}
       </div>

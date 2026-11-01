@@ -11,6 +11,7 @@ import {
 } from "@/lib/comment-entries";
 import type { CommentTranslationRecord } from "@/lib/comment-dictionary";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
+import { CommentTranslationPreview } from "./CommentTranslationPreview";
 
 interface Props {
   cwd?: string;
@@ -373,6 +374,13 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
           );
         })}
       </div>
+      {current && (
+        <CommentTranslationPreview
+          cwd={cwd}
+          entries={current.entries}
+          translations={current.translations}
+        />
+      )}
     </div>
   );
 }
