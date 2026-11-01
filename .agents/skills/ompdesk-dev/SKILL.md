@@ -20,7 +20,7 @@ description: 在本仓库（ompdesk）里开发的入口——代码在哪、改
 | `hooks/` | 流式、SSE、视口、主题等客户端状态 | 对应 `components/` 使用方 |
 | `proxy.ts` | Next 的请求前校验：主机允许列表、密码锁 | `bin/web-auth-store.js` |
 | `instrumentation.ts` | 进程启动引导：日志、HTTP dispatcher | 只能走运行时导入，见下 |
-| `next.config.ts` | distDir 覆盖、SDK 外部化 | 桌面打包脚本 |
+| `next.config.ts` | distDir 覆盖、SDK 外部化 | `scripts/smoke-dev.mjs` |
 | `bin/` | 启动器与密码存储（CommonJS，npm 包里只有它和 `.next`） | `proxy.ts` |
 | `app/globals.css` | 两套主题与手机档媒体查询 | `lib/mobile-layout.ts` |
 
