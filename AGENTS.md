@@ -69,9 +69,7 @@ bun run dev   # port 30141
 Lint：`bun run lint`
 测试：`bun test`
 
-开发期间不要执行 `bun run build`：会污染 `.next/` 并破坏 `bun run dev`。例外是
-`bun run desktop:build`，它经 `scripts/stage-desktop.mjs` 通过 `OMPDESK_DIST_DIR`
-构建到 `src-tauri/server/.next`，不碰开发用的 `.next/`。
+开发期间不要执行 `bun run build`：会污染 `.next/` 并破坏 `bun run dev`。
 
 运行环境固定为 Bun：`@oh-my-pi/pi-*` 以 TypeScript 源码发布并 import `bun:sqlite`，
 Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 为 ESM
