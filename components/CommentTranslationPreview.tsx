@@ -5,11 +5,12 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { useCommentTranslationPreference } from "@/hooks/useCommentTranslation";
 import { notifyCommentDictionaryChanged } from "@/lib/comment-dictionary-version";
-import { commentTranslationKey, commentTranslationTarget } from "@/lib/comment-translation-render";
-import type { CommentEntry } from "@/lib/comment-entries";
+import { commentTranslationTarget } from "@/lib/comment-translation-render";
+import { commentTranslationKey, type CommentEntry } from "@/lib/comment-entries";
 import type { CommentTranslationRecord } from "@/lib/comment-dictionary";
 import { getFileExt } from "@/lib/file-types";
-import { getFileApiUrl } from "@/lib/file-paths";
+import { getFileApiUrl, joinFilePath } from "@/lib/file-paths";
+import { useSourceWrapLines } from "@/hooks/useSourceWrapLines";
 import { SourceView } from "./SourceCodeView";
 
 interface Props {
@@ -32,6 +33,7 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
   const { t, locale } = useI18n();
   const { isDark } = useTheme();
   const viewerEnabled = useCommentTranslationPreference();
+  const wrapLines = useSourceWrapLines();
   const targetLanguage = commentTranslationTarget(locale);
 
   // 面板保存译文后递增字典版本，已打开的查看器不必重新加载文件即可取到新译文。
@@ -43,7 +45,7 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
     () => entries.map((entry) => ({
       id: `${entry.filePath}:${entry.startLine}`,
       entry,
-      key: commentTranslationKey(entry, targetLanguage),
+      key: entry.language === targetLanguage ? null : commentTranslationKey(entry),
     })),
     [entries, targetLanguage],
   );
@@ -56,7 +58,7 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
 
   const [source, setSource] = useState<{ path: string; content: string } | null>(null);
   const [sourceFailed, setSourceFailed] = useState(false);
-  const absolutePath = selected ? `${cwd.replace(/[\\/]+$/, "")}/${selected.entry.filePath}` : null;
+  const absolutePath = selected ? joinFilePath(cwd, selected.entry.filePath) : null;
 
   useEffect(() => {
     if (!absolutePath) {
@@ -97,9 +99,9 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
   }, [loaded, selected]);
 
   const previewTranslations = useMemo(() => {
-    if (!selected || !record) return null;
+    if (!viewerEnabled || !selected || !record) return null;
     return new Map<number, string>([[selected.entry.endLine, record.translation]]);
-  }, [record, selected]);
+  }, [record, selected, viewerEnabled]);
 
   if (candidates.length === 0 || !selected) return null;
 
@@ -165,7 +167,7 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
           <SourceView
             content={snippet}
             language={getFileExt(selected.entry.filePath) === "tsx" ? "tsx" : "typescript"}
-            wrapLines={false}
+            wrapLines={wrapLines}
             isDark={isDark}
             firstLineNumber={selected.entry.startLine}
             translations={previewTranslations}
@@ -174,16 +176,15 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
         )}
       </div>
 
-      {!record && (
+      {!viewerEnabled ? (
+        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>
+          {t("comments.previewHidden")}
+        </div>
+      ) : !record ? (
         <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>
           {t("comments.previewEmpty")}
         </div>
-      )}
-      {!viewerEnabled && (
-        <div style={{ marginTop: 2, fontSize: 10, color: "var(--text-dim)" }}>
-          {t("comments.previewHidden")}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
