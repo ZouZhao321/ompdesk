@@ -8,6 +8,7 @@ import { SubagentPanel, isSubagentActive } from "./SubagentPanel";
 import { CommentTranslationPanel } from "./CommentTranslationPanel";
 import { ChatWindow } from "./ChatWindow";
 import { FileExplorerPanel } from "./FileExplorerPanel";
+import { GitChangesPanel } from "./GitChangesPanel";
 import { FileViewer } from "./FileViewer";
 import { TabBar } from "./TabBar";
 import { PanelViewIcon } from "./PanelViewIcon";
@@ -58,6 +59,7 @@ import type { SessionStatsInfo } from "@/lib/omp-types";
 // 重渲染（面板拖动、子代理快照更新）时保持不动。
 const MemoFileViewer = memo(FileViewer);
 const MemoFileExplorerPanel = memo(FileExplorerPanel);
+const MemoGitChangesPanel = memo(GitChangesPanel);
 const MemoSubagentPanel = memo(SubagentPanel);
 
 type SessionCopyField = "file" | "id";
@@ -1084,6 +1086,15 @@ export function AppShell() {
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
             {translate("files.noProject")}
           </div>
+        );
+      case "git":
+        return (
+          <MemoGitChangesPanel
+            cwd={activeCwd}
+            onOpenFile={handleOpenFile}
+            active={tab.id === activePanelTabId && rightPanelOpen}
+            refreshKey={explorerRefreshKey}
+          />
         );
       case "subagents":
         return (
@@ -2142,6 +2153,14 @@ export function AppShell() {
               size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
             >
               <PanelViewIcon kind="explorer" />
+            </PanelViewButton>
+            <PanelViewButton
+              active={activePanelTab?.kind === "git"}
+              title={translate("git.title")}
+              onClick={() => handleToggleViewTab("git")}
+              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+            >
+              <PanelViewIcon kind="git" />
             </PanelViewButton>
             <PanelViewButton
               active={activePanelTab?.kind === "subagents"}

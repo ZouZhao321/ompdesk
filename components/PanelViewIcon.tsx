@@ -36,5 +36,15 @@ export function PanelViewIcon({ kind, size = 15 }: { kind: PanelViewKind; size?:
           <circle cx="15" cy="14" r="1" />
         </svg>
       );
+    case "git":
+      return (
+        <svg {...common}>
+          <circle cx="6" cy="6" r="2.5" />
+          <circle cx="6" cy="18" r="2.5" />
+          <circle cx="18" cy="9" r="2.5" />
+          <path d="M6 8.5v7" />
+          <path d="M18 11.5c0 3-2.5 4-6 4h-1" />
+        </svg>
+      );
   }
 }
