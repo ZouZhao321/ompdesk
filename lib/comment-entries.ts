@@ -1,6 +1,10 @@
 /** 注释词条的语言，由文本里中文字符与拉丁字母的数量关系决定。 */
 export type CommentLanguage = "zh" | "en";
 
+export function isCommentLanguage(value: unknown): value is CommentLanguage {
+  return value === "zh" || value === "en";
+}
+
 export interface CommentSourceFile {
   /** 相对于项目根目录的路径，使用 `/` 分隔。 */
   path: string;
@@ -77,7 +81,10 @@ export function extractCommentEntries(files: CommentSourceFile[]): CommentExtrac
 
   for (const file of ordered) {
     for (const comment of mergeLineComments(readComments(file.content))) {
-      const text = normalizeCommentText(comment);
+      const body = comment.kind === "block"
+        ? comment.body.split("\n").map((line) => line.replace(/^\s*\*+\s?/, "")).join("\n")
+        : comment.body;
+      const text = normalizeCommentText(body);
       if (isExcludedComment(text)) {
         excluded++;
         continue;
@@ -188,12 +195,22 @@ function mergeLineComments(comments: RawComment[]): RawComment[] {
   return merged;
 }
 
-/** 去掉每行的注释符号前缀，多行合并为一段，连续空白压成一个空格。 */
-function normalizeCommentText(comment: RawComment): string {
-  const lines = comment.kind === "block"
-    ? comment.body.split("\n").map((line) => line.replace(/^\s*\*+\s?/, ""))
-    : comment.body.split("\n");
-  return lines.join(" ").replace(/\s+/g, " ").trim();
+/** 多行合并为一段，连续空白压成一个空格。 */
+export function normalizeCommentText(text: string): string {
+  return text.split("\n").join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * 字典键 = 归一化后的整块注释文本 + 目标语言。
+ * 缩进与换行的差异不改变键；调用方传入已去掉注释符号前缀的文本。
+ */
+export function commentEntryKey(text: string, targetLanguage: CommentLanguage): string {
+  return `${normalizeCommentText(text)}\u0000${targetLanguage}`;
+}
+
+/** 译文的目标语言始终是原文语言的另一种。 */
+export function translationTargetLanguage(language: CommentLanguage): CommentLanguage {
+  return language === "zh" ? "en" : "zh";
 }
 
 /**
