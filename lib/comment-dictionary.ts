@@ -3,9 +3,9 @@ import { join } from "path";
 import { writePrivateFileAtomicSync } from "./atomic-file";
 import {
   commentEntryKey,
+  commentTranslationKey,
   isCommentLanguage,
   normalizeCommentText,
-  translationTargetLanguage,
   type CommentEntry,
   type CommentLanguage,
 } from "./comment-entries";
@@ -152,7 +152,7 @@ export function translationsForEntries(
 ): Record<string, CommentTranslationRecord> {
   const result: Record<string, CommentTranslationRecord> = {};
   for (const entry of entries) {
-    const key = commentEntryKey(entry.text, translationTargetLanguage(entry.language));
+    const key = commentTranslationKey(entry);
     const record = dictionary.translations[key];
     if (record) result[key] = record;
   }
