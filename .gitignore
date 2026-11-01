@@ -49,8 +49,11 @@ yarn-error.log*
 # git worktrees
 .worktrees/
 
-# 本地临时产物（.tmp/<任务>/ 自包含，见 AGENTS.md）
+# 本地临时产物（.tmp/<任务>/ 自包含，见 AGENTS.template.md）
 .tmp/
+
+# 个人 agent 规则，不提交；从 AGENTS.template.md 复制后自行修改
+/AGENTS.md
 
 # 改动与删除前的自动备份（omp 扩展 backup-guard 写入）
 .backups/
@@ -59,3 +62,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .factory
+src-tauri/target/
+src-tauri/gen/
+src-tauri/resources/
+src-tauri/server/.remember/
