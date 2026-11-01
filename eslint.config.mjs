@@ -5,9 +5,6 @@ const eslintConfig = [
   ...coreWebVitals,
   ...typescript,
   {
-    ignores: ["**/src-tauri/target", "**/src-tauri/gen"],
-  },
-  {
     rules: {
       "react-hooks/immutability": "off",
       "react-hooks/refs": "off",
