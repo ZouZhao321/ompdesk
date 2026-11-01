@@ -1,4 +1,6 @@
-/** 注释词条的语言，由文本里中文字符与拉丁字母的数量关系决定。 */
+import ts from "typescript";
+
+/** 注释词条的语言：文本里出现中文字符即中文，否则英文。 */
 export type CommentLanguage = "zh" | "en";
 
 export function isCommentLanguage(value: unknown): value is CommentLanguage {
@@ -24,6 +26,8 @@ export interface CommentEntry {
 export interface CommentExtraction {
   entries: CommentEntry[];
   excluded: number;
+  /** 扫描过的源文件数。 */
+  files: number;
 }
 
 /** 依赖、产物、工作副本与临时目录都不参与扫描。 */
@@ -46,8 +50,6 @@ const SOURCE_EXTENSIONS: Record<string, true> = { ".ts": true, ".tsx": true };
 
 const WORD_RE = /\p{L}+/gu;
 const HAN_RE = /\p{Script=Han}/u;
-const HAN_COUNT_RE = /\p{Script=Han}/gu;
-const LATIN_COUNT_RE = /[A-Za-z]/g;
 
 export function isSkippedCommentSourceDir(name: string): boolean {
   return SKIPPED_DIRS[name.toLowerCase()] === true;
@@ -94,89 +96,99 @@ export function extractCommentEntries(files: CommentSourceFile[]): CommentExtrac
         startLine: comment.startLine,
         endLine: comment.endLine,
         text,
-        language: commentLanguage(text),
+        language: HAN_RE.test(text) ? "zh" : "en",
       });
     }
   }
 
-  return { entries, excluded };
+  return { entries, excluded, files: ordered.length };
 }
 
-/** 逐字符扫描，跳过字符串字面量里的注释符号，并跨行跟踪块注释。 */
+/** 行首偏移表，把字符位置换算成 1 起始行号。 */
+function lineStarts(content: string): number[] {
+  const starts = [0];
+  for (let index = 0; index < content.length; index++) {
+    if (content[index] === "\n") starts.push(index + 1);
+  }
+  return starts;
+}
+
+function lineAt(starts: readonly number[], position: number): number {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (starts[middle] <= position) low = middle;
+    else high = middle - 1;
+  }
+  return low + 1;
+}
+
+/**
+ * 扫描到这些 token 之后，`/` 是除号；其余位置按正则字面量的起点处理，
+ * 由 reScanSlashToken 一并消费正则内部的反斜杠与字符类。
+ */
+const EXPRESSION_END_TOKENS = new Set<ts.SyntaxKind>([
+  ts.SyntaxKind.Identifier,
+  ts.SyntaxKind.PrivateIdentifier,
+  ts.SyntaxKind.NumericLiteral,
+  ts.SyntaxKind.BigIntLiteral,
+  ts.SyntaxKind.StringLiteral,
+  ts.SyntaxKind.RegularExpressionLiteral,
+  ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+  ts.SyntaxKind.TemplateTail,
+  ts.SyntaxKind.CloseParenToken,
+  ts.SyntaxKind.CloseBracketToken,
+  ts.SyntaxKind.CloseBraceToken,
+  ts.SyntaxKind.ThisKeyword,
+  ts.SyntaxKind.SuperKeyword,
+  ts.SyntaxKind.TrueKeyword,
+  ts.SyntaxKind.FalseKeyword,
+  ts.SyntaxKind.NullKeyword,
+  ts.SyntaxKind.PlusPlusToken,
+  ts.SyntaxKind.MinusMinusToken,
+]);
+
+/**
+ * 用 TypeScript 扫描器取注释 trivia。字符串、模板与正则字面量由扫描器整体消费，
+ * 其中的引号、反斜杠与 `//` 不会被当成注释。
+ */
 function readComments(content: string): RawComment[] {
+  const starts = lineStarts(content);
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, content);
   const comments: RawComment[] = [];
-  let index = 0;
-  let line = 1;
-  let inBlock = false;
-  let blockStart = 1;
-  let blockBody = "";
-  let quote: string | null = null;
+  let expectExpression = true;
 
-  while (index < content.length) {
-    const char = content[index];
-    const next = content[index + 1];
-
-    if (char === "\n") {
-      line++;
-      // 单双引号字符串不跨行；未闭合时在新行恢复，避免吞掉后续注释。
-      if (quote !== "`") quote = null;
-      if (inBlock) blockBody += "\n";
-      index++;
-      continue;
+  while (true) {
+    let token = scanner.scan();
+    if (token === ts.SyntaxKind.EndOfFileToken) break;
+    if (token === ts.SyntaxKind.SlashToken && expectExpression) {
+      token = scanner.reScanSlashToken();
     }
 
-    if (inBlock) {
-      if (char === "*" && next === "/") {
-        comments.push({ kind: "block", startLine: blockStart, endLine: line, body: blockBody });
-        inBlock = false;
-        blockBody = "";
-        index += 2;
-        continue;
+    const text = scanner.getTokenText();
+    const start = scanner.getTokenPos();
+    const end = scanner.getTextPos();
+
+    if (token >= ts.SyntaxKind.FirstTriviaToken && token <= ts.SyntaxKind.LastTriviaToken) {
+      if (token === ts.SyntaxKind.SingleLineCommentTrivia) {
+        const line = lineAt(starts, start);
+        comments.push({ kind: "line", startLine: line, endLine: line, body: text.slice(2) });
+      } else if (token === ts.SyntaxKind.MultiLineCommentTrivia) {
+        const body = text.slice(2, text.endsWith("*/") ? -2 : undefined);
+        comments.push({
+          kind: "block",
+          startLine: lineAt(starts, start),
+          endLine: lineAt(starts, Math.max(start, end - 1)),
+          body,
+        });
       }
-      blockBody += char;
-      index++;
       continue;
     }
 
-    if (quote) {
-      if (char === "\\") {
-        if (next === "\n") line++;
-        index += 2;
-        continue;
-      }
-      if (char === quote) quote = null;
-      index++;
-      continue;
-    }
-
-    if (char === "/" && next === "/") {
-      let end = index + 2;
-      while (end < content.length && content[end] !== "\n") end++;
-      comments.push({ kind: "line", startLine: line, endLine: line, body: content.slice(index + 2, end) });
-      index = end;
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      inBlock = true;
-      blockStart = line;
-      blockBody = "";
-      index += 2;
-      continue;
-    }
-
-    if (char === "\"" || char === "'" || char === "`") {
-      quote = char;
-      index++;
-      continue;
-    }
-
-    index++;
+    expectExpression = !EXPRESSION_END_TOKENS.has(token);
   }
 
-  if (inBlock) {
-    comments.push({ kind: "block", startLine: blockStart, endLine: line, body: blockBody });
-  }
   return comments;
 }
 
@@ -213,6 +225,11 @@ export function translationTargetLanguage(language: CommentLanguage): CommentLan
   return language === "zh" ? "en" : "zh";
 }
 
+/** 词条的字典键：归一化文本加上译文目标语言。 */
+export function commentTranslationKey(entry: CommentEntry): string {
+  return commentEntryKey(entry.text, translationTargetLanguage(entry.language));
+}
+
 /**
  * 纯符号横幅没有任何单词；只含一个单词的分隔标题也排除。
  * 中文没有空格，单个中文词可能是一整句说明，因此单词语判定只针对拉丁字母文本。
@@ -223,9 +240,3 @@ function isExcludedComment(text: string): boolean {
   return words.length === 1 && !HAN_RE.test(text);
 }
 
-/** 中文字符占比达到一半时归入左栏，否则归入右栏。 */
-function commentLanguage(text: string): CommentLanguage {
-  const han = text.match(HAN_COUNT_RE)?.length ?? 0;
-  const latin = text.match(LATIN_COUNT_RE)?.length ?? 0;
-  return han > 0 && han >= latin ? "zh" : "en";
-}
