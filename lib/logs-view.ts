@@ -31,11 +31,14 @@ export function formatFileSize(bytes: number): string {
  * only the server's `current` flag claims which file is active (a file carried
  * over from the previous day has no rotation suffix either).
  */
-export function formatFileLabel(file: LogFileInfo): string {
+export function formatFileLabel(
+  file: LogFileInfo,
+  suffix: { current: string; rotation: string } = { current: "current file", rotation: "rotation" },
+): string {
   const match = /^omp\.(\d{4}-\d{2}-\d{2})\.(\d+)\.log(?:\.(\d+))?$/.exec(file.name);
   if (!match) return file.name;
-  if (match[3]) return `${match[1]} · rotation ${match[3]}`;
-  return file.current ? `${match[1]} · current file` : match[1];
+  if (match[3]) return `${match[1]} · ${suffix.rotation} ${match[3]}`;
+  return file.current ? `${match[1]} · ${suffix.current}` : match[1];
 }
 
 export function formatFileModified(iso: string): string {

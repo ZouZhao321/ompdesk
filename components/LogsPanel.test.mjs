@@ -157,7 +157,7 @@ test("shows follow and pause state in the controls", () => {
   assert.match(paused, />Follow latest</);
 });
 
-test("renders the panel chrome in Chinese while keeping technical level labels", () => {
+test("renders the panel chrome in Chinese", () => {
   const html = render({}, "zh-CN");
 
   assert.match(html, />日志</);
@@ -173,7 +173,8 @@ test("renders the panel chrome in Chinese while keeping technical level labels",
   assert.match(html, />暂停</);
   assert.match(html, />刷新</);
   assert.match(html, />未选择文件</);
-  assert.match(html, /All levels/);
+  assert.match(html, /全部级别/);
+  assert.equal(html.includes("All levels"), false, html);
   assert.equal(html.includes("No file yet"), false, html);
 });
 
