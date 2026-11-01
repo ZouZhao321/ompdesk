@@ -1,5 +1,5 @@
 name: 功能请求
-description: 提出新功能或对现有流程的改进
+description: 提出新功能或对现有流程的改进；采纳与否会在本 issue 回复
 title: "[Feat] "
 labels: ["enhancement"]
 body:
