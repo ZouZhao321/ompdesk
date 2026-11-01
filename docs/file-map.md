@@ -36,6 +36,7 @@ cwd/browse/route.ts             GET 目录选择器
 default-cwd/route.ts            POST 创建 ~/omp-cwd-YYYYMMDD
 files/[...path]/route.ts        GET 文件内容 | POST 上传
 file-index/route.ts             GET 文件模糊索引
+comment-entries/route.ts        GET 注释词条提取（只读）
 git/status/route.ts             GET 工作区改动状态
 git/diff/route.ts               GET 单文件差异
 home/route.ts                   GET 用户主目录
@@ -70,6 +71,7 @@ worktrees/route.ts              GET/POST/DELETE git worktree
 ```
 agent-client.ts      为 /api/agent 命令提供带类型的 fetch 辅助
 api-request-log.ts   withRequestLog：统一请求日志与耗时
+comment-entries.ts   注释词条提取：合并连续单行、排除横幅与单词标题、按中文字符占比归属语言
 request-security.ts  请求来源与主机校验
 logging.ts           服务端日志入口
 sse-lifecycle.ts     两条 SSE 路由共用的连接生命周期
@@ -124,6 +126,7 @@ MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
 BranchNavigator.tsx 会话内分支切换器
 ConversationMap.tsx 会话地图：卡片、连线、缩放、分叉与切换
 SubagentPanel.tsx   子代理标签页：运行与历史列表、执行详情
+CommentTranslationPanel.tsx 注释互译标签页：中文/英文两栏只读词条列表
 RewindDialog.tsx    回退选点对话框
 ProjectTrustDialog.tsx 项目信任确认
 ExtensionStatusBar.tsx 扩展状态栏
