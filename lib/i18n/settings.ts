@@ -1,14 +1,10 @@
-import type { Locale } from "./types";
-
-type MessagesByLocale = Record<string, Record<string, string>>;
-
 /**
  * 把设置分组名转成稳定的 key 片段。
  * @param group 服务端返回的分组名
- * @returns 小写、连字符分隔的分组片段；空名称回退为 general
+ * @returns 小写、连字符分隔的分组片段；空名称回退为 group
  */
 export function groupSlug(group: string): string {
-  return group.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "general";
+  return group.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || "group";
 }
 
 /** 设置标签名的翻译 key。 */
@@ -31,22 +27,29 @@ export function settingFieldDescriptionKey(path: string): string {
   return `settings.field.${path}.description`;
 }
 
+/** 搜索时需要的字段形状。 */
+export interface SettingSearchField {
+  path: string;
+  tab: string;
+  group?: string;
+}
+
 /**
- * 查询设置文案，缺失时回退到服务端返回的原文。
- * @param locale 当前语言
- * @param key 翻译 key
- * @param messages 各语言的消息字典
- * @param fallback 服务端返回的英文原文
- * @returns 显示文案
+ * 按已解析的文案筛选设置字段。
+ * @param fields 要筛选的字段
+ * @param query 搜索词
+ * @param text 把字段解析成显示文案
+ * @returns 命中搜索词的字段
  */
-export function resolveSettingText(
-  locale: Locale,
-  key: string,
-  messages: MessagesByLocale,
-  fallback: string,
-): string {
-  const message = messages[locale]?.[key] ?? messages.en?.[key];
-  if (message !== undefined) return message;
-  if (process.env.NODE_ENV !== "production") console.warn(`[i18n] Missing setting translation: ${key}`);
-  return fallback;
+export function filterSettingFieldsByQuery<T extends SettingSearchField>(
+  fields: readonly T[],
+  query: string,
+  text: (field: T) => { label: string; description: string; group: string },
+): T[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return [];
+  return fields.filter((field) => {
+    const display = text(field);
+    return `${display.label} ${display.description} ${field.path} ${display.group}`.toLowerCase().includes(normalized);
+  });
 }
