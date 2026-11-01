@@ -60,8 +60,7 @@ bun run typecheck
 bun run smoke:dev  # 起 dev server，请求 / 与 /api/home，扫描构建失败标记
 ```
 
-- 开发期间不要执行 `bun run build`：会污染 `.next/` 并打断正在运行的开发服务器。桌面打包用
-  `bun run desktop:build`，它写到 `src-tauri/server/.next`。
+- 开发期间不要执行 `bun run build`：会污染 `.next/` 并打断正在运行的开发服务器。
 - 启用了密码锁的机器（`~/.omp/agent/ompdesk-auth.json` 存在）跑冒烟要带
   `OMPDESK_SMOKE_AUTH=用户名:密码`，否则首页固定返回 401，看起来像构建失败。
 - `bun run lint` 有大量存量告警，不能当门禁；只看改动文件范围的 eslint 结果。
