@@ -81,7 +81,8 @@ const entryTextStyle = {
 
 const translationButtonStyle = {
   ...entryTextStyle,
-  display: "block",
+  display: "flex",
+  alignItems: "center",
   width: "100%",
   padding: 0,
   border: "none",
@@ -162,9 +163,28 @@ const failureStyle = {
   overflowWrap: "anywhere",
 } as const;
 
+/** 两栏各自可收缩，长单词只在栏内换行，不会把邻栏挤出去。 */
+const columnStyle = {
+  minWidth: 0,
+} as const;
+
+/**
+ * 复选输入的命中区。移动档把 label 撑到命中区尺寸，输入本身保持原尺寸，
+ * 桌面档 label 收缩成输入的大小，布局与改动前一致。
+ */
+const checkboxHitBoxStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  cursor: "pointer",
+} as const;
+
 export function CommentTranslationPanel({ cwd, active }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
+  // 移动档控件的命中区边长；桌面档保持各控件原本的尺寸。
+  const hitTarget = isMobile ? MOBILE_HIT_TARGET_PX : undefined;
   const [loaded, setLoaded] = useState<LoadedComments | null>(null);
   const [loading, setLoading] = useState(false);
   const [failedCwd, setFailedCwd] = useState<string | null>(null);
@@ -377,7 +397,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
               style={{
                 ...actionButtonStyle,
                 color: "var(--danger)",
-                minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                minHeight: hitTarget,
               }}
             >
               {t("comments.deleteDictionary")}
@@ -392,6 +412,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
             gap: 4,
             fontSize: 11,
             color: "var(--text-dim)",
+            minHeight: hitTarget,
           }}>
             <input
               type="checkbox"
@@ -401,10 +422,6 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                 current ? current.entries.map(rowId) : [],
                 event.target.checked,
               )}
-              style={{
-                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-              }}
             />
             {t("comments.selectAll")}
           </label>
@@ -417,7 +434,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
             disabled={generating || selected.size === 0}
             style={{
               ...actionButtonStyle,
-              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+              minHeight: hitTarget,
             }}
           >
             {generating
@@ -464,17 +481,15 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
           return (
             <div key={group.filePath}>
               <div style={fileHeaderStyle}>
-                <input
-                  type="checkbox"
-                  checked={groupSelected}
-                  onChange={(event) => toggleSelection(group.rows.map(rowId), event.target.checked)}
-                  title={t("comments.selectFile")}
-                  aria-label={`${t("comments.selectFile")}: ${group.filePath}`}
-                  style={{
-                    minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                  }}
-                />
+                <label style={{ ...checkboxHitBoxStyle, minWidth: hitTarget, minHeight: hitTarget }}>
+                  <input
+                    type="checkbox"
+                    checked={groupSelected}
+                    onChange={(event) => toggleSelection(group.rows.map(rowId), event.target.checked)}
+                    title={t("comments.selectFile")}
+                    aria-label={`${t("comments.selectFile")}: ${group.filePath}`}
+                  />
+                </label>
                 <span>{group.filePath}</span>
               </div>
               {group.rows.map((entry) => {
@@ -503,7 +518,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                           placeholder={t("comments.translationPlaceholder")}
                           style={{
                             ...editorStyle,
-                            minHeight: isMobile ? MOBILE_HIT_TARGET_PX : 60,
+                            minHeight: hitTarget ?? 60,
                           }}
                         />
                         <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
@@ -513,7 +528,8 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                             onClick={() => void saveTranslation(activeEdit)}
                             style={{
                               ...actionButtonStyle,
-                              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                              minWidth: hitTarget,
+                              minHeight: hitTarget,
                             }}
                           >
                             {t("comments.save")}
@@ -523,7 +539,8 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                             onClick={() => setEditing(null)}
                             style={{
                               ...actionButtonStyle,
-                              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                              minWidth: hitTarget,
+                              minHeight: hitTarget,
                             }}
                           >
                             {t("comments.cancel")}
@@ -539,7 +556,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                           type="button"
                           title={t("comments.editTranslation")}
                           onClick={() => beginEdit(entry, targetLanguage, key, record.translation)}
-                          style={translationButtonStyle}
+                          style={{ ...translationButtonStyle, minHeight: hitTarget }}
                         >
                           {record.translation}
                         </button>
@@ -557,7 +574,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                         style={{
                           ...translationButtonStyle,
                           color: "var(--text-dim)",
-                          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                          minHeight: hitTarget,
                         }}
                       >
                         {t("comments.addTranslation")}
@@ -582,21 +599,23 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                     style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}
                   >
                     <div style={rowHeaderStyle}>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(id)}
-                        onChange={(event) => toggleSelection([id], event.target.checked)}
-                        aria-label={`${t("comments.selectEntry")}: ${entry.filePath}:${entry.startLine}`}
-                        style={{
-                          minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                        }}
-                      />
+                      <label style={{ ...checkboxHitBoxStyle, minWidth: hitTarget, minHeight: hitTarget }}>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(id)}
+                          onChange={(event) => toggleSelection([id], event.target.checked)}
+                          aria-label={`${t("comments.selectEntry")}: ${entry.filePath}:${entry.startLine}`}
+                        />
+                      </label>
                       <span>{t("comments.line", { line: entry.startLine })}</span>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 3 }}>
-                      {entry.language === "zh" ? originalColumn : translationColumn}
-                      {entry.language === "en" ? originalColumn : translationColumn}
+                      <div style={columnStyle}>
+                        {entry.language === "zh" ? originalColumn : translationColumn}
+                      </div>
+                      <div style={columnStyle}>
+                        {entry.language === "en" ? originalColumn : translationColumn}
+                      </div>
                     </div>
                   </div>
                 );
