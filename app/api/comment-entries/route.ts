@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
-import {
-  extractCommentEntries,
-  isCommentSourceFile,
-  isSkippedCommentSourceDir,
-  type CommentSourceFile,
-} from "@/lib/comment-entries";
+import { extractCommentEntries } from "@/lib/comment-entries";
+import { readCommentSourceFiles } from "@/lib/comment-sources";
 import {
   getAllowedFileRoots,
   isExistingFilePathAllowed,
@@ -14,12 +10,13 @@ import {
 } from "@/lib/file-access";
 import { isApiRequestAllowed } from "@/lib/request-security";
 import fs from "fs";
-import path from "path";
 
 // GET /api/comment-entries?cwd=/abs/path
 // Returns the comment entries of every .ts/.tsx file under cwd, sorted by path
 // and line, plus how many banner/heading comments were excluded. Extraction
-// itself is a pure function; this route only lists files and reads contents.
+// itself is a pure function; this route checks access, then lets
+// lib/comment-sources pick the files (git-tracked in a repo, directory walk
+// otherwise).
 export const GET = withRequestLog("/api/comment-entries", getRouteHandler);
 
 async function getRouteHandler(req: NextRequest) {
@@ -50,28 +47,5 @@ async function getRouteHandler(req: NextRequest) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
-  return NextResponse.json(extractCommentEntries(readSourceFiles(cwd)));
-}
-
-function readSourceFiles(root: string): CommentSourceFile[] {
-  const files: CommentSourceFile[] = [];
-  const walk = (absoluteDir: string, relativeDir: string) => {
-    const dirents = fs.readdirSync(absoluteDir, { withFileTypes: true });
-    for (const dirent of dirents) {
-      const relativePath = relativeDir ? `${relativeDir}/${dirent.name}` : dirent.name;
-      if (dirent.isDirectory()) {
-        if (!isSkippedCommentSourceDir(dirent.name)) {
-          walk(path.join(absoluteDir, dirent.name), relativePath);
-        }
-        continue;
-      }
-      if (!dirent.isFile() || !isCommentSourceFile(relativePath)) continue;
-      files.push({
-        path: relativePath,
-        content: fs.readFileSync(path.join(absoluteDir, dirent.name), "utf8"),
-      });
-    }
-  };
-  walk(root, "");
-  return files;
+  return NextResponse.json(extractCommentEntries(await readCommentSourceFiles(cwd)));
 }
