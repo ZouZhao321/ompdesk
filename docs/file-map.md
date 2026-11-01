@@ -36,7 +36,8 @@ cwd/browse/route.ts             GET 目录选择器
 default-cwd/route.ts            POST 创建 ~/omp-cwd-YYYYMMDD
 files/[...path]/route.ts        GET 文件内容 | POST 上传
 file-index/route.ts             GET 文件模糊索引
-comment-entries/route.ts        GET 注释词条提取（git 跟踪优先，只读）
+comment-entries/route.ts        GET 注释词条提取并附带已保存的译文（git 跟踪优先，只读）
+comment-dictionary/route.ts     PUT 保存人工译文 | DELETE 删除整个字典
 git/status/route.ts             GET 工作区改动状态
 git/diff/route.ts               GET 单文件差异
 home/route.ts                   GET 用户主目录
@@ -71,8 +72,9 @@ worktrees/route.ts              GET/POST/DELETE git worktree
 ```
 agent-client.ts      为 /api/agent 命令提供带类型的 fetch 辅助
 api-request-log.ts   withRequestLog：统一请求日志与耗时
-comment-entries.ts   注释词条提取：合并连续单行、排除横幅与单词标题、按中文字符占比归属语言
+comment-entries.ts   注释词条提取：合并连续单行、排除横幅与单词标题、按中文字符占比归属语言、计算字典键
 comment-sources.ts   词条来源文件：git 仓库以 .gitignore 为准，非仓库退回目录遍历
+comment-dictionary.ts 本机注释字典：按键读写人工译文、来源标记、只返回当前项目相关记录
 git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文件，非仓库返回 null
 request-security.ts  请求来源与主机校验
 logging.ts           服务端日志入口

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { withRequestLog } from "@/lib/api-request-log";
 import { extractCommentEntries } from "@/lib/comment-entries";
 import { readCommentSourceFiles } from "@/lib/comment-sources";
+import { readCommentDictionary, translationsForEntries } from "@/lib/comment-dictionary";
 import {
   getAllowedFileRoots,
   isExistingFilePathAllowed,
@@ -13,9 +15,10 @@ import fs from "fs";
 
 // GET /api/comment-entries?cwd=/abs/path
 // Returns the comment entries of every .ts/.tsx file under cwd, sorted by path
-// and line, plus how many banner/heading comments were excluded. Extraction
-// itself is a pure function; this route checks access, then lets
-// lib/comment-sources pick the files (git-tracked in a repo, directory walk
+// and line, plus how many banner/heading comments were excluded and the saved
+// translations for exactly those entries. Extraction itself is a pure function;
+// this route only lists files, reads contents, and joins the local dictionary.
+// lib/comment-sources picks the files (git-tracked in a repo, directory walk
 // otherwise).
 export const GET = withRequestLog("/api/comment-entries", getRouteHandler);
 
@@ -47,5 +50,10 @@ async function getRouteHandler(req: NextRequest) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
-  return NextResponse.json(extractCommentEntries(await readCommentSourceFiles(cwd)));
+  const extraction = extractCommentEntries(await readCommentSourceFiles(cwd));
+  const dictionary = readCommentDictionary(getAgentDir());
+  return NextResponse.json({
+    ...extraction,
+    translations: translationsForEntries(extraction.entries, dictionary),
+  });
 }
