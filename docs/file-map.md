@@ -170,6 +170,5 @@ proxy.ts            访问控制：密码校验、主机与跨站检查
 instrumentation.ts  启动时接线（代理、日志）
 next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
 bin/                启动器、密码存储、Bun 定位
-scripts/            构建与打包（stage-desktop、build-desktop、fetch-bun、sync-version）
-src-tauri/          桌面外壳
+scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息）
 ```
