@@ -30,6 +30,8 @@ import {
   commentTranslationTarget,
 } from "@/lib/comment-translation-render";
 import { setCommentTranslationPreference } from "@/lib/comment-translation-preference";
+import { setSourceWrapLines } from "@/lib/source-wrap-preference";
+import { useSourceWrapLines } from "@/hooks/useSourceWrapLines";
 
 interface Props {
   filePath: string;
@@ -737,7 +739,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("source");
-  const [wrapLines, setWrapLines] = useState(false);
+  const wrapLines = useSourceWrapLines();
   const gitDiffRequestRef = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [selectedLineRange, setSelectedLineRange] = useState<SelectedLineRange | null>(null);
@@ -789,7 +791,6 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     setData(null);
     setGitDiff(null);
     setDisplayMode("source");
-    setWrapLines(false);
 
     fetchContent(filePath).finally(() => setLoading(false));
   }, [filePath, fetchContent]);
@@ -1061,7 +1062,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
               <>
                 <button
                   type="button"
-                  onClick={() => setWrapLines((value) => !value)}
+                  onClick={() => setSourceWrapLines(!wrapLines)}
                   title={wrapLines ? t("i18n.disableWrap") : t("i18n.enableWrap")}
                   aria-label={wrapLines ? t("i18n.disableWrap") : t("i18n.enableWrap")}
                   aria-pressed={wrapLines}

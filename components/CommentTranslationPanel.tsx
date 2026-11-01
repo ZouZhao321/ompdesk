@@ -4,12 +4,18 @@ import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
-  commentEntryKey,
+  commentTranslationKey,
   translationTargetLanguage,
   type CommentEntry,
   type CommentLanguage,
 } from "@/lib/comment-entries";
 import type { CommentTranslationRecord } from "@/lib/comment-dictionary";
+import type { CommentTranslationRequestEntry } from "@/lib/comment-translation-generation";
+import {
+  chunkCommentTranslationEntries,
+  commentTranslationErrorKey,
+  type CommentTranslationErrorKey,
+} from "@/lib/comment-translation-request";
 import type { ProtectedFragment } from "@/lib/comment-translation-validation";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { CommentTranslationPreview } from "./CommentTranslationPreview";
@@ -24,12 +30,14 @@ interface LoadedComments {
   cwd: string;
   entries: CommentEntry[];
   excluded: number;
+  files: number;
   translations: Record<string, CommentTranslationRecord>;
 }
 
 interface CommentEntriesResponse {
   entries: CommentEntry[];
   excluded: number;
+  files: number;
   translations: Record<string, CommentTranslationRecord>;
 }
 
@@ -169,8 +177,8 @@ const columnStyle = {
 } as const;
 
 /**
- * 复选输入的命中区。移动档把 label 撑到命中区尺寸，输入本身保持原尺寸，
- * 桌面档 label 收缩成输入的大小，布局与改动前一致。
+ * 复选输入的命中区。移动档把 label 撑到命中区尺寸，输入本身保持原尺寸；
+ * 桌面档 label 收缩到输入自身的尺寸。
  */
 const checkboxHitBoxStyle = {
   display: "inline-flex",
@@ -195,7 +203,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [generating, setGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<"noModel" | "failed" | null>(null);
+  const [generateError, setGenerateError] = useState<CommentTranslationErrorKey | null>(null);
   const [rowFailures, setRowFailures] = useState<Record<string, RowFailure>>({});
 
   useEffect(() => {
@@ -213,6 +221,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
           cwd,
           entries: payload.entries,
           excluded: payload.excluded,
+          files: payload.files,
           translations: payload.translations,
         });
         // 重新扫描后丢弃已不存在的行，勾选数量与实际条目保持一致。
@@ -313,49 +322,55 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
     const rows = loadedHere.entries.filter((entry) => selected.has(rowId(entry)));
     if (rows.length === 0) return;
 
-    // 同一句原文同一目标语言只发一次；已有译文的条目直接命中，不再请求。
+    // 同一句原文同一目标语言只发一次；勾选行一律强制重新生成，覆盖已有译文。
     const seenKeys = new Set<string>();
-    const entries: Array<{
-      original: string;
-      originalLanguage: CommentLanguage;
-      targetLanguage: CommentLanguage;
-    }> = [];
+    const entries: CommentTranslationRequestEntry[] = [];
     for (const entry of rows) {
-      const targetLanguage = translationTargetLanguage(entry.language);
-      const key = commentEntryKey(entry.text, targetLanguage);
-      if (seenKeys.has(key) || loadedHere.translations[key]) continue;
+      const key = commentTranslationKey(entry);
+      if (seenKeys.has(key)) continue;
       seenKeys.add(key);
-      entries.push({ original: entry.text, originalLanguage: entry.language, targetLanguage });
+      entries.push({
+        original: entry.text,
+        originalLanguage: entry.language,
+        targetLanguage: translationTargetLanguage(entry.language),
+        force: true,
+      });
     }
-    if (entries.length === 0) return;
 
     setGenerating(true);
     setGenerateError(null);
     setRowFailures({});
+    const failures: Record<string, RowFailure> = {};
+    const translations: Record<string, CommentTranslationRecord> = {};
+    let error: CommentTranslationErrorKey | null = null;
     try {
-      const response = await fetch("/api/comment-translations/generate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ entries }),
-      });
-      if (response.status === 409) {
-        setGenerateError("noModel");
-        return;
+      // 服务端单次请求有条目上限，整页勾选按上限顺序分批，结果合并后再显示。
+      for (const batch of chunkCommentTranslationEntries(entries)) {
+        const response = await fetch("/api/comment-translations/generate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ entries: batch }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { code?: unknown } | null;
+          error = commentTranslationErrorKey(payload?.code);
+          break;
+        }
+        const payload = (await response.json()) as GenerateResponse;
+        Object.assign(translations, payload.translations);
+        for (const result of payload.results) {
+          if (result.status !== "failed") continue;
+          failures[result.key] = result.reason === "no_output" ? "noOutput" : (result.missing ?? []);
+        }
       }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = (await response.json()) as GenerateResponse;
-      setLoaded((previous) => previous && previous.cwd === cwd
-        ? { ...previous, translations: { ...previous.translations, ...payload.translations } }
-        : previous);
-      const failures: Record<string, RowFailure> = {};
-      for (const result of payload.results) {
-        if (result.status !== "failed") continue;
-        failures[result.key] = result.reason === "no_output" ? "noOutput" : (result.missing ?? []);
-      }
-      setRowFailures(failures);
     } catch {
-      setGenerateError("failed");
+      error = commentTranslationErrorKey(undefined);
     } finally {
+      setLoaded((previous) => previous && previous.cwd === cwd
+        ? { ...previous, translations: { ...previous.translations, ...translations } }
+        : previous);
+      setRowFailures(failures);
+      setGenerateError(error);
       setGenerating(false);
     }
   }
@@ -386,7 +401,11 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, fontSize: 12, color: "var(--text)" }}>
             {current
-              ? t("comments.summary", { total: current.entries.length, excluded: current.excluded })
+              ? t("comments.summary", {
+                files: current.files,
+                total: current.entries.length,
+                excluded: current.excluded,
+              })
               : t("comments.loading")}
           </div>
           {translatedCount > 0 && (
@@ -447,7 +466,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
         )}
         {generateError && (
           <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>
-            {generateError === "noModel" ? t("comments.noModel") : t("comments.generateFailed")}
+            {t(generateError)}
           </div>
         )}
       </div>
@@ -494,7 +513,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
               </div>
               {group.rows.map((entry) => {
                 const targetLanguage = translationTargetLanguage(entry.language);
-                const key = commentEntryKey(entry.text, targetLanguage);
+                const key = commentTranslationKey(entry);
                 const record = current.translations[key];
                 const activeEdit = editing && editing.key === key ? editing : null;
                 const originalColumn = <div style={entryTextStyle}>{entry.text}</div>;
