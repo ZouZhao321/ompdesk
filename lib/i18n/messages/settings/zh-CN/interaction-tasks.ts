@@ -95,7 +95,7 @@ export const interactionTasks: Record<string, string> = {
 
   "settings.field.collab.relayUrl.label": "中继 URL",
   "settings.field.collab.relayUrl.description": "/collab 使用的中继（wss://host[:port]）",
-  "settings.field.collab.webUrl.label": "Web UI URL",
+  "settings.field.collab.webUrl.label": "Web 界面 URL",
   "settings.field.collab.webUrl.description":
     "/collab 链接使用的浏览器界面；留空则从 collab.relayUrl 推导；显式 http:// 仅限本机",
   "settings.field.collab.displayName.label": "显示名称",
