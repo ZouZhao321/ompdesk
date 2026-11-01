@@ -1,4 +1,8 @@
-# ompdesk - 开发说明
+# ompdesk - 团队开发规则
+
+本文件是团队规则模板，不会被任何 agent 自动加载。开发者在仓库根建一个不提交的 `AGENTS.md`，
+用 `@AGENTS.template.md` 引入本文件，再补充个人习惯；`CLAUDE.md` 同样只想 `AGENTS.md`，
+所以没有个人文件的克隆不会拿到这些规则。
 
 ## Git 工作流
 
@@ -56,8 +60,6 @@ stash 记录，以及 `bun run dev` 的 30141 端口与 `~/.omp/agent` 下的会
   worktree 一起清理。
 - `.tmp/legacy/` 收纳早期的调查产物，内容不再维护。
 
-`.backups/` 由 omp 扩展 `backup-guard` 在改动或删除前自动写入，同样被忽略。
-
 ## 命令
 
 ```bash
@@ -69,17 +71,13 @@ bun run dev   # port 30141
 Lint：`bun run lint`
 测试：`bun test`
 
-开发期间不要执行 `bun run build`：会污染 `.next/` 并破坏 `bun run dev`。
+开发期间不要执行 `bun run build`：会污染 `.next/` 并破坏 `bun run dev`。例外是
+`bun run desktop:build`，它经 `scripts/stage-desktop.mjs` 通过 `OMPDESK_DIST_DIR`
+构建到 `src-tauri/server/.next`，不碰开发用的 `.next/`。
 
 运行环境固定为 Bun：`@oh-my-pi/pi-*` 以 TypeScript 源码发布并 import `bun:sqlite`，
 Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 为 ESM
 `import`，只靠 `serverExternalPackages` 不够。测试用 `bun test`，不用 `node --test`。
-
-## 测试工作区
-
-界面、地图与交互的手工测试在 `C:\Users\ZouZhao\Desktop\Project\ompdesk-lab` 进行：
-把 ompdesk 的工作目录切到那里再开会话。真实项目目录不作为测试数据的写入位置；该
-目录的 `AGENTS.md` 记录复现步骤与预期结果。
 
 ## 界面改动
 
@@ -115,11 +113,13 @@ gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
 JSON 记录，当前 `version: 3`。记录语义与顺序见 ADR-0004，字段全集以
 `@oh-my-pi/pi-coding-agent` 的 `session-entries.d.ts` 为准。
 
-## 代码索引
+## 需求与规格
 
-改函数、类或方法之前先用 `impact` 看影响范围并向用户报告；提交前用
-`detect_changes({scope: "all"})` 确认改动只落在预期的符号与流程上。重命名用
-`rename`，不用查找替换。索引数据的读取方式见下面的快照索引。
+外部诉求（缺陷、功能请求、使用问题）走 GitHub Issues 表单，三种结论都在 issue 回帖；内部
+需求与规格进 Plane，规格写评论区并以 `规格 vN：` 开头。判定一句话：外部用户能不能看到，
+能走 GitHub，不能走 Plane。Plane 坐标、正文模板与校验命令在 `~/.omp/agent/plane.md`，
+两个入口的交接流程见 `docs/agents/issue-tracker.md`。Plane 地址、工作项 id 与内部讨论不写进
+issue、PR、提交与仓库文档，仓库公开时这些内容只留在本机。
 
 ## 文档与决策
 
