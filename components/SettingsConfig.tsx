@@ -11,6 +11,7 @@ import { refreshOmpTheme, useTheme } from "@/hooks/useTheme";
 import { refreshDisplaySettings } from "@/hooks/useDisplaySettings";
 import { useI18n } from "@/hooks/useI18n";
 import {
+  filterSettingFieldsByQuery,
   settingFieldDescriptionKey,
   settingFieldLabelKey,
   settingGroupKey,
@@ -260,14 +261,12 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
   const visibleFields = useMemo(() => settings?.fields.filter((field) => conditionVisible(field, values)) ?? [], [settings?.fields, values]);
   const activeTab = section.startsWith("settings:") ? section.slice("settings:".length) : null;
   const filteredFields = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (normalized) {
-      return visibleFields.filter((field) => {
-        const label = tOr(settingFieldLabelKey(field.path), field.label);
-        const description = tOr(settingFieldDescriptionKey(field.path), field.description);
-        const group = field.group ? tOr(settingGroupKey(field.tab, field.group), field.group) : t("settings.groupUnspecified");
-        return `${label} ${description} ${field.path} ${group}`.toLowerCase().includes(normalized);
-      });
+    if (query.trim()) {
+      return filterSettingFieldsByQuery(visibleFields, query, (field) => ({
+        label: tOr(settingFieldLabelKey(field.path), field.label),
+        description: tOr(settingFieldDescriptionKey(field.path), field.description),
+        group: field.group ? tOr(settingGroupKey(field.tab, field.group), field.group) : t("settings.groupUnspecified"),
+      }));
     }
     if (!activeTab) return [];
     return visibleFields.filter((field) => field.tab === activeTab && !(activeTab === "appearance" && field.group === "Theme"));
@@ -311,7 +310,7 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
               label={tOr(settingFieldLabelKey(field.path), field.label)}
               description={tOr(settingFieldDescriptionKey(field.path), field.description)}
               busy={saving.has(field.path)}
-              error={saveErrors[field.path]}
+              error={saveErrors[field.path] ? t("settings.saveFailed", { detail: saveErrors[field.path] }) : undefined}
               onSave={(value) => void saveSetting(field, value)}
             />
           ))}
@@ -321,7 +320,7 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
   };
 
   const renderThemeSection = () => {
-    if (!settings) return <div className={styles.empty}>{loading ? t("settings.themes.loading") : loadError ?? t("settings.themes.unavailable")}</div>;
+    if (!settings) return <div className={styles.empty}>{loading ? t("settings.themes.loading") : loadError ? t("settings.loadFailed", { detail: loadError }) : t("settings.themes.unavailable")}</div>;
     return (
       <div className={styles.scrollContent}>
         <header className={styles.contentHeader}><h2 className={styles.contentTitle}>{t("settings.themes.title")}</h2><p className={styles.contentDescription}>{t("settings.themes.descriptionPrefix")}<code>~/.omp/agent/config.yml</code>{t("settings.themes.descriptionSuffix")}</p></header>
@@ -339,7 +338,9 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
 
   const renderGenericSettings = () => {
     if (loading) return <div className={styles.empty}>{t("settings.loading")}</div>;
-    if (loadError || !settings) return <div className={styles.empty}>{loadError ?? t("settings.unavailable")}</div>;
+    if (loadError || !settings) {
+      return <div className={styles.empty}>{loadError ? t("settings.loadFailed", { detail: loadError }) : t("settings.unavailable")}</div>;
+    }
     return (
       <div className={styles.scrollContent}>
         <header className={styles.contentHeader}>

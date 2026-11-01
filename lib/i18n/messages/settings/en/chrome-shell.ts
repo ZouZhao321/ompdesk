@@ -26,6 +26,8 @@ export const chromeShell: Record<string, string> = {
   "settings.searchDescription": "Matching canonical /settings entries across every category.",
   "settings.description": "Canonical omp /settings values. Changes are saved immediately to the shared agent configuration.",
   "settings.loading": "Loading omp settings…",
+  "settings.loadFailed": "Settings failed to load: {detail}",
+  "settings.saveFailed": "Save failed: {detail}",
   "settings.unavailable": "Settings unavailable",
   "settings.noMatches": "No settings match this search.",
   "settings.savedReload": "Saved. Reload the active session to apply runtime settings.",

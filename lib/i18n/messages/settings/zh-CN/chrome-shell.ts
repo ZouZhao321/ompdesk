@@ -26,6 +26,8 @@ export const chromeShell: Record<string, string> = {
   "settings.searchDescription": "在所有分类中匹配标准的 /settings 设置项。",
   "settings.description": "标准的 omp /settings 取值。改动立即保存到共享的智能体配置。",
   "settings.loading": "正在加载 omp 设置…",
+  "settings.loadFailed": "设置加载失败：{detail}",
+  "settings.saveFailed": "保存失败：{detail}",
   "settings.unavailable": "设置不可用",
   "settings.noMatches": "没有匹配的设置项。",
   "settings.savedReload": "已保存。重新加载当前会话后生效。",
