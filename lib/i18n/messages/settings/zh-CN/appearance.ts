@@ -52,10 +52,10 @@ export const appearance: Record<string, string> = {
     "终端尺寸稳定后，如何刷新保留在终端回滚缓冲中的记录行",
   "settings.field.terminal.showProgress.label": "原生终端进度",
   "settings.field.terminal.showProgress.description":
-    "智能体或上下文维护运行时，通过 OSC 9;4 发出不确定进度（Tern 中始终开启）",
+    "Agent 或上下文维护运行时，通过 OSC 9;4 发出不确定进度（Tern 中始终开启）",
   "settings.field.terminal.programStatus.label": "程序状态（OSC 7501）",
   "settings.field.terminal.programStatus.description":
-    "通过 OSC 7501 报告智能体正在工作、等待你、已完成或失败，供终端标签指示器与智能体收件箱使用",
+    "通过 OSC 7501 报告 Agent 正在工作、等待你、已完成或失败，供终端标签指示器与 Agent 收件箱使用",
   "settings.field.tui.textSizing.label": "大标题（Kitty）",
   "settings.field.tui.textSizing.description":
     "使用 Kitty 的 OSC 66 文字缩放协议把 Markdown 一级标题渲染为 2 倍大小。仅在 Kitty 终端生效，其它终端忽略。默认关闭。",
@@ -63,19 +63,19 @@ export const appearance: Record<string, string> = {
   "settings.field.tui.renderMermaid.description": "把 Mermaid 围栏代码块渲染为字符画",
   "settings.field.tui.renderSvg.label": "渲染 SVG 图形",
   "settings.field.tui.renderSvg.description":
-    "邀请智能体用 SVG 绘制图表，在支持图形的终端中内联显示为图片",
+    "邀请 Agent 用 SVG 绘制图表，在支持图形的终端中内联显示为图片",
   "settings.field.tui.autoGraph.label": "表格自动绘图",
   "settings.field.tui.autoGraph.description":
-    "在智能体回答里的数值表格下方绘制图表，使用主题配色；仅在支持图形的终端生效",
-  "settings.field.tui.reactions.label": "智能体表情回应",
+    "在 Agent 回答里的数值表格下方绘制图表，使用主题配色；仅在支持图形的终端生效",
+  "settings.field.tui.reactions.label": "Agent 表情回应",
   "settings.field.tui.reactions.description":
-    "允许智能体用表情徽标回应你的消息，徽标显示在其气泡上",
+    "允许 Agent 用表情徽标回应你的消息，徽标显示在其气泡上",
   "settings.field.tui.codexResetFireworks.label": "Codex 重置烟花",
   "settings.field.tui.codexResetFireworks.description":
     "Codex 每周用量意外重置或新存入重置次数时，在画面上三分之一处播放烟花，直到按 Esc 才消失",
   "settings.field.tui.titleState.label": "终端标题运行状态",
   "settings.field.tui.titleState.description":
-    "在终端标题的分隔符中显示智能体运行状态：工作时为动画旋转符（WSL 下为静态 ':'），轮到你时为 '>'，等待你回应时为 '!'",
+    "在终端标题的分隔符中显示 Agent 运行状态：工作时为动画旋转符（WSL 下为静态 ':'），轮到你时为 '>'，等待你回应时为 '!'",
   "settings.field.tui.titleSpinner.label": "终端标题旋转符",
   "settings.field.tui.titleSpinner.description":
     "终端标题中工作状态旋转符使用的字形集：盲文扫描、填充月相、单点循环或 ASCII 安全线段",
@@ -84,17 +84,17 @@ export const appearance: Record<string, string> = {
     "用 OSC 8 超链接包裹路径与网址，支持在终端中点击打开（auto：自动检测支持；off：从不；always：始终）",
   "settings.field.tui.mouse.label": "鼠标点击聚焦",
   "settings.field.tui.mouse.description":
-    "在主会话中捕获鼠标点击，点击即可聚焦实时子智能体卡片与 HUD 行，目标悬停时高亮。开启后原生文本选择改为 Shift+拖拽，滚轮滚动改为 Shift+滚轮",
+    "在主会话中捕获鼠标点击，点击即可聚焦实时子 Agent 卡片与 HUD 行，目标悬停时高亮。开启后原生文本选择改为 Shift+拖拽，滚轮滚动改为 Shift+滚轮",
   "settings.field.tui.tight.label": "紧凑布局",
   "settings.field.tui.tight.description": "去掉终端输出左右各 1 个字符的水平留白",
   "settings.field.display.shimmer.label": "微光",
   "settings.field.display.shimmer.description": "工作与加载消息的动画样式",
-  "settings.field.display.pinnedAgents.label": "置顶智能体",
+  "settings.field.display.pinnedAgents.label": "置顶 Agent",
   "settings.field.display.pinnedAgents.description":
-    "编辑框上方的实时智能体跳转列表（off 隐藏；collapsed 只显示几行并带展开器；full 显示全部）",
-  "settings.field.display.subagentLivePreview.label": "子智能体实时预览",
+    "编辑框上方的实时 Agent 跳转列表（off 隐藏；collapsed 只显示几行并带展开器；full 显示全部）",
+  "settings.field.display.subagentLivePreview.label": "子 Agent 实时预览",
   "settings.field.display.subagentLivePreview.description":
-    "在每个置顶子智能体的行下方显示当前或最近一次工具调用",
+    "在每个置顶子 Agent 的行下方显示当前或最近一次工具调用",
   "settings.field.display.smoothStreaming.label": "平滑流式输出",
   "settings.field.display.smoothStreaming.description":
     "内容分块到达时平滑显示助手文本与流式工具输入",
@@ -118,7 +118,7 @@ export const appearance: Record<string, string> = {
     "把提示框下边框移到单独一行，避免 macOS 输入法预编辑内容顶开边框",
   "settings.field.task.showResolvedModelBadge.label": "显示实际模型徽标",
   "settings.field.task.showResolvedModelBadge.description":
-    "在任务组件状态行显示每个子智能体实际使用的模型 ID",
+    "在任务组件状态行显示每个子 Agent 实际使用的模型 ID",
   "settings.field.title.icons.label": "标题图标",
   "settings.field.title.icons.description":
     "新增的生成标题或 /rename 标题前使用的图标与短代码",
