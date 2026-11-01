@@ -74,7 +74,7 @@ worktrees/route.ts              GET/POST/DELETE git worktree
 ```
 agent-client.ts      为 /api/agent 命令提供带类型的 fetch 辅助
 api-request-log.ts   withRequestLog：统一请求日志与耗时
-comment-entries.ts   注释词条提取：ts.createScanner 取注释、合并连续单行、排除横幅与单词标题、含中文即归中文、计算字典键
+comment-entries.ts   注释词条提取：TypeScript 语法树的注释区间、合并连续单行、排除横幅与单词标题、含中文即归中文、计算字典键
 comment-sources.ts   词条来源文件：git 仓库以 .gitignore 为准，非仓库退回目录遍历
 comment-dictionary.ts 本机注释字典：按键读写人工译文、来源标记、只返回当前项目相关记录
 comment-dictionary-version.ts 字典版本号与订阅，保存译文后通知查看器刷新
