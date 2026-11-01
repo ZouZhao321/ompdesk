@@ -321,15 +321,15 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
   };
 
   const renderThemeSection = () => {
-    if (!settings) return <div className={styles.empty}>{loading ? "Loading themes…" : loadError ?? "Themes unavailable"}</div>;
+    if (!settings) return <div className={styles.empty}>{loading ? t("settings.themes.loading") : loadError ?? t("settings.themes.unavailable")}</div>;
     return (
       <div className={styles.scrollContent}>
-        <header className={styles.contentHeader}><h2 className={styles.contentTitle}>Themes</h2><p className={styles.contentDescription}>The web interface uses the same dark and light theme mappings as omp. Changes are persisted to <code>~/.omp/agent/config.yml</code> and applied here immediately.</p></header>
+        <header className={styles.contentHeader}><h2 className={styles.contentTitle}>{t("settings.themes.title")}</h2><p className={styles.contentDescription}>{t("settings.themes.descriptionPrefix")}<code>~/.omp/agent/config.yml</code>{t("settings.themes.descriptionSuffix")}</p></header>
         <div className={styles.settingsBody}>
           <div className={styles.themeGrid}>{(["dark", "light"] as const).map((mode) => {
             const field = settings.fields.find((item) => item.path === `theme.${mode}`)!;
             const palette = settings.theme.palettes[mode];
-            return <div className={styles.themeCard} key={mode}><ThemePreview palette={palette} /><div className={styles.themeCardBody}><div className={styles.themeCardHeader}><span className={styles.themeSlot}>{mode} mapping</span>{theme === mode && <span className={styles.themeActive}>Active on web</span>}</div><SearchableSelect value={String(field.value)} disabled={saving.has(field.path)} ariaLabel={`${mode} theme`} options={(field.options ?? []).map((option) => ({ value: option.value, label: option.label, description: option.description }))} onChange={(value) => void saveSetting(field, value)} />{theme !== mode && <button type="button" className={styles.closeButton} style={{ marginTop: 8 }} onClick={() => toggleTheme()}>Preview {mode}</button>}</div></div>;
+            return <div className={styles.themeCard} key={mode}><ThemePreview palette={palette} /><div className={styles.themeCardBody}><div className={styles.themeCardHeader}><span className={styles.themeSlot}>{t("settings.themes.mapping", { mode })}</span>{theme === mode && <span className={styles.themeActive}>{t("settings.themes.activeOnWeb")}</span>}</div><SearchableSelect value={String(field.value)} disabled={saving.has(field.path)} ariaLabel={t("settings.themes.pickerLabel", { mode })} options={(field.options ?? []).map((option) => ({ value: option.value, label: option.label, description: option.description }))} onChange={(value) => void saveSetting(field, value)} />{theme !== mode && <button type="button" className={styles.closeButton} style={{ marginTop: 8 }} onClick={() => toggleTheme()}>{t("settings.themes.preview", { mode })}</button>}</div></div>;
           })}</div>
           {renderFields(settings.fields.filter((field) => field.tab === "appearance" && field.group === "Theme" && !field.path.startsWith("theme.")), ["Theme"], "appearance")}
         </div>
@@ -437,6 +437,7 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
 
 function McpSettings({ cwd, sessionId, runtimeId, onRuntimeIdentity, onReloaded }: { cwd?: string | null; sessionId?: string | null; runtimeId?: string;
   onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"]; onReloaded?: (runtimeId: string | null) => void }) {
+  const { t } = useI18n();
   const [data, setData] = useState<McpConfigResponse | null>(null);
   const [scope, setScope] = useState<"user" | "project">("user");
   const [selected, setSelected] = useState(0);
@@ -540,16 +541,16 @@ function McpSettings({ cwd, sessionId, runtimeId, onRuntimeIdentity, onReloaded 
   return (
     <div className={styles.scrollContent}>
       <header className={styles.contentHeader}>
-        <h2 className={styles.contentTitle}>MCP servers</h2>
-        <p className={styles.contentDescription}>All MCP servers discovered by OMP are listed by scope and can be enabled or disabled here. Native OMP entries are editable; configurations owned by Claude, Codex, Gemini, plugins, or other providers remain read-only at their source.</p>
+        <h2 className={styles.contentTitle}>{t("settings.mcp.title")}</h2>
+        <p className={styles.contentDescription}>{t("settings.mcp.description")}</p>
       </header>
       <div className={styles.settingsBody}>
-        {!data ? <div className={styles.empty}>{error ?? "Loading MCP configuration…"}</div> : (
+        {!data ? <div className={styles.empty}>{error ?? t("settings.mcp.loading")}</div> : (
           <div className={styles.mcpLayout}>
             <aside className={styles.mcpList}>
               <div className={styles.scopeTabs}>
-                <button type="button" className={styles.scopeButton} data-active={scope === "user"} onClick={() => { setScope("user"); setSelected(0); }}>User · {data.user.servers.length}</button>
-                <button type="button" className={styles.scopeButton} data-active={scope === "project"} disabled={!data.project} onClick={() => { setScope("project"); setSelected(0); }}>Project · {data.project?.servers.length ?? 0}</button>
+                <button type="button" className={styles.scopeButton} data-active={scope === "user"} onClick={() => { setScope("user"); setSelected(0); }}>{t("settings.mcp.scopeUser", { count: data.user.servers.length })}</button>
+                <button type="button" className={styles.scopeButton} data-active={scope === "project"} disabled={!data.project} onClick={() => { setScope("project"); setSelected(0); }}>{t("settings.mcp.scopeProject", { count: data.project?.servers.length ?? 0 })}</button>
               </div>
               {currentScope?.error ? <div className={styles.error} style={{ padding: 12 }}>{currentScope.error}</div> : (
                 <div className={styles.serverRows}>
@@ -560,7 +561,7 @@ function McpSettings({ cwd, sessionId, runtimeId, onRuntimeIdentity, onReloaded 
                         <button type="button" className={styles.serverSelect} title={item.source?.path} onClick={() => setSelected(index)}>
                           <span className={styles.statusDot} data-off={!item.enabled} />
                           <span className={styles.serverName}>{item.name}</span>
-                          {item.editable === false && <span className={styles.sourceBadge}>{item.source?.provider ?? "external"}</span>}
+                          {item.editable === false && <span className={styles.sourceBadge}>{item.source?.provider ?? t("settings.mcp.externalSource")}</span>}
                         </button>
                         <button
                           type="button"
@@ -568,37 +569,37 @@ function McpSettings({ cwd, sessionId, runtimeId, onRuntimeIdentity, onReloaded 
                           data-on={item.enabled}
                           disabled={toggling === toggleKey}
                           aria-pressed={item.enabled}
-                          aria-label={`${item.enabled ? "Disable" : "Enable"} ${item.name}`}
-                          title={`${item.enabled ? "Disable" : "Enable"} ${item.name}`}
+                          aria-label={t(item.enabled ? "settings.mcp.disableServer" : "settings.mcp.enableServer", { name: item.name })}
+                          title={t(item.enabled ? "settings.mcp.disableServer" : "settings.mcp.enableServer", { name: item.name })}
                           onClick={() => void toggleServer(item)}
                         >
-                          {toggling === toggleKey ? "…" : item.enabled ? "ON" : "OFF"}
+                          {toggling === toggleKey ? "…" : item.enabled ? t("settings.mcp.enabled") : t("settings.mcp.disabled")}
                         </button>
                       </div>
                     );
-                  }) : <div className={styles.serverListEmpty}>No servers in this scope.</div>}
+                  }) : <div className={styles.serverListEmpty}>{t("settings.mcp.noServers")}</div>}
                 </div>
               )}
-              <button type="button" className={styles.addServer} disabled={Boolean(currentScope?.error)} onClick={addServer}>+ Add OMP server</button>
+              <button type="button" className={styles.addServer} disabled={Boolean(currentScope?.error)} onClick={addServer}>{t("settings.mcp.addServer")}</button>
             </aside>
             <section className={styles.mcpEditor}>
               {server ? (
                 <>
                   <div className={styles.editorHeader}>
-                    <input className={styles.textInput} value={name} readOnly={server.editable === false} onChange={(event) => setName(event.target.value)} placeholder="server-name" />
-                    {server.editable !== false && <button type="button" className={styles.dangerButton} onClick={removeServer}>Delete</button>}
+                    <input className={styles.textInput} value={name} readOnly={server.editable === false} onChange={(event) => setName(event.target.value)} placeholder={t("settings.mcp.namePlaceholder")} />
+                    {server.editable !== false && <button type="button" className={styles.dangerButton} onClick={removeServer}>{t("settings.mcp.delete")}</button>}
                   </div>
-                  {server.editable === false && <div className={styles.readOnlyNotice}>Configuration read-only · managed by {server.source?.provider ?? "an external provider"}. Status can be changed from the server list.</div>}
+                  {server.editable === false && <div className={styles.readOnlyNotice}>{t("settings.mcp.readOnlyNotice", { provider: server.source?.provider ?? t("settings.mcp.externalProvider") })}</div>}
                   <textarea className={styles.jsonEditor} value={json} readOnly={server.editable === false} spellCheck={false} onChange={(event) => setJson(event.target.value)} />
                   <div className={styles.editorActions}>
                     <div>
                       {error && <div className={styles.error}>{error}</div>}
                       <div className={styles.saveState}>{server.source?.path ?? currentScope?.path}</div>
                     </div>
-                    {server.editable !== false && <button type="button" className={styles.primaryButton} disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save MCP"}</button>}
+                    {server.editable !== false && <button type="button" className={styles.primaryButton} disabled={saving} onClick={() => void save()}>{saving ? t("settings.mcp.saving") : t("settings.mcp.save")}</button>}
                   </div>
                 </>
-              ) : <div className={styles.empty}>Add or select an MCP server.</div>}
+              ) : <div className={styles.empty}>{t("settings.mcp.emptyEditor")}</div>}
             </section>
           </div>
         )}
