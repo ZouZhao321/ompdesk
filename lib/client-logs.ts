@@ -40,7 +40,7 @@ export const CLIENT_ERROR_RATE_LIMIT = 20;
 export const CLIENT_ERROR_RATE_WINDOW_MS = 60_000;
 /**
  * Address bucket ceiling. Higher than the per-session limit because every tab
- * on one machine shares the same address (and the desktop shell reports
+ * on one machine shares the same address (loopback requests are reported as
  * `local`); rotating `sessionId` still cannot exceed it.
  */
 export const CLIENT_ERROR_ADDRESS_RATE_LIMIT = 60;
