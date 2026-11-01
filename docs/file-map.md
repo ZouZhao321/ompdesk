@@ -138,10 +138,13 @@ PluginsConfig.tsx   设置面板内的插件管理
 SkillsConfig.tsx    设置面板内的 skills 列表与安装
 FileExplorer.tsx    文件树
 FileExplorerPanel.tsx 右侧标签页中的文件树视图（上传、刷新、变更文件）
+GitChangesPanel.tsx 右侧标签页中的 Git 变更列表（状态、汇总、刷新与轮询）
+GitStatusBadge.tsx  变更文件的状态字母徽标与状态配色
+PanelIconButton.tsx 右侧面板工具栏图标按钮
 FileIcons.tsx       文件图标辅助
 PanelViewIcon.tsx   视图标签与入口的图标
 FileViewer.tsx      文件标签页的内容
-TabBar.tsx          右侧面板标签栏（文件浏览器 / 子代理 / 已打开文件）
+TabBar.tsx          右侧面板标签栏（文件浏览器 / Git / 子代理 / 已打开文件）
 TurnWrittenFiles.tsx 单轮写入文件列表
 ```
 
