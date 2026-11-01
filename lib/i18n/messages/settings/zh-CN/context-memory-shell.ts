@@ -36,10 +36,10 @@ export const contextMemoryShell: Record<string, string> = {
     "首次安装时自动创建受管理的 JavaScript eval 包环境",
   "settings.field.eval.tools.enabled.label": "Eval 定义的工具",
   "settings.field.eval.tools.enabled.description":
-    "允许 eval 单元格定义工具（Python 中的 @tool、JS 中的 tool(fn)），供 task、agent() 与 workpool() 子代理调用",
+    "允许 eval 单元格定义工具（Python 中的 @tool、JS 中的 tool(fn)），供 task、agent() 与 workpool() 子 Agent 调用",
   "settings.field.eval.workpool.freshAgents.label": "Workpool 全新 Agent",
   "settings.field.eval.workpool.freshAgents.description":
-    "为每个 workpool 项新建子代理，而不是复用 worker 或批量处理排队项",
+    "为每个 workpool 项新建子 Agent，而不是复用 worker 或批量处理排队项",
   "settings.field.eval.autoBackground.enabled.label": "Eval 自动转后台",
   "settings.field.eval.autoBackground.enabled.description":
     "自动将长时间运行的 eval 单元格转入后台，稍后投递结果",
@@ -69,7 +69,7 @@ export const contextMemoryShell: Record<string, string> = {
     "在不同的上下文窗口之间保留持久笔记和可搜索的原始历史。",
   "settings.field.compaction.midTurnEnabled.label": "轮次中压缩",
   "settings.field.compaction.midTurnEnabled.description":
-    "在下一个 Provider 请求之前，于安全的轮次中工具循环边界检查阈值；子代理始终检查，因为它们的整个任务就是一轮",
+    "在下一个 Provider 请求之前，于安全的轮次中工具循环边界检查阈值；子 Agent 始终检查，因为它们的整个任务就是一轮",
   "settings.field.compaction.methodOrder.label": "压缩方法顺序",
   "settings.field.compaction.methodOrder.description":
     "自动上下文维护的首选回退顺序；不可用或执行失败的方法会推进到下一个选项",

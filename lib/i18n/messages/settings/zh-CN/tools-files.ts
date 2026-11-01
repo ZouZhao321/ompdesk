@@ -204,7 +204,7 @@ export const toolsFiles: Record<string, string> = {
     "选择 edit 工具的变体（replace、patch、hashline 或 apply_patch）",
   "settings.field.edit.fuzzyMatch.label": "模糊匹配",
   "settings.field.edit.fuzzyMatch.description":
-    "接受针对空白差异的高置信度模糊匹配",
+    "接受针对空白 Diff 的高置信度模糊匹配",
   "settings.field.edit.fuzzyThreshold.label": "模糊匹配阈值",
   "settings.field.edit.fuzzyThreshold.description":
     "接受模糊匹配的相似度阈值（0-1）",

@@ -13,13 +13,13 @@ export const appearance: Record<string, string> = {
   "settings.field.symbolPreset.label": "符号集",
   "settings.field.symbolPreset.description": "图标与符号使用的字形集（Unicode、Nerd Font 或 ASCII）",
   "settings.field.colorBlindMode.label": "色盲模式",
-  "settings.field.colorBlindMode.description": "差异的新增部分使用蓝色代替绿色",
+  "settings.field.colorBlindMode.description": "Diff 新增部分使用蓝色代替绿色",
 
   "settings.field.composer.shape.label": "输入框形状",
   "settings.field.composer.shape.description": "输入编辑器与状态行的视觉布局",
   "settings.field.composer.tokenRate.label": "生成速率",
   "settings.field.composer.tokenRate.description":
-    "实时显示生成速度（tok/s）：工作行中会话标题旁，或原生输入条里思考级别之后；最后一次读数保留到下一轮。数值由流式增量估算，并在每条消息完成时按服务商计费的输出数校正。",
+    "实时显示生成速度（tok/s）：工作行中会话标题旁，或原生输入条里思考级别之后；最后一次读数保留到下一轮。数值由流式增量估算，并在每条消息完成时按 Provider 计费的输出数校正。",
 
   "settings.field.statusLine.preset.label": "状态行预设",
   "settings.field.statusLine.preset.description": "预置的状态行配置",
@@ -45,7 +45,7 @@ export const appearance: Record<string, string> = {
   "settings.field.images.autoResize.label": "自动调整图片尺寸",
   "settings.field.images.autoResize.description": "把大图缩放到最大 2000x2000，以提升模型兼容性",
   "settings.field.images.blockImages.label": "阻止图片",
-  "settings.field.images.blockImages.description": "禁止把图片发送给 LLM 服务商",
+  "settings.field.images.blockImages.description": "禁止把图片发送给 LLM Provider",
 
   "settings.field.tui.resizeScrollback.label": "调整回滚缓冲",
   "settings.field.tui.resizeScrollback.description":
