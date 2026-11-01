@@ -9,6 +9,17 @@ export function PanelViewIcon({ kind, size = 15 }: { kind: PanelViewKind; size?:
       </svg>
     );
   }
+  if (kind === "git") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="6" cy="6" r="2.5" />
+        <circle cx="6" cy="18" r="2.5" />
+        <circle cx="18" cy="9" r="2.5" />
+        <path d="M6 8.5v7" />
+        <path d="M18 11.5c0 3-2.5 4-6 4h-1" />
+      </svg>
+    );
+  }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="4" y="8" width="16" height="12" rx="3" />
