@@ -11,7 +11,7 @@ export const chromeShell: Record<string, string> = {
   "settings.nav.logs": "日志",
 
   "settings.tab.appearance": "外观",
-  "settings.tab.model": "模型",
+  "settings.tab.model": "模型参数",
   "settings.tab.interaction": "交互",
   "settings.tab.context": "上下文",
   "settings.tab.memory": "记忆",
