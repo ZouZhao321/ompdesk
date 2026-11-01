@@ -111,9 +111,11 @@ Full details, including the recovery threat model: [docs/authentication.md](./do
 
 ## Phone access (Tailscale)
 
-`bun run dev` and `bun run start` serve the fixed loopback port **30141** and
-never pick another one, so a tailnet forward set up once keeps working across
-restarts. The `ompdesk` CLI launcher defaults to 30141 but takes another port
+`bun run start` and the `ompdesk` launcher serve the fixed loopback port
+**30141** and exit with an error when another process holds it, so a tailnet
+forward set up once keeps working across restarts. `bun run dev` uses 30141
+too, but lets Next.js fall back to the next free port when it is taken. The
+`ompdesk` CLI launcher defaults to 30141 but takes another port
 (`ompdesk --port 8080`, `PORT=8080 ompdesk`); point the tailnet forward at
 whichever port it uses.
 
@@ -145,6 +147,8 @@ Keep these constraints in mind:
 - **Run one ompdesk server per port.** ompdesk passes the requested port
   through unchanged instead of picking another one, so a port another process
   already holds makes startup fail with an error.
+
+## Model roles
 
 omp does not have "the" model — it has a model per **scope of work**, and ompdesk exposes the same roles the TUI's `/model` selector and `Ctrl+P` cycle use:
 
