@@ -272,6 +272,12 @@ list. If no listener cancels the extension event, Pi Web preserves the
 browser's native context menu. This hook is browser-side and independent of
 Pi agent extensions.
 
+## Contributing
+
+Bug reports and feature requests go through the GitHub issue forms; every issue gets an
+answer, but an issue is not a scheduling commitment. Accepted work is planned separately and
+the outcome is reported back on the issue. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Development
 
 ```bash
