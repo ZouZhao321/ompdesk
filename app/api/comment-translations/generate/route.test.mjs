@@ -194,3 +194,59 @@ test("a page-sized selection is split into several model prompts", async (t) => 
   assert.equal(payload.results.every((result) => result.status === "generated"), true);
   assert.equal(Object.keys(readCommentDictionary(agentDir).translations).length, 41);
 });
+
+test("a forced entry regenerates and overwrites the stored translation", async (t) => {
+  let calls = 0;
+  const model = {
+    id: "fake/model",
+    complete: async () => {
+      calls += 1;
+      return modelReply([{ id: 1, translation: "Regenerated config" }]);
+    },
+  };
+  const { agentDir, handler } = fixture(t, model);
+
+  saveCommentTranslation(agentDir, {
+    original: "读取配置",
+    originalLanguage: "zh",
+    targetLanguage: "en",
+    translation: "Old manual config",
+    origin: "manual",
+  });
+
+  const response = await handler(request([
+    { original: "读取配置", originalLanguage: "zh", targetLanguage: "en", force: true },
+  ]));
+  const payload = await response.json();
+
+  assert.equal(calls, 1);
+  assert.equal(payload.results[0].status, "generated");
+  assert.equal(payload.results[0].translation, "Regenerated config");
+  const record = readCommentDictionary(agentDir).translations[payload.results[0].key];
+  assert.equal(record.translation, "Regenerated config");
+  assert.equal(record.origin, "model");
+  assert.equal(record.model, "fake/model");
+});
+
+test("more entries than the per-request limit is rejected as invalid", async (t) => {
+  let calls = 0;
+  const model = {
+    id: "fake/model",
+    complete: async () => {
+      calls += 1;
+      return modelReply([]);
+    },
+  };
+  const { handler } = fixture(t, model);
+
+  const entries = Array.from({ length: 1_001 }, (_, index) => ({
+    original: `注释 ${index + 1}`,
+    originalLanguage: "zh",
+    targetLanguage: "en",
+  }));
+  const response = await handler(request(entries));
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).code, "invalid_entries");
+  assert.equal(calls, 0);
+});

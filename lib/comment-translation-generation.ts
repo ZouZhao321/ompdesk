@@ -22,6 +22,8 @@ export interface CommentTranslationRequestEntry {
   original: string;
   originalLanguage: CommentLanguage;
   targetLanguage: CommentLanguage;
+  /** 已选中的旧译文仍要重新生成时置 true，跳过字典命中。 */
+  force?: boolean;
 }
 
 export type CommentTranslationFailureReason = "no_output" | "missing_fragments";
@@ -59,6 +61,8 @@ interface PendingEntry {
   key: string;
   original: string;
   entry: CommentTranslationRequestEntry;
+  /** 任一同键条目要求强制生成时，这一条跳过字典命中。 */
+  forced: boolean;
 }
 
 interface PromptItem {
@@ -123,16 +127,21 @@ function parseModelTranslations(raw: string): Map<number, string> | null {
   return translations;
 }
 
-/** 键相同即同一句原文与同一目标语言，一次请求里只处理一次。 */
+/** 键相同即同一句原文与同一目标语言，一次请求里只处理一次；强制标记取并集。 */
 function collectPending(entries: readonly CommentTranslationRequestEntry[]): PendingEntry[] {
   const ordered: PendingEntry[] = [];
-  const seen = new Set<string>();
+  const indexByKey = new Map<string, number>();
   for (const entry of entries) {
     const original = normalizeCommentText(entry.original);
+    if (!original) continue;
     const key = commentEntryKey(original, entry.targetLanguage);
-    if (!original || seen.has(key)) continue;
-    seen.add(key);
-    ordered.push({ key, original, entry });
+    const existing = indexByKey.get(key);
+    if (existing !== undefined) {
+      if (entry.force) ordered[existing].forced = true;
+      continue;
+    }
+    indexByKey.set(key, ordered.length);
+    ordered.push({ key, original, entry, forced: entry.force === true });
   }
   return ordered;
 }
@@ -146,9 +155,9 @@ export async function generateCommentTranslations(
   const translations: Record<string, CommentTranslationRecord> = {};
   const pending: PendingEntry[] = [];
 
-  // 同一句原文同一目标语言已经在字典里，就不再请求模型。
+  // 同一句原文同一目标语言已经在字典里，就不再请求模型；强制生成时忽略旧译文。
   for (const item of ordered) {
-    const record = dictionary.translations[item.key];
+    const record = item.forced ? undefined : dictionary.translations[item.key];
     if (!record || !record.translation.trim()) {
       pending.push(item);
       continue;
