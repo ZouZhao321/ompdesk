@@ -155,7 +155,7 @@ export function LogsPanelView({
             onChange={(event) => onLevelChange(event.target.value as LogLevelName | "all")}
           >
             {LOG_LEVEL_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>{t(`settings.logs.level.${option.value}`)}</option>
             ))}
           </select>
         </label>
@@ -180,7 +180,7 @@ export function LogsPanelView({
             {files.length === 0 && <option value="">{t("settings.logs.noFileYet")}</option>}
             {files.map((item) => (
               <option key={item.name} value={item.name}>
-                {formatFileLabel(item)} · {formatFileSize(item.size)}
+                {formatFileLabel(item, { current: t("settings.logs.currentFile"), rotation: t("settings.logs.rotation") })} · {formatFileSize(item.size)}
               </option>
             ))}
           </select>

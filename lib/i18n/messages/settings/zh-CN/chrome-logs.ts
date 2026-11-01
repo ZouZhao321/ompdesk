@@ -13,6 +13,14 @@ export const chromeLogs: Record<string, string> = {
   "settings.logs.file": "文件",
   "settings.logs.fileAria": "日志文件",
   "settings.logs.noFileYet": "暂无文件",
+  "settings.logs.currentFile": "当前文件",
+  "settings.logs.rotation": "轮转",
+
+  "settings.logs.level.all": "全部级别",
+  "settings.logs.level.error": "ERROR 及以上",
+  "settings.logs.level.warn": "WARN 及以上",
+  "settings.logs.level.info": "INFO 及以上",
+  "settings.logs.level.debug": "DEBUG",
 
   "settings.logs.following": "正在跟随",
   "settings.logs.followLatest": "跟随最新",

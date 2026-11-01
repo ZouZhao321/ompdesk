@@ -13,6 +13,14 @@ export const chromeLogs: Record<string, string> = {
   "settings.logs.file": "File",
   "settings.logs.fileAria": "Log file",
   "settings.logs.noFileYet": "No file yet",
+  "settings.logs.currentFile": "current file",
+  "settings.logs.rotation": "rotation",
+
+  "settings.logs.level.all": "All levels",
+  "settings.logs.level.error": "Error and above",
+  "settings.logs.level.warn": "Warn and above",
+  "settings.logs.level.info": "Info and above",
+  "settings.logs.level.debug": "Debug",
 
   "settings.logs.following": "Following",
   "settings.logs.followLatest": "Follow latest",
