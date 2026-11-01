@@ -10,6 +10,7 @@ const jiti = createJiti(import.meta.url, {
   tsconfigPaths: true,
 });
 const { LogsPanelView } = await jiti.import("./LogsPanelView.tsx");
+const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 const styles = new Proxy({}, { get: (_target, key) => String(key) });
 const noop = () => {};
@@ -40,8 +41,14 @@ function props(overrides = {}) {
   };
 }
 
-function render(overrides) {
-  return renderToStaticMarkup(React.createElement(LogsPanelView, props(overrides)));
+function render(overrides, initialLocale = "en") {
+  return renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      { initialLocale },
+      React.createElement(LogsPanelView, props(overrides)),
+    ),
+  );
 }
 
 function entry(offset, message, extra = {}) {
@@ -148,6 +155,48 @@ test("shows follow and pause state in the controls", () => {
   assert.match(paused, /Polling paused/);
   assert.match(paused, />Resume</);
   assert.match(paused, />Follow latest</);
+});
+
+test("renders the panel chrome in Chinese while keeping technical level labels", () => {
+  const html = render({}, "zh-CN");
+
+  assert.match(html, />日志</);
+  assert.match(html, /当前服务进程的日志文件/);
+  assert.match(html, />下载</);
+  assert.match(html, />级别</);
+  assert.match(html, /aria-label="日志级别"/);
+  assert.match(html, />关键词</);
+  assert.match(html, /placeholder="按文本过滤"/);
+  assert.match(html, /aria-label="日志文件"/);
+  assert.match(html, />暂无文件</);
+  assert.match(html, />正在跟随</);
+  assert.match(html, />暂停</);
+  assert.match(html, />刷新</);
+  assert.match(html, />未选择文件</);
+  assert.match(html, /All levels/);
+  assert.equal(html.includes("No file yet"), false, html);
+});
+
+test("localizes empty states and keeps server errors verbatim", () => {
+  const loading = render({ loading: true }, "zh-CN");
+  assert.match(loading, /正在加载日志/);
+  assert.match(loading, /正在读取当前进程日志/);
+
+  const failed = render({ error: "connect ECONNREFUSED" }, "zh-CN");
+  assert.match(failed, /无法加载日志/);
+  assert.match(failed, /connect ECONNREFUSED/);
+
+  const file = { name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true };
+  const noMatches = render({ files: [file], file, level: "warn" }, "zh-CN");
+  assert.match(noMatches, /没有匹配的条目/);
+  assert.match(noMatches, /只读取该文件的最新部分/);
+
+  const paused = render({ files: [file], file, paused: true, follow: false }, "zh-CN");
+  assert.match(paused, />跟随最新</);
+  assert.match(paused, />继续</);
+  assert.match(paused, /轮询已暂停/);
+  assert.match(paused, />当前</);
+  assert.match(paused, /最后写入 /);
 });
 
 test("keeps the narrow-screen layout rules", () => {
