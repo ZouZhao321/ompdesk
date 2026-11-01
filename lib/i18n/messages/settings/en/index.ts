@@ -1,4 +1,5 @@
 import { appearance } from "./appearance";
+import { chromeAccess } from "./chrome-access";
 import { chromeLogs } from "./chrome-logs";
 import { chromeMcp } from "./chrome-mcp";
 import { chromeShell } from "./chrome-shell";
@@ -21,6 +22,7 @@ export const settingsEnParts: Record<string, Record<string, string>> = {
   chromeShell,
   chromeThemes,
   chromeMcp,
+  chromeAccess,
   chromeLogs,
 };
 
