@@ -113,6 +113,14 @@ gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
 JSON 记录，当前 `version: 3`。记录语义与顺序见 ADR-0004，字段全集以
 `@oh-my-pi/pi-coding-agent` 的 `session-entries.d.ts` 为准。
 
+## 需求与规格
+
+外部诉求（缺陷、功能请求、使用问题）走 GitHub Issues 表单，三种结论都在 issue 回帖；内部
+需求与规格进 Plane，规格写评论区并以 `规格 vN：` 开头。判定一句话：外部用户能不能看到，
+能走 GitHub，不能走 Plane。Plane 坐标、正文模板与校验命令在 `~/.omp/agent/plane.md`，
+两个入口的交接流程见 `docs/agents/issue-tracker.md`。Plane 地址、工作项 id 与内部讨论不写进
+issue、PR、提交与仓库文档，仓库公开时这些内容只留在本机。
+
 ## 文档与决策
 
 本文档每次会话都会加载，一句话也要占上下文。它只写长期成立的规则、命令与结构。
