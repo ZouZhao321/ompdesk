@@ -28,3 +28,17 @@ GitHub 的 issue、PR 与提交里。
 维护者本机的 `~/.omp/agent/plane.md` 记录坐标、正文模板、规格评论规则与校验命令。
 一条工作项只有正文与评论区两个位置：正文写需求（背景、目标、验收标准、约束可选、范围外），
 评论区写规格，以 `规格 vN：` 开头，编号最大的一条为当前有效版本，每次写全量。
+
+## 状态同步
+
+追踪器的状态由仓库事实驱动，命令在本机执行，配置从环境变量读取：
+
+- 开工：`bun run tracker:claim --ref <序号> [--assignee <成员名>]`。状态改为 In Progress，
+  指定负责人后能从工作项上看到谁在做。
+- 关联 PR：`bun run tracker:link --ref <序号> --pr <PR 号>`。在链接字段写入 `PR #N`。
+- 合并收尾：`bun run tracker:done --pr <PR 号> --ref <序号>...`。状态改为 Done，并追加一条
+  评论，写明 PR 链接、合并提交与 CI 结果；父项与子项一起传。
+- 环境变量：`TRACKER_PROJECT_ID`、`TRACKER_API_KEY` 必填；`TRACKER_BASE_URL`、
+  `TRACKER_WORKSPACE`、`TRACKER_ASSIGNEE` 可选。
+
+PR 与工作项的对应关系存在追踪器的链接字段，不出现在仓库、PR 或提交里。

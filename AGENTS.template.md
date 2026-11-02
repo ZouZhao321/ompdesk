@@ -25,7 +25,9 @@
    工作区状态不参与 worktree 的判定，也不构成阻塞。
 6. 用 `gh pr create` 向 `main` 提 PR。创建 PR 与推送无需询问；合并 PR 需要用户
    明确授权。
-7. PR 合并且用户同意清理后，才删除 worktree 与分支。
+7. 维护者合并后把结果写回内部追踪器：`bun run tracker:done --pr <PR 号> --ref <序号>...`。
+   开工时用 `bun run tracker:claim --ref <序号>` 把状态改为 In Progress。
+8. PR 合并且用户同意清理后，才删除 worktree 与分支。
 
 检查范围是本 worktree 的代码。`bun run typecheck`、`bun run lint`、`bun test`、
 合并前的自检与 CI 都以该 worktree 为准，主检出的失败不构成阻塞；失败与本次改动
