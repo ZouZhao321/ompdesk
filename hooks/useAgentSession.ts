@@ -66,9 +66,9 @@ type PendingNavigation = {
 };
 
 /**
- * 整段载入被在途导航让位时的返回值。这次没有回写，但导航收尾会补发一次，与 `null`
- * （请求失败、被更晚的载入接管、会话不存在）分开：`promoteNewSession` 这类「载入
- * 成功才继续」的门控不该因为一次让位被静默丢掉。
+ * 整段载入被在途导航让位时的返回值：这次没有回写，由导航收尾补发一次。与 `null`
+ * （请求失败、被更晚的载入接管、会话不存在）分开，调用方可以据此判断「未应用但
+ * 会重发」；`promoteNewSession` 这类门控只在真正应用时继续，deferred 不算成功。
  */
 type SessionLoadDeferred = { deferred: true };
 
@@ -2317,7 +2317,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             // omp 18 hands off in place, so the session keeps its id and gains
             // a handoff compaction entry: reload this transcript rather than
             // navigating to a replacement session.
-            if (mountedRef.current && await loadSession(sessionIdRef.current ?? currentSid, true)) promoteNewSession();
+            const reloaded = await loadSession(sessionIdRef.current ?? currentSid, true);
+            if (mountedRef.current && reloaded && !("deferred" in reloaded)) promoteNewSession();
             return complete({ handled: true, message: "Context handed off and compacted in place" });
           } finally {
             if (mountedRef.current) {
