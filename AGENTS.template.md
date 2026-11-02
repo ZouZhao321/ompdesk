@@ -83,6 +83,11 @@ Lint：`bun run lint`
 Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 为 ESM
 `import`，只靠 `serverExternalPackages` 不够。测试用 `bun test`，不用 `node --test`。
 
+## 测试数据
+
+- 测试样本只从 `test-support/session-fixtures.ts` 生成，不手写会话文件。
+- 手工验证必须把 `PI_CODING_AGENT_DIR` 指向任务临时目录，生产历史不参与。
+
 ## 界面改动
 
 界面改动必须附截图，能录视频的再附一段不超过一分钟的短视频，只演示这次的交互。
@@ -174,4 +179,4 @@ ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `descri
 - `模型角色清单`: 新增或改角色时对齐 SDK 定义；来源 SDK 的 `ModelRole` 类型，`grep -n "export type ModelRole"`
 - `主题色值`: 改配色时找变量名与真实取值；来源 `/api/theme` 与 `pi-tui/src/theme/*.json`，请求接口或读主题 JSON
 - `依赖与运行时版本`: 判断 Bun、Node 与 Next 的版本约束；来源 `package.json` 的 `engines` 与 `bun.lock`，读 `package.json`
-- `测试样本会话`: 复现界面测试时定位数据；来源 `~/.omp/agent/sessions/`，按会话 id 检索
+- `测试样本会话`: 复现界面测试时定位数据；来源 `test-support/session-fixtures.ts` 的场景，铺到任务临时目录
