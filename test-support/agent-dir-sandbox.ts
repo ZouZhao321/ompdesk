@@ -11,9 +11,14 @@
  */
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { resetSessionIndexForTests } from "@oh-my-pi/pi-coding-agent/session/session-index";
-import { getAgentDir, setAgentDir, __resetDirsFromEnvForTests } from "@oh-my-pi/pi-utils/dirs";
+import {
+  getAgentDir,
+  relativePathWithinNormalizedRoot,
+  setAgentDir,
+  __resetDirsFromEnvForTests,
+} from "@oh-my-pi/pi-utils/dirs";
 
 /** 活动 agent 目录在沙箱里的固定位置。 */
 const RUNTIME_AGENT_DIR = "runtime/agent";
@@ -81,6 +86,28 @@ function resetAgentDirState(): void {
   resetSessionIndexForTests();
 }
 
+/**
+ * 活动 agent 目录是否仍落在沙箱里。删掉沙箱前必须确认为 false：活动目录指向已删除
+ * 的目录会让后续用例把数据写进不存在的路径。读不到活动目录时按「仍在沙箱」处理。
+ */
+function activeAgentDirWithinSandbox(root: string): boolean {
+  let activeAgentDir: string;
+  try {
+    activeAgentDir = getAgentDir();
+  } catch (error) {
+    warnCleanupFailure(`读取活动 agent 目录（${root}）`, error);
+    return true;
+  }
+  // 沙箱路径刚由 mkdtemp 创建，不需要解析符号链接；大小写不敏感平台统一折叠。
+  const caseInsensitive = process.platform === "win32" || process.platform === "darwin";
+  const sandboxRoot = resolve(root);
+  const active = resolve(activeAgentDir);
+  return relativePathWithinNormalizedRoot(
+    caseInsensitive ? sandboxRoot.toLowerCase() : sandboxRoot,
+    caseInsensitive ? active.toLowerCase() : active,
+  ) !== null;
+}
+
 function warnCleanupFailure(action: string, error: unknown): void {
   console.warn(`ompdesk 测试沙箱清理失败：${action}`, error);
 }
@@ -104,11 +131,16 @@ export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSa
     previous = switchAgentDir(agentDir);
   } catch (error) {
     // 切换可能停在半路（目录已改、索引还是旧的），此时 t.after 尚未注册，没人会
-    // 收拾这棵临时目录：先删掉，再把原始错误交给用例。
-    try {
-      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-    } catch (cleanupError) {
-      warnCleanupFailure(`删除临时目录 ${root}`, cleanupError);
+    // 收拾这棵临时目录。但内部恢复也可能失败：活动目录仍指向 root 时删掉它会让
+    // 后续用例写进已删除的目录，保留目录交给系统回收。
+    if (activeAgentDirWithinSandbox(root)) {
+      console.warn(`ompdesk 测试沙箱保留临时目录 ${root}：活动 agent 目录仍指向它`);
+    } else {
+      try {
+        rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      } catch (cleanupError) {
+        warnCleanupFailure(`删除临时目录 ${root}`, cleanupError);
+      }
     }
     throw error;
   }
@@ -124,15 +156,19 @@ export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSa
       restoreAgentDir(previous);
     } catch (error) {
       warnCleanupFailure(`恢复活动 agent 目录（${root}）`, error);
-      // 恢复停在半路时索引可能还指向沙箱，再复位一次，让后续用例从当前环境重建。
+      // 恢复停在半路时目录解析或索引都可能仍指向沙箱；两处复位都幂等，一起再做
+      // 一次，后续用例才从当前环境重建。
       try {
-        resetSessionIndexForTests();
+        resetAgentDirState();
       } catch (resetError) {
-        warnCleanupFailure(`重置会话索引（${root}）`, resetError);
+        warnCleanupFailure(`重置目录解析与会话索引（${root}）`, resetError);
       }
-      // 活动目录仍指向沙箱：删掉 root 会让后续用例写进已删除的目录，保留目录交给
-      // 系统回收。
-      console.warn(`ompdesk 测试沙箱保留临时目录 ${root}：活动 agent 目录未恢复`);
+    }
+
+    // 活动目录仍指向沙箱：删掉 root 会让后续用例写进已删除的目录，保留目录交给
+    // 系统回收。
+    if (activeAgentDirWithinSandbox(root)) {
+      console.warn(`ompdesk 测试沙箱保留临时目录 ${root}：活动 agent 目录仍指向它`);
       return;
     }
 
