@@ -20,7 +20,7 @@ import { basename, join, resolve } from "path";
 import { setTimeout as delay } from "timers/promises";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 
-export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent";
+export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent" | "tools" | "long";
 
 export interface SeedOptions {
   agentDir: string;
@@ -50,6 +50,8 @@ const SCENARIO_TITLES: Record<SessionScenario, string> = {
   empty: "伪造会话 empty",
   branch: "伪造会话 branch",
   subagent: "伪造会话 subagent",
+  tools: "伪造会话 tools",
+  long: "伪造会话 long",
 };
 
 const SINGLE_TURN_USER_TEXT = "伪造会话 single-turn 的用户消息";
@@ -67,7 +69,59 @@ const SUBAGENT_TITLE_PREFIX = "Sub ";
 // 子会话消息相对父会话逐条递增，读回时顺序不依赖文件写入时序。
 const CHILD_MESSAGE_OFFSET_MS = 1000;
 
+const TOOLS_USER_TEXTS = [
+  "伪造会话 tools 的第一轮用户消息：读取 README.md",
+  "伪造会话 tools 的第二轮用户消息：列出项目根目录",
+];
+const TOOLS_THINKING_TEXTS = [
+  "伪造会话 tools 的第一轮思考：先确认 README.md 的内容",
+  "伪造会话 tools 的第二轮思考：用 bash 列出项目根目录",
+];
+const TOOLS_REPLY_TEXTS = [
+  "伪造会话 tools 的第一轮助手回复：README.md 已读取",
+  "伪造会话 tools 的第二轮助手回复：目录已列出",
+];
+const TOOLS_READ_RESULT_TEXT = "伪造会话 tools 的 read 结果：README.md 的样本内容";
+const TOOLS_BASH_RESULT_TEXT = "伪造会话 tools 的 bash 结果：app、components、lib";
+// 工具调用、结果回填与收尾回复按固定步长推进，读回后的配对不依赖文件写入时序。
+const TOOLS_MESSAGE_STEP_MS = 1000;
+const TOOLS_MESSAGES_PER_ROUND = 4;
+const TOOLS_CALLS: readonly ToolCallSpec[] = [
+  {
+    id: "call_fixture_tools_read",
+    name: "read",
+    arguments: { path: "README.md" },
+    resultText: TOOLS_READ_RESULT_TEXT,
+  },
+  {
+    id: "call_fixture_tools_bash",
+    name: "bash",
+    arguments: { command: "ls" },
+    resultText: TOOLS_BASH_RESULT_TEXT,
+  },
+];
+const NO_ASSISTANT_USAGE: AssistantUsage = { input: 0, output: 0 };
+const TOOLS_ASSISTANT_USAGE: AssistantUsage = { input: 180, output: 60 };
+// 长上下文场景每轮两条消息，助手回合带非零用量，会话地图由这些条目展开。
+const LONG_TURN_COUNT = 24;
+const LONG_MESSAGE_STEP_MS = 60_000;
+const LONG_ASSISTANT_USAGE: AssistantUsage = { input: 2400, output: 800 };
+
 type SessionMessage = Parameters<SessionManager["appendMessage"]>[0];
+type AssistantContent = Extract<SessionMessage, { role: "assistant" }>["content"];
+type AssistantStopReason = Extract<SessionMessage, { role: "assistant" }>["stopReason"];
+
+interface AssistantUsage {
+  input: number;
+  output: number;
+}
+
+interface ToolCallSpec {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  resultText: string;
+}
 
 interface BuiltSession {
   id: string;
@@ -207,6 +261,10 @@ async function buildScenario(
       return buildBranchScenario(options, stagingDir);
     case "subagent":
       return buildSubagentScenario(options, stagingDir);
+    case "tools":
+      return buildToolsScenario(options, stagingDir);
+    case "long":
+      return buildLongScenario(options, stagingDir);
   }
 }
 
@@ -280,6 +338,61 @@ async function buildSubagentScenario(
   };
 }
 
+/** 两轮「思考 + 工具调用 + 结果回填 + 文本回复」，第一轮用 read，第二轮用 bash。 */
+async function buildToolsScenario(
+  options: { cwd: string; title: string; messageTime: number },
+  stagingDir: string,
+): Promise<ScenarioPlan> {
+  const messages: SessionMessage[] = [];
+
+  for (const [round, call] of TOOLS_CALLS.entries()) {
+    const start = options.messageTime + round * TOOLS_MESSAGES_PER_ROUND * TOOLS_MESSAGE_STEP_MS;
+    messages.push(
+      userMessage(TOOLS_USER_TEXTS[round], start),
+      assistantMessage(
+        [
+          { type: "thinking", thinking: TOOLS_THINKING_TEXTS[round] },
+          { type: "toolCall", id: call.id, name: call.name, arguments: call.arguments },
+        ],
+        start + TOOLS_MESSAGE_STEP_MS,
+        TOOLS_ASSISTANT_USAGE,
+        "toolUse",
+      ),
+      toolResultMessage(call, call.resultText, start + 2 * TOOLS_MESSAGE_STEP_MS),
+      assistantMessage(TOOLS_REPLY_TEXTS[round], start + 3 * TOOLS_MESSAGE_STEP_MS, TOOLS_ASSISTANT_USAGE),
+    );
+  }
+
+  return {
+    sessions: [await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir)],
+    extend: async () => [],
+  };
+}
+
+/** 24 轮问答交替出现，时间戳按固定步长递增，助手回合带非零用量。 */
+async function buildLongScenario(
+  options: { cwd: string; title: string; messageTime: number },
+  stagingDir: string,
+): Promise<ScenarioPlan> {
+  const messages: SessionMessage[] = [];
+  for (let turn = 0; turn < LONG_TURN_COUNT; turn++) {
+    const userTime = options.messageTime + turn * 2 * LONG_MESSAGE_STEP_MS;
+    messages.push(
+      userMessage(`伪造会话 long 的第 ${turn + 1} 轮用户消息`, userTime),
+      assistantMessage(
+        `伪造会话 long 的第 ${turn + 1} 轮助手回复`,
+        userTime + LONG_MESSAGE_STEP_MS,
+        LONG_ASSISTANT_USAGE,
+      ),
+    );
+  }
+
+  return {
+    sessions: [await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir)],
+    extend: async () => [],
+  };
+}
+
 function publishedSession(session: BuiltSession, scenarioDir: string): BuiltSession {
   return { ...session, file: join(scenarioDir, basename(session.file)) };
 }
@@ -343,22 +456,39 @@ function userMessage(text: string, timestamp: number): SessionMessage {
   return { role: "user", content: text, timestamp };
 }
 
-function assistantMessage(text: string, timestamp: number): SessionMessage {
+/** 纯文本走字符串形式，思考块与工具调用直接传内容块数组。 */
+function assistantMessage(
+  content: string | AssistantContent,
+  timestamp: number,
+  usage: AssistantUsage = NO_ASSISTANT_USAGE,
+  stopReason: AssistantStopReason = "stop",
+): SessionMessage {
   return {
     role: "assistant",
-    content: [{ type: "text", text }],
+    content: typeof content === "string" ? [{ type: "text", text: content }] : content,
     api: "fixture",
     provider: "fixture",
     model: "fixture",
     usage: {
-      input: 0,
-      output: 0,
+      input: usage.input,
+      output: usage.output,
       cacheRead: 0,
       cacheWrite: 0,
-      totalTokens: 0,
+      totalTokens: usage.input + usage.output,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
-    stopReason: "stop",
+    stopReason,
+    timestamp,
+  };
+}
+
+function toolResultMessage(call: ToolCallSpec, text: string, timestamp: number): SessionMessage {
+  return {
+    role: "toolResult",
+    toolCallId: call.id,
+    toolName: call.name,
+    content: [{ type: "text", text }],
+    isError: false,
     timestamp,
   };
 }
