@@ -321,17 +321,34 @@ test("铺样本前清掉替换阶段残留的 .staging- 与 .backup- 目录", as
   const sessionsDir = fixturesDir(sandbox.agentDir);
   await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
 
-  // 模拟替换阶段被杀的进程：备份与 staging 都在 sessions 同层，备份名以 .backup- 开头。
+  // 模拟替换阶段被杀的进程：staging 在 sessions 下，备份在 agentDir 顶层。
   const scenarioDir = join(sessionsDir, "fixture-single-turn");
-  cpSync(scenarioDir, join(sessionsDir, ".backup-fixture-single-turn-killed"), { recursive: true });
+  cpSync(scenarioDir, join(sandbox.agentDir, ".backup-fixture-single-turn-killed"), { recursive: true });
   mkdirSync(join(sessionsDir, ".staging-killed"), { recursive: true });
 
   const [reseeding] = await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
 
   assert.deepEqual(readdirSync(sessionsDir), ["fixture-single-turn"]);
+  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "残留备份不得留在 agentDir 顶层");
   sandbox.readFixtures();
   const infos = await SessionManager.listAll();
   assert.deepEqual(infos.map((info) => info.id), [reseeding.id], "残留目录不得变成额外会话");
+});
+
+test("会话扫描看不到 agentDir 顶层的替换备份", async (t) => {
+  const sandbox = createSandbox(t);
+  const [seeded] = await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+
+  // 删除最终失败时留下的备份：位于 sessions 之外，里面的 .jsonl 不在扫描范围。
+  cpSync(
+    join(fixturesDir(sandbox.agentDir), "fixture-single-turn"),
+    join(sandbox.agentDir, `.backup-fixture-single-turn-${randomUUID()}`),
+    { recursive: true },
+  );
+
+  sandbox.readFixtures();
+  const infos = await SessionManager.listAll();
+  assert.deepEqual(infos.map((info) => info.id), [seeded.id], "备份不得变成额外会话");
 });
 
 test("新场景同样拒绝带 sessions 以外条目的 agentDir", async (t) => {
@@ -510,12 +527,13 @@ test("resetSessionFixtures 删除全部场景目录与中间目录，重复调�
   const sandbox = createSandbox(t);
   await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
   await seedSessions("empty", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
-  mkdirSync(join(fixturesDir(sandbox.agentDir), ".backup-killed"), { recursive: true });
+  mkdirSync(join(sandbox.agentDir, ".backup-fixture-empty-killed"), { recursive: true });
 
   await resetSessionFixtures(sandbox.agentDir);
   assert.equal(existsSync(join(fixturesDir(sandbox.agentDir), "fixture-single-turn")), false);
   assert.equal(existsSync(join(fixturesDir(sandbox.agentDir), "fixture-empty")), false);
   assert.deepEqual(readdirSync(fixturesDir(sandbox.agentDir)), []);
+  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "复位应清掉 agentDir 顶层的替换备份");
 
   await resetSessionFixtures(sandbox.agentDir);
   const missing = join(sandbox.root, "missing");
@@ -534,6 +552,45 @@ test("resetSessionFixtures 拒绝带 sessions 以外条目的 agentDir", async (
     ["fixture-single-turn"],
     "拒绝时不得删除样本",
   );
+});
+
+test("resetSessionFixtures 在活动 agent 目录与目标相同时拒绝", async (t) => {
+  const sandbox = createSandbox(t);
+  await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+  switchAgentDir(sandbox.agentDir);
+
+  await assert.rejects(() => resetSessionFixtures(sandbox.agentDir), /活动 agent 目录/);
+  assert.deepEqual(
+    readdirSync(fixturesDir(sandbox.agentDir)),
+    ["fixture-single-turn"],
+    "拒绝时不得删除样本",
+  );
+});
+
+test("resetSessionFixtures 拒绝真实用户配置根下的 agentDir，符号链接亦然", async (t) => {
+  const sandbox = createSandbox(t);
+  // 与铺样本的用例一致：把配置根搬进沙箱，避免复位真的碰到用户配置根。
+  const savedConfigDir = process.env.PI_CONFIG_DIR;
+  process.env.PI_CONFIG_DIR = relative(homedir(), join(sandbox.root, "config-root"));
+  try {
+    const realAgentDir = join(getBaseConfigRoot(), "agent");
+    const victim = join(realAgentDir, "sessions", "fixture-single-turn", "victim.jsonl");
+    mkdirSync(dirname(victim), { recursive: true });
+    writeFileSync(victim, "");
+
+    await assert.rejects(() => resetSessionFixtures(realAgentDir), /真实用户配置根/);
+
+    // 指向真实 agent 目录的符号链接：字面路径在沙箱里，只有真实路径露出配置根。
+    const link = join(sandbox.root, "agent-link");
+    if (linkDirectory(t, realAgentDir, link)) {
+      await assert.rejects(() => resetSessionFixtures(link), /真实用户配置根/);
+    }
+
+    assert.ok(existsSync(victim), "拒绝时不得删除样本");
+  } finally {
+    if (savedConfigDir === undefined) delete process.env.PI_CONFIG_DIR;
+    else process.env.PI_CONFIG_DIR = savedConfigDir;
+  }
 });
 
 test("用例自己切换活动 agent 目录，结束后恢复原值", (t) => {
