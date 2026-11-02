@@ -5,8 +5,13 @@
  * 判定都收在这里，hook 与界面只负责把结论写回状态与滚动入口。
  */
 
+import { RAIL_JUMP_SETTLE_MS } from "./transcript-rail-jump";
+
 /** 贴底阈值（px）：距列表底部不超过这么多像素就算仍停在底部。 */
 export const FOLLOW_BOTTOM_THRESHOLD_PX = 72;
+
+/** 抑制器截止时长（ms）：跳转的两次兜底清算再加一帧余量。 */
+export const FOLLOW_OBSERVATION_HOLD_MS = RAIL_JUMP_SETTLE_MS * 2 + 500;
 
 /** 改变跟随开关的事件。 */
 export type FollowEvent =

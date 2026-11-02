@@ -17,8 +17,7 @@ import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
 import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
-import { reduceFollow, type FollowEvent } from "@/lib/transcript-follow";
-import { RAIL_JUMP_SETTLE_MS } from "@/lib/transcript-rail-jump";
+import { FOLLOW_OBSERVATION_HOLD_MS, reduceFollow, type FollowEvent } from "@/lib/transcript-follow";
 import type { ChatDraftImage } from "@/lib/draft-store";
 import { rememberSessionContinuation, clearSessionContinuation } from "@/lib/workspace-memory";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
@@ -224,9 +223,8 @@ export interface UseAgentSessionOptions {
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 const USER_SCROLL_INTENT_MS = 1200;
-// 跟随观测抑制器的上限（ms）：跳转的两次清算各有一个 RAIL_JUMP_SETTLE_MS 的兜底，
-// 再加上一帧余量。抑制器只能由外部松开，漏配对时由这个截止时间兜住。
-const FOLLOW_OBSERVATION_HOLD_MS = RAIL_JUMP_SETTLE_MS * 2 + 500;
+// 跟随观测抑制器的截止时长与判定都在 lib/transcript-follow.ts：抑制器只能由外部
+// 松开，漏配对时由截止时间兜住。
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
@@ -2587,8 +2585,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleScrollPositionChange = useCallback(() => {
     // 跳转自己的落点还在滚：这一串位置不参与判定，读到的一律丢掉。抑制器到点自己
     // 失效，调用方漏了松开也不会让跟随永久停摆。
+    if (followObservationHeldRef.current && Date.now() < followObservationHoldUntilRef.current) return;
     if (followObservationHeldRef.current) {
-      if (Date.now() < followObservationHoldUntilRef.current) return;
       // 到点收回走同一个松开入口：合上状态与截止时间只有一处写。
       releaseFollowObservation();
     }
