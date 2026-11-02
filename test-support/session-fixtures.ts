@@ -176,7 +176,7 @@ export async function seedSessions(
     }));
   } finally {
     // 正常情况下 staging 已被改名，force 让这次清理变成空操作。
-    await rm(stagingDir, { recursive: true, force: true });
+    await removeWithRetry(stagingDir);
   }
 }
 
@@ -195,7 +195,7 @@ export async function resetSessionFixtures(agentDir: string): Promise<void> {
   for (const entry of await listSessionDirectories(sessionsDir)) {
     const stale = entry.name.startsWith(STAGING_PREFIX) || entry.name.startsWith(BACKUP_PREFIX);
     if (entry.name.startsWith(FIXTURE_PREFIX) || stale) {
-      await rm(join(sessionsDir, entry.name), { recursive: true, force: true });
+      await removeWithRetry(join(sessionsDir, entry.name));
     }
   }
 }
@@ -301,7 +301,7 @@ async function listSessionDirectories(sessionsDir: string): Promise<Dirent[]> {
 async function sweepStaleDirectories(sessionsDir: string): Promise<void> {
   for (const entry of await listSessionDirectories(sessionsDir)) {
     if (entry.name.startsWith(STAGING_PREFIX) || entry.name.startsWith(BACKUP_PREFIX)) {
-      await rm(join(sessionsDir, entry.name), { recursive: true, force: true });
+      await removeWithRetry(join(sessionsDir, entry.name));
     }
   }
 }
