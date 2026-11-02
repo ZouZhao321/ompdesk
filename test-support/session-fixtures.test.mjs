@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
 
@@ -78,6 +78,20 @@ function listInfoFor(infos, id) {
   const info = infos.find((candidate) => candidate.id === id);
   assert.ok(info, `listAll 应读回会话 ${id}`);
   return info;
+}
+
+/**
+ * 等到第一个铺设把 staging 目录写进 sessions。这一刻之后才开始铺第二个场景时，
+ * 不排队的话它的清扫会删掉第一个铺设正在写的中间目录。
+ */
+async function waitForStaging(sessionsDir) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (existsSync(sessionsDir) && readdirSync(sessionsDir).some((name) => name.startsWith(".staging-"))) {
+      return;
+    }
+    await new Promise((resume) => setTimeout(resume, 5));
+  }
+  assert.fail("铺设没有在预期时间内产出 staging 目录");
 }
 
 test("single-turn 场景生成后能被 SessionManager.listAll 读回", async (t) => {
@@ -314,6 +328,35 @@ test("tools 与 long 场景重复铺设不增加文件，也不留下中间目�
   }
 
   assert.deepEqual(readdirSync(sessionsDir).sort(), ["fixture-long", "fixture-tools"]);
+});
+
+test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
+  const sandbox = createSandbox(t);
+  const sessionsDir = fixturesDir(sandbox.agentDir);
+  const options = { agentDir: sandbox.agentDir, cwd: sandbox.cwd };
+
+  // 铺设会清扫整棵目录下的 staging 与备份：不排队时后来者会把先行者正在写的
+  // staging 删掉。先让 long 开始铺，等它的 staging 落盘后再铺第二个场景，两个
+  // 铺设同时在飞，两边都必须完整落地。
+  const long = seedSessions("long", options);
+  // 等待期间先挂上失败处理，避免它的拒绝冒成未处理拒绝；Promise.all 仍能看到。
+  long.catch(() => {});
+  await waitForStaging(sessionsDir);
+  const empty = seedSessions("empty", options);
+  const [longSessions, emptySessions] = await Promise.all([long, empty]);
+
+  assert.equal(longSessions.length, 1);
+  assert.equal(emptySessions.length, 1);
+  assert.deepEqual(jsonlFiles(join(sessionsDir, "fixture-long")), [basename(longSessions[0].path)]);
+  assert.deepEqual(jsonlFiles(join(sessionsDir, "fixture-empty")), [basename(emptySessions[0].path)]);
+  assert.deepEqual(readdirSync(sessionsDir).sort(), ["fixture-empty", "fixture-long"]);
+  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "并发铺设不得留下中间目录");
+
+  sandbox.readFixtures();
+  const infos = await SessionManager.listAll();
+  assert.equal(infos.length, 2, "两个场景各自只有一条会话");
+  assert.equal(listInfoFor(infos, longSessions[0].id).title, TITLE_LONG);
+  assert.equal(listInfoFor(infos, emptySessions[0].id).title, TITLE_EMPTY);
 });
 
 test("铺样本前清掉替换阶段残留的 .staging- 与 .backup- 目录", async (t) => {
