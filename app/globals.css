@@ -1621,7 +1621,6 @@ span.linenumber {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   pointer-events: none;
 }
 .transcript-rail > * {
@@ -1691,7 +1690,6 @@ span.linenumber {
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 20px;
   padding: 0;
   border: 0;
   border-radius: 6px;
