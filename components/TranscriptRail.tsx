@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import {
   RAIL_ROW_GAP_PX,
   RAIL_ROW_PX,
@@ -59,7 +59,7 @@ function Chevron({ direction }: { direction: "up" | "down" }) {
  * 节距，全部圆点始终露出；节距会小到失去可用命中区时整条收起。移动档与没有
  * 多余车道时由 CSS 隐藏，首帧不会闪现。
  */
-export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChange, t }: Props) {
+export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChange, t }: Props) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const dotsRef = useRef<HTMLDivElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
@@ -271,4 +271,4 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
       </div>
     </div>
   );
-}
+});
