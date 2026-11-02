@@ -1,4 +1,5 @@
 import { memo, type RefObject, type UIEvent } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import type { LogEntry, LogFileInfo, LogLevelName } from "@/lib/api-types";
 import {
   describeLogsState,
@@ -8,7 +9,15 @@ import {
   formatFileModified,
   formatFileSize,
   LOG_LEVEL_OPTIONS,
+  LOGS_ERROR_INVALID_JSON,
+  LOGS_ERROR_TIMEOUT,
 } from "@/lib/logs-view";
+
+/** 客户端错误码到翻译 key 的映射；服务端原文不在此表内，原样显示。 */
+const LOCAL_LOG_ERROR_KEYS: Record<string, string> = {
+  [LOGS_ERROR_INVALID_JSON]: "settings.logs.invalidResponse",
+  [LOGS_ERROR_TIMEOUT]: "settings.logs.timeout",
+};
 
 /**
  * Presentational half of the Logs panel. Kept free of CSS-module imports so
@@ -108,6 +117,7 @@ export function LogsPanelView({
   onRefresh,
   onToggleEntry,
 }: LogsPanelViewProps) {
+  const { t } = useI18n();
   const state = describeLogsState({
     loading,
     error,
@@ -118,16 +128,21 @@ export function LogsPanelView({
     catchingUp,
   });
   const activeFile = selectedFile ?? file?.name ?? "";
+  const stateText = state.kind === "ready"
+    ? null
+    : {
+        title: t(`settings.logs.state.${state.kind}.title`),
+        detail: state.kind === "error"
+          ? (LOCAL_LOG_ERROR_KEYS[state.detail ?? ""] ? t(LOCAL_LOG_ERROR_KEYS[state.detail ?? ""]) : state.detail ?? "")
+          : t(`settings.logs.state.${state.kind}.detail`),
+      };
 
   return (
     <div className={styles.panel}>
       <header className={styles.header}>
         <div>
-          <h2 className={styles.title}>Logs</h2>
-          <p className={styles.description}>
-            The current server process&apos;s log file, straight from omp&apos;s rotating log. Read-only; prompts,
-            completions, tool arguments, file contents, and credentials are never written here.
-          </p>
+          <h2 className={styles.title}>{t("settings.logs.title")}</h2>
+          <p className={styles.description}>{t("settings.logs.description")}</p>
         </div>
         <a
           className={styles.download}
@@ -135,46 +150,46 @@ export function LogsPanelView({
           download={file?.name}
           aria-disabled={!file}
         >
-          Download
+          {t("settings.logs.download")}
         </a>
       </header>
 
       <div className={styles.toolbar}>
         <label className={styles.field}>
-          <span>Level</span>
+          <span>{t("settings.logs.level")}</span>
           <select
             className={styles.select}
             value={level}
-            aria-label="Log level"
+            aria-label={t("settings.logs.levelAria")}
             onChange={(event) => onLevelChange(event.target.value as LogLevelName | "all")}
           >
             {LOG_LEVEL_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>{t(`settings.logs.level.${option.value}`)}</option>
             ))}
           </select>
         </label>
         <label className={`${styles.field} ${styles.searchField}`}>
-          <span>Keyword</span>
+          <span>{t("settings.logs.keyword")}</span>
           <input
             className={styles.input}
             value={keyword}
-            placeholder="Filter by text"
-            aria-label="Log keyword"
+            placeholder={t("settings.logs.keywordPlaceholder")}
+            aria-label={t("settings.logs.keywordAria")}
             onChange={(event) => onKeywordChange(event.target.value)}
           />
         </label>
         <label className={`${styles.field} ${styles.fileField}`}>
-          <span>File</span>
+          <span>{t("settings.logs.file")}</span>
           <select
             className={styles.select}
             value={activeFile}
-            aria-label="Log file"
+            aria-label={t("settings.logs.fileAria")}
             onChange={(event) => onFileChange(event.target.value || null)}
           >
-            {files.length === 0 && <option value="">No file yet</option>}
+            {files.length === 0 && <option value="">{t("settings.logs.noFileYet")}</option>}
             {files.map((item) => (
               <option key={item.name} value={item.name}>
-                {formatFileLabel(item)} · {formatFileSize(item.size)}
+                {formatFileLabel(item, { current: t("settings.logs.currentFile"), rotation: t("settings.logs.rotation") })} · {formatFileSize(item.size)}
               </option>
             ))}
           </select>
@@ -187,7 +202,7 @@ export function LogsPanelView({
             aria-pressed={follow}
             onClick={() => onFollowChange(!follow)}
           >
-            {follow ? "Following" : "Follow latest"}
+            {follow ? t("settings.logs.following") : t("settings.logs.followLatest")}
           </button>
           <button
             type="button"
@@ -196,10 +211,10 @@ export function LogsPanelView({
             aria-pressed={paused}
             onClick={onTogglePause}
           >
-            {paused ? "Resume" : "Pause"}
+            {paused ? t("settings.logs.resume") : t("settings.logs.pause")}
           </button>
           <button type="button" className={styles.action} disabled={loading} onClick={onRefresh}>
-            {loading ? "Refreshing…" : "Refresh"}
+            {loading ? t("settings.logs.refreshing") : t("settings.logs.refresh")}
           </button>
         </div>
       </div>
@@ -209,26 +224,26 @@ export function LogsPanelView({
           <>
             <code className={styles.fileName}>{file.name}</code>
             <span>{formatFileSize(file.size)}</span>
-            <span>Last write {formatFileModified(file.modifiedAt)}</span>
-            {file.current && <span className={styles.currentBadge}>active</span>}
+            <span>{t("settings.logs.lastWrite", { time: formatFileModified(file.modifiedAt) })}</span>
+            {file.current && <span className={styles.currentBadge}>{t("settings.logs.active")}</span>}
           </>
         ) : (
-          <span>No file selected</span>
+          <span>{t("settings.logs.noFileSelected")}</span>
         )}
-        {paused && <span className={styles.pausedBadge}>Polling paused</span>}
+        {paused && <span className={styles.pausedBadge}>{t("settings.logs.pollingPaused")}</span>}
       </div>
 
       {error && entries.length > 0 && <div className={styles.errorBanner} role="alert">{error}</div>}
 
       <div className={styles.list} ref={listRef} data-state={state.kind} onScroll={onListScroll}>
-        {state.kind !== "ready" ? (
+        {stateText ? (
           <div
             className={styles.empty}
             role={state.kind === "error" ? "alert" : "status"}
             data-kind={state.kind}
           >
-            <strong>{state.title}</strong>
-            <span>{state.detail}</span>
+            <strong>{stateText.title}</strong>
+            <span>{stateText.detail}</span>
           </div>
         ) : (
           entries.map((entry) => (
