@@ -18,6 +18,31 @@ const CANDIDATE_LIMIT = 10;
 /** 单次用例渲染的消息条数上限。 */
 const MESSAGE_LIMIT = 20;
 
+/** 会话库或会话文件不存在：全新 CI runner 的正常状态，不是环境故障，应当改用样本会话。 */
+const MISSING_PATH_ERROR_CODES = new Set(["ENOENT", "ENOTDIR"]);
+
+/** 会话库存在却读不出来：权限或占用问题，属于环境限制，跳过用例而不是失败。 */
+const UNREADABLE_STORE_ERROR_CODES = new Set(["EACCES", "EPERM", "EBUSY"]);
+
+function errorCode(error) {
+  return error && typeof error === "object" ? error.code : undefined;
+}
+
+/** 路径不存在（库扫描目录或会话文件没了）不是故障，走样本回退。 */
+function isMissingPathError(error) {
+  return MISSING_PATH_ERROR_CODES.has(errorCode(error));
+}
+
+/** 只有会话库不可读才算可跳过的环境问题；harness 与 SDK 的契约变化必须失败。 */
+function isUnreadableStoreError(error) {
+  return UNREADABLE_STORE_ERROR_CODES.has(errorCode(error));
+}
+
+/** 临时目录建不出来（父目录不存在、无权限、被占用）都是环境限制，跳过而不是失败。 */
+function isTempDirError(error) {
+  return isMissingPathError(error) || isUnreadableStoreError(error);
+}
+
 /**
  * 每台机器的会话库不同，所以夹具在运行时挑选：取会话列表里 mtime（`modified`）最新
  * 的一条（mtime 相同则按路径升序，保证顺序稳定），再用仓库自己的
@@ -28,20 +53,10 @@ const MESSAGE_LIMIT = 20;
  * 读取走 `loadEntriesFromFile()`：它只解析 JSONL，不创建 writer、不取单写者锁、也
  * 不触发迁移写回（`getSessionEntries()` 背后的 `SessionManager.open()` 会取锁）。
  * 用例因此不会写入或修改任何会话文件，也不会和正在写文件的会话进程抢锁。
- */
-const FIXTURE_IO_ERROR_CODES = new Set(["ENOENT", "EACCES", "EPERM", "EBUSY", "ENOTDIR", "EISDIR"]);
-
-/** 只有会话库不可读才算可跳过的环境问题；harness 与 SDK 的契约变化必须失败。 */
-function isFixtureEnvironmentError(error) {
-  return Boolean(
-    error && typeof error === "object" && FIXTURE_IO_ERROR_CODES.has(error.code),
-  );
-}
-
-/**
- * 挑选本机夹具：`fixture` 非空表示找到了可渲染的真实会话。没有会话（CI runner 就是
- * 这种状态）或候选都不可渲染不是错误，返回 `reason` 让用例改铺样本；只有会话库本身
- * 不可读才把 `environmentError` 设为跳过原因。
+ *
+ * `fixture` 非空表示找到了可渲染的真实会话。会话库或会话文件不存在（全新 CI runner
+ * 就是这种状态）返回 `reason` 让用例改铺样本；只有会话库存在却读不出来才把
+ * `environmentError` 设为跳过原因。
  */
 async function selectLocalFixture() {
   let sessions;
@@ -49,8 +64,11 @@ async function selectLocalFixture() {
     invalidateSessionListCache();
     sessions = await listAllSessions({ force: true });
   } catch (error) {
-    if (!isFixtureEnvironmentError(error)) throw error;
-    const reason = `读取本机会话列表失败，跳过历史会话夹具：${error.message}`;
+    if (isMissingPathError(error)) {
+      return { fixture: null, reason: "本机没有会话库，改用样本会话", environmentError: null };
+    }
+    if (!isUnreadableStoreError(error)) throw error;
+    const reason = `本机会话库不可读，跳过历史会话夹具：${error.message}`;
     return { fixture: null, reason, environmentError: reason };
   }
   const candidates = sessions
@@ -78,10 +96,18 @@ async function selectLocalFixture() {
         };
       }
     } catch (error) {
-      if (!isFixtureEnvironmentError(error)) throw error;
-      console.log(
-        `[history-fixtures] 跳过无法读取的会话 ${session.path}: ${error.message}`,
-      );
+      if (isMissingPathError(error)) {
+        // 列出与读取之间文件没了：不是回归，换下一个候选，最终没有可用的就走样本。
+        console.log(
+          `[history-fixtures] 会话文件在列出之后消失，跳过 ${session.path}: ${error.message}`,
+        );
+      } else if (isUnreadableStoreError(error)) {
+        console.log(
+          `[history-fixtures] 跳过无法读取的会话 ${session.path}: ${error.message}`,
+        );
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -109,9 +135,9 @@ async function seedFixture(t) {
       beforeRestore: invalidateSessionListCache,
     });
   } catch (error) {
-    // 只容忍临时目录建不出来：那是环境限制，不是回归。铺设样本与切换目录的失败
-    // （EPERM/EBUSY/EACCES 也在其中）必须抛出，否则铺设逻辑坏了会变成 CI 跳过。
-    if (!isFixtureEnvironmentError(error)) throw error;
+    // 只容忍临时目录建不出来：那是环境限制，不是回归。铺设样本与切换目录在 try 之外，
+    // 它们的失败（EPERM/EBUSY/EACCES 也在其中）会直接抛出，不会变成 CI 跳过。
+    if (!isTempDirError(error)) throw error;
     console.log(`[history-fixtures] 无法在临时目录铺设会话样本：${error.message}`);
     return null;
   }
