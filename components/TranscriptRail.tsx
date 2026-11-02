@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import {
+  RAIL_GAP_PX,
   RAIL_ROW_PX,
+  RAIL_STEP_HEIGHT_PX,
   railDotPitch,
   railStepItemIndex,
   type TranscriptRailDot,
@@ -71,7 +73,6 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
   // 每条提问都要有一个看得见的圆点：圆点列铺满上下两条按钮之间的高度，放不下时
   // 按数量压缩节距；节距会小于可用命中区下限时整条收起，不把圆点压成一条实线。
   const [dotPitch, setDotPitch] = useState<number | null>(RAIL_ROW_PX);
-  const stepBlockRef = useRef(0);
   useLayoutEffect(() => {
     const rail = railRef.current;
     const lane = rail?.parentElement;
@@ -79,19 +80,9 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
     const apply = () => {
       const laneHeight = lane.clientHeight;
       if (laneHeight <= 0) return;
-      let used = 0;
-      for (const step of rail.querySelectorAll(".transcript-rail-step")) {
-        used += step.getBoundingClientRect().height;
-      }
-      let block = stepBlockRef.current;
-      if (used > 0) {
-        const gapValue = Number.parseFloat(getComputedStyle(rail).rowGap);
-        const gap = Number.isFinite(gapValue) ? gapValue : 4;
-        block = used + gap * 2;
-        stepBlockRef.current = block;
-      }
-      // 收起状态下量不到按钮，用上一次量到的占位；车道始终在布局里，窗口缩放后
-      // 仍能重新判断要不要露出。
+      // 按钮块的高度由常量给出：跳转条被收起时量不到按钮，不靠缓存，窗口展开后
+      // 也不会少算这一块。
+      const block = RAIL_STEP_HEIGHT_PX * 2 + RAIL_GAP_PX * 2;
       const next = railDotPitch(laneHeight - block, dots.length);
       setDotPitch((current) => (current === next ? current : next));
     };
@@ -174,7 +165,6 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
   const tipVisible = tipAnchor !== null;
   useEffect(() => {
     if (!tipVisible) return;
-    let frame = 0;
     // 锚点还立着才谈位置：圆点被卸载、跳转条被收起都收起提示。
     const anchorIsVisible = () => {
       const anchor = anchorRef.current;
@@ -184,18 +174,8 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
       }
       return true;
     };
-    const onScroll = () => {
-      if (!anchorIsVisible()) return;
-      // 一帧只对一次：连续的滚动事件合并到同一个 rAF 里。
-      if (frame !== 0) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        positionTip();
-      });
-    };
-    window.addEventListener("scroll", onScroll, true);
-    // 缩放、面板拖拽、字体加载与圆点增减都不发滚动事件：竖条或圆点列的尺寸变了，
-    // 锚点的纵向位置就变了，浮层却还停在旧位置。尺寸一变就重新对准。
+    // 转写区滚动搬不动圆点，提示不需要跟着滚动重算；缩放、面板拖拽、字体加载与
+    // 圆点增减都不发滚动事件，尺寸一变才重新对准。
     const observer = new ResizeObserver(() => {
       if (anchorIsVisible()) positionTip();
     });
@@ -204,9 +184,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
     // 圆点数组换了：锚点可能已经不在这份列表里，还在就按新位置重算。
     if (anchorIsVisible()) positionTip();
     return () => {
-      window.removeEventListener("scroll", onScroll, true);
       observer.disconnect();
-      if (frame !== 0) cancelAnimationFrame(frame);
     };
   }, [tipVisible, dots, positionTip, hideTip]);
 
@@ -217,13 +195,14 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
         className="transcript-rail"
         role="navigation"
         aria-label={t("chat.transcriptRail")}
-        style={railHidden ? { display: "none" } : undefined}
+        style={{ gap: RAIL_GAP_PX, display: railHidden ? "none" : undefined }}
       >
         <button
           type="button"
           className="transcript-rail-step"
           aria-label={t("chat.previousPrompt")}
           title={t("chat.previousPrompt")}
+          style={{ height: RAIL_STEP_HEIGHT_PX }}
           disabled={previousItemIndex === null}
           onClick={() => {
             if (previousItemIndex !== null) onJump(previousItemIndex);
@@ -272,6 +251,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
           className="transcript-rail-step"
           aria-label={t("chat.nextPrompt")}
           title={t("chat.nextPrompt")}
+          style={{ height: RAIL_STEP_HEIGHT_PX }}
           disabled={nextItemIndex === null}
           onClick={() => {
             if (nextItemIndex !== null) onJump(nextItemIndex);

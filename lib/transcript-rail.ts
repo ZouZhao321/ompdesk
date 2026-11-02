@@ -129,6 +129,12 @@ export function shouldShowTranscriptRail(dotCount: number): boolean {
 /** 顶部判定容差（px）：行顶落在视口顶边下方一行以内时仍算顶部可见。 */
 export const RAIL_TOP_SLACK_PX = 24;
 
+/** 上下两条步进按钮的高度（px）：圆点列的可用高度按车道高度减去这个块算。 */
+export const RAIL_STEP_HEIGHT_PX = 20;
+
+/** 跳转条内部的行间距（px）：步进按钮与圆点列共用。 */
+export const RAIL_GAP_PX = 4;
+
 /**
  * 顶部可见条目：偏移不超过可见顶边的最后一条。
  *
