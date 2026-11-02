@@ -64,6 +64,29 @@ const FS_RETRYABLE_CODES: Record<string, true> = {
 };
 const FS_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
 
+/**
+ * 同一 agentDir 上的铺设与复位在进程内排队：每次铺设都会清扫该目录下所有
+ * `.staging-*` 与 `.backup-fixture-*` 并整体替换场景目录，并发执行时一个铺设会
+ * 删掉另一个的 staging 或回滚备份。队列按解析后的路径分桶，执行完最后一个排队者
+ * 后自动摘除；跨进程不设约束，样本目录只给测试与手工验证使用。
+ */
+const agentDirQueues = new Map<string, Promise<void>>();
+
+function withAgentDirLock<T>(agentDir: string, operation: () => Promise<T>): Promise<T> {
+  const previous = agentDirQueues.get(agentDir) ?? Promise.resolve();
+  // 前一个操作失败也要让后面排队的继续：两个分支都接操作本身，只传递完成信号。
+  const run = previous.then(operation, operation);
+  const settled = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  agentDirQueues.set(agentDir, settled);
+  return run.finally(() => {
+    // 后面已有排队者时它已经接管队尾，这里不能把它的表项删掉。
+    if (agentDirQueues.get(agentDir) === settled) agentDirQueues.delete(agentDir);
+  });
+}
+
 const SCENARIO_TITLES: Record<SessionScenario, string> = {
   "single-turn": "伪造会话 single-turn",
   empty: "伪造会话 empty",
@@ -172,31 +195,33 @@ export async function seedSessions(
   const messageTime = parseTimestamp(options.timestamp ?? DEFAULT_TIMESTAMP);
   const scenarioDir = join(agentDir, SESSIONS_DIR, `${FIXTURE_PREFIX}${scenario}`);
 
-  await assertFixtureAgentDir(agentDir);
-  const sessionsDir = join(agentDir, SESSIONS_DIR);
-  await sweepStaleDirectories(agentDir);
-  await assertFixtureSessionsDir(sessionsDir);
-  const stagingDir = join(sessionsDir, `${STAGING_PREFIX}${randomUUID()}`);
-  await mkdir(stagingDir, { recursive: true });
+  return withAgentDirLock(agentDir, async () => {
+    await assertFixtureAgentDir(agentDir);
+    const sessionsDir = join(agentDir, SESSIONS_DIR);
+    await sweepStaleDirectories(agentDir);
+    await assertFixtureSessionsDir(sessionsDir);
+    const stagingDir = join(sessionsDir, `${STAGING_PREFIX}${randomUUID()}`);
+    await mkdir(stagingDir, { recursive: true });
 
-  try {
-    const plan = await buildScenario(scenario, { cwd: options.cwd, title, messageTime }, stagingDir);
-    const children = await replaceDirectory(stagingDir, scenarioDir, agentDir, () => plan.extend(scenarioDir));
-    return [...plan.sessions, ...children].map((session) => ({
-      id: session.id,
-      path: join(scenarioDir, basename(session.file)),
-      title: session.title,
-      cwd: session.cwd,
-    }));
-  } finally {
-    // 正常情况下 staging 已被改名，force 让这次清理变成空操作；删不掉只记录，
-    // 不让清理错误盖掉上面抛出的原始错误。
     try {
-      await removeWithRetry(stagingDir);
-    } catch (error) {
-      console.warn(`session-fixtures: 清理 staging ${stagingDir} 失败`, error);
+      const plan = await buildScenario(scenario, { cwd: options.cwd, title, messageTime }, stagingDir);
+      const children = await replaceDirectory(stagingDir, scenarioDir, agentDir, () => plan.extend(scenarioDir));
+      return [...plan.sessions, ...children].map((session) => ({
+        id: session.id,
+        path: join(scenarioDir, basename(session.file)),
+        title: session.title,
+        cwd: session.cwd,
+      }));
+    } finally {
+      // 正常情况下 staging 已被改名，force 让这次清理变成空操作；删不掉只记录，
+      // 不让清理错误盖掉上面抛出的原始错误。
+      try {
+        await removeWithRetry(stagingDir);
+      } catch (error) {
+        console.warn(`session-fixtures: 清理 staging ${stagingDir} 失败`, error);
+      }
     }
-  }
+  });
 }
 
 /**
@@ -208,16 +233,18 @@ export async function seedSessions(
  */
 export async function resetSessionFixtures(agentDir: string): Promise<void> {
   const resolved = resolveFixtureAgentDir(agentDir);
-  const entries = await readAgentDirEntries(resolved);
-  if (entries === null) return;
-  assertOnlySessions(entries);
-  await sweepStaleDirectories(resolved);
-  const sessionsDir = join(resolved, SESSIONS_DIR);
-  for (const entry of await listSubdirectories(sessionsDir)) {
-    if (entry.name.startsWith(FIXTURE_PREFIX)) {
-      await removeWithRetry(join(sessionsDir, entry.name));
+  await withAgentDirLock(resolved, async () => {
+    const entries = await readAgentDirEntries(resolved);
+    if (entries === null) return;
+    assertOnlySessions(entries);
+    await sweepStaleDirectories(resolved);
+    const sessionsDir = join(resolved, SESSIONS_DIR);
+    for (const entry of await listSubdirectories(sessionsDir)) {
+      if (entry.name.startsWith(FIXTURE_PREFIX)) {
+        await removeWithRetry(join(sessionsDir, entry.name));
+      }
     }
-  }
+  });
 }
 
 function requireAgentDir(agentDir: string | undefined): string {
