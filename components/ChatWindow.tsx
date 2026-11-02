@@ -629,9 +629,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     const next = railTopVisibleItemIndex(items, visibleTop + RAIL_TOP_SLACK_PX);
     setTopItemIndex((current) => (current === next ? current : next));
     // 最后一段比视口短时，贴底也会让顶部可见条目停在上一轮：高亮另按贴底判一次，
-    // 口径与跟随、「回到底部」按钮相同。
-    const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
-      <= FOLLOW_BOTTOM_THRESHOLD_PX;
+    // 口径与跟随、「回到底部」按钮相同。内容不足一屏时没有可滚动的范围，按顶部
+    // 可见条目走，否则短会话的最后一个圆点会一直高亮。
+    const scrollable = scroller.scrollHeight > scroller.clientHeight;
+    const atBottom = scrollable
+      && scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= FOLLOW_BOTTOM_THRESHOLD_PX;
     setRailAtBottom((current) => (current === atBottom ? current : atBottom));
   }, [scrollContainerRef]);
 
