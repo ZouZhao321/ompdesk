@@ -176,8 +176,13 @@ export async function seedSessions(
       cwd: session.cwd,
     }));
   } finally {
-    // 正常情况下 staging 已被改名，force 让这次清理变成空操作。
-    await removeWithRetry(stagingDir);
+    // 正常情况下 staging 已被改名，force 让这次清理变成空操作；删不掉只记录，
+    // 不让清理错误盖掉上面抛出的原始错误。
+    try {
+      await removeWithRetry(stagingDir);
+    } catch (error) {
+      console.warn(`session-fixtures: 清理 staging ${stagingDir} 失败`, error);
+    }
   }
 }
 
