@@ -7,11 +7,18 @@
  */
 
 /**
- * git 的仓库本地环境变量：指定仓库位置、索引、对象库与配置来源，钩子注入后会盖过
- * `git -C`。清单取自 git(1) 的 ENVIRONMENT VARIABLES 一节中与仓库绑定的条目
- * （配置注入只需摘掉 `GIT_CONFIG_COUNT`，git 依据它决定是否读取成对的
+ * git 的仓库本地环境变量：指定仓库位置、索引、对象库、命名空间与配置来源，钩子注入后
+ * 会盖过 `git -C`。清单取自 git(1) 的 ENVIRONMENT VARIABLES 一节中与仓库绑定或与仓库
+ * 发现相关的条目（配置注入只需摘掉 `GIT_CONFIG_COUNT`，git 依据它决定是否读取成对的
  * `GIT_CONFIG_KEY_<n>` / `GIT_CONFIG_VALUE_<n>`）。测试直接引用本常量，
  * 增删条目不需要手抄第二份。
+ *
+ * `GIT_CEILING_DIRECTORIES` 与 `GIT_DISCOVERY_ACROSS_FILESYSTEM` 不指定仓库，但改变
+ * `-C` 之后的仓库发现：前者让上溯提前停下，后者决定能否跨文件系统上溯，钩子里的取值
+ * 同样会让命令找到别处仓库，所以一并剥离。
+ *
+ * 刻意保留：`GIT_CONFIG_GLOBAL` / `GIT_CONFIG_SYSTEM` / `GIT_CONFIG_NOSYSTEM` 只换配置
+ * 来源、不改变 `-C` 指向的仓库；`GIT_AUTHOR_*` / `GIT_COMMITTER_*` 只影响提交身份。
  */
 export const REPO_LOCATION_ENV_KEYS: readonly string[] = [
   "GIT_DIR",
@@ -22,6 +29,10 @@ export const REPO_LOCATION_ENV_KEYS: readonly string[] = [
   "GIT_PREFIX",
   "GIT_OBJECT_DIRECTORY",
   "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_NAMESPACE",
+  "GIT_QUARANTINE_PATH",
+  "GIT_CEILING_DIRECTORIES",
+  "GIT_DISCOVERY_ACROSS_FILESYSTEM",
   "GIT_CONFIG",
   "GIT_CONFIG_PARAMETERS",
   "GIT_CONFIG_COUNT",
