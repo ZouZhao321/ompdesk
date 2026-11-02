@@ -2,6 +2,9 @@ import type { Locale, TranslationParams } from "./types";
 
 type MessagesByLocale = Record<string, Record<string, string>>;
 
+/** 缺失提示只打印一次，避免每个字段、每次输入都刷屏。 */
+const warnedMissingKeys = new Set<string>();
+
 /**
  * 替换翻译消息中的简单插值占位符。
  * @param message 原始翻译消息
@@ -13,6 +16,29 @@ export function interpolateMessage(message: string, params: TranslationParams = 
     const value = params[name];
     return value === undefined ? token : String(value);
   });
+}
+
+/**
+ * 从当前语言和英语语言包中解析消息，缺失时返回调用方给出的原文。
+ * @param locale 当前语言
+ * @param key 翻译 key
+ * @param messages 各语言的消息字典
+ * @param fallback 缺失时使用的原文
+ * @returns 翻译结果或 fallback
+ */
+export function translateOrFallback(
+  locale: Locale,
+  key: string,
+  messages: MessagesByLocale,
+  fallback: string,
+): string {
+  const message = messages[locale]?.[key] ?? messages.en?.[key];
+  if (message !== undefined) return message;
+  if (process.env.NODE_ENV !== "production" && !warnedMissingKeys.has(key)) {
+    warnedMissingKeys.add(key);
+    console.warn(`[i18n] Missing translation: ${key}`);
+  }
+  return fallback;
 }
 
 /**
@@ -29,12 +55,7 @@ export function translateMessage(
   messages: MessagesByLocale,
   params: TranslationParams = {},
 ): string {
-  const message = messages[locale]?.[key] ?? messages.en?.[key];
-  if (message === undefined) {
-    if (process.env.NODE_ENV !== "production") console.warn(`[i18n] Missing translation: ${key}`);
-    return key;
-  }
-  return interpolateMessage(message, params);
+  return interpolateMessage(translateOrFallback(locale, key, messages, key), params);
 }
 
 /**
