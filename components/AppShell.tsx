@@ -5,8 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { SubagentPanel, isSubagentActive } from "./SubagentPanel";
+import { CommentTranslationPanel } from "./CommentTranslationPanel";
 import { ChatWindow } from "./ChatWindow";
 import { FileExplorerPanel } from "./FileExplorerPanel";
+import { GitChangesPanel } from "./GitChangesPanel";
 import { FileViewer } from "./FileViewer";
 import { TabBar } from "./TabBar";
 import { PanelViewIcon } from "./PanelViewIcon";
@@ -57,6 +59,7 @@ import type { SessionStatsInfo } from "@/lib/omp-types";
 // 重渲染（面板拖动、子代理快照更新）时保持不动。
 const MemoFileViewer = memo(FileViewer);
 const MemoFileExplorerPanel = memo(FileExplorerPanel);
+const MemoGitChangesPanel = memo(GitChangesPanel);
 const MemoSubagentPanel = memo(SubagentPanel);
 
 type SessionCopyField = "file" | "id";
@@ -1084,6 +1087,15 @@ export function AppShell() {
             {translate("files.noProject")}
           </div>
         );
+      case "git":
+        return (
+          <MemoGitChangesPanel
+            cwd={activeCwd}
+            onOpenFile={handleOpenFile}
+            active={tab.id === activePanelTabId && rightPanelOpen}
+            refreshKey={explorerRefreshKey}
+          />
+        );
       case "subagents":
         return (
           <MemoSubagentPanel
@@ -1092,6 +1104,13 @@ export function AppShell() {
             onRuntimeIdentity={handleRuntimeIdentity}
             cwd={selectedSession?.cwd ?? effectiveNewSessionCwd ?? undefined}
             subagents={subagents}
+            active={tab.id === activePanelTabId && rightPanelOpen}
+          />
+        );
+      case "comments":
+        return (
+          <CommentTranslationPanel
+            cwd={activeCwd ?? undefined}
             active={tab.id === activePanelTabId && rightPanelOpen}
           />
         );
@@ -2136,6 +2155,14 @@ export function AppShell() {
               <PanelViewIcon kind="explorer" />
             </PanelViewButton>
             <PanelViewButton
+              active={activePanelTab?.kind === "git"}
+              title={translate("git.title")}
+              onClick={() => handleToggleViewTab("git")}
+              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+            >
+              <PanelViewIcon kind="git" />
+            </PanelViewButton>
+            <PanelViewButton
               active={activePanelTab?.kind === "subagents"}
               title={translate("subagents.title")}
               onClick={() => handleToggleViewTab("subagents")}
@@ -2143,6 +2170,14 @@ export function AppShell() {
               showDot={runningSubagentCount > 0 && activePanelTab?.kind !== "subagents"}
             >
               <PanelViewIcon kind="subagents" />
+            </PanelViewButton>
+            <PanelViewButton
+              active={activePanelTab?.kind === "comments"}
+              title={translate("comments.title")}
+              onClick={() => handleToggleViewTab("comments")}
+              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+            >
+              <PanelViewIcon kind="comments" />
             </PanelViewButton>
           </div>
           <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>

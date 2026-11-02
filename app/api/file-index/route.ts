@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import {
@@ -11,9 +9,8 @@ import {
   isWindowsAbsolutePath,
 } from "@/lib/file-access";
 import { buildEntriesFromFiles, filterFileEntries, type FileIndexEntry } from "@/lib/file-fuzzy";
+import { listGitFiles } from "@/lib/git-listing";
 import { isApiRequestAllowed } from "@/lib/request-security";
-
-const execFileAsync = promisify(execFile);
 
 // Same skip lists as /api/files — only used for the non-git readdir fallback.
 // Git-tracked repos rely on .gitignore instead (matches the TUI's fd behavior).
@@ -62,21 +59,12 @@ function getIndexCache(): Map<string, CacheEntry> {
 }
 
 async function listWithGit(cwd: string): Promise<FileListing | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["-C", cwd, "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-      { timeout: 10_000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, LC_ALL: "C" } },
-    );
-    const all = stdout.split("\0").filter(Boolean);
-    if (all.length > GIT_HARD_CAP) {
-      return { files: all.slice(0, GIT_HARD_CAP), hardTruncated: true };
-    }
-    return { files: all, hardTruncated: false };
-  } catch {
-    // Not a git repo (or git unavailable) — caller falls back to readdir walk.
-    return null;
+  const all = await listGitFiles(cwd);
+  if (!all) return null;
+  if (all.length > GIT_HARD_CAP) {
+    return { files: all.slice(0, GIT_HARD_CAP), hardTruncated: true };
   }
+  return { files: all, hardTruncated: false };
 }
 
 function listWithWalk(cwd: string): FileListing {

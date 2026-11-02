@@ -28,14 +28,6 @@ import { ProjectRow } from "./ProjectRow";
 import { ProjectSortControl } from "./ProjectSortControl";
 import { projectMenuRowStyle } from "./project-menu-row-style";
 
-declare global {
-  interface Window {
-    piDesktop?: {
-      selectDirectory: () => Promise<string | null>;
-    };
-  }
-}
-
 interface Props {
   selectedSessionId: string | null;
   selectedRuntimeId?: string;
