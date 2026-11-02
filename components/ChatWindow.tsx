@@ -53,7 +53,7 @@ import { useSyncedDisplaySettings } from "@/hooks/useDisplaySettings";
 import { formatTokenCount } from "@/lib/format-tokens";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import type { GoalStatusInfo, SessionStatsInfo } from "@/lib/omp-types";
-import { Virtuoso, type Components, type ListItem, type ListProps, type VirtuosoHandle } from "react-virtuoso";
+import { Virtuoso, type Components, type ListProps, type VirtuosoHandle } from "react-virtuoso";
 
 interface Props {
   session: SessionInfo | null;
@@ -603,22 +603,29 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   );
 
   const transcriptListRef = useRef<HTMLDivElement | null>(null);
-  const railRenderedItemsRef = useRef<RailRenderedItem[]>([]);
   const railScrollCleanupRef = useRef<(() => void) | null>(null);
   const railVisibleRef = useRef(false);
   const [topItemIndex, setTopItemIndex] = useState<number | null>(null);
   const [railAtBottom, setRailAtBottom] = useState(false);
 
-  // 顶部可见条目以列表报告的已渲染条目为准：偏移是列表的测量值，这里只补一个
-  // 滚动容器与列表容器的矩形差，不按平均高度反推。跳转条在单轮、移动档、窄转写区
-  // 下不显示，这时不读尺寸也不写状态，滚动帧里因此没有多余的重渲染。
+  // 顶部可见条目直接从已挂载的行量：列表的 itemsRendered 报告比滚动晚一拍，
+  // 按它算高亮时，快速滚动会一直落在上一轮。跳转条在单轮、移动档、窄转写区下不
+  // 显示，这时不读尺寸也不写状态，滚动帧里因此没有多余的重渲染。
   const syncRailTopItem = useCallback(() => {
     if (!railVisibleRef.current) return;
     const scroller = scrollContainerRef.current;
     const list = transcriptListRef.current;
     if (!scroller || !list) return;
-    const visibleTop = scroller.getBoundingClientRect().top - list.getBoundingClientRect().top;
-    const next = railTopVisibleItemIndex(railRenderedItemsRef.current, visibleTop);
+    const listTop = list.getBoundingClientRect().top;
+    const visibleTop = scroller.getBoundingClientRect().top - listTop;
+    const items: RailRenderedItem[] = [];
+    for (const row of list.querySelectorAll<HTMLElement>("[data-index]")) {
+      const index = Number(row.getAttribute("data-index"));
+      if (!Number.isFinite(index)) continue;
+      const rect = row.getBoundingClientRect();
+      items.push({ index, offset: rect.top - listTop, size: rect.height });
+    }
+    const next = railTopVisibleItemIndex(items, visibleTop);
     setTopItemIndex((current) => (current === next ? current : next));
     // 最后一段比视口短时，贴底也会让顶部可见条目停在上一轮：高亮另按贴底判一次，
     // 口径与跟随、「回到底部」按钮相同。
@@ -647,9 +654,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     if (visible) syncRailTopItem();
   }, [syncRailTopItem]);
 
-  const handleTranscriptItemsRendered = useCallback((items: ListItem<TranscriptListItem>[]) => {
-    // 只登记，不在这里测量。
-    railRenderedItemsRef.current = items.map(({ index, offset, size }) => ({ index, offset, size }));
+  const handleTranscriptItemsRendered = useCallback(() => {
+    // 渲染窗口变了只补一次测量；几何在测量帧里直接从 DOM 读，不在这里同步读。
     scheduleRailMeasure();
   }, [scheduleRailMeasure]);
 

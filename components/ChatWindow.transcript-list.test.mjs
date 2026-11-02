@@ -169,8 +169,8 @@ test("gives every user turn a dot even when the prompt has no text", () => {
 });
 
 test("measures the rail once per frame instead of per streamed chunk", () => {
-  // 流式期间每个数据块都会让列表报告一次已渲染条目。报告只登记，测量与滚动共用
-  // 同一个 rAF 调度，因此每个块不会各触发一次强制布局。
+  // 流式期间每个数据块都会让列表报告一次已渲染条目。报告只触发共用调度，测量在
+  // 同一帧里做一次，因此每个块不会各触发一次强制布局。
   assert.match(
     source,
     /const scheduleRailMeasure = useCallback\(\(\) => \{\s*if \(railMeasureFrameRef\.current !== 0\) return;\s*railMeasureFrameRef\.current = requestAnimationFrame\(\(\) => \{\s*railMeasureFrameRef\.current = 0;\s*syncRailTopItem\(\);/,
@@ -180,9 +180,12 @@ test("measures the rail once per frame instead of per streamed chunk", () => {
     source.indexOf("const handleTranscriptScrollerRef = useCallback("),
   );
   assert.ok(itemsRenderedSource.length > 0, "the itemsRendered slice is empty");
-  assert.match(itemsRenderedSource, /railRenderedItemsRef\.current = items\.map\(/);
   assert.match(itemsRenderedSource, /scheduleRailMeasure\(\)/);
+  assert.doesNotMatch(itemsRenderedSource, /getBoundingClientRect/);
   assert.doesNotMatch(itemsRenderedSource, /syncRailTopItem\(/);
+  // 顶部可见条目直接读已挂载的行：列表报告的渲染窗口比滚动晚一拍，按报告算
+  // 高亮在快速滚动时总落后一轮。
+  assert.match(source, /for \(const row of list\.querySelectorAll<HTMLElement>\("\[data-index\]"\)\)/);
   // 滚动路径不再自带一个 rAF，两条来源合成同一个调度。
   assert.match(source, /element\.addEventListener\("scroll", scheduleRailMeasure, \{ passive: true \}\);/);
   assert.match(source, /element\.removeEventListener\("scroll", scheduleRailMeasure\)/);
