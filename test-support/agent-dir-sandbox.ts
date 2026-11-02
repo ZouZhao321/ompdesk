@@ -52,8 +52,19 @@ export interface AgentDirSandbox {
  */
 export function switchAgentDir(dir: string): AgentDirSnapshot {
   const snapshot = { agentDir: getAgentDir(), env: process.env.PI_CODING_AGENT_DIR };
-  setAgentDir(dir);
-  resetAgentDirState();
+  try {
+    setAgentDir(dir);
+    resetAgentDirState();
+  } catch (error) {
+    // 切换可能停在半路（目录已改、索引还是旧的）。不先回到快照，调用方删掉临时
+    // 目录后活动目录就会指向已删除的目录；恢复失败只记录，原始错误照常抛出。
+    try {
+      restoreAgentDir(snapshot);
+    } catch (restoreError) {
+      warnCleanupFailure(`恢复活动 agent 目录（切换到 ${dir} 失败后）`, restoreError);
+    }
+    throw error;
+  }
   return snapshot;
 }
 
@@ -77,10 +88,11 @@ function warnCleanupFailure(action: string, error: unknown): void {
 /**
  * 铺出沙箱并把活动目录切进去，用例结束自动恢复与清理。
  *
- * 清理分四步执行，每步单独兜错并保证后面的步骤仍然执行：活动 agent 目录必须
- * 恢复，临时目录必须尝试删除，否则后续用例会指向已删除的沙箱。失败只记录：
- * history.db 的句柄是模块级的，Windows 上关闭句柄到目录可删除之间有延迟，rm 会
- * 短暂报 EBUSY；临时目录交给系统回收，不翻转用例结果。
+ * 清理先跑 `beforeRestore`，再恢复活动 agent 目录；两步各自兜错，失败只记录，
+ * 不翻转用例结果。临时目录只在恢复成功之后删除：恢复失败时活动目录仍指向沙箱，
+ * 删掉它会让后续用例写进已删除的目录，此时保留目录交给系统回收。删除本身也可能
+ * 短暂报 EBUSY——history.db 的句柄是模块级的，Windows 上关闭句柄到目录可删除之间
+ * 有延迟——同样只记录。
  */
 export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSandboxOptions): AgentDirSandbox {
   const root = mkdtempSync(join(tmpdir(), options.prefix));
@@ -106,24 +118,28 @@ export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSa
       options.beforeRestore?.();
     } catch (error) {
       warnCleanupFailure(`beforeRestore（${root}）`, error);
-    } finally {
+    }
+
+    try {
+      restoreAgentDir(previous);
+    } catch (error) {
+      warnCleanupFailure(`恢复活动 agent 目录（${root}）`, error);
+      // 恢复停在半路时索引可能还指向沙箱，再复位一次，让后续用例从当前环境重建。
       try {
-        restoreAgentDir(previous);
-      } catch (error) {
-        warnCleanupFailure(`恢复活动 agent 目录（${root}）`, error);
-      } finally {
-        try {
-          resetSessionIndexForTests();
-        } catch (error) {
-          warnCleanupFailure(`重置会话索引（${root}）`, error);
-        } finally {
-          try {
-            rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-          } catch (error) {
-            warnCleanupFailure(`删除临时目录 ${root}`, error);
-          }
-        }
+        resetSessionIndexForTests();
+      } catch (resetError) {
+        warnCleanupFailure(`重置会话索引（${root}）`, resetError);
       }
+      // 活动目录仍指向沙箱：删掉 root 会让后续用例写进已删除的目录，保留目录交给
+      // 系统回收。
+      console.warn(`ompdesk 测试沙箱保留临时目录 ${root}：活动 agent 目录未恢复`);
+      return;
+    }
+
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch (error) {
+      warnCleanupFailure(`删除临时目录 ${root}`, error);
     }
   });
 
