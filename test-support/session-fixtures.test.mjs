@@ -18,6 +18,8 @@ const { getAgentDir, setAgentDir, __resetDirsFromEnvForTests } = await jiti.impo
 
 const TITLE_SINGLE_TURN = "伪造会话 single-turn";
 const TITLE_EMPTY = "伪造会话 empty";
+const TITLE_BRANCH = "伪造会话 branch";
+const TITLE_SUBAGENT = "伪造会话 subagent";
 const USER_TEXT = "伪造会话 single-turn 的用户消息";
 
 const originalAgentDir = getAgentDir();
@@ -100,6 +102,89 @@ test("empty 场景只留下标题，没有消息记录", async (t) => {
   const info = listInfoFor(await SessionManager.listAll(), session.id);
   assert.equal(info.title, TITLE_EMPTY);
   assert.equal(info.messageCount, 0);
+});
+
+test("branch 场景从父会话末端分出两条子会话", async (t) => {
+  const sandbox = createSandbox(t);
+  const seeded = await seedSessions("branch", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+
+  assert.equal(seeded.length, 3);
+  const [parent, ...children] = seeded;
+  const scenarioDir = join(fixturesDir(sandbox.agentDir), "fixture-branch");
+  assert.equal(parent.title, TITLE_BRANCH);
+  assert.equal(dirname(parent.path), scenarioDir);
+  assert.equal(jsonlFiles(scenarioDir).length, 3);
+  for (const child of children) {
+    assert.equal(child.title, TITLE_BRANCH);
+    assert.equal(dirname(child.path), scenarioDir);
+  }
+
+  const previous = switchAgentDir(sandbox.agentDir);
+  t.after(() => restoreAgentDir(previous));
+
+  const infos = await SessionManager.listAll();
+  const parentInfo = listInfoFor(infos, parent.id);
+  assert.equal(parentInfo.parentSessionPath, undefined, "父会话自身没有 parentSession");
+  assert.equal(parentInfo.messageCount, 2);
+  for (const child of children) {
+    const info = listInfoFor(infos, child.id);
+    assert.equal(resolve(info.parentSessionPath), resolve(parent.path));
+    assert.equal(info.messageCount, 3);
+  }
+});
+
+test("subagent 场景挂一个标题带 Sub 前缀的子会话", async (t) => {
+  const sandbox = createSandbox(t);
+  const seeded = await seedSessions("subagent", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+
+  assert.equal(seeded.length, 2);
+  const [parent, child] = seeded;
+  assert.equal(parent.title, TITLE_SUBAGENT);
+  assert.ok(child.title.startsWith("Sub"), `子会话标题应以 Sub 开头，实际是 ${child.title}`);
+  assert.equal(dirname(child.path), join(fixturesDir(sandbox.agentDir), "fixture-subagent"));
+
+  const previous = switchAgentDir(sandbox.agentDir);
+  t.after(() => restoreAgentDir(previous));
+
+  const infos = await SessionManager.listAll();
+  const info = listInfoFor(infos, child.id);
+  assert.equal(resolve(info.parentSessionPath), resolve(parent.path));
+  assert.ok(info.title.startsWith("Sub"));
+});
+
+test("branch 与 subagent 场景重复铺设不增加文件，也不留下中间目录", async (t) => {
+  const sandbox = createSandbox(t);
+  const sessionsDir = fixturesDir(sandbox.agentDir);
+
+  for (const [scenario, expected] of [
+    ["branch", 3],
+    ["subagent", 2],
+  ]) {
+    const scenarioDir = join(sessionsDir, `fixture-${scenario}`);
+    await seedSessions(scenario, { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+    const first = jsonlFiles(scenarioDir);
+
+    await seedSessions(scenario, { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+    const second = jsonlFiles(scenarioDir);
+
+    assert.equal(first.length, expected);
+    assert.equal(second.length, expected);
+  }
+
+  assert.deepEqual(readdirSync(sessionsDir).sort(), ["fixture-branch", "fixture-subagent"]);
+});
+
+test("新场景同样拒绝带 sessions 以外条目的 agentDir", async (t) => {
+  const sandbox = createSandbox(t);
+  writeFileSync(join(sandbox.agentDir, "models.yml"), "");
+
+  for (const scenario of ["branch", "subagent"]) {
+    await assert.rejects(
+      () => seedSessions(scenario, { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+      /models\.yml/,
+    );
+  }
+  assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
 });
 
 test("缺失的 agentDir 与非样本目录都会被拒绝", async (t) => {
