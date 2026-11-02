@@ -603,7 +603,13 @@ async function replaceDirectory<T>(
       console.warn(`session-fixtures: 回滚删除 ${targetDir} 失败`, cleanupError);
     }
     if (replaceExisting) {
-      await renameWithRetry(backupDir, targetDir);
+      // 新目录删不掉时备份回不去（ENOTEMPTY/EPERM），这里同样只告警：
+      // 恢复失败不能用它自己的错误替换调用方要看的原始错误。
+      try {
+        await renameWithRetry(backupDir, targetDir);
+      } catch (restoreError) {
+        console.warn(`session-fixtures: 恢复备份 ${backupDir} 失败`, restoreError);
+      }
     }
     throw error;
   }
