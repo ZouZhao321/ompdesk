@@ -83,6 +83,10 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
       // 按钮块的高度由常量给出：跳转条被收起时量不到按钮，不靠缓存，窗口展开后
       // 也不会少算这一块。
       const block = RAIL_STEP_HEIGHT_PX * 2 + RAIL_GAP_PX * 2;
+      if (laneHeight <= block) {
+        setDotPitch(null);
+        return;
+      }
       const next = railDotPitch(laneHeight - block, dots.length);
       setDotPitch((current) => (current === next ? current : next));
     };

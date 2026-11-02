@@ -244,6 +244,8 @@ test("compresses the dot column instead of scrolling it", () => {
   // 全部圆点都要露出来：列高由节距乘数量得出，节距按可用高度均分；列内滚动与
   // 滚动位置居中都不再存在。
   assert.match(source, /const block = RAIL_STEP_HEIGHT_PX \* 2 \+ RAIL_GAP_PX \* 2;/);
+  // 车道连按钮块都放不下时整条收起，不把圆点压到按钮与正文上。
+  assert.match(source, /if \(laneHeight <= block\) \{\s*setDotPitch\(null\);\s*return;\s*\}/);
   assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
   assert.match(source, /style=\{\{\s*height: pitch \* dots\.length,\s*"--rail-dot-mark": `\$\{dotMarkPx\}px`,\s*\} as CSSProperties\}/);
   // 节距低于可用下限时整条收起；车道仍在布局里，窗口缩放后能重新判断。
