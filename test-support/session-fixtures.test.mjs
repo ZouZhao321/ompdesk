@@ -9,7 +9,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
 
@@ -384,20 +385,32 @@ test("活动 agent 目录经符号链接指向目标目录时同样拒绝铺样�
 
 test("活动 agent 目录位于真实用户配置根之下时拒绝铺样本", async (t) => {
   const sandbox = createSandbox(t);
-  // 用真实配置根下一个确定不存在的子目录作为活动目录：守卫只比较路径，且目标不存在，
-  // 重建会话索引不会碰到任何真实数据。
-  const absent = join(getBaseConfigRoot(), `absent-agent-${randomUUID()}`);
-  assert.equal(existsSync(absent), false, "用例依赖的路径不得事先存在");
-  const before = switchAgentDir(absent);
+  // 配置根是「家目录 + PI_CONFIG_DIR」，而 PI_CONFIG_DIR 只能是相对家目录的目录名：
+  // 用指回沙箱的相对路径把配置根搬进临时目录，切换活动目录即使落盘也碰不到真实配置根。
+  const savedConfigDir = process.env.PI_CONFIG_DIR;
+  process.env.PI_CONFIG_DIR = relative(homedir(), join(sandbox.root, "config-root"));
+  const configRoot = getBaseConfigRoot();
+  // 配置根下确定不存在的子目录：守卫只比较路径，切过去不写任何文件。
+  const absent = join(configRoot, `absent-agent-${randomUUID()}`);
+  let before;
   try {
+    assert.equal(relative(sandbox.root, configRoot), "config-root", "配置根应落在沙箱里");
+    assert.equal(existsSync(absent), false, "用例依赖的路径不得事先存在");
+    before = switchAgentDir(absent);
     assert.equal(getAgentDir(), absent, "活动目录应切到不存在的子目录");
     await assert.rejects(
       () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-      /真实用户配置根/,
+      /活动 agent 目录位于真实用户配置根/,
     );
     assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
   } finally {
-    restoreAgentDir(before);
+    try {
+      if (before) restoreAgentDir(before);
+    } finally {
+      if (savedConfigDir === undefined) delete process.env.PI_CONFIG_DIR;
+      else process.env.PI_CONFIG_DIR = savedConfigDir;
+    }
+    assert.equal(existsSync(absent), false, "切到不存在的目录不得落盘");
   }
 });
 
