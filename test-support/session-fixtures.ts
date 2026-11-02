@@ -18,13 +18,13 @@
  * 指向 agentDir。
  */
 import { randomUUID } from "crypto";
-import { realpathSync } from "fs";
 import type { Dirent } from "fs";
 import { mkdir, readdir, rename, rm, stat } from "fs/promises";
-import { basename, dirname, join, resolve } from "path";
+import { basename, join, resolve } from "path";
 import { setTimeout as delay } from "timers/promises";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDir, getBaseConfigRoot, relativePathWithinNormalizedRoot } from "@oh-my-pi/pi-utils/dirs";
+import { comparableDirectory } from "./path-compare";
 
 export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent" | "tools" | "long";
 
@@ -324,36 +324,6 @@ function assertActiveAgentDirSeparate(agentDir: string): void {
   }
 }
 
-/** 目录比较键：真实路径优先，缺失的尾段拼回最近的已存在祖先之上，大小写不敏感平台统一折叠。 */
-function comparableDirectory(directory: string): string {
-  const real = realPathOfNearestAncestor(resolve(directory));
-  return process.platform === "win32" || process.platform === "darwin" ? real.toLowerCase() : real;
-}
-
-/**
- * `realpath` 只接受已存在的路径。路径还不存在时从最近的已存在祖先开始解析，再把
- * 缺失的尾段拼回去：整条路径解析失败就退回字面路径的话，祖先里的符号链接会漏掉
- * （macOS 的 `/var` → `/private/var`、`~/.omp` 被换成符号链接），两侧一半真实
- * 路径一半字面路径，包含关系就会漏判。只有 ENOENT/ENOTDIR 视为缺失，其他错误照常抛出。
- */
-function realPathOfNearestAncestor(absolute: string): string {
-  const missing: string[] = [];
-  let current = absolute;
-  for (;;) {
-    try {
-      return join(realpathSync(current), ...missing);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
-      const parent = dirname(current);
-      // 到根目录仍解析不到真实路径：没有可用的祖先，按字面路径比较。
-      if (parent === current) return absolute;
-      missing.unshift(basename(current));
-      current = parent;
-    }
-  }
-}
-
 function parseTimestamp(timestamp: string): number {
   const parsed = Date.parse(timestamp);
   if (Number.isNaN(parsed)) {
@@ -419,6 +389,11 @@ async function assertFixtureSessionsDir(sessionsDir: string): Promise<void> {
   }
 }
 
+/**
+ * 只读列出子目录；符号链接条目同样计入：链接指向真实会话目录时，按 `isDirectory()`
+ * 过滤会把 `.staging-*`、`.backup-*` 与 `fixture-*` 链接一并漏掉，守卫与清扫都失效。
+ * 删除这类条目删的是链接本身（`rm` 递归删除不跟进链接），链接目标保持原样。
+ */
 async function listSubdirectories(root: string): Promise<Dirent[]> {
   let entries: Dirent[];
   try {
@@ -427,7 +402,7 @@ async function listSubdirectories(root: string): Promise<Dirent[]> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  return entries.filter((entry) => entry.isDirectory());
+  return entries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink());
 }
 
 /**

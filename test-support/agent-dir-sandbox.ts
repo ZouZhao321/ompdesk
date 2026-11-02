@@ -11,7 +11,7 @@
  */
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { resetSessionIndexForTests } from "@oh-my-pi/pi-coding-agent/session/session-index";
 import {
   getAgentDir,
@@ -19,6 +19,7 @@ import {
   setAgentDir,
   __resetDirsFromEnvForTests,
 } from "@oh-my-pi/pi-utils/dirs";
+import { comparableDirectory } from "./path-compare";
 
 /** 活动 agent 目录在沙箱里的固定位置。 */
 const RUNTIME_AGENT_DIR = "runtime/agent";
@@ -112,14 +113,10 @@ function activeAgentDirWithinSandbox(root: string): boolean {
     warnCleanupFailure(`读取活动 agent 目录（${root}）`, error);
     return true;
   }
-  // 沙箱路径刚由 mkdtemp 创建，不需要解析符号链接；大小写不敏感平台统一折叠。
-  const caseInsensitive = process.platform === "win32" || process.platform === "darwin";
-  const sandboxRoot = resolve(root);
-  const active = resolve(activeAgentDir);
-  return relativePathWithinNormalizedRoot(
-    caseInsensitive ? sandboxRoot.toLowerCase() : sandboxRoot,
-    caseInsensitive ? active.toLowerCase() : active,
-  ) !== null;
+  // 与样本守卫共用同一套归一：沙箱根里的符号链接（macOS 的 /var → /private/var）
+  // 与大小写不敏感平台都要折叠。否则经链接写成的活动目录会被判成在沙箱之外，
+  // 删掉沙箱后活动目录就指向了已删除的路径。
+  return relativePathWithinNormalizedRoot(comparableDirectory(root), comparableDirectory(activeAgentDir)) !== null;
 }
 
 function warnCleanupFailure(action: string, error: unknown): void {
