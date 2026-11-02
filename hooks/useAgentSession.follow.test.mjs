@@ -1,27 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 import { FOLLOW_BOTTOM_THRESHOLD_PX, FOLLOW_OBSERVATION_HOLD_MS, reduceFollow } from "../lib/transcript-follow.ts";
-
-const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
-const ast = ts.createSourceFile("useAgentSession.ts", source, ts.ScriptTarget.Latest, true);
-
-// 取出 hook 里某个 useCallback 回调的实现文本，让测试跑生产代码而不是复述一遍逻辑。
-function callbackSource(name) {
-  let found = null;
-  const visit = (node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name
-      && node.initializer && ts.isCallExpression(node.initializer)
-      && node.initializer.expression.getText(ast) === "useCallback") {
-      found = node.initializer.arguments[0].getText(ast);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
-  assert.ok(found, `Missing callback: ${name}`);
-  return found;
-}
+import { source, callbackSource } from "./useAgentSession.test-support.mjs";
 
 const CALLBACKS = [
   "applyFollow",
@@ -63,6 +44,8 @@ function harness({ intentUntil = 0, scrollHeight = 4000, clientHeight = 800, now
     { current: 0 },
     { current: container },
     (following) => {
+      // 与生产 setAutoFollowPaused 一致：同一个值不产生状态变化。
+      if (paused === !following) return;
       paused = !following;
       followStates.push(following);
     },
@@ -94,7 +77,9 @@ test("clears the user scroll intent window before a submitted prompt pulls to th
   h.applyFollow({ type: "submit" });
 
   assert.deepEqual(h.scrolls, [{ behavior: "auto", intentUntilAtScroll: 0 }]);
-  assert.deepEqual(h.followStates, [true]);
+  // 「提交」本来就处于跟随中：生产 setter 会去重，这里同样不产生状态变化。
+  assert.deepEqual(h.followStates, []);
+  assert.equal(h.isPaused(), false);
   assert.equal(h.intentUntilRef.current, 0);
 });
 

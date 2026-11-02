@@ -2,35 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
+import { callback } from "./useAgentSession.test-support.mjs";
 
-const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
 const clientSource = await readFile(new URL("../lib/agent-client.ts", import.meta.url), "utf8");
 const memorySource = await readFile(new URL("../lib/workspace-memory.ts", import.meta.url), "utf8");
-const ast = ts.createSourceFile("useAgentSession.ts", source, ts.ScriptTarget.Latest, true);
-const callbacks = new Map();
-function collect(node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
-    && node.initializer && ts.isCallExpression(node.initializer)
-    && node.initializer.expression.getText(ast) === "useCallback") {
-    callbacks.set(node.name.text, node.initializer.arguments[0].getText(ast));
-  }
-  if (ts.isBinaryExpression(node) && node.left.getText(ast) === "runtimeIdRef.onIdentity") {
-    callbacks.set("onIdentity", node.right.getText(ast));
-  }
-  ts.forEachChild(node, collect);
-}
-collect(ast);
-
-// Run production callback bodies and modules, removing TypeScript syntax only.
-// All identity/retry/storage decisions remain in production code. Each harness
-// gets its own fetch and sessionStorage, without patching shared browser globals.
-function callback(name, bindings) {
-  assert.ok(callbacks.has(name), `Missing callback: ${name}`);
-  const { outputText } = ts.transpileModule(`const callback = ${callbacks.get(name)};`, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022 },
-  });
-  return new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(...Object.values(bindings));
-}
 
 function productionModule(source, bindings, dependencies = {}) {
   const { outputText } = ts.transpileModule(source, {

@@ -1,30 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-import ts from "typescript";
-
-const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
-const ast = ts.createSourceFile("useAgentSession.ts", source, ts.ScriptTarget.Latest, true);
-const callbacks = new Map();
-function collect(node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
-    && node.initializer && ts.isCallExpression(node.initializer)
-    && node.initializer.expression.getText(ast) === "useCallback") {
-    callbacks.set(node.name.text, node.initializer.arguments[0].getText(ast));
-  }
-  ts.forEachChild(node, collect);
-}
-collect(ast);
-
-// Execute the production callbacks, stripping only TypeScript syntax. Network,
-// React setters and browser storage are doubles; no copy of the guard logic.
-function callback(name, bindings) {
-  assert.ok(callbacks.has(name), `Missing callback: ${name}`);
-  const { outputText } = ts.transpileModule(`const callback = ${callbacks.get(name)};`, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022 },
-  });
-  return new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(...Object.values(bindings));
-}
+import { callback } from "./useAgentSession.test-support.mjs";
 
 const response = (data) => ({ ok: true, json: async () => data });
 const live = (runtimeId = "runtime:r2") => ({ sessionId: "b", runtimeId, isStreaming: true });
