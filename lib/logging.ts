@@ -100,8 +100,7 @@ export interface ConfigureLoggingOptions {
  * Mirror records to stdout when `OMPDESK_LOG_STDOUT` asks for it, otherwise in
  * development only. The mirror is an ompdesk log sink rather than the SDK
  * console transport, so `OMP_LOG_LEVEL` filters it exactly like the file.
- * Production and the desktop shell keep it quiet so the shell's own log
- * capture does not receive a second copy.
+ * Production keeps it quiet so the file transport is the only sink by default.
  */
 export function shouldMirrorStdout(env: NodeJS.ProcessEnv = process.env): boolean {
   const requested = env.OMPDESK_LOG_STDOUT?.trim().toLowerCase();

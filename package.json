@@ -35,20 +35,14 @@
   ],
   "scripts": {
     "dev": "bun --bun next dev --webpack -H 127.0.0.1 -p 30141",
-    "dev:lan": "bun --bun next dev --webpack -H 0.0.0.0 -p 30141",
     "build": "bun --bun next build --webpack",
     "start": "bun --bun next start -H 127.0.0.1 -p 30141",
-    "start:lan": "bun --bun next start -H 0.0.0.0 -p 30141",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public",
-    "desktop:build": "bun scripts/stage-desktop.mjs && bun scripts/build-desktop.mjs",
-    "desktop:dev": "tauri dev",
-    "desktop:fetch-bun": "bun scripts/fetch-bun.mjs",
-    "desktop:signer": "tauri signer",
-    "desktop:sync-version": "bun scripts/sync-version.mjs",
-    "tauri": "tauri"
+    "smoke:dev": "bun scripts/smoke-dev.mjs",
+    "scratch": "bun scripts/scratch.mjs",
+    "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
   "dependencies": {
     "@oh-my-pi/pi-agent-core": "~18.10.4",
@@ -68,7 +62,6 @@
   "devDependencies": {
     "@lobehub/icons": "^5.23.1",
     "@tailwindcss/postcss": "^4.3.3",
-    "@tauri-apps/cli": "^2.12.3",
     "@types/bun": "^1.4.3",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.9",

@@ -69,6 +69,9 @@ export function shouldDismissOnBlur(
 /**
  * 侧边栏「项目」标题右侧的排序控件：只消费当前排序方式与开关状态，
  * 本地存储与列表排序都由调用方处理。
+ *
+ * 菜单右对齐到调用方行容器的右缘：调用方必须在包住触发按钮的那一行上建立
+ * 定位上下文（`position: relative`），组件本身不建立定位上下文。
  */
 export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, onSelectMode }: Props) {
   const { t } = useI18n();
@@ -127,7 +130,8 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
       ref={menuRef}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      style={{ position: "relative", display: "flex", flexShrink: 0, marginRight: 6 }}
+      // 不建立定位上下文：菜单的包含块是调用方的整行，right:0 对齐行右缘。
+      style={{ display: "flex", flexShrink: 0 }}
     >
       <button
         ref={triggerRef}
