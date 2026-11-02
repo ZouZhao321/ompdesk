@@ -41,16 +41,17 @@ export async function listWindowsDrives(): Promise<BrowsableDirectory[]> {
 /**
  * 按输入形态判断是不是 Windows 路径。
  *
- * 盘符与反斜杠开头的 UNC 在任何宿主上都只能是 Windows 路径；正斜杠开头的
- * `//server/share` 只有 Windows 宿主才当 UNC：POSIX 上 `//tmp/x` 与 `/tmp/x`
- * 等价，判成 Windows 会让 `path.win32` 把它归一成 `\\tmp\x`，随后 stat 失败。
+ * 盘符形态（`C:\x`、`C:/x` 与盘符相对的 `C:x`）与反斜杠开头的输入（UNC、
+ * `\Users`）在任何宿主上都只能是 Windows 路径；正斜杠开头的 `//server/share`
+ * 只有 Windows 宿主才当 UNC：POSIX 上 `//tmp/x` 与 `/tmp/x` 等价，判成 Windows
+ * 会让 `path.win32` 把它归一成 `\\tmp\x`，随后 stat 失败。
  */
 export function isWindowsPathInput(
   directory: string,
   platform: NodeJS.Platform = process.platform,
 ): boolean {
-  if (/^[a-zA-Z]:[\\/]/.test(directory)) return true;
-  if (directory.startsWith("\\\\")) return true;
+  if (/^[a-zA-Z]:/.test(directory)) return true;
+  if (directory.startsWith("\\")) return true;
   return platform === "win32" && directory.startsWith("//");
 }
 
