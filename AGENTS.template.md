@@ -87,6 +87,7 @@ Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 
 
 - 测试样本只从 `test-support/session-fixtures.ts` 生成，不手写会话文件。
 - 手工验证必须把 `PI_CODING_AGENT_DIR` 指向任务临时目录，生产历史不参与。
+- 手工验证时先铺样本再启动 `bun run dev`；发消息或切模型前，把 `agent.db` 与 `models.yml` 复制进该目录，或在该目录内重新登录。
 
 ## 界面改动
 
