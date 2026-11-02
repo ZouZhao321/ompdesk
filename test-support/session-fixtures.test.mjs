@@ -57,8 +57,13 @@ function createSandbox(t) {
     restoreAgentDir(previous);
     // history.db 的 sqlite 句柄在进程内保持打开，Windows 上删不掉文件本身。
     resetSessionIndexForTests();
-    // Windows 上关闭句柄到目录可删除之间有延迟，rm 会短暂报 EBUSY。
-    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    // Windows 上关闭句柄到目录可删除之间有延迟，rm 会短暂报 EBUSY；清理失败
+    // 不应翻转用例结果，临时目录交给系统回收。
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch (error) {
+      console.warn(`ompdesk session-fixtures 测试清理失败：${root}`, error);
+    }
   });
 
   return {
