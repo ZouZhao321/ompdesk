@@ -4,14 +4,17 @@
  *
  * 每个场景落在 <agentDir>/sessions/fixture-<scenario>。生成过程先写到同一层的
  * .staging-<随机> 目录，成功后整体替换场景目录：重复铺设不会累积文件，中途失败
- * 也不会留下半个场景。
+ * 也不会留下半个场景；替换阶段被杀的进程留下的 .staging-* 与 .backup-* 在下次
+ * 铺设前清掉。
  *
  * branch 与 subagent 场景的父会话先由 SessionManager.create 写出，经 staging 原子
  * 替换进场景目录后再用 SessionManager.open + createBranchedSession 补写子会话：
  * 子会话头部记录的是父文件的最终路径，父文件本身不被改写。
  *
- * 设置标题会写活动 agent 目录的 history.db，因此活动 agent 目录要放在 agentDir
- * 之外（例如任务临时目录的另一处），不要把 PI_CODING_AGENT_DIR 指向 agentDir。
+ * 设置标题会写活动 agent 目录的 history.db，因此活动 agent 目录必须与 agentDir
+ * 不同：相同就直接拒绝，避免样本入口把索引写进真实目录。调用方要先把活动目录切到
+ * 目标之外（例如任务临时目录里的 runtime 目录），不要把 PI_CODING_AGENT_DIR
+ * 指向 agentDir。
  */
 import { randomUUID } from "crypto";
 import type { Dirent } from "fs";
@@ -19,6 +22,7 @@ import { mkdir, readdir, rename, rm, stat } from "fs/promises";
 import { basename, join, resolve } from "path";
 import { setTimeout as delay } from "timers/promises";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
+import { getAgentDir } from "@oh-my-pi/pi-utils/dirs";
 
 export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent" | "tools" | "long";
 
@@ -145,6 +149,7 @@ export async function seedSessions(
   options: SeedOptions,
 ): Promise<SeededSession[]> {
   const agentDir = requireAgentDir(options?.agentDir);
+  assertActiveAgentDirSeparate(agentDir);
   if (!Object.hasOwn(SCENARIO_TITLES, scenario)) {
     throw new Error(`session-fixtures: 未知场景 ${String(scenario)}`);
   }
@@ -155,6 +160,8 @@ export async function seedSessions(
 
   await assertFixtureAgentDir(agentDir);
   const sessionsDir = join(agentDir, SESSIONS_DIR);
+  await sweepStaleDirectories(sessionsDir);
+  await assertFixtureSessionsDir(sessionsDir);
   const stagingDir = join(sessionsDir, `${STAGING_PREFIX}${randomUUID()}`);
   await mkdir(stagingDir, { recursive: true });
 
@@ -175,16 +182,9 @@ export async function seedSessions(
 
 export async function resetSessionFixtures(agentDir: string): Promise<void> {
   const sessionsDir = join(requireAgentDir(agentDir), SESSIONS_DIR);
-  let entries: Dirent[];
-  try {
-    entries = await readdir(sessionsDir, { withFileTypes: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw error;
-  }
-
-  for (const entry of entries) {
-    if (entry.isDirectory() && entry.name.startsWith(FIXTURE_PREFIX)) {
+  for (const entry of await listSessionDirectories(sessionsDir)) {
+    const stale = entry.name.startsWith(STAGING_PREFIX) || entry.name.startsWith(BACKUP_PREFIX);
+    if (entry.name.startsWith(FIXTURE_PREFIX) || stale) {
       await rm(join(sessionsDir, entry.name), { recursive: true, force: true });
     }
   }
@@ -195,6 +195,25 @@ function requireAgentDir(agentDir: string | undefined): string {
     throw new Error("session-fixtures: 必须提供非空的 agentDir");
   }
   return resolve(agentDir);
+}
+
+/**
+ * 设置标题会写活动 agent 目录的 history.db。活动目录与目标 agentDir 相同时，
+ * 样本会在真实目录留下索引，所以在写任何文件之前就拒绝。
+ */
+function assertActiveAgentDirSeparate(agentDir: string): void {
+  // Windows 路径大小写不敏感，比较前统一折叠。
+  const comparable = (directory: string) => {
+    const absolute = resolve(directory);
+    return process.platform === "win32" ? absolute.toLowerCase() : absolute;
+  };
+  if (comparable(getAgentDir()) !== comparable(agentDir)) return;
+  throw new Error(
+    `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：`
+      + "setSessionName 会把标题写进该目录的 history.db。"
+      + "铺样本前先把活动目录切到目标之外，例如 setAgentDir(runtimeDir) 后再调用 "
+      + "seedSessions(scenario, { agentDir })",
+  );
 }
 
 function parseTimestamp(timestamp: string): number {
@@ -226,6 +245,45 @@ async function assertFixtureAgentDir(agentDir: string): Promise<void> {
     throw new Error(
       `session-fixtures: agentDir 只能包含 ${SESSIONS_DIR}，实际还有 ${unexpected.join("、")}`,
     );
+  }
+}
+
+/**
+ * sessions 下的子目录名只允许 fixture-*：真实的 agent 目录在这里按工作目录分桶，
+ * 放行会把样本混进用户会话。
+ */
+async function assertFixtureSessionsDir(sessionsDir: string): Promise<void> {
+  const unexpected = (await listSessionDirectories(sessionsDir))
+    .filter((entry) => !entry.name.startsWith(FIXTURE_PREFIX))
+    .map((entry) => entry.name);
+  if (unexpected.length > 0) {
+    throw new Error(
+      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 只允许 ${FIXTURE_PREFIX}* 目录，`
+        + `实际还有 ${unexpected.join("、")}`,
+    );
+  }
+}
+
+async function listSessionDirectories(sessionsDir: string): Promise<Dirent[]> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(sessionsDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  return entries.filter((entry) => entry.isDirectory());
+}
+
+/**
+ * 进程在替换阶段被杀会留下 .staging-* 或 .backup-* 目录，里面的 .jsonl 会被
+ * 会话列表当成额外会话，铺样本前先扫掉。
+ */
+async function sweepStaleDirectories(sessionsDir: string): Promise<void> {
+  for (const entry of await listSessionDirectories(sessionsDir)) {
+    if (entry.name.startsWith(STAGING_PREFIX) || entry.name.startsWith(BACKUP_PREFIX)) {
+      await rm(join(sessionsDir, entry.name), { recursive: true, force: true });
+    }
   }
 }
 

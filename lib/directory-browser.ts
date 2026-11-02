@@ -38,6 +38,19 @@ export async function listWindowsDrives(): Promise<BrowsableDirectory[]> {
   return candidates.filter((drive): drive is BrowsableDirectory => drive !== null);
 }
 
+/**
+ * 按输入形态选路径 API：盘符与 UNC 输入走 win32，其余按 POSIX 处理。
+ *
+ * 不能用宿主平台的 `path` 代替：在 Windows 上它把 `/Users/alex/project` 当成
+ * win32 路径解析成 `\\Users\\alex`，POSIX 输入的 `/` 语义会丢。
+ */
+function selectPathApi(directory: string): typeof path.posix {
+  const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(directory)
+    || directory.startsWith("\\\\")
+    || directory.startsWith("//");
+  return isWindowsPath ? path.win32 : path.posix;
+}
+
 export function normalizeDirectory(directory: string): string {
   if (directory === "~") return homedir();
   if (/^~[\\/]/.test(directory)) {
@@ -45,22 +58,14 @@ export function normalizeDirectory(directory: string): string {
     return path.resolve(homedir(), suffix);
   }
 
-  const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(directory)
-    || directory.startsWith("\\\\")
-    || directory.startsWith("//");
-  const pathApi = isWindowsPath ? path.win32 : path;
+  const pathApi = selectPathApi(directory);
   const launchCwd = process.env.OMPDESK_LAUNCH_CWD;
   const baseDirectory = launchCwd ? pathApi.resolve(launchCwd) : process.cwd();
   return pathApi.resolve(baseDirectory, directory);
 }
 
 export function getParentDirectory(directory: string): string | null {
-  // 按输入形态选 API：宿主平台的 `path` 会把 POSIX 输入当成 win32 路径处理，
-  // 在 Windows 上把 `/Users/alex/project` 解析成 `\\Users\\alex`。
-  const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(directory)
-    || directory.startsWith("\\\\")
-    || directory.startsWith("//");
-  const pathApi = isWindowsPath ? path.win32 : path.posix;
+  const pathApi = selectPathApi(directory);
   const normalized = pathApi.normalize(directory);
   const parent = pathApi.dirname(normalized);
   return parent === normalized ? null : parent;
