@@ -230,7 +230,7 @@ function requireAgentDir(agentDir: string | undefined): string {
  * 位于真实用户配置根（`~/.omp`，含 profiles 与 PI_CONFIG_DIR 覆盖）之下的。
  *
  * 符号链接与大小写不敏感平台（Windows 与 macOS 默认）都会让字面路径不同却指向
- * 同一目录：比较前先解析真实路径，目录还不存在时回退到 resolve，再折叠大小写。
+ * 同一目录：比较前先解析真实路径，目录还不存在时解析最近的已存在祖先，再折叠大小写。
  */
 function assertActiveAgentDirSeparate(agentDir: string): void {
   const activeAgentDir = getAgentDir();
@@ -265,17 +265,34 @@ function assertActiveAgentDirSeparate(agentDir: string): void {
   }
 }
 
-/** 目录比较键：真实路径优先，路径不存在时用绝对路径，大小写不敏感平台统一折叠。 */
+/** 目录比较键：真实路径优先，缺失的尾段拼回最近的已存在祖先之上，大小写不敏感平台统一折叠。 */
 function comparableDirectory(directory: string): string {
-  let absolute: string;
-  try {
-    absolute = realpathSync(directory);
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
-    absolute = resolve(directory);
+  const real = realPathOfNearestAncestor(resolve(directory));
+  return process.platform === "win32" || process.platform === "darwin" ? real.toLowerCase() : real;
+}
+
+/**
+ * `realpath` 只接受已存在的路径。路径还不存在时从最近的已存在祖先开始解析，再把
+ * 缺失的尾段拼回去：整条路径解析失败就退回字面路径的话，祖先里的符号链接会漏掉
+ * （macOS 的 `/var` → `/private/var`、`~/.omp` 被换成符号链接），两侧一半真实
+ * 路径一半字面路径，包含关系就会漏判。只有 ENOENT/ENOTDIR 视为缺失，其他错误照常抛出。
+ */
+function realPathOfNearestAncestor(absolute: string): string {
+  const missing: string[] = [];
+  let current = absolute;
+  for (;;) {
+    try {
+      return join(realpathSync(current), ...missing);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+      const parent = dirname(current);
+      // 到根目录仍解析不到真实路径：没有可用的祖先，按字面路径比较。
+      if (parent === current) return absolute;
+      missing.unshift(basename(current));
+      current = parent;
+    }
   }
-  return process.platform === "win32" || process.platform === "darwin" ? absolute.toLowerCase() : absolute;
 }
 
 function parseTimestamp(timestamp: string): number {
