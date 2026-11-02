@@ -51,23 +51,24 @@ test("follows layout changes while the tip is showing", () => {
   assert.match(source, /\}, \[tipVisible, dots, positionTip, hideTip\]\);/);
 });
 
-test("keeps the tip anchored while the transcript scrolls", () => {
-  // 转写区的滚动搬不动圆点，跟随开着时每个流式块都会滚一次：只重新对准，不收提示。
+test("repositions the tip without listening to transcript scrolls", () => {
+  // 转写区滚动搬不动圆点：提示位置只在竖条与圆点列尺寸变化、圆点数组变化时重算。
+  // 不挂 window 滚动监听，流式跟随期间不会每个数据块都在滚动帧里多读一次布局。
+  assert.doesNotMatch(source, /window\.addEventListener\("scroll"/);
+  assert.match(
+    source,
+    /const observer = new ResizeObserver\(\(\) => \{\s*if \(anchorIsVisible\(\)\) positionTip\(\);\s*\}\);/,
+  );
+  // 锚点只在圆点被卸载或跳转条被收起时失效。
   assert.match(source, /if \(!anchor \|\| !isTipAnchorVisible\(anchor\.element, dotsRef\.current\)\) \{/);
-  // 锚点只在圆点被卸载、被圆点列裁到列外或跳转条被 CSS 收起时失效。
   assert.match(source, /if \(!element\.isConnected\) return false;/);
   assert.match(source, /if \(rect\.width === 0 \|\| rect\.height === 0\) return false;/);
   assert.match(source, /return rect\.bottom > columnRect\.top && rect\.top < columnRect\.bottom;/);
-  // 重新对准合并到一帧里，并直接写 DOM：滚动不改状态，竖条不跟着重渲染。
-  assert.match(source, /if \(frame !== 0\) return;\s*frame = requestAnimationFrame\(\(\) => \{\s*frame = 0;\s*positionTip\(\);/);
+  // 位置直接写 DOM，不进状态。
   assert.match(source, /element\.style\.top = `/);
   assert.doesNotMatch(source, /setTip\(/);
-  // 卸载时取消还没跑的那一帧。
-  assert.match(source, /if \(frame !== 0\) cancelAnimationFrame\(frame\)/);
   // 收起只发生在失去锚点的分支里。
   assert.match(source, /\) \{\s*hideTip\(\);\s*return false;\s*\}/);
-  assert.match(source, /window\.addEventListener\("scroll", onScroll, true\)/);
-  assert.match(source, /window\.removeEventListener\("scroll", onScroll, true\)/);
 });
 
 /** 跳转条几何：车道、缝隙与最小留白只写在 CSS 与这里，版心常量从 lib 读。 */
@@ -151,6 +152,7 @@ test("lays every dot out with the measured pitch", async () => {
   // 每条提问仍然保留一个可见圆点。
   assert.equal(RAIL_ROW_PX, 14);
   assert.match(source, /style=\{\{ height: pitch \}\}/);
+  assert.match(source, /const block = RAIL_STEP_HEIGHT_PX \* 2 \+ RAIL_GAP_PX \* 2;/);
   assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
   assert.doesNotMatch(styles, /\.transcript-rail-dot::before/);
   assert.match(declarations(".transcript-rail-dot {"), /width: var\(--transcript-rail-lane\);/);
@@ -241,10 +243,13 @@ test("puts the rail ahead of the transcript in the tab order", () => {
 test("compresses the dot column instead of scrolling it", () => {
   // 全部圆点都要露出来：列高由节距乘数量得出，节距按可用高度均分；列内滚动与
   // 滚动位置居中都不再存在。
+  assert.match(source, /const block = RAIL_STEP_HEIGHT_PX \* 2 \+ RAIL_GAP_PX \* 2;/);
   assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
   assert.match(source, /style=\{\{\s*height: pitch \* dots\.length,\s*"--rail-dot-mark": `\$\{dotMarkPx\}px`,\s*\} as CSSProperties\}/);
   // 节距低于可用下限时整条收起；车道仍在布局里，窗口缩放后能重新判断。
-  assert.match(source, /style=\{railHidden \? \{ display: "none" \} : undefined\}/);
+  assert.match(source, /style=\{\{ gap: RAIL_GAP_PX, display: railHidden \? "none" : undefined \}\}/);
+  // 按钮块高度由常量给出，跳转条收起时不需要依赖上一次的测量。
+  assert.match(source, /style=\{\{ height: RAIL_STEP_HEIGHT_PX \}\}/);
   // 窗口缩放改变高度时重算，不必等圆点数量变化。
   assert.match(source, /const observer = new ResizeObserver\(apply\);\s*observer\.observe\(lane\);/);
   assert.doesNotMatch(source, /railScrollTop/);
