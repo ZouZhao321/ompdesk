@@ -42,6 +42,9 @@
     "test": "bun test",
     "smoke:dev": "bun scripts/smoke-dev.mjs",
     "scratch": "bun scripts/scratch.mjs",
+    "tracker:claim": "bun scripts/tracker-sync.mjs claim",
+    "tracker:link": "bun scripts/tracker-sync.mjs link",
+    "tracker:done": "bun scripts/tracker-sync.mjs done",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
   "dependencies": {
