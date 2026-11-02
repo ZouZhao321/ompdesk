@@ -85,6 +85,7 @@ comment-translation-generation.ts 勾选条目的批量译文生成：字典命�
 comment-translation-validation.ts 译文逐字片段校验：路径、标识符、数字与括号片段
 comment-translation-route.ts 生成接口的请求校验与处理器
 comment-translation-model.ts 生成接口的模型接线：可见模型选择与 completeSimple 调用
+git-env.ts           createGitEnv()：git 子进程环境，剥离钩子注入的仓库定位变量
 git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文件，非仓库返回 null
 request-security.ts  请求来源与主机校验
 source-wrap-preference.ts 源码视图换行开关的共享状态，查看器与预览共用
