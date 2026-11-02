@@ -63,11 +63,7 @@ export function switchAgentDir(dir: string): AgentDirSnapshot {
   } catch (error) {
     // 切换可能停在半路（目录已改、索引还是旧的）。不先回到快照，调用方删掉临时
     // 目录后活动目录就会指向已删除的目录；恢复失败只记录，原始错误照常抛出。
-    try {
-      restoreAgentDir(snapshot);
-    } catch (restoreError) {
-      warnCleanupFailure(`恢复活动 agent 目录（切换到 ${dir} 失败后）`, restoreError);
-    }
+    restoreSnapshotOrResetState(snapshot, `恢复活动 agent 目录（切换到 ${dir} 失败后）`);
     throw error;
   }
   return snapshot;
@@ -84,6 +80,24 @@ export function restoreAgentDir(snapshot: AgentDirSnapshot): void {
 function resetAgentDirState(): void {
   __resetDirsFromEnvForTests();
   resetSessionIndexForTests();
+}
+
+/**
+ * 恢复到快照；恢复本身失败时只记录，再补一次目录解析与会话索引的重建：两处复位
+ * 都幂等，恢复停在半路时它们可能仍指向沙箱，后续用例就会写进待删除的目录。
+ */
+function restoreSnapshotOrResetState(snapshot: AgentDirSnapshot, action: string): void {
+  try {
+    restoreAgentDir(snapshot);
+    return;
+  } catch (error) {
+    warnCleanupFailure(action, error);
+  }
+  try {
+    resetAgentDirState();
+  } catch (error) {
+    warnCleanupFailure(`${action}后重建目录解析与会话索引`, error);
+  }
 }
 
 /**
@@ -152,18 +166,7 @@ export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSa
       warnCleanupFailure(`beforeRestore（${root}）`, error);
     }
 
-    try {
-      restoreAgentDir(previous);
-    } catch (error) {
-      warnCleanupFailure(`恢复活动 agent 目录（${root}）`, error);
-      // 恢复停在半路时目录解析或索引都可能仍指向沙箱；两处复位都幂等，一起再做
-      // 一次，后续用例才从当前环境重建。
-      try {
-        resetAgentDirState();
-      } catch (resetError) {
-        warnCleanupFailure(`重置目录解析与会话索引（${root}）`, resetError);
-      }
-    }
+    restoreSnapshotOrResetState(previous, `恢复活动 agent 目录（${root}）`);
 
     // 活动目录仍指向沙箱：删掉 root 会让后续用例写进已删除的目录，保留目录交给
     // 系统回收。
