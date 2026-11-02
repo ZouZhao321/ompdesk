@@ -161,6 +161,13 @@ test("skips the rail measurement while the rail is hidden", () => {
   assert.match(source, /onVisibilityChange=\{handleRailVisibilityChange\}/);
 });
 
+test("gives every user turn a dot even when the prompt has no text", () => {
+  // 只有图片或附件的提问仍然是一轮：没有文本时退回占位文案，圆点数才不会少于
+  // 提问数；压缩摘要这类非提问锚点依旧不出圆点。
+  assert.match(source, /const text = getUserInputText\(anchor\);\s*if \(text !== null\) return text;/);
+  assert.match(source, /return anchor\.role === "user" \? t\("chat\.promptWithoutText"\) : null;/);
+});
+
 test("measures the rail once per frame instead of per streamed chunk", () => {
   // 流式期间每个数据块都会让列表报告一次已渲染条目。报告只登记，测量与滚动共用
   // 同一个 rAF 调度，因此每个块不会各触发一次强制布局。

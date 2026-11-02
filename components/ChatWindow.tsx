@@ -589,13 +589,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     ?? TRANSCRIPT_LIVE_TAIL_KEY;
 
   // 跳转条与列表共用同一份分组结果，只为锚点轮取提问原文，不重新扫描消息；
-  // 流式合成项不是一轮，圆点数只随正式轮次变化。
+  // 流式合成项不是一轮，圆点数只随正式轮次变化。用户提问只有图片或附件时没有
+  // 文本，仍然要占一个圆点：缺了它圆点数就少于提问数，高亮也会错位到相邻轮。
   const railDots = useMemo(
     () => buildTranscriptRailDots(groupedTranscriptItems, (item) => {
       const anchor = messages[item.anchorIndex];
-      return anchor ? getUserInputText(anchor) : null;
+      if (!anchor) return null;
+      const text = getUserInputText(anchor);
+      if (text !== null) return text;
+      return anchor.role === "user" ? t("chat.promptWithoutText") : null;
     }),
-    [groupedTranscriptItems, messages],
+    [groupedTranscriptItems, messages, t],
   );
 
   const transcriptListRef = useRef<HTMLDivElement | null>(null);
