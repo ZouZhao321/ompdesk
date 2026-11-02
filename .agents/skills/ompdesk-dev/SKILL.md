@@ -20,7 +20,7 @@ description: 在本仓库（ompdesk）里开发的入口——代码在哪、改
 | `hooks/` | 流式、SSE、视口、主题等客户端状态 | 对应 `components/` 使用方 |
 | `proxy.ts` | Next 的请求前校验：主机允许列表、密码锁 | `bin/web-auth-store.js` |
 | `instrumentation.ts` | 进程启动引导：日志、HTTP dispatcher | 只能走运行时导入，见下 |
-| `next.config.ts` | distDir 覆盖、SDK 外部化 | 桌面打包脚本 |
+| `next.config.ts` | distDir 覆盖、SDK 外部化 | `scripts/smoke-dev.mjs` |
 | `bin/` | 启动器与密码存储（CommonJS，npm 包里只有它和 `.next`） | `proxy.ts` |
 | `app/globals.css` | 两套主题与手机档媒体查询 | `lib/mobile-layout.ts` |
 
@@ -60,8 +60,7 @@ bun run typecheck
 bun run smoke:dev  # 起 dev server，请求 / 与 /api/home，扫描构建失败标记
 ```
 
-- 开发期间不要执行 `bun run build`：会污染 `.next/` 并打断正在运行的开发服务器。桌面打包用
-  `bun run desktop:build`，它写到 `src-tauri/server/.next`。
+- 开发期间不要执行 `bun run build`：会污染 `.next/` 并打断正在运行的开发服务器。
 - 启用了密码锁的机器（`~/.omp/agent/ompdesk-auth.json` 存在）跑冒烟要带
   `OMPDESK_SMOKE_AUTH=用户名:密码`，否则首页固定返回 401，看起来像构建失败。
 - `bun run lint` 有大量存量告警，不能当门禁；只看改动文件范围的 eslint 结果。

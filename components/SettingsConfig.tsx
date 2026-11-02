@@ -9,6 +9,14 @@ import { LogsPanel } from "./LogsPanel";
 import { SearchableSelect } from "./SearchableSelect";
 import { refreshOmpTheme, useTheme } from "@/hooks/useTheme";
 import { refreshDisplaySettings } from "@/hooks/useDisplaySettings";
+import { useI18n } from "@/hooks/useI18n";
+import {
+  filterSettingFieldsByQuery,
+  settingFieldDescriptionKey,
+  settingFieldLabelKey,
+  settingGroupKey,
+  settingTabKey,
+} from "@/lib/i18n/settings";
 import { sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
 import type {
   McpConfigResponse,
@@ -85,6 +93,7 @@ function conditionVisible(field: SettingsField, values: Map<string, SettingsValu
 }
 
 function TextSetting({ field, busy, onSave }: { field: SettingsField; busy: boolean; onSave: (value: SettingsValue) => void }) {
+  const { t } = useI18n();
   const [value, setValue] = useState(field.type === "secret" ? "" : String(field.value ?? ""));
   useEffect(() => {
     setValue(field.type === "secret" ? "" : String(field.value ?? ""));
@@ -96,7 +105,7 @@ function TextSetting({ field, busy, onSave }: { field: SettingsField; busy: bool
       type={field.type === "secret" ? "password" : "text"}
       value={value}
       disabled={busy}
-      placeholder={field.type === "secret" && field.configured ? "Configured — enter to replace" : undefined}
+      placeholder={field.type === "secret" && field.configured ? t("settings.secretPlaceholder") : undefined}
       onChange={(event) => setValue(event.target.value)}
       onBlur={() => { if (value !== persisted && (field.type !== "secret" || value.length > 0)) onSave(value); }}
       onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
@@ -157,21 +166,21 @@ function MultiSelectSetting({ field, busy, onSave }: { field: SettingsField; bus
   );
 }
 
-function SettingControl({ field, busy, onSave }: { field: SettingsField; busy: boolean; onSave: (value: SettingsValue) => void }) {
+function SettingControl({ field, label, busy, onSave }: { field: SettingsField; label: string; busy: boolean; onSave: (value: SettingsValue) => void }) {
   if (field.type === "boolean") return <button type="button" className={styles.switch} data-on={field.value === true} disabled={busy} aria-pressed={field.value === true} onClick={() => onSave(field.value !== true)} />;
   if (field.type === "select") {
-    return <SearchableSelect value={String(field.value ?? "")} disabled={busy} ariaLabel={field.label} options={(field.options ?? []).map((option) => ({ value: option.value, label: option.label, description: option.description }))} onChange={(value) => onSave(typeof field.value === "number" || typeof field.defaultValue === "number" ? Number(value) : value)} />;
+    return <SearchableSelect value={String(field.value ?? "")} disabled={busy} ariaLabel={label} options={(field.options ?? []).map((option) => ({ value: option.value, label: option.label, description: option.description }))} onChange={(value) => onSave(typeof field.value === "number" || typeof field.defaultValue === "number" ? Number(value) : value)} />;
   }
   if (field.type === "multiselect") return <MultiSelectSetting field={field} busy={busy} onSave={onSave} />;
   if (field.type === "providerLimits") return <ProviderLimitsSetting field={field} busy={busy} onSave={onSave} />;
   return <TextSetting field={field} busy={busy} onSave={onSave} />;
 }
 
-function SettingRow({ field, busy, error, onSave }: { field: SettingsField; busy: boolean; error?: string; onSave: (value: SettingsValue) => void }) {
+function SettingRow({ field, label, description, busy, error, onSave }: { field: SettingsField; label: string; description: string; busy: boolean; error?: string; onSave: (value: SettingsValue) => void }) {
   return (
     <div className={styles.settingRow}>
-      <div><div className={styles.settingLabel}>{field.label}</div><div className={styles.settingDescription}>{field.description}</div>{error && <div className={styles.error}>{error}</div>}</div>
-      <div className={styles.settingControl}><SettingControl field={field} busy={busy} onSave={onSave} /></div>
+      <div><div className={styles.settingLabel}>{label}</div><div className={styles.settingDescription}>{description}</div>{error && <div className={styles.error}>{error}</div>}</div>
+      <div className={styles.settingControl}><SettingControl field={field} label={label} busy={busy} onSave={onSave} /></div>
     </div>
   );
 }
@@ -203,6 +212,7 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
   const [needsReload, setNeedsReload] = useState(false);
   const [reloading, setReloading] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { t, tOr } = useI18n();
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -251,11 +261,16 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
   const visibleFields = useMemo(() => settings?.fields.filter((field) => conditionVisible(field, values)) ?? [], [settings?.fields, values]);
   const activeTab = section.startsWith("settings:") ? section.slice("settings:".length) : null;
   const filteredFields = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (normalized) return visibleFields.filter((field) => `${field.label} ${field.description} ${field.path} ${field.group ?? ""}`.toLowerCase().includes(normalized));
+    if (query.trim()) {
+      return filterSettingFieldsByQuery(visibleFields, query, (field) => ({
+        label: tOr(settingFieldLabelKey(field.path), field.label),
+        description: tOr(settingFieldDescriptionKey(field.path), field.description),
+        group: field.group ? tOr(settingGroupKey(field.tab, field.group), field.group) : t("settings.groupUnspecified"),
+      }));
+    }
     if (!activeTab) return [];
     return visibleFields.filter((field) => field.tab === activeTab && !(activeTab === "appearance" && field.group === "Theme"));
-  }, [activeTab, query, visibleFields]);
+  }, [activeTab, query, t, tOr, visibleFields]);
 
   const close = useCallback(() => { onModelsChanged?.(); onClose(); }, [onClose, onModelsChanged]);
   const reloadActiveSession = useCallback(async () => {
@@ -273,51 +288,71 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
     }
   }, [onReloaded, onRuntimeIdentity, runtimeId, sessionId]);
   const selectedTab = settings?.tabs.find((tab) => tab.id === activeTab);
-  const pageTitle = query.trim() ? `Search · ${filteredFields.length}` : selectedTab?.label ?? "Settings";
+  const pageTitle = query.trim()
+    ? t("settings.searchResults", { count: filteredFields.length })
+    : selectedTab ? tOr(settingTabKey(selectedTab.id), selectedTab.label) : t("common.settings");
 
-  const renderFields = (fields: SettingsField[], groups: string[]) => {
-    const orderedGroups = [...groups, ...fields.map((field) => field.group ?? "General").filter((group) => !groups.includes(group))];
+  const renderFields = (fields: SettingsField[], groups: string[], tab = "") => {
+    const unspecified = "General";
+    const orderedGroups = [...groups, ...fields.map((field) => field.group ?? unspecified).filter((group) => !groups.includes(group))];
     return [...new Set(orderedGroups)].map((group) => {
-      const groupFields = fields.filter((field) => (field.group ?? "General") === group);
+      const groupFields = fields.filter((field) => (field.group ?? unspecified) === group);
       if (!groupFields.length) return null;
-      return <section className={styles.group} key={group}><h3 className={styles.groupTitle}>{group}</h3>{groupFields.map((field) => <SettingRow key={field.path} field={field} busy={saving.has(field.path)} error={saveErrors[field.path]} onSave={(value) => void saveSetting(field, value)} />)}</section>;
+      const groupTab = tab || groupFields[0]?.tab || "";
+      const title = group === unspecified ? t("settings.groupUnspecified") : tOr(settingGroupKey(groupTab, group), group);
+      return (
+        <section className={styles.group} key={group}>
+          <h3 className={styles.groupTitle}>{title}</h3>
+          {groupFields.map((field) => (
+            <SettingRow
+              key={field.path}
+              field={field}
+              label={tOr(settingFieldLabelKey(field.path), field.label)}
+              description={tOr(settingFieldDescriptionKey(field.path), field.description)}
+              busy={saving.has(field.path)}
+              error={saveErrors[field.path] ? t("settings.saveFailed", { detail: saveErrors[field.path] }) : undefined}
+              onSave={(value) => void saveSetting(field, value)}
+            />
+          ))}
+        </section>
+      );
     });
   };
 
   const renderThemeSection = () => {
-    if (!settings) return <div className={styles.empty}>{loading ? "Loading themes…" : loadError ?? "Themes unavailable"}</div>;
+    if (!settings) return <div className={styles.empty}>{loading ? t("settings.themes.loading") : loadError ? t("settings.loadFailed", { detail: loadError }) : t("settings.themes.unavailable")}</div>;
     return (
       <div className={styles.scrollContent}>
-        <header className={styles.contentHeader}><h2 className={styles.contentTitle}>Themes</h2><p className={styles.contentDescription}>The web interface uses the same dark and light theme mappings as omp. Changes are persisted to <code>~/.omp/agent/config.yml</code> and applied here immediately.</p></header>
+        <header className={styles.contentHeader}><h2 className={styles.contentTitle}>{t("settings.themes.title")}</h2><p className={styles.contentDescription}>{t("settings.themes.descriptionPrefix")}<code>~/.omp/agent/config.yml</code>{t("settings.themes.descriptionSuffix")}</p></header>
         <div className={styles.settingsBody}>
           <div className={styles.themeGrid}>{(["dark", "light"] as const).map((mode) => {
             const field = settings.fields.find((item) => item.path === `theme.${mode}`)!;
             const palette = settings.theme.palettes[mode];
-            return <div className={styles.themeCard} key={mode}><ThemePreview palette={palette} /><div className={styles.themeCardBody}><div className={styles.themeCardHeader}><span className={styles.themeSlot}>{mode} mapping</span>{theme === mode && <span className={styles.themeActive}>Active on web</span>}</div><SearchableSelect value={String(field.value)} disabled={saving.has(field.path)} ariaLabel={`${mode} theme`} options={(field.options ?? []).map((option) => ({ value: option.value, label: option.label, description: option.description }))} onChange={(value) => void saveSetting(field, value)} />{theme !== mode && <button type="button" className={styles.closeButton} style={{ marginTop: 8 }} onClick={() => toggleTheme()}>Preview {mode}</button>}</div></div>;
+            return <div className={styles.themeCard} key={mode}><ThemePreview palette={palette} /><div className={styles.themeCardBody}><div className={styles.themeCardHeader}><span className={styles.themeSlot}>{t(mode === "dark" ? "settings.themes.darkMapping" : "settings.themes.lightMapping")}</span>{theme === mode && <span className={styles.themeActive}>{t("settings.themes.activeOnWeb")}</span>}</div><SearchableSelect value={String(field.value)} disabled={saving.has(field.path)} ariaLabel={t(mode === "dark" ? "settings.themes.darkPicker" : "settings.themes.lightPicker")} options={(field.options ?? []).map((option) => ({ value: option.value, label: option.label, description: option.description }))} onChange={(value) => void saveSetting(field, value)} />{theme !== mode && <button type="button" className={styles.closeButton} style={{ marginTop: 8 }} onClick={() => toggleTheme()}>{t(mode === "dark" ? "settings.themes.darkPreview" : "settings.themes.lightPreview")}</button>}</div></div>;
           })}</div>
-          {renderFields(settings.fields.filter((field) => field.tab === "appearance" && field.group === "Theme" && !field.path.startsWith("theme.")), ["Theme"])}
+          {renderFields(settings.fields.filter((field) => field.tab === "appearance" && field.group === "Theme" && !field.path.startsWith("theme.")), ["Theme"], "appearance")}
         </div>
       </div>
     );
   };
 
   const renderGenericSettings = () => {
-    if (loading) return <div className={styles.empty}>Loading omp settings…</div>;
-    if (loadError || !settings) return <div className={styles.empty}>{loadError ?? "Settings unavailable"}</div>;
+    if (loading) return <div className={styles.empty}>{t("settings.loading")}</div>;
+    if (loadError || !settings) {
+      return <div className={styles.empty}>{loadError ? t("settings.loadFailed", { detail: loadError }) : t("settings.unavailable")}</div>;
+    }
     return (
       <div className={styles.scrollContent}>
         <header className={styles.contentHeader}>
           <h2 className={styles.contentTitle}>{pageTitle}</h2>
           <p className={styles.contentDescription}>
-            {query.trim()
-              ? "Matching canonical /settings entries across every category."
-              : "Canonical omp /settings values. Changes are saved immediately to the shared agent configuration."}
+            {query.trim() ? t("settings.searchDescription") : t("settings.description")}
           </p>
           {needsReload && sessionId && (
             <div className={styles.reloadNotice}>
-              <span>Saved. Reload the active session to apply runtime settings.</span>
+              <span>{t("settings.savedReload")}</span>
               <button type="button" onClick={() => void reloadActiveSession()} disabled={reloading}>
-                {reloading ? "Reloading…" : "Reload session"}
+                {reloading ? t("settings.reloading") : t("settings.reloadSession")}
               </button>
             </div>
           )}
@@ -325,7 +360,7 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
         <div className={styles.settingsBody}>
           {filteredFields.length
             ? renderFields(filteredFields, selectedTab?.groups ?? [])
-            : <div className={styles.empty}>No settings match this search.</div>}
+            : <div className={styles.empty}>{t("settings.noMatches")}</div>}
         </div>
       </div>
     );
@@ -375,17 +410,23 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
 
   return (
     <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-      <div className={styles.window} role="dialog" aria-modal="true" aria-label="Settings">
+      <div className={styles.window} role="dialog" aria-modal="true" aria-label={t("common.settings")}>
         <aside className={styles.sidebar}>
-          <div className={styles.brand}><div className={styles.eyebrow}>omp /settings</div><h1 className={styles.title}>Settings</h1><code className={styles.context} title={cwd ?? "Global configuration"}>{cwd ?? "Global configuration"}</code></div>
-          <div className={styles.searchWrap}><svg className={styles.searchIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input className={styles.search} value={query} placeholder="Search /settings" onChange={(event) => setQuery(event.target.value)} /></div>
+          <div className={styles.brand}><div className={styles.eyebrow}>omp /settings</div><h1 className={styles.title}>{t("common.settings")}</h1><code className={styles.context} title={cwd ?? t("settings.globalConfiguration")}>{cwd ?? t("settings.globalConfiguration")}</code></div>
+          <div className={styles.searchWrap}><svg className={styles.searchIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input className={styles.search} value={query} placeholder={t("settings.searchPlaceholder")} onChange={(event) => setQuery(event.target.value)} /></div>
           <nav className={styles.nav}>
-            <div className={styles.navLabel}>Configuration</div>
-            {CORE_SECTIONS.map((item) => <button key={item.id} type="button" className={styles.navButton} data-active={!query && section === item.id} disabled={item.requiresCwd && !cwd} title={item.requiresCwd && !cwd ? `${item.label} requires a project` : item.label} onClick={() => { setQuery(""); setSection(item.id); }}><SettingsIcon kind={item.icon}/><span>{item.label}</span></button>)}
-            <div className={styles.navLabel}>OMP settings</div>
-            {settings?.tabs.map((tab) => <button key={tab.id} type="button" className={styles.navButton} data-active={!query && activeTab === tab.id} onClick={() => { setQuery(""); setSection(`settings:${tab.id}`); }}><SettingsIcon kind={tab.id}/><span>{tab.label}</span></button>)}
+            <div className={styles.navLabel}>{t("settings.nav.configuration")}</div>
+            {CORE_SECTIONS.map((item) => {
+              const label = tOr(`settings.nav.${item.id}`, item.label);
+              return <button key={item.id} type="button" className={styles.navButton} data-active={!query && section === item.id} disabled={item.requiresCwd && !cwd} title={item.requiresCwd && !cwd ? t("settings.requiresProject", { label }) : label} onClick={() => { setQuery(""); setSection(item.id); }}><SettingsIcon kind={item.icon}/><span>{label}</span></button>;
+            })}
+            <div className={styles.navLabel}>{t("settings.nav.ompSettings")}</div>
+            {settings?.tabs.map((tab) => {
+              const label = tOr(settingTabKey(tab.id), tab.label);
+              return <button key={tab.id} type="button" className={styles.navButton} data-active={!query && activeTab === tab.id} onClick={() => { setQuery(""); setSection(`settings:${tab.id}`); }}><SettingsIcon kind={tab.id}/><span>{label}</span></button>;
+            })}
           </nav>
-          <div className={styles.closeRail}><button type="button" className={styles.closeButton} onClick={close}><span>Close settings</span><span aria-hidden="true">×</span></button></div>
+          <div className={styles.closeRail}><button type="button" className={styles.closeButton} onClick={close}><span>{t("settings.close")}</span><span aria-hidden="true">×</span></button></div>
         </aside>
         <main className={styles.content}>
           {renderSection()}
@@ -397,6 +438,7 @@ export function SettingsConfig({ cwd, sessionId, runtimeId, onRuntimeIdentity, i
 
 function McpSettings({ cwd, sessionId, runtimeId, onRuntimeIdentity, onReloaded }: { cwd?: string | null; sessionId?: string | null; runtimeId?: string;
   onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"]; onReloaded?: (runtimeId: string | null) => void }) {
+  const { t } = useI18n();
   const [data, setData] = useState<McpConfigResponse | null>(null);
   const [scope, setScope] = useState<"user" | "project">("user");
   const [selected, setSelected] = useState(0);
@@ -500,16 +542,16 @@ function McpSettings({ cwd, sessionId, runtimeId, onRuntimeIdentity, onReloaded 
   return (
     <div className={styles.scrollContent}>
       <header className={styles.contentHeader}>
-        <h2 className={styles.contentTitle}>MCP servers</h2>
-        <p className={styles.contentDescription}>All MCP servers discovered by OMP are listed by scope and can be enabled or disabled here. Native OMP entries are editable; configurations owned by Claude, Codex, Gemini, plugins, or other providers remain read-only at their source.</p>
+        <h2 className={styles.contentTitle}>{t("settings.mcp.title")}</h2>
+        <p className={styles.contentDescription}>{t("settings.mcp.description")}</p>
       </header>
       <div className={styles.settingsBody}>
-        {!data ? <div className={styles.empty}>{error ?? "Loading MCP configuration…"}</div> : (
+        {!data ? <div className={styles.empty}>{error ?? t("settings.mcp.loading")}</div> : (
           <div className={styles.mcpLayout}>
             <aside className={styles.mcpList}>
               <div className={styles.scopeTabs}>
-                <button type="button" className={styles.scopeButton} data-active={scope === "user"} onClick={() => { setScope("user"); setSelected(0); }}>User · {data.user.servers.length}</button>
-                <button type="button" className={styles.scopeButton} data-active={scope === "project"} disabled={!data.project} onClick={() => { setScope("project"); setSelected(0); }}>Project · {data.project?.servers.length ?? 0}</button>
+                <button type="button" className={styles.scopeButton} data-active={scope === "user"} onClick={() => { setScope("user"); setSelected(0); }}>{t("settings.mcp.scopeUser", { count: data.user.servers.length })}</button>
+                <button type="button" className={styles.scopeButton} data-active={scope === "project"} disabled={!data.project} onClick={() => { setScope("project"); setSelected(0); }}>{t("settings.mcp.scopeProject", { count: data.project?.servers.length ?? 0 })}</button>
               </div>
               {currentScope?.error ? <div className={styles.error} style={{ padding: 12 }}>{currentScope.error}</div> : (
                 <div className={styles.serverRows}>
@@ -520,7 +562,7 @@ function McpSettings({ cwd, sessionId, runtimeId, onRuntimeIdentity, onReloaded 
                         <button type="button" className={styles.serverSelect} title={item.source?.path} onClick={() => setSelected(index)}>
                           <span className={styles.statusDot} data-off={!item.enabled} />
                           <span className={styles.serverName}>{item.name}</span>
-                          {item.editable === false && <span className={styles.sourceBadge}>{item.source?.provider ?? "external"}</span>}
+                          {item.editable === false && <span className={styles.sourceBadge}>{item.source?.provider ?? t("settings.mcp.externalSource")}</span>}
                         </button>
                         <button
                           type="button"
@@ -528,37 +570,37 @@ function McpSettings({ cwd, sessionId, runtimeId, onRuntimeIdentity, onReloaded 
                           data-on={item.enabled}
                           disabled={toggling === toggleKey}
                           aria-pressed={item.enabled}
-                          aria-label={`${item.enabled ? "Disable" : "Enable"} ${item.name}`}
-                          title={`${item.enabled ? "Disable" : "Enable"} ${item.name}`}
+                          aria-label={t(item.enabled ? "settings.mcp.disableServer" : "settings.mcp.enableServer", { name: item.name })}
+                          title={t(item.enabled ? "settings.mcp.disableServer" : "settings.mcp.enableServer", { name: item.name })}
                           onClick={() => void toggleServer(item)}
                         >
-                          {toggling === toggleKey ? "…" : item.enabled ? "ON" : "OFF"}
+                          {toggling === toggleKey ? "…" : item.enabled ? t("settings.mcp.enabled") : t("settings.mcp.disabled")}
                         </button>
                       </div>
                     );
-                  }) : <div className={styles.serverListEmpty}>No servers in this scope.</div>}
+                  }) : <div className={styles.serverListEmpty}>{t("settings.mcp.noServers")}</div>}
                 </div>
               )}
-              <button type="button" className={styles.addServer} disabled={Boolean(currentScope?.error)} onClick={addServer}>+ Add OMP server</button>
+              <button type="button" className={styles.addServer} disabled={Boolean(currentScope?.error)} onClick={addServer}>{t("settings.mcp.addServer")}</button>
             </aside>
             <section className={styles.mcpEditor}>
               {server ? (
                 <>
                   <div className={styles.editorHeader}>
-                    <input className={styles.textInput} value={name} readOnly={server.editable === false} onChange={(event) => setName(event.target.value)} placeholder="server-name" />
-                    {server.editable !== false && <button type="button" className={styles.dangerButton} onClick={removeServer}>Delete</button>}
+                    <input className={styles.textInput} value={name} readOnly={server.editable === false} onChange={(event) => setName(event.target.value)} placeholder={t("settings.mcp.namePlaceholder")} />
+                    {server.editable !== false && <button type="button" className={styles.dangerButton} onClick={removeServer}>{t("settings.mcp.delete")}</button>}
                   </div>
-                  {server.editable === false && <div className={styles.readOnlyNotice}>Configuration read-only · managed by {server.source?.provider ?? "an external provider"}. Status can be changed from the server list.</div>}
+                  {server.editable === false && <div className={styles.readOnlyNotice}>{t("settings.mcp.readOnlyNotice", { provider: server.source?.provider ?? t("settings.mcp.externalProvider") })}</div>}
                   <textarea className={styles.jsonEditor} value={json} readOnly={server.editable === false} spellCheck={false} onChange={(event) => setJson(event.target.value)} />
                   <div className={styles.editorActions}>
                     <div>
                       {error && <div className={styles.error}>{error}</div>}
                       <div className={styles.saveState}>{server.source?.path ?? currentScope?.path}</div>
                     </div>
-                    {server.editable !== false && <button type="button" className={styles.primaryButton} disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save MCP"}</button>}
+                    {server.editable !== false && <button type="button" className={styles.primaryButton} disabled={saving} onClick={() => void save()}>{saving ? t("settings.mcp.saving") : t("settings.mcp.save")}</button>}
                   </div>
                 </>
-              ) : <div className={styles.empty}>Add or select an MCP server.</div>}
+              ) : <div className={styles.empty}>{t("settings.mcp.emptyEditor")}</div>}
             </section>
           </div>
         )}
