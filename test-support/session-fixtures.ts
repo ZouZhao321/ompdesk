@@ -17,6 +17,7 @@
  * 指向 agentDir。
  */
 import { randomUUID } from "crypto";
+import { realpathSync } from "fs";
 import type { Dirent } from "fs";
 import { mkdir, readdir, rename, rm, stat } from "fs/promises";
 import { basename, dirname, join, resolve } from "path";
@@ -208,22 +209,33 @@ function requireAgentDir(agentDir: string | undefined): string {
 }
 
 /**
- * 设置标题会写活动 agent 目录的 history.db。活动目录与目标 agentDir 相同时，
- * 样本会在真实目录留下索引，所以在写任何文件之前就拒绝。
+ * 设置标题会写活动 agent 目录的 history.db。活动目录与目标 agentDir 指向同一
+ * 真实目录时，样本会在真实目录留下索引，所以在写任何文件之前就拒绝。
+ *
+ * 符号链接与大小写不敏感平台（Windows 与 macOS 默认）都会让字面路径不同却指向
+ * 同一目录：比较前先解析真实路径，目录还不存在时回退到 resolve，再折叠大小写。
  */
 function assertActiveAgentDirSeparate(agentDir: string): void {
-  // Windows 路径大小写不敏感，比较前统一折叠。
-  const comparable = (directory: string) => {
-    const absolute = resolve(directory);
-    return process.platform === "win32" ? absolute.toLowerCase() : absolute;
-  };
-  if (comparable(getAgentDir()) !== comparable(agentDir)) return;
+  if (comparableDirectory(getAgentDir()) !== comparableDirectory(agentDir)) return;
   throw new Error(
     `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：`
       + "setSessionName 会把标题写进该目录的 history.db。"
       + "铺样本前先把活动目录切到目标之外，例如 setAgentDir(runtimeDir) 后再调用 "
       + "seedSessions(scenario, { agentDir })",
   );
+}
+
+/** 目录比较键：真实路径优先，路径不存在时用绝对路径，大小写不敏感平台统一折叠。 */
+function comparableDirectory(directory: string): string {
+  let absolute: string;
+  try {
+    absolute = realpathSync(directory);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+    absolute = resolve(directory);
+  }
+  return process.platform === "win32" || process.platform === "darwin" ? absolute.toLowerCase() : absolute;
 }
 
 function parseTimestamp(timestamp: string): number {
