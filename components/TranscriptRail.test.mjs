@@ -147,9 +147,9 @@ test("derives the rail geometry from the region constants", async () => {
 
 test("lays every dot out with the measured pitch", async () => {
   const { RAIL_ROW_PX } = await import("../lib/transcript-rail.ts");
-  // 空间足够时节距就是命中区高度 24px；放不下时由 railDotPitch 压缩节距，
+  // 空间足够时节距就是命中区高度 14px；放不下时由 railDotPitch 压缩节距，
   // 每条提问仍然保留一个可见圆点。
-  assert.equal(RAIL_ROW_PX, 24);
+  assert.equal(RAIL_ROW_PX, 14);
   assert.match(source, /style=\{\{ height: dotPitch \}\}/);
   assert.match(source, /const next = railDotPitch\(available, dots\.length\);/);
   assert.doesNotMatch(styles, /\.transcript-rail-dot::before/);
