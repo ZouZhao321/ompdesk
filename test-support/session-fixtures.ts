@@ -224,16 +224,19 @@ function requireAgentDir(agentDir: string | undefined): string {
 }
 
 /**
- * 设置标题会写活动 agent 目录的 history.db。两种活动目录都会把样本索引写进用户
- * 数据，必须在写任何文件之前拒绝：与目标 agentDir 指向同一真实目录的，以及位于
- * 真实用户配置根（`~/.omp`，含 profiles 与 PI_CONFIG_DIR 覆盖）之下的。
+ * 设置标题会写活动 agent 目录的 history.db。三种活动目录都会把样本索引写进不该
+ * 写的地方，必须在写任何文件之前拒绝：与目标 agentDir 指向同一真实目录的、位于
+ * 目标 agentDir 内部的（会在样本树里生成 history.db，破坏下一次铺设与复位），以及
+ * 位于真实用户配置根（`~/.omp`，含 profiles 与 PI_CONFIG_DIR 覆盖）之下的。
  *
  * 符号链接与大小写不敏感平台（Windows 与 macOS 默认）都会让字面路径不同却指向
  * 同一目录：比较前先解析真实路径，目录还不存在时回退到 resolve，再折叠大小写。
  */
 function assertActiveAgentDirSeparate(agentDir: string): void {
   const activeAgentDir = getAgentDir();
-  if (comparableDirectory(activeAgentDir) === comparableDirectory(agentDir)) {
+  const active = comparableDirectory(activeAgentDir);
+  const target = comparableDirectory(agentDir);
+  if (active === target) {
     throw new Error(
       `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：`
         + "setSessionName 会把标题写进该目录的 history.db。"
@@ -242,8 +245,17 @@ function assertActiveAgentDirSeparate(agentDir: string): void {
     );
   }
 
+  if (relativePathWithinNormalizedRoot(target, active) !== null) {
+    throw new Error(
+      `session-fixtures: 活动 agent 目录位于目标 agentDir 内部（${activeAgentDir} 在 ${agentDir} 之下）：`
+        + "setSessionName 会在样本树里创建 history.db，破坏下一次铺设与复位。"
+        + "铺样本前先把活动目录切到 agentDir 之外，例如 "
+        + 'setAgentDir(join(tmpdir(), "runtime/agent"))',
+    );
+  }
+
   const configRoot = comparableDirectory(getBaseConfigRoot());
-  if (relativePathWithinNormalizedRoot(configRoot, comparableDirectory(activeAgentDir)) !== null) {
+  if (relativePathWithinNormalizedRoot(configRoot, active) !== null) {
     throw new Error(
       `session-fixtures: 活动 agent 目录位于真实用户配置根 ${configRoot} 之下（${activeAgentDir}）：`
         + "setSessionName 会把标题写进该目录的 history.db。"
@@ -277,8 +289,20 @@ function parseTimestamp(timestamp: string): number {
 /**
  * 只接受空目录或只有 sessions 的 agentDir：真实的 agent 目录带 agent.db 或
  * models.yml，放行会把样本写进用户数据。
+ *
+ * 尚未创建的真实 agent 目录（`~/.omp/agent` 首次运行前）顶层是空的，条目检查会
+ * 直接放行再 mkdir；因此与活动目录守卫一致，配置根之下一律拒绝。
  */
 async function assertFixtureAgentDir(agentDir: string): Promise<void> {
+  const configRoot = comparableDirectory(getBaseConfigRoot());
+  if (relativePathWithinNormalizedRoot(configRoot, comparableDirectory(agentDir)) !== null) {
+    throw new Error(
+      `session-fixtures: agentDir 不能位于真实用户配置根 ${configRoot} 之下（${agentDir}）：`
+        + "真实的 agent 目录可能尚未创建，空目录检查会放行，样本就写进了用户数据。"
+        + '请改用任务临时目录，例如 join(mkdtempSync(join(tmpdir(), "ompdesk-")), "agent")',
+    );
+  }
+
   const entries = await readAgentDirEntries(agentDir);
   if (entries === null) {
     await mkdir(agentDir, { recursive: true });
