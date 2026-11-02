@@ -9,7 +9,9 @@ description: 移动档只有一条媒体查询，粗指针不看高度；改断�
 
 `useIsMobile` 只订阅这条查询：`subscribe` 内创建 `MediaQueryList` 并在退订时移除监听，`getSnapshot` 直接读 `matchMedia(MOBILE_LAYOUT_QUERY).matches`。`app/globals.css` 的手机查询与 `AppShell` 的内联查询都由同一常量拼出，不再手写断点。TSX 尺寸引用 `MOBILE_HIT_TARGET_PX`；CSS 无法导入 TS 常量，手机查询内写等值的 `44px`。
 
-手机档的命中区覆盖顶栏、输入区与扩展浮层、侧栏抽屉、消息操作、页签栏、分支树行与附件删除按钮。`TabBar` 的高度与关闭按钮由组件按 `useIsMobile()` 取值，`globals.css` 不用 `!important` 反压内联尺寸。
+手机档的命中区覆盖顶栏、输入区与扩展浮层、侧栏抽屉、消息操作、页签栏、分支树行、附件删除按钮与注释互译面板。`TabBar` 的高度与关闭按钮由组件按 `useIsMobile()` 取值，`globals.css` 不用 `!important` 反压内联尺寸。
+
+注释互译面板的复选输入包在 label 里：label 取 `MOBILE_HIT_TARGET_PX` 的命中区，输入本身保持原生尺寸，点命中区任意位置都能勾选。生成、保存、取消与译文编辑按钮同样按该常量取最小边长，两栏列表各自 `min-width: 0`，长注释在栏内换行而不挤占邻栏。
 
 ## 后果
 

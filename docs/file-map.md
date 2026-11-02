@@ -36,6 +36,10 @@ cwd/browse/route.ts             GET 目录选择器
 default-cwd/route.ts            POST 创建 ~/omp-cwd-YYYYMMDD
 files/[...path]/route.ts        GET 文件内容 | POST 上传
 file-index/route.ts             GET 文件模糊索引
+comment-entries/route.ts        GET 注释词条提取并附带已保存的译文（git 跟踪优先，只读）
+comment-dictionary/route.ts     PUT 保存人工译文 | DELETE 删除整个字典
+comment-dictionary/lookup/route.ts POST 按字典键批量取译文，供查看器渲染
+comment-translations/generate/route.ts POST 按勾选条目生成译文，片段校验后写入字典
 git/status/route.ts             GET 工作区改动状态
 git/diff/route.ts               GET 单文件差异
 home/route.ts                   GET 用户主目录
@@ -70,7 +74,20 @@ worktrees/route.ts              GET/POST/DELETE git worktree
 ```
 agent-client.ts      为 /api/agent 命令提供带类型的 fetch 辅助
 api-request-log.ts   withRequestLog：统一请求日志与耗时
+comment-entries.ts   注释词条提取：TypeScript 语法树的注释区间、合并连续单行、排除横幅与单词标题、含中文即归中文、计算字典键
+comment-sources.ts   词条来源文件：git 仓库以 .gitignore 为准，非仓库退回目录遍历
+comment-dictionary.ts 本机注释字典：按键读写人工译文、来源标记、只返回当前项目相关记录
+comment-dictionary-version.ts 字典版本号与订阅，保存译文后通知查看器刷新
+comment-translation-preference.ts 查看器译文开关的本机存储与订阅
+comment-translation-render.ts 译文行计算：界面语言对应的目标语言、查询键去重、按源码行号挂译文
+comment-translation-request.ts 生成请求的共享上限与失败码到提示文案的映射
+comment-translation-generation.ts 勾选条目的批量译文生成：字典命中、force 覆盖、分批提示词、逐条校验与写入
+comment-translation-validation.ts 译文逐字片段校验：路径、标识符、数字与括号片段
+comment-translation-route.ts 生成接口的请求校验与处理器
+comment-translation-model.ts 生成接口的模型接线：可见模型选择与 completeSimple 调用
+git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文件，非仓库返回 null
 request-security.ts  请求来源与主机校验
+source-wrap-preference.ts 源码视图换行开关的共享状态，查看器与预览共用
 logging.ts           服务端日志入口
 sse-lifecycle.ts     两条 SSE 路由共用的连接生命周期
 http-dispatcher.ts   代理环境变量接线的运行时分支
@@ -131,6 +148,9 @@ MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
 BranchNavigator.tsx 会话内分支切换器
 ConversationMap.tsx 会话地图：卡片、连线、缩放、分叉与切换
 SubagentPanel.tsx   子代理标签页：运行与历史列表、执行详情
+CommentTranslationPanel.tsx 注释互译标签页：中英两栏词条、勾选生成、分批请求与字典管理
+CommentTranslationPreview.tsx 面板底部预览：用查看器同一份源码视图渲染选中词条
+SourceCodeView.tsx  源码渲染：高亮、行号、换行与译文行，查看器与预览共用
 RewindDialog.tsx    回退选点对话框
 ProjectTrustDialog.tsx 项目信任确认
 ExtensionStatusBar.tsx 扩展状态栏
@@ -145,10 +165,13 @@ PluginsConfig.tsx   设置面板内的插件管理
 SkillsConfig.tsx    设置面板内的 skills 列表与安装
 FileExplorer.tsx    文件树
 FileExplorerPanel.tsx 右侧标签页中的文件树视图（上传、刷新、变更文件）
+GitChangesPanel.tsx 右侧标签页中的 Git 变更列表（状态、汇总、刷新与轮询）
+GitStatusBadge.tsx  变更文件的状态字母徽标与状态配色
+PanelIconButton.tsx 右侧面板工具栏图标按钮
 FileIcons.tsx       文件图标辅助
 PanelViewIcon.tsx   视图标签与入口的图标
 FileViewer.tsx      文件标签页的内容
-TabBar.tsx          右侧面板标签栏（文件浏览器 / 子代理 / 已打开文件）
+TabBar.tsx          右侧面板标签栏（文件浏览器 / Git / 子代理 / 注释互译 / 已打开文件）
 TurnWrittenFiles.tsx 单轮写入文件列表
 TranscriptRail.tsx  对话列右外侧的提问跳转条：圆点、悬停提示、上一条与下一条
 ```
@@ -166,6 +189,8 @@ useResizablePanel.ts 面板拖拽宽度
 useKeyboardShortcuts.ts 全局快捷键
 useDisplaySettings.ts 渲染设置
 useI18n.tsx         全站翻译上下文
+useCommentTranslation.ts 译文开关、字典版本与按键批量查询
+useSourceWrapLines.ts 源码换行开关，订阅共享状态
 useTheme.ts         主题状态
 ```
 
@@ -178,6 +203,5 @@ proxy.ts            访问控制：密码校验、主机与跨站检查
 instrumentation.ts  启动时接线（代理、日志）
 next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
 bin/                启动器、密码存储、Bun 定位
-scripts/            构建与打包（stage-desktop、build-desktop、fetch-bun、sync-version）
-src-tauri/          桌面外壳
+scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息）
 ```

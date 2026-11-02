@@ -5,6 +5,7 @@ import {
   getDefault,
   getEnumValues,
   getPathsForTab,
+  getSettingsFieldType,
   getType,
   getUi,
   hasUi,
@@ -23,7 +24,6 @@ import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-acces
 import { getAvailableWebThemes, getWebThemeConfig } from "@/lib/omp-theme";
 import type {
   SettingsField,
-  SettingsFieldType,
   SettingsOption,
   SettingsResponse,
   SettingsValue,
@@ -49,19 +49,6 @@ function optionsFor(path: SettingPath, runtimeThemes: string[]): SettingsOption[
   if (Array.isArray(ui.options)) return ui.options.map((option) => ({ ...option }));
   const values = getEnumValues(path);
   return values?.map((value) => ({ value, label: value }));
-}
-
-function fieldTypeFor(path: SettingPath): SettingsFieldType | null {
-  const schemaType = getType(path);
-  const ui = getUi(path);
-  if (!ui) return null;
-  if (schemaType === "boolean") return "boolean";
-  if (schemaType === "enum") return "select";
-  if (schemaType === "string") return isCredential(path) ? "secret" : ui.options ? "select" : "text";
-  if (schemaType === "number") return ui.options ? "select" : null;
-  if (schemaType === "array") return ui.options ? "multiselect" : null;
-  if (schemaType === "record") return path === "providers.maxInFlightRequests" ? "providerLimits" : "text";
-  return null;
 }
 
 function serializableValue(value: unknown): SettingsValue {
@@ -138,7 +125,7 @@ async function getRouteHandler(req: Request) {
 
     for (const tab of SETTING_TABS) {
       for (const path of getPathsForTab(tab)) {
-        const fieldType = fieldTypeFor(path);
+        const fieldType = getSettingsFieldType(path);
         const ui = getUi(path);
         if (!fieldType || !ui) continue;
         const secret = isCredential(path);
