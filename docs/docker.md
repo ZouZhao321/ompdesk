@@ -84,6 +84,7 @@ open). Everything else behaves as documented in the README:
 | `OMPDESK_AUTHENTICATED` | Require the password lock. |
 | `OMPDESK_PASSWORD` | The password, overriding any stored hash. |
 | `OMPDESK_ALLOWED_HOSTS` | Exact external hostname, when a reverse proxy fronts the container. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector URL. Compose only forwards variables listed under `environment`, so add the `OTEL_*` ones there too; see [telemetry.md](./telemetry.md). |
 
 `--authenticated` on its own asks for a password on the terminal, which a
 detached container has none of. Pass `OMPDESK_PASSWORD` instead, or set the
