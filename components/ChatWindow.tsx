@@ -1040,7 +1040,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
         </div>
       ) : (
       <>
-      <div className="chat-transcript-region flex min-w-0 flex-1 overflow-hidden">
+      <div
+        className="chat-transcript-region flex min-w-0 flex-1 overflow-hidden"
+        style={{
+          "--chat-column-width": `${RAIL_COLUMN_WIDTH_PX}px`,
+          "--chat-column-padding": `${RAIL_COLUMN_PADDING_PX}px`,
+        } as CSSProperties}
+      >
         <div
           style={{
             position: "absolute",
