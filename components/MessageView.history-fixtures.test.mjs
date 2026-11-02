@@ -100,25 +100,29 @@ async function selectLocalFixture() {
  * 临时目录都建不出来才返回 null，由用例按环境问题跳过。
  */
 async function seedFixture(t) {
+  let sandbox;
   try {
-    const sandbox = createAgentDirSandbox(t, {
+    sandbox = createAgentDirSandbox(t, {
       prefix: "ompdesk-history-fixtures-",
       dirs: ["agent", "project"],
       // 列表缓存跟着活动目录走，恢复原目录前先清掉指向样本的缓存。
       beforeRestore: invalidateSessionListCache,
     });
-    const agentDir = join(sandbox.root, "agent");
-    const cwd = join(sandbox.root, "project");
-    // tools 场景一轮覆盖正文、思考、工具调用（read 与 bash）与结果回填，样本只有一条
-    // 会话，夹具挑选结果不随文件 mtime 变化。
-    await seedSessions("tools", { agentDir, cwd });
-    // 活动目录切到样本目录，listAllSessions() 才扫描到这里。
-    switchAgentDir(agentDir);
   } catch (error) {
+    // 只容忍临时目录建不出来：那是环境限制，不是回归。铺设样本与切换目录的失败
+    // （EPERM/EBUSY/EACCES 也在其中）必须抛出，否则铺设逻辑坏了会变成 CI 跳过。
     if (!isFixtureEnvironmentError(error)) throw error;
     console.log(`[history-fixtures] 无法在临时目录铺设会话样本：${error.message}`);
     return null;
   }
+
+  const agentDir = join(sandbox.root, "agent");
+  const cwd = join(sandbox.root, "project");
+  // tools 场景一轮覆盖正文、思考、工具调用（read 与 bash）与结果回填，样本只有一条
+  // 会话，夹具挑选结果不随文件 mtime 变化。
+  await seedSessions("tools", { agentDir, cwd });
+  // 活动目录切到样本目录，listAllSessions() 才扫描到这里。
+  switchAgentDir(agentDir);
 
   const { fixture, reason } = await selectLocalFixture();
   assert.ok(fixture, `样本会话没有读到可渲染的消息：${reason}`);
