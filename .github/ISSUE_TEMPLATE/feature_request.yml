@@ -24,3 +24,9 @@ body:
     attributes:
       label: 考虑过的其他做法
       description: 可选。
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 附加信息
+      description: 可选。截图、参考实现、相关 issue 或资料链接。
