@@ -107,9 +107,15 @@ export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotInd
   // 不能因此分家。
   const [keyboardDotIndex, setKeyboardDotIndex] = useState<number | null>(null);
   useEffect(() => {
-    setKeyboardDotIndex((current) => (current !== null && current === currentDotIndex ? null : current));
-  }, [currentDotIndex]);
-  const activeDotIndex = keyboardDotIndex ?? (currentDotIndex >= 0 ? currentDotIndex : 0);
+    // 圆点可能变少（切分支、rewind 截断），停靠点要跟着收回合法范围。
+    setKeyboardDotIndex((current) => (
+      current === null || current === currentDotIndex || current >= dots.length ? null : current
+    ));
+  }, [currentDotIndex, dots.length]);
+  const activeDotIndex = Math.min(
+    keyboardDotIndex ?? Math.max(currentDotIndex, 0),
+    Math.max(dots.length - 1, 0),
+  );
   const handleDotKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let target = index;
     if (event.key === "ArrowUp") target = index - 1;

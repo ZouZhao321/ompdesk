@@ -238,6 +238,8 @@ test("keeps the rail out of the tab order while it is hidden", async () => {
   // 圆点用 roving tabindex：只有当前圆点进 Tab 序列，方向键在圆点之间移动，
   // 长会话不会让每个圆点都成为一次 Tab 停留。
   assert.match(source, /tabIndex=\{index === activeDotIndex \? 0 : -1\}/);
+  // 停靠点收敛到合法范围：圆点变少时也始终恰有一个 Tab 停留点。
+  assert.match(source, /const activeDotIndex = Math\.min\(/);
   assert.match(source, /onKeyDown=\{\(event\) => handleDotKeyDown\(event, index\)\}/);
 });
 
