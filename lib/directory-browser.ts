@@ -55,9 +55,12 @@ export function normalizeDirectory(directory: string): string {
 }
 
 export function getParentDirectory(directory: string): string | null {
-  const pathApi = /^[a-zA-Z]:[\\/]/.test(directory) || directory.startsWith("\\\\")
-    ? path.win32
-    : path;
+  // 按输入形态选 API：宿主平台的 `path` 会把 POSIX 输入当成 win32 路径处理，
+  // 在 Windows 上把 `/Users/alex/project` 解析成 `\\Users\\alex`。
+  const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(directory)
+    || directory.startsWith("\\\\")
+    || directory.startsWith("//");
+  const pathApi = isWindowsPath ? path.win32 : path.posix;
   const normalized = pathApi.normalize(directory);
   const parent = pathApi.dirname(normalized);
   return parent === normalized ? null : parent;
