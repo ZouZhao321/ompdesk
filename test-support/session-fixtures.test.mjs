@@ -7,6 +7,7 @@
  * history.db，相同的话样本入口就写进了真实目录。
  */
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
@@ -357,7 +358,17 @@ test("活动 agent 目录经符号链接指向目标目录时同样拒绝铺样�
   const sandbox = createSandbox(t);
   const link = join(sandbox.root, "agent-link");
   // Windows 建目录符号链接需要管理员或开发者模式，junction 不需要；POSIX 用 dir。
-  symlinkSync(sandbox.agentDir, link, process.platform === "win32" ? "junction" : "dir");
+  try {
+    symlinkSync(sandbox.agentDir, link, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    // 环境不支持建目录链接时跳过，其他错误照常抛出。
+    const code = error?.code;
+    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP") {
+      t.skip("Creating directory symlinks requires additional privileges on this platform");
+      return;
+    }
+    throw error;
+  }
 
   switchAgentDir(link);
   const before = readdirSync(sandbox.agentDir).sort();
@@ -373,9 +384,13 @@ test("活动 agent 目录经符号链接指向目标目录时同样拒绝铺样�
 
 test("活动 agent 目录位于真实用户配置根之下时拒绝铺样本", async (t) => {
   const sandbox = createSandbox(t);
-  // 用真实配置根下的未建目录作为活动目录：守卫只看路径，拒绝时不会产生任何写入。
-  const before = switchAgentDir(join(getBaseConfigRoot(), "agent"));
+  // 用真实配置根下一个确定不存在的子目录作为活动目录：守卫只比较路径，且目标不存在，
+  // 重建会话索引不会碰到任何真实数据。
+  const absent = join(getBaseConfigRoot(), `absent-agent-${randomUUID()}`);
+  assert.equal(existsSync(absent), false, "用例依赖的路径不得事先存在");
+  const before = switchAgentDir(absent);
   try {
+    assert.equal(getAgentDir(), absent, "活动目录应切到不存在的子目录");
     await assert.rejects(
       () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
       /真实用户配置根/,
@@ -384,6 +399,36 @@ test("活动 agent 目录位于真实用户配置根之下时拒绝铺样本", a
   } finally {
     restoreAgentDir(before);
   }
+});
+
+test("活动 agent 目录位于目标 agentDir 内部时拒绝铺样本", async (t) => {
+  const sandbox = createSandbox(t);
+  // 目标目录内部的未建子目录：守卫只比较路径，拒绝时不会在样本树里生成 history.db。
+  const nested = join(sandbox.agentDir, "runtime");
+  assert.equal(existsSync(nested), false, "用例依赖的路径不得事先存在");
+  const before = switchAgentDir(nested);
+  try {
+    await assert.rejects(
+      () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+      /内部/,
+    );
+    assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
+    assert.equal(existsSync(nested), false, "拒绝时不得在样本树里创建目录");
+  } finally {
+    restoreAgentDir(before);
+  }
+});
+
+test("真实用户配置根下的 agentDir 直接拒绝铺样本", async (t) => {
+  const sandbox = createSandbox(t);
+  // 配置根下确定不存在的子目录：真实的 agent 目录首次运行前为空，条目检查会放行。
+  const target = join(getBaseConfigRoot(), `absent-agent-dir-${randomUUID()}`);
+
+  await assert.rejects(
+    () => seedSessions("single-turn", { agentDir: target, cwd: sandbox.cwd }),
+    /真实用户配置根/,
+  );
+  assert.equal(existsSync(target), false, "拒绝时不得创建目录");
 });
 
 test("缺失的 agentDir 与非样本目录都会被拒绝", async (t) => {
