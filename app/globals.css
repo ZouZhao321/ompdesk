@@ -1590,8 +1590,7 @@ span.linenumber {
   /* 车道与跳转条都绝对定位：定位祖先由这条规则自己给出，不再隐含依赖行盒上的
      Tailwind relative——那个类一被删，跳转条就会静默改挂到整列上。 */
   position: relative;
-  --chat-column-width: 820px;
-  --chat-column-padding: 16px;
+  /* 版心与内边距由 ChatWindow 从 lib 常量内联注入，这里不再保留第二份取值。 */
   --transcript-rail-lane: 36px;
   /* 跳转条与对话列之间留的缝隙。 */
   --transcript-rail-gap: 6px;

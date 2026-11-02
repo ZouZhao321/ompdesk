@@ -88,9 +88,11 @@ test("derives the rail geometry from the region constants", async () => {
   // relative 兜底，那个类被删掉时跳转条也不会静默改挂到整列上。
   assert.match(region, /position: relative;/);
   assert.doesNotMatch(chatWindow, /chat-transcript-region relative/);
-  // 同步来源写在容器上：版心与内边距来自 ChatWindow 的行盒常量，车道宽来自 CSS。
-  assert.match(region, new RegExp(`--chat-column-width: ${RAIL_COLUMN_WIDTH_PX}px;`));
-  assert.match(region, new RegExp(`--chat-column-padding: ${RAIL_COLUMN_PADDING_PX}px;`));
+  // 版心与内边距来自 ChatWindow 的行盒常量，由它内联注入；CSS 不再保留第二份取值。
+  assert.match(chatWindow, new RegExp(`"--chat-column-width": \`\\$\\{RAIL_COLUMN_WIDTH_PX\\}px\``));
+  assert.match(chatWindow, new RegExp(`"--chat-column-padding": \`\\$\\{RAIL_COLUMN_PADDING_PX\\}px\``));
+  assert.doesNotMatch(region, /--chat-column-width:/);
+  assert.doesNotMatch(region, /--chat-column-padding:/);
   assert.match(region, new RegExp(`--transcript-rail-lane: ${LANE_PX}px;`));
   assert.equal(customPixel(region, "transcript-rail-gap"), GAP_PX);
   assert.equal(customPixel(region, "transcript-rail-margin"), MARGIN_PX);
@@ -127,8 +129,8 @@ test("derives the rail geometry from the region constants", async () => {
     /--transcript-rail-min-region: calc\(\s*2 \* \(var\(--transcript-rail-inset\) \+ var\(--transcript-rail-lane\) \+ var\(--transcript-rail-margin\)\)\s*\);/,
   );
   // 阈值把内边距与缝隙一起算进去：版心一半 + 内边距 + 缝隙 = 432，最小宽度 944。
-  const inset = customPixel(region, "chat-column-width") / 2
-    + customPixel(region, "chat-column-padding")
+  const inset = RAIL_COLUMN_WIDTH_PX / 2
+    + RAIL_COLUMN_PADDING_PX
     + customPixel(region, "transcript-rail-gap");
   assert.equal(inset, insetPx);
   assert.equal(inset, 432);
@@ -207,11 +209,12 @@ test("keeps a disabled step visually out of reach", () => {
   assert.match(styles, /\.transcript-rail-step:hover:not\(:disabled\)/);
 });
 
-test("keeps the rail out of the tab order while it is hidden", () => {
+test("keeps the rail out of the tab order while it is hidden", async () => {
+  const { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } = await import("../lib/transcript-rail.ts");
   const region = declarations(".chat-transcript-region");
   assert.ok(region, "missing .chat-transcript-region");
-  const inset = customPixel(region, "chat-column-width") / 2
-    + customPixel(region, "chat-column-padding")
+  const inset = RAIL_COLUMN_WIDTH_PX / 2
+    + RAIL_COLUMN_PADDING_PX
     + GAP_PX;
   const laneQueryMaxPx = 2 * (inset + LANE_PX + MARGIN_PX) - 1;
   // 放不下整条车道就是放不下：整条 display: none 收起，隐藏时元素不可聚焦。
