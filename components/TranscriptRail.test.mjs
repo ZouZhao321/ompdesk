@@ -107,6 +107,16 @@ test("derives the rail geometry from the region constants", async () => {
   const webkitScrollbar = declarations(".chat-session-scroll::-webkit-scrollbar");
   assert.ok(webkitScrollbar, "missing .chat-session-scroll::-webkit-scrollbar");
   assert.doesNotMatch(webkitScrollbar, /width:/);
+  // 跳转条收起时恢复一条细滚动条：跳转与滚动位置反馈至少保留一种。
+  const fallback = declarations(".chat-session-scroll--rail-hidden");
+  assert.ok(fallback, "missing .chat-session-scroll--rail-hidden");
+  assert.match(fallback, /scrollbar-width: thin;/);
+  assert.match(fallback, /scrollbar-color: var\(--border\) transparent;/);
+  const fallbackWebkit = declarations(".chat-session-scroll--rail-hidden::-webkit-scrollbar");
+  assert.ok(fallbackWebkit, "missing .chat-session-scroll--rail-hidden::-webkit-scrollbar");
+  assert.match(fallbackWebkit, /display: block;/);
+  assert.match(fallbackWebkit, /width: 8px;/);
+  assert.match(chatWindow, /chat-session-scroll--rail-hidden/);
   // 左缘偏移与最小宽度都由这几个常量算出，不再出现手抄的派生像素值。
   assert.match(
     region,
