@@ -152,7 +152,7 @@ test("lays every dot out with the measured pitch", async () => {
   // 每条提问仍然保留一个可见圆点。
   assert.equal(RAIL_ROW_PX, 14);
   assert.match(source, /style=\{\{ height: pitch \}\}/);
-  assert.match(source, /const block = RAIL_STEP_HEIGHT_PX \* 2 \+ RAIL_GAP_PX \* 2;/);
+  assert.match(source, /const block = RAIL_STEP_HEIGHT_PX \* 2 \+ RAIL_ROW_GAP_PX \* 2;/);
   assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
   assert.doesNotMatch(styles, /\.transcript-rail-dot::before/);
   assert.match(declarations(".transcript-rail-dot {"), /width: var\(--transcript-rail-lane\);/);
@@ -243,13 +243,13 @@ test("puts the rail ahead of the transcript in the tab order", () => {
 test("compresses the dot column instead of scrolling it", () => {
   // 全部圆点都要露出来：列高由节距乘数量得出，节距按可用高度均分；列内滚动与
   // 滚动位置居中都不再存在。
-  assert.match(source, /const block = RAIL_STEP_HEIGHT_PX \* 2 \+ RAIL_GAP_PX \* 2;/);
+  assert.match(source, /const block = RAIL_STEP_HEIGHT_PX \* 2 \+ RAIL_ROW_GAP_PX \* 2;/);
   // 车道连按钮块都放不下时整条收起，不把圆点压到按钮与正文上。
   assert.match(source, /if \(laneHeight <= block\) \{\s*setDotPitch\(null\);\s*return;\s*\}/);
   assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
   assert.match(source, /style=\{\{\s*height: pitch \* dots\.length,\s*"--rail-dot-mark": `\$\{dotMarkPx\}px`,\s*\} as CSSProperties\}/);
   // 节距低于可用下限时整条收起；车道仍在布局里，窗口缩放后能重新判断。
-  assert.match(source, /style=\{\{ gap: RAIL_GAP_PX, display: railHidden \? "none" : undefined \}\}/);
+  assert.match(source, /style=\{\{ gap: RAIL_ROW_GAP_PX, display: railHidden \? "none" : undefined \}\}/);
   // 按钮块高度由常量给出，跳转条收起时不需要依赖上一次的测量。
   assert.match(source, /style=\{\{ height: RAIL_STEP_HEIGHT_PX \}\}/);
   // 窗口缩放改变高度时重算，不必等圆点数量变化。

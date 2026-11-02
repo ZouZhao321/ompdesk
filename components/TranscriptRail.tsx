@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import {
-  RAIL_GAP_PX,
+  RAIL_ROW_GAP_PX,
   RAIL_ROW_PX,
   RAIL_STEP_HEIGHT_PX,
   railDotPitch,
@@ -82,7 +82,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
       if (laneHeight <= 0) return;
       // 按钮块的高度由常量给出：跳转条被收起时量不到按钮，不靠缓存，窗口展开后
       // 也不会少算这一块。
-      const block = RAIL_STEP_HEIGHT_PX * 2 + RAIL_GAP_PX * 2;
+      const block = RAIL_STEP_HEIGHT_PX * 2 + RAIL_ROW_GAP_PX * 2;
       if (laneHeight <= block) {
         setDotPitch(null);
         return;
@@ -199,7 +199,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
         className="transcript-rail"
         role="navigation"
         aria-label={t("chat.transcriptRail")}
-        style={{ gap: RAIL_GAP_PX, display: railHidden ? "none" : undefined }}
+        style={{ gap: RAIL_ROW_GAP_PX, display: railHidden ? "none" : undefined }}
       >
         <button
           type="button"
