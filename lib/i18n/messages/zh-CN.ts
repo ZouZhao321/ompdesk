@@ -398,6 +398,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.nextPrompt": "下一条提问",
     "chat.jumpToPrompt": "跳到第 {index} 条提问",
     "chat.jumpToPromptDescription": "第 {index} 条提问：{prompt}",
+    "chat.promptWithoutText": "无文本提问（图片或附件）",
     "chat.compacted": "已压缩",
     "chat.tokensSaved": "节省 {saved}",
     "i18n.close": "关闭",

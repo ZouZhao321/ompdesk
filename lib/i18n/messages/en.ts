@@ -398,6 +398,7 @@ export const enLocale: LocalePlugin = {
     "chat.nextPrompt": "Next prompt",
     "chat.jumpToPrompt": "Jump to prompt {index}",
     "chat.jumpToPromptDescription": "Prompt {index}: {prompt}",
+    "chat.promptWithoutText": "Prompt without text (image or attachment)",
     "chat.compacted": "Compacted",
     "chat.tokensSaved": "{saved} saved",
     "i18n.close": "Close",
