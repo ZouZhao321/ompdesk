@@ -172,6 +172,23 @@ body {
   display: none;
 }
 
+/* 跳转条被移动档、窄转写区或单轮条件收起时，位置反馈只剩滚动条：这一档恢复一条
+   细滚动条，避免两种导航方式同时消失。类由 ChatWindow 按跳转条自己报告的可见性挂。 */
+.chat-session-scroll--rail-hidden {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.chat-session-scroll--rail-hidden::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+.chat-session-scroll--rail-hidden::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-dim) 65%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
 :root {
   /* System monospace stack. ompdesk is a local tool: it must not depend on a
      font CDN at build or at runtime, and the terminal-native faces below are

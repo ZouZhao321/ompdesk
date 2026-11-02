@@ -651,9 +651,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     if (railMeasureFrameRef.current !== 0) cancelAnimationFrame(railMeasureFrameRef.current);
   }, []);
 
+  const [railVisible, setRailVisible] = useState(true);
+
   // 是否可见由跳转条自己量：移动档与窄转写区都由 CSS 收起，这里不重复判定断点。
   const handleRailVisibilityChange = useCallback((visible: boolean) => {
     railVisibleRef.current = visible;
+    setRailVisible(visible);
     if (visible) syncRailTopItem();
   }, [syncRailTopItem]);
 
@@ -1077,7 +1080,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             increaseViewportBy={TRANSCRIPT_VIEWPORT_BUFFER}
             followOutput={transcriptFollowOutput(autoFollowPaused)}
             atBottomThreshold={FOLLOW_BOTTOM_THRESHOLD_PX}
-            className="chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
+            className={`chat-session-scroll min-w-0 flex-1 overflow-x-hidden overflow-y-auto${shouldShowTranscriptRail(railDots.length) && railVisible ? "" : " chat-session-scroll--rail-hidden"}`}
             itemContent={renderTranscriptRow}
           />
         </TranscriptListRefContext.Provider>
