@@ -19,7 +19,7 @@
 import { randomUUID } from "crypto";
 import type { Dirent } from "fs";
 import { mkdir, readdir, rename, rm, stat } from "fs/promises";
-import { basename, join, resolve } from "path";
+import { basename, dirname, join, resolve } from "path";
 import { setTimeout as delay } from "timers/promises";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDir } from "@oh-my-pi/pi-utils/dirs";
@@ -554,25 +554,25 @@ function toolResultMessage(call: ToolCallSpec, text: string, timestamp: number):
 /**
  * 用 staging 目录整体替换场景目录，替换后在同一目录补写会话；任一步失败都删掉
  * 新目录并恢复原场景。
+ *
+ * 备份与 staging 同层，并真正以 .backup- 开头：这样清扫与 fixture-* 守卫都能
+ * 覆盖替换阶段被杀的进程留下的备份。
  */
 async function replaceDirectory<T>(
   stagingDir: string,
   targetDir: string,
   finish: () => Promise<T>,
 ): Promise<T> {
-  const backupDir = `${targetDir}${BACKUP_PREFIX}${randomUUID()}`;
+  const backupDir = join(dirname(targetDir), `${BACKUP_PREFIX}${basename(targetDir)}-${randomUUID()}`);
   const replaceExisting = await pathExists(targetDir);
   if (replaceExisting) {
     await renameWithRetry(targetDir, backupDir);
   }
 
+  let result: T;
   try {
     await renameWithRetry(stagingDir, targetDir);
-    const result = await finish();
-    if (replaceExisting) {
-      await rm(backupDir, { recursive: true, force: true });
-    }
-    return result;
+    result = await finish();
   } catch (error) {
     await rm(targetDir, { recursive: true, force: true });
     if (replaceExisting) {
@@ -580,6 +580,15 @@ async function replaceDirectory<T>(
     }
     throw error;
   }
+
+  if (replaceExisting) {
+    try {
+      await rm(backupDir, { recursive: true, force: true });
+    } catch {
+      // 备份删不掉不影响已铺好的场景；残留目录由下次清扫或 resetSessionFixtures 处理。
+    }
+  }
+  return result;
 }
 
 async function pathExists(target: string): Promise<boolean> {
