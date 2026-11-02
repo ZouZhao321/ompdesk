@@ -40,6 +40,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "check": "bun run typecheck && bun run lint",
+    "ci": "bun run typecheck && bun run build && bun run smoke:dev",
+    "verify": "bun run check && bun run build && bun run smoke:dev",
+    "verify:push": "bun scripts/verify-push.mjs",
     "smoke:dev": "bun scripts/smoke-dev.mjs",
     "scratch": "bun scripts/scratch.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
