@@ -52,6 +52,24 @@ function fixturesDir(agentDir) {
   return join(agentDir, "sessions");
 }
 
+/**
+ * 建目录符号链接；Windows 建符号链接需要管理员或开发者模式，junction 不需要。
+ * 环境不支持建链接时标记用例跳过并返回 false，其他错误照常抛出。
+ */
+function linkDirectory(t, target, link) {
+  try {
+    symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+    return true;
+  } catch (error) {
+    const code = error?.code;
+    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP") {
+      t.skip("Creating directory symlinks requires additional privileges on this platform");
+      return false;
+    }
+    throw error;
+  }
+}
+
 function jsonlFiles(dir) {
   return readdirSync(dir).filter((name) => name.endsWith(".jsonl"));
 }
@@ -358,18 +376,7 @@ test("活动 agent 目录与目标 agentDir 相同时拒绝铺样本", async (t)
 test("活动 agent 目录经符号链接指向目标目录时同样拒绝铺样本", async (t) => {
   const sandbox = createSandbox(t);
   const link = join(sandbox.root, "agent-link");
-  // Windows 建目录符号链接需要管理员或开发者模式，junction 不需要；POSIX 用 dir。
-  try {
-    symlinkSync(sandbox.agentDir, link, process.platform === "win32" ? "junction" : "dir");
-  } catch (error) {
-    // 环境不支持建目录链接时跳过，其他错误照常抛出。
-    const code = error?.code;
-    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP") {
-      t.skip("Creating directory symlinks requires additional privileges on this platform");
-      return;
-    }
-    throw error;
-  }
+  if (!linkDirectory(t, sandbox.agentDir, link)) return;
 
   switchAgentDir(link);
   const before = readdirSync(sandbox.agentDir).sort();
@@ -381,6 +388,26 @@ test("活动 agent 目录经符号链接指向目标目录时同样拒绝铺样�
 
   assert.deepEqual(readdirSync(sandbox.agentDir).sort(), before, "拒绝时目标目录不得新增文件");
   assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
+});
+
+test("符号链接下尚未创建的子目录仍按目标目录内部拒绝铺样本", async (t) => {
+  const sandbox = createSandbox(t);
+  const link = join(sandbox.root, "agent-link");
+  if (!linkDirectory(t, sandbox.agentDir, link)) return;
+
+  // 链接存在、叶子不存在：只有把缺失尾段拼回解析后的祖先，才看得出它落在目标之内。
+  const nested = join(link, "unbuilt-child");
+  const before = switchAgentDir(nested);
+  try {
+    await assert.rejects(
+      () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+      /位于目标 agentDir 内部/,
+    );
+    assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
+    assert.equal(existsSync(nested), false, "拒绝时不得在符号链接下创建目录");
+  } finally {
+    restoreAgentDir(before);
+  }
 });
 
 test("活动 agent 目录位于真实用户配置根之下时拒绝铺样本", async (t) => {
