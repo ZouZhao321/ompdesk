@@ -67,13 +67,17 @@ export function normalizeDirectory(directory: string): string {
   const pathApi = isWindowsPathInput(directory) ? path.win32 : path.posix;
   // 绝对输入自带根，按输入形态规整即可；交给宿主 path 会把别平台的路径拼成盘符路径。
   // `normalize` 会保留结尾分隔符，同一目录就有 `/a/b/` 与 `/a/b` 两种形态；相对输入分支
-  // 用宿主 `resolve` 天然去掉它，这里同样剥掉根目录以外的结尾分隔符。不能直接用
-  // `pathApi.resolve`：`path.win32.resolve("\\Users\\alex")` 会补上当前盘符
-  // （`C:\Users\alex`），把根相对输入指到别处。
+  // 用宿主 `resolve` 天然去掉它，这里同样剥掉根目录以外的结尾分隔符。只剥所选 API 的
+  // 分隔符：POSIX 下反斜杠是合法文件名字符，`/tmp/foo\` 指的是名字以反斜杠结尾的目录，
+  // 跟着一起剥就指到了别的路径。不能直接用 `pathApi.resolve`：
+  // `path.win32.resolve("\\Users\\alex")` 会补上当前盘符（`C:\Users\alex`），把根相对输入
+  // 指到别处。
   if (pathApi.isAbsolute(directory)) {
     const normalized = pathApi.normalize(directory);
     const root = pathApi.parse(normalized).root;
-    return normalized.length > root.length ? normalized.replace(/[\\/]+$/, "") : normalized;
+    let end = normalized.length;
+    while (end > root.length && normalized[end - 1] === pathApi.sep) end -= 1;
+    return normalized.slice(0, end);
   }
 
   // 相对输入的基准是宿主状态，必须用宿主 path 拼接。普通相对路径的基准是启动器注入的
