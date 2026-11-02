@@ -103,7 +103,8 @@ function restoreSnapshotOrResetState(snapshot: AgentDirSnapshot, action: string)
 
 /**
  * 活动 agent 目录是否仍落在沙箱里。删掉沙箱前必须确认为 false：活动目录指向已删除
- * 的目录会让后续用例把数据写进不存在的路径。读不到活动目录时按「仍在沙箱」处理。
+ * 的目录会让后续用例把数据写进不存在的路径。读不到活动目录或比较不出结果时按
+ * 「仍在沙箱」处理。
  */
 function activeAgentDirWithinSandbox(root: string): boolean {
   let activeAgentDir: string;
@@ -116,7 +117,15 @@ function activeAgentDirWithinSandbox(root: string): boolean {
   // 与样本守卫共用同一套归一：沙箱根里的符号链接（macOS 的 /var → /private/var）
   // 与大小写不敏感平台都要折叠。否则经链接写成的活动目录会被判成在沙箱之外，
   // 删掉沙箱后活动目录就指向了已删除的路径。
-  return relativePathWithinNormalizedRoot(comparableDirectory(root), comparableDirectory(activeAgentDir)) !== null;
+  try {
+    return relativePathWithinNormalizedRoot(comparableDirectory(root), comparableDirectory(activeAgentDir)) !== null;
+  } catch (error) {
+    // 比较本身也要读文件系统（realpath），EACCES/EPERM/ELOOP 时比不出结论。此处只能
+    // 保守：保留目录只会漏删，删掉却会让后续用例写进已删除的路径；抛出还会中断
+    // t.after 的清理和用例对原始错误的报告。
+    warnCleanupFailure(`比较活动 agent 目录与沙箱（${root}）`, error);
+    return true;
+  }
 }
 
 function warnCleanupFailure(action: string, error: unknown): void {
