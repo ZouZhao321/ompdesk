@@ -150,8 +150,8 @@ test("lays every dot out with the measured pitch", async () => {
   // 空间足够时节距就是命中区高度 14px；放不下时由 railDotPitch 压缩节距，
   // 每条提问仍然保留一个可见圆点。
   assert.equal(RAIL_ROW_PX, 14);
-  assert.match(source, /style=\{\{ height: dotPitch \}\}/);
-  assert.match(source, /const next = railDotPitch\(available, dots\.length\);/);
+  assert.match(source, /style=\{\{ height: pitch \}\}/);
+  assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
   assert.doesNotMatch(styles, /\.transcript-rail-dot::before/);
   assert.match(declarations(".transcript-rail-dot {"), /width: var\(--transcript-rail-lane\);/);
 });
@@ -220,7 +220,10 @@ test("keeps the rail out of the tab order while it is hidden", () => {
   assert.match(styles.slice(mobileMedia), /\.transcript-rail \{\s*display: none;\s*\}/);
   // 只有一轮提问时干脆不渲染，圆点与按钮都不存在。
   assert.match(chatWindow, /shouldShowTranscriptRail\(railDots\.length\) && \(\s*<TranscriptRail/);
-  assert.doesNotMatch(source, /tabIndex=/);
+  // 圆点用 roving tabindex：只有当前圆点进 Tab 序列，方向键在圆点之间移动，
+  // 长会话不会让每个圆点都成为一次 Tab 停留。
+  assert.match(source, /tabIndex=\{index === activeDotIndex \? 0 : -1\}/);
+  assert.match(source, /onKeyDown=\{\(event\) => handleDotKeyDown\(event, index\)\}/);
 });
 
 test("puts the rail ahead of the transcript in the tab order", () => {
@@ -238,10 +241,12 @@ test("puts the rail ahead of the transcript in the tab order", () => {
 test("compresses the dot column instead of scrolling it", () => {
   // 全部圆点都要露出来：列高由节距乘数量得出，节距按可用高度均分；列内滚动与
   // 滚动位置居中都不再存在。
-  assert.match(source, /const next = railDotPitch\(available, dots\.length\);/);
-  assert.match(source, /style=\{\{\s*height: dotPitch \* dots\.length,\s*"--rail-dot-mark": `\$\{dotMarkPx\}px`,\s*\} as CSSProperties\}/);
+  assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
+  assert.match(source, /style=\{\{\s*height: pitch \* dots\.length,\s*"--rail-dot-mark": `\$\{dotMarkPx\}px`,\s*\} as CSSProperties\}/);
+  // 节距低于可用下限时整条收起；车道仍在布局里，窗口缩放后能重新判断。
+  assert.match(source, /style=\{railHidden \? \{ display: "none" \} : undefined\}/);
   // 窗口缩放改变高度时重算，不必等圆点数量变化。
-  assert.match(source, /const observer = new ResizeObserver\(apply\);\s*observer\.observe\(rail\);/);
+  assert.match(source, /const observer = new ResizeObserver\(apply\);\s*observer\.observe\(lane\);/);
   assert.doesNotMatch(source, /railScrollTop/);
   assert.doesNotMatch(styles, /overflow-y: auto/);
 });

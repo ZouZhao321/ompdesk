@@ -86,13 +86,18 @@ export function railCurrentDotIndex(
 /**
  * 圆点列的行高：把全部圆点铺进可用高度，上限是 `RAIL_ROW_PX`。
  *
- * 圆点数少于可放数量时保持 14px 节距；多到放不下时按数量均分，圆点数与提问数
- * 因此始终一致，没有藏在列内滚动里的圆点。
+ * 圆点数少于可放数量时保持 14px 节距；多到放不下时按数量均分。均分后低于
+ * `RAIL_MIN_PITCH_PX` 时返回 null，调用方收起整条跳转条——节距再小既点不中，
+ * 圆点也会叠成一条实线。
  */
-export function railDotPitch(availableHeight: number, dotCount: number): number {
+export function railDotPitch(availableHeight: number, dotCount: number): number | null {
   if (dotCount <= 0 || availableHeight <= 0) return RAIL_ROW_PX;
-  return Math.min(RAIL_ROW_PX, availableHeight / dotCount);
+  const pitch = Math.min(RAIL_ROW_PX, availableHeight / dotCount);
+  return pitch < RAIL_MIN_PITCH_PX ? null : pitch;
 }
+
+/** 圆点列能接受的最小节距（px）：再小就没有可用的命中区，跳转条整体收起。 */
+export const RAIL_MIN_PITCH_PX = 6;
 
 /** 逐轮跳转的方向：-1 上一条，1 下一条。 */
 export type RailStepDirection = -1 | 1;
@@ -120,6 +125,9 @@ export function railStepItemIndex(
 export function shouldShowTranscriptRail(dotCount: number): boolean {
   return dotCount > 1;
 }
+
+/** 顶部判定容差（px）：行顶落在视口顶边下方一行以内时仍算顶部可见。 */
+export const RAIL_TOP_SLACK_PX = 24;
 
 /**
  * 顶部可见条目：偏移不超过可见顶边的最后一条。

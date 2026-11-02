@@ -25,6 +25,7 @@ import {
   shouldShowTranscriptRail,
   RAIL_COLUMN_PADDING_PX,
   RAIL_COLUMN_WIDTH_PX,
+  RAIL_TOP_SLACK_PX,
   type RailRenderedItem,
 } from "@/lib/transcript-rail";
 import { FOLLOW_BOTTOM_THRESHOLD_PX } from "@/lib/transcript-follow";
@@ -625,7 +626,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
       const rect = row.getBoundingClientRect();
       items.push({ index, offset: rect.top - listTop, size: rect.height });
     }
-    const next = railTopVisibleItemIndex(items, visibleTop);
+    const next = railTopVisibleItemIndex(items, visibleTop + RAIL_TOP_SLACK_PX);
     setTopItemIndex((current) => (current === next ? current : next));
     // 最后一段比视口短时，贴底也会让顶部可见条目停在上一轮：高亮另按贴底判一次，
     // 口径与跟随、「回到底部」按钮相同。

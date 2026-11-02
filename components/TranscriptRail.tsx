@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import {
   RAIL_ROW_PX,
   railDotPitch,
@@ -29,8 +29,8 @@ interface TipAnchor {
 }
 
 /**
- * 提示框的锚点是否还立着：圆点被卸载、被圆点列的滚动裁到列外，或整条跳转条
- * 被 CSS 收起（量到零尺寸）都让提示无处可对。
+ * 提示框的锚点是否还立着：圆点被卸载，或整条跳转条被收起（量到零尺寸），
+ * 都让提示无处可对。
  */
 function isTipAnchorVisible(element: HTMLElement, column: HTMLElement | null): boolean {
   if (!element.isConnected) return false;
@@ -52,9 +52,10 @@ function Chevron({ direction }: { direction: "up" | "down" }) {
 /**
  * 贴在对话列右外侧的提问跳转条。
  *
- * 圆点从条目数组的分组结果来，点击只把条目下标交给列表；当前圆点由列表报告的
- * 顶部可见条目决定。圆点放不下时容器内部滚动，当前圆点保持在正中。移动档与
- * 没有多余车道时由 CSS 隐藏，首帧不会闪现。
+ * 圆点从条目数组的分组结果来，点击只把条目下标交给列表；当前圆点由视口顶部
+ * 所在的已挂载条目决定。圆点列铺满上下两条按钮之间的可用高度，数量多时压缩
+ * 节距，全部圆点始终露出；节距会小到失去可用命中区时整条收起。移动档与没有
+ * 多余车道时由 CSS 隐藏，首帧不会闪现。
  */
 export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChange, t }: Props) {
   const railRef = useRef<HTMLDivElement | null>(null);
@@ -68,28 +69,57 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
   const nextItemIndex = railStepItemIndex(dots, currentDotIndex, 1);
 
   // 每条提问都要有一个看得见的圆点：圆点列铺满上下两条按钮之间的高度，放不下时
-  // 按数量压缩节距，不再把多出来的圆点藏进列内滚动。
-  const [dotPitch, setDotPitch] = useState(RAIL_ROW_PX);
+  // 按数量压缩节距；节距会小于可用命中区下限时整条收起，不把圆点压成一条实线。
+  const [dotPitch, setDotPitch] = useState<number | null>(RAIL_ROW_PX);
+  const stepBlockRef = useRef(0);
   useLayoutEffect(() => {
     const rail = railRef.current;
-    if (!rail) return;
+    const lane = rail?.parentElement;
+    if (!rail || !lane) return;
     const apply = () => {
-      const steps = rail.querySelectorAll(".transcript-rail-step");
+      const laneHeight = lane.clientHeight;
+      if (laneHeight <= 0) return;
       let used = 0;
-      for (const step of steps) used += step.getBoundingClientRect().height;
-      const gapValue = Number.parseFloat(getComputedStyle(rail).rowGap);
-      const gap = Number.isFinite(gapValue) ? gapValue : 4;
-      const available = rail.clientHeight - used - gap * 2;
-      const next = railDotPitch(available, dots.length);
-      setDotPitch((current) => (Math.abs(current - next) < 0.5 ? current : next));
+      for (const step of rail.querySelectorAll(".transcript-rail-step")) {
+        used += step.getBoundingClientRect().height;
+      }
+      let block = stepBlockRef.current;
+      if (used > 0) {
+        const gapValue = Number.parseFloat(getComputedStyle(rail).rowGap);
+        const gap = Number.isFinite(gapValue) ? gapValue : 4;
+        block = used + gap * 2;
+        stepBlockRef.current = block;
+      }
+      // 收起状态下量不到按钮，用上一次量到的占位；车道始终在布局里，窗口缩放后
+      // 仍能重新判断要不要露出。
+      const next = railDotPitch(laneHeight - block, dots.length);
+      setDotPitch((current) => (current === next ? current : next));
     };
     apply();
     const observer = new ResizeObserver(apply);
-    observer.observe(rail);
+    observer.observe(lane);
     return () => observer.disconnect();
   }, [dots.length]);
+  const railHidden = dotPitch === null;
+  const pitch = dotPitch ?? RAIL_ROW_PX;
   // 节距变小时圆点跟着缩，相邻圆点才不会连成一条实线。
-  const dotMarkPx = Math.max(2, Math.min(6, dotPitch / 2));
+  const dotMarkPx = Math.min(6, Math.max(1, pitch / 2));
+  // 圆点用 roving tabindex：Tab 只停在当前圆点上，方向键在圆点之间移动，
+  // 长会话不会因为每个圆点都是停留点而挡住键盘用户。
+  const activeDotIndex = currentDotIndex >= 0 ? currentDotIndex : 0;
+  const handleDotKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let target = index;
+    if (event.key === "ArrowUp") target = index - 1;
+    else if (event.key === "ArrowDown") target = index + 1;
+    else if (event.key === "Home") target = 0;
+    else if (event.key === "End") target = dots.length - 1;
+    else return;
+    event.preventDefault();
+    const clamped = Math.min(Math.max(target, 0), dots.length - 1);
+    if (clamped === index) return;
+    onJump(dots[clamped].itemIndex);
+    dotsRef.current?.querySelectorAll<HTMLButtonElement>(".transcript-rail-dot")[clamped]?.focus();
+  }, [dots, onJump]);
 
   // 移动档与窄转写区都用 display: none 收起，量到零尺寸即不可见。
   const visibilityListenerRef = useRef(onVisibilityChange);
@@ -145,7 +175,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
   useEffect(() => {
     if (!tipVisible) return;
     let frame = 0;
-    // 锚点还立着才谈位置：圆点被卸载、被圆点列裁到列外、跳转条被 CSS 收起都收起提示。
+    // 锚点还立着才谈位置：圆点被卸载、跳转条被收起都收起提示。
     const anchorIsVisible = () => {
       const anchor = anchorRef.current;
       if (!anchor || !isTipAnchorVisible(anchor.element, dotsRef.current)) {
@@ -187,6 +217,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
         className="transcript-rail"
         role="navigation"
         aria-label={t("chat.transcriptRail")}
+        style={railHidden ? { display: "none" } : undefined}
       >
         <button
           type="button"
@@ -204,7 +235,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
           ref={dotsRef}
           className="transcript-rail-dots"
           style={{
-            height: dotPitch * dots.length,
+            height: pitch * dots.length,
             "--rail-dot-mark": `${dotMarkPx}px`,
           } as CSSProperties}
         >
@@ -215,11 +246,13 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
                 key={dot.itemIndex}
                 type="button"
                 className="transcript-rail-dot"
-                style={{ height: dotPitch }}
+                style={{ height: pitch }}
+                tabIndex={index === activeDotIndex ? 0 : -1}
                 aria-label={t("chat.jumpToPrompt", { index: index + 1 })}
                 aria-describedby={promptId}
                 aria-current={index === currentDotIndex ? "true" : undefined}
                 onClick={() => onJump(dot.itemIndex)}
+                onKeyDown={(event) => handleDotKeyDown(event, index)}
                 onMouseEnter={(event) => showTip(event.currentTarget, dot.prompt)}
                 onMouseLeave={hideTip}
                 onFocus={(event) => showTip(event.currentTarget, dot.prompt)}
