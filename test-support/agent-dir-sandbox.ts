@@ -5,8 +5,9 @@
  * 同层的其他子目录里：铺样本会把标题写进活动目录的 history.db，两者相同就会写进
  * 真实目录。用例结束时恢复进入沙箱前的活动目录，再删掉整棵临时目录。
  *
- * 切换目录的顺序固定为 setAgentDir → __resetDirsFromEnvForTests，恢复时连
- * PI_CODING_AGENT_DIR 一起还原；顺序写错会让目录解析读到上一轮的快照。
+ * 切换目录的顺序固定为 setAgentDir → __resetDirsFromEnvForTests →
+ * resetSessionIndexForTests，恢复时连 PI_CODING_AGENT_DIR 一起还原；顺序写错会让
+ * 目录解析或会话索引读到上一轮的快照。
  */
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -43,11 +44,16 @@ export interface AgentDirSandbox {
   agentDir: string;
 }
 
-/** 切换活动 agent 目录并重建目录解析状态，返回切换前的值供恢复。 */
+/**
+ * 切换活动 agent 目录并重建目录解析状态与会话索引，返回切换前的值供恢复。
+ *
+ * 会话索引缓存着打开时的 history.db 连接：只重建目录解析的话，切换后可能仍
+ * 沿用上一个 agent 目录的数据库。
+ */
 export function switchAgentDir(dir: string): AgentDirSnapshot {
   const snapshot = { agentDir: getAgentDir(), env: process.env.PI_CODING_AGENT_DIR };
   setAgentDir(dir);
-  __resetDirsFromEnvForTests();
+  resetAgentDirState();
   return snapshot;
 }
 
@@ -55,7 +61,13 @@ export function restoreAgentDir(snapshot: AgentDirSnapshot): void {
   setAgentDir(snapshot.agentDir);
   if (snapshot.env === undefined) delete process.env.PI_CODING_AGENT_DIR;
   else process.env.PI_CODING_AGENT_DIR = snapshot.env;
+  resetAgentDirState();
+}
+
+/** 目录解析与会话索引都从当前环境重建，两者必须一起复位。 */
+function resetAgentDirState(): void {
   __resetDirsFromEnvForTests();
+  resetSessionIndexForTests();
 }
 
 function warnCleanupFailure(action: string, error: unknown): void {
