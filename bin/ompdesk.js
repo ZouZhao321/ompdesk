@@ -22,7 +22,7 @@ const path = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { parseLaunchOptions } = require("./ompdesk-options");
+const { parseLaunchOptions, loopbackBindingError } = require("./ompdesk-options");
 const {
   getWebAuthStatus,
   resolveWebAuthFile,
@@ -57,6 +57,11 @@ try {
 
 
 const { port, hostname, openBrowser, authenticated, resetPassword } = parseLaunchOptions();
+const bindingError = loopbackBindingError(hostname);
+if (bindingError) {
+  console.error(bindingError);
+  process.exit(1);
+}
 const loopbackHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 // Resolved once here and handed to the server through the environment, so the
 // launcher and the Next.js process can never disagree about which credential

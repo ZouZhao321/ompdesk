@@ -9,7 +9,21 @@ export interface StaticMarkerAppearance {
   color: string;
   /** 无障碍文字使用的 i18n key。 */
   labelKey: string;
+  /** 带计数的无障碍文字使用的 i18n key，项目行按状态汇总时用。 */
+  countLabelKey: string;
 }
+
+/** 静态标记的固定展示顺序：项目行按这个顺序排列各状态的计数。 */
+export const STATIC_MARKER_STATUSES: readonly StaticMarkerStatus[] = [
+  "complete",
+  "interrupted",
+  "aborted",
+  "error",
+  "pending",
+];
+
+/** 未读会话按静态状态分组的计数；没有命中的状态不出现。 */
+export type StaticMarkerCounts = Partial<Record<StaticMarkerStatus, number>>;
 
 /**
  * 侧栏标记。
@@ -36,11 +50,31 @@ export interface SessionMarkerInput {
 
 /** 五种静态结果各自的主题颜色与无障碍文字。 */
 export const STATIC_MARKER_APPEARANCE: Record<StaticMarkerStatus, StaticMarkerAppearance> = {
-  complete: { color: "var(--success)", labelKey: "sidebar.sessionComplete" },
-  interrupted: { color: "var(--warning)", labelKey: "sidebar.sessionInterrupted" },
-  aborted: { color: "var(--text-muted)", labelKey: "sidebar.sessionAborted" },
-  error: { color: "var(--danger)", labelKey: "sidebar.sessionError" },
-  pending: { color: "var(--accent)", labelKey: "sidebar.sessionPending" },
+  complete: {
+    color: "var(--success)",
+    labelKey: "sidebar.sessionComplete",
+    countLabelKey: "sidebar.sessionCompleteWithCount",
+  },
+  interrupted: {
+    color: "var(--warning)",
+    labelKey: "sidebar.sessionInterrupted",
+    countLabelKey: "sidebar.sessionInterruptedWithCount",
+  },
+  aborted: {
+    color: "var(--text-muted)",
+    labelKey: "sidebar.sessionAborted",
+    countLabelKey: "sidebar.sessionAbortedWithCount",
+  },
+  error: {
+    color: "var(--danger)",
+    labelKey: "sidebar.sessionError",
+    countLabelKey: "sidebar.sessionErrorWithCount",
+  },
+  pending: {
+    color: "var(--accent)",
+    labelKey: "sidebar.sessionPending",
+    countLabelKey: "sidebar.sessionPendingWithCount",
+  },
 };
 
 /**

@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { startMemoryMonitor } from "./memory-monitor";
 import { importRuntimeModule } from "./runtime-import";
 
 /**
@@ -258,6 +259,7 @@ export async function configureLogging(options: ConfigureLoggingOptions = {}): P
     sdk.setTransports({ file: options.file ?? true, console: false });
     registerStdoutSink(sdk);
     transportState[TRANSPORTS_CONFIGURED] = true;
+    if (!explicit) startMemorySampling(env);
   } catch {
     // Bootstrapping diagnostics must never stop the server from starting.
   }
@@ -494,6 +496,9 @@ async function bootstrapRuntime(): Promise<void> {
     for (const record of pendingRecords.splice(0)) {
       writeThrough(sdk, record.level, record.message, record.context);
     }
+    // 打包后的进程从不调用 `configureLogging`（`lib/` 只存在于仓库检出里），
+    // 第一条记录触发的这里才是生产环境的启动点。
+    startMemorySampling();
   } catch {
     // A transport that cannot be installed leaves nowhere to write. Drop the
     // backlog and stop buffering instead of rejecting an unobserved promise.
@@ -514,6 +519,19 @@ function write(level: LogLevel, message: string, context: Record<string, unknown
   runtimeBootstrap ??= bootstrapRuntime().catch(() => {
     runtimeUnavailable = true;
     pendingRecords.length = 0;
+  });
+}
+
+/**
+ * 采样进程内存并写成 `process.memory`。
+ *
+ * 记录间隔随字段一起写入，读日志时不必再查环境变量；采样器在同一进程里只会启动一次，
+ * 重复调用是空操作。
+ */
+function startMemorySampling(env: NodeJS.ProcessEnv = process.env): void {
+  startMemoryMonitor({
+    env,
+    emit: (sample, intervalMs) => logEvent("debug", "process", "process.memory", { intervalMs, ...sample }),
   });
 }
 
