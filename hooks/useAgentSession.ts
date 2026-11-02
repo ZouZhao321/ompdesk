@@ -519,6 +519,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [goalStatus, setGoalStatus] = useState<GoalStatusInfo | null>(null);
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
+  // 上一次观测到的容器与 scrollTop：只有位置真的变了才算一次滚动，内容增高与行
+  // 重测量引起的距离变化不算。
+  const lastScrollRef = useRef<{ container: HTMLElement; top: number } | null>(null);
   // 跳转的落点由列表带着滚一串：这一串里读到的位置说明不了用户意图。一次性抑制器
   // 在跳转开始时合上，由列表停止滚动或跳转的兜底定时器松开。
   const followObservationHeldRef = useRef(false);
@@ -741,7 +744,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
       messagesLoaded = true;
       if (showLoading) setLoading(false);
-      if (!includeState) return null;
+      if (!includeState) return { running: false };
 
       try {
         const requestedRuntimeId = runtimeIdRef.current;
@@ -2207,7 +2210,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ...(args ? { customInstructions: args } : {}),
           }, runtimeIdRef);
           setCompactResult(readCompactResult(result, "manual"));
-          if (await loadSession(sid, true)) promoteNewSession();
+          const reloaded = await loadSession(sid, true);
+          if (reloaded && !("deferred" in reloaded)) promoteNewSession();
           return complete({ handled: true, message: "Compacted context" });
         }
 
@@ -2227,7 +2231,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (!sid) return complete({ handled: true, error: "No active session to name" });
           if (!args) return complete({ handled: true, error: "Usage: /name <name>" });
           await sendAgentCommand(sid, { type: "set_session_name", name: args }, runtimeIdRef);
-          if (await loadSession(sid)) promoteNewSession();
+          const reloaded = await loadSession(sid);
+          if (reloaded && !("deferred" in reloaded)) promoteNewSession();
           return complete({ handled: true, message: `Session renamed to ${args}` });
         }
 
@@ -2585,6 +2590,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleScrollPositionChange = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    // 先记下位置再判定：抑制器合上期间的那串滚动也要更新基准，松开后的第一帧
+    // 才不会把落点误当成一次新的位置变化。
+    const previousScroll = lastScrollRef.current;
+    const positionChanged = previousScroll === null
+      || previousScroll.container !== container
+      || previousScroll.top !== container.scrollTop;
+    lastScrollRef.current = { container, top: container.scrollTop };
     // 跳转自己的落点还在滚：这一串位置不参与判定，读到的一律丢掉。抑制器到点自己
     // 失效，调用方漏了松开也不会让跟随永久停摆。
     if (followObservationHeldRef.current && Date.now() < followObservationHoldUntilRef.current) return;
@@ -2592,14 +2606,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // 到点收回走同一个松开入口：合上状态与截止时间只有一处写。
       releaseFollowObservation();
     }
-    const container = scrollContainerRef.current;
-    if (!container) return;
     // 位置判定与运行状态无关：跳转在空闲期停掉的跟随，靠用户把视图滑回底部自愈，
     // 按运行状态早退会把这条路堵死。
     applyFollow({
       type: "scroll",
       userDriven: Date.now() <= userScrollIntentUntilRef.current,
       distanceFromBottom: container.scrollHeight - container.scrollTop - container.clientHeight,
+      positionChanged,
     });
   }, [applyFollow, releaseFollowObservation]);
 

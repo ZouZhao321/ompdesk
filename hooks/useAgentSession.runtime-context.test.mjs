@@ -406,6 +406,7 @@ test("a branch that lands first is not pulled back by an older session load", as
   const historyBody = deferred();
   const navigationRequested = deferred();
   const navigationBody = deferred();
+  let historyCount = 0;
   h.bindings.fetch = async (url) => {
     if (String(url).startsWith("/api/agent/")) {
       return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
@@ -414,8 +415,18 @@ test("a branch that lands first is not pulled back by an older session load", as
       navigationRequested.resolve();
       return { ok: true, json: () => navigationBody.promise };
     }
-    historyRequested.resolve();
-    return { ok: true, json: () => historyBody.promise };
+    historyCount += 1;
+    if (historyCount === 1) {
+      historyRequested.resolve();
+      return { ok: true, json: () => historyBody.promise };
+    }
+    // 让位后的重发读的是导航落定后的视图。
+    return response({
+      sessionId: "b",
+      runtimeId: "runtime:r1",
+      leafId: "target-leaf",
+      context: { messages: [{ role: "user", content: "target" }], entryIds: ["target-entry"] },
+    });
   };
 
   // agent_end / prompt_done 触发的整段载入先发出。
@@ -436,6 +447,9 @@ test("a branch that lands first is not pulled back by an older session load", as
     context: { messages: [{ role: "user", content: "persisted" }], entryIds: ["persisted-entry"] },
   }));
   assert.equal(await loading, null);
+  // 让位的那次载入会重发一次：等重发落地后，最终仍停在导航的目标分支上。
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(historyCount, 2);
   assert.equal(h.ui.ActiveLeafId, "target-leaf");
   assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
   assert.equal(h.bindings.appliedLeafIdRef.current, "target-leaf");
