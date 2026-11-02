@@ -180,8 +180,18 @@ export async function seedSessions(
   }
 }
 
+/**
+ * 手工入口：删掉 agentDir 下所有样本目录与替换阶段残留的中间目录。
+ *
+ * 删除前只做只读检查：目录不存在就直接返回，存在时只允许包含 sessions，与
+ * seedSessions 的守卫一致，误传真实 agent 目录会被拒绝；检查不创建任何目录。
+ */
 export async function resetSessionFixtures(agentDir: string): Promise<void> {
-  const sessionsDir = join(requireAgentDir(agentDir), SESSIONS_DIR);
+  const resolved = requireAgentDir(agentDir);
+  const entries = await readAgentDirEntries(resolved);
+  if (entries === null) return;
+  assertOnlySessions(entries);
+  const sessionsDir = join(resolved, SESSIONS_DIR);
   for (const entry of await listSessionDirectories(sessionsDir)) {
     const stale = entry.name.startsWith(STAGING_PREFIX) || entry.name.startsWith(BACKUP_PREFIX);
     if (entry.name.startsWith(FIXTURE_PREFIX) || stale) {
@@ -229,17 +239,26 @@ function parseTimestamp(timestamp: string): number {
  * models.yml，放行会把样本写进用户数据。
  */
 async function assertFixtureAgentDir(agentDir: string): Promise<void> {
-  let entries: string[];
+  const entries = await readAgentDirEntries(agentDir);
+  if (entries === null) {
+    await mkdir(agentDir, { recursive: true });
+    return;
+  }
+  assertOnlySessions(entries);
+}
+
+/** 只读列出 agentDir 顶层条目；目录不存在返回 null，不创建任何东西。 */
+async function readAgentDirEntries(agentDir: string): Promise<string[] | null> {
   try {
-    entries = await readdir(agentDir);
+    return await readdir(agentDir);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      await mkdir(agentDir, { recursive: true });
-      return;
-    }
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+}
 
+/** 只放行空目录或只有 sessions：带 agent.db、models.yml 的是真实 agent 目录。 */
+function assertOnlySessions(entries: readonly string[]): void {
   const unexpected = entries.filter((name) => name !== SESSIONS_DIR);
   if (unexpected.length > 0) {
     throw new Error(

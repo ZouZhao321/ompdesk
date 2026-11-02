@@ -400,7 +400,22 @@ test("resetSessionFixtures 删除全部场景目录与中间目录，重复调�
   assert.deepEqual(readdirSync(fixturesDir(sandbox.agentDir)), []);
 
   await resetSessionFixtures(sandbox.agentDir);
-  await resetSessionFixtures(join(sandbox.root, "missing"));
+  const missing = join(sandbox.root, "missing");
+  await resetSessionFixtures(missing);
+  assert.equal(existsSync(missing), false, "缺失目录不得被创建");
+});
+
+test("resetSessionFixtures 拒绝带 sessions 以外条目的 agentDir", async (t) => {
+  const sandbox = createSandbox(t);
+  await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+  writeFileSync(join(sandbox.agentDir, "agent.db"), "");
+
+  await assert.rejects(() => resetSessionFixtures(sandbox.agentDir), /agent\.db/);
+  assert.deepEqual(
+    readdirSync(fixturesDir(sandbox.agentDir)),
+    ["fixture-single-turn"],
+    "拒绝时不得删除样本",
+  );
 });
 
 test("用例自己切换活动 agent 目录，结束后恢复原值", (t) => {
