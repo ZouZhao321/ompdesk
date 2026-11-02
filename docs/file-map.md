@@ -89,6 +89,7 @@ git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文�
 request-security.ts  请求来源与主机校验
 source-wrap-preference.ts 源码视图换行开关的共享状态，查看器与预览共用
 logging.ts           服务端日志入口
+memory-monitor.ts    进程内存采样：process.memory 记录的数据来源
 sse-lifecycle.ts     两条 SSE 路由共用的连接生命周期
 http-dispatcher.ts   代理环境变量接线的运行时分支
 web-auth.ts          密码锁的读取方
