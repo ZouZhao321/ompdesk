@@ -72,6 +72,9 @@ type PendingNavigation = {
  */
 type SessionLoadDeferred = { deferred: true };
 
+/** 整段载入已应用、但调用方没有要求运行态时的返回值；与「未读运行态」区分开。 */
+type SessionLoadApplied = { applied: true };
+
 type StreamAction =
   | { type: "start" }
   | { type: "update"; message: Partial<AgentMessage> }
@@ -661,14 +664,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return false;
   }, [followSessionIdentity]);
 
-  const loadSessionRef = useRef<((sid: string, showLoading?: boolean, includeState?: boolean, retryAfterSettled?: boolean) => Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | null>) | null>(null);
+  const loadSessionRef = useRef<((sid: string, showLoading?: boolean, includeState?: boolean, retryAfterSettled?: boolean) => Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | SessionLoadApplied | null>) | null>(null);
 
   const loadSession = useCallback(async (
     sid: string,
     showLoading = false,
     includeState = false,
     retryAfterSettled = true,
-  ): Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | null> => {
+  ): Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | SessionLoadApplied | null> => {
     const requestId = ++historyRequestRef.current;
     const ownsHistory = () => mountedRef.current && sessionIdRef.current === sid && historyRequestRef.current === requestId;
     // 发出这次请求时的导航代数与在途目标。导航会自己写叶子与正文，这次载入只代表
@@ -746,7 +749,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
       messagesLoaded = true;
       if (showLoading) setLoading(false);
-      if (!includeState) return { running: false };
+      if (!includeState) return { applied: true };
 
       try {
         const requestedRuntimeId = runtimeIdRef.current;
@@ -2634,8 +2637,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       loadSession(session.id, true, true).then((agentState) => {
         const sid = sessionIdRef.current;
         if (!mountedRef.current || !sid) return;
-        // 首屏载入没有在途导航可让位；这里只是把「让位」从结果类型里摘掉。
-        if (!agentState || "deferred" in agentState) return;
+        // 首屏载入没有在途导航可让位；这里只是把「让位」与「未读运行态」从结果里摘掉。
+        if (!agentState || "deferred" in agentState || !("running" in agentState)) return;
         if (agentState.running) {
           loadTools(sid);
           if (
