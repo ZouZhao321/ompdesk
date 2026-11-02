@@ -616,6 +616,13 @@ test("resetSessionFixtures 拒绝真实用户配置根下的 agentDir，符号�
   const savedConfigDir = process.env.PI_CONFIG_DIR;
   process.env.PI_CONFIG_DIR = relative(homedir(), join(sandbox.root, "config-root"));
   try {
+    // 写之前先确认配置根确实落在沙箱里：PI_CONFIG_DIR 没生效或跨盘时
+    // getBaseConfigRoot() 会指回真实配置根，victim 就写进了用户数据。
+    assert.equal(
+      relative(sandbox.root, getBaseConfigRoot()),
+      "config-root",
+      "配置根应落在沙箱里",
+    );
     const realAgentDir = join(getBaseConfigRoot(), "agent");
     const victim = join(realAgentDir, "sessions", "fixture-single-turn", "victim.jsonl");
     mkdirSync(dirname(victim), { recursive: true });
