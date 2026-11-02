@@ -7,7 +7,7 @@
  * history.db，相同的话样本入口就写进了真实目录。
  */
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
@@ -342,6 +342,24 @@ test("sessions 下出现非 fixture 目录时拒绝铺样本", async (t) => {
 test("活动 agent 目录与目标 agentDir 相同时拒绝铺样本", async (t) => {
   const sandbox = createSandbox(t);
   switchAgentDir(sandbox.agentDir);
+  const before = readdirSync(sandbox.agentDir).sort();
+
+  await assert.rejects(
+    () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+    /活动 agent 目录/,
+  );
+
+  assert.deepEqual(readdirSync(sandbox.agentDir).sort(), before, "拒绝时目标目录不得新增文件");
+  assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
+});
+
+test("活动 agent 目录经符号链接指向目标目录时同样拒绝铺样本", async (t) => {
+  const sandbox = createSandbox(t);
+  const link = join(sandbox.root, "agent-link");
+  // Windows 建目录符号链接需要管理员或开发者模式，junction 不需要；POSIX 用 dir。
+  symlinkSync(sandbox.agentDir, link, process.platform === "win32" ? "junction" : "dir");
+
+  switchAgentDir(link);
   const before = readdirSync(sandbox.agentDir).sort();
 
   await assert.rejects(
