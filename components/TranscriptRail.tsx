@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
-  RAIL_MAX_HEIGHT_PX,
   RAIL_ROW_PX,
-  railScrollTop,
+  railDotPitch,
   railStepItemIndex,
   type TranscriptRailDot,
 } from "@/lib/transcript-rail";
@@ -68,18 +67,29 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
   const previousItemIndex = railStepItemIndex(dots, currentDotIndex, -1);
   const nextItemIndex = railStepItemIndex(dots, currentDotIndex, 1);
 
-  // 圆点列的实际高度可能被上下两条按钮挤到上限值以下，滚动位置按量到的算。
+  // 每条提问都要有一个看得见的圆点：圆点列铺满上下两条按钮之间的高度，放不下时
+  // 按数量压缩节距，不再把多出来的圆点藏进列内滚动。
+  const [dotPitch, setDotPitch] = useState(RAIL_ROW_PX);
   useLayoutEffect(() => {
-    const container = dotsRef.current;
-    if (!container) return;
+    const rail = railRef.current;
+    if (!rail) return;
     const apply = () => {
-      container.scrollTop = railScrollTop(currentDotIndex, dots.length, container.clientHeight);
+      const steps = rail.querySelectorAll(".transcript-rail-step");
+      let used = 0;
+      for (const step of steps) used += step.getBoundingClientRect().height;
+      const gapValue = Number.parseFloat(getComputedStyle(rail).rowGap);
+      const gap = Number.isFinite(gapValue) ? gapValue : 4;
+      const available = rail.clientHeight - used - gap * 2;
+      const next = railDotPitch(available, dots.length);
+      setDotPitch((current) => (Math.abs(current - next) < 0.5 ? current : next));
     };
     apply();
     const observer = new ResizeObserver(apply);
-    observer.observe(container);
+    observer.observe(rail);
     return () => observer.disconnect();
-  }, [currentDotIndex, dots.length]);
+  }, [dots.length]);
+  // 节距变小时圆点跟着缩，相邻圆点才不会连成一条实线。
+  const dotMarkPx = Math.max(2, Math.min(6, dotPitch / 2));
 
   // 移动档与窄转写区都用 display: none 收起，量到零尺寸即不可见。
   const visibilityListenerRef = useRef(onVisibilityChange);
@@ -190,7 +200,14 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
         >
           <Chevron direction="up" />
         </button>
-        <div ref={dotsRef} className="transcript-rail-dots" style={{ maxHeight: RAIL_MAX_HEIGHT_PX }}>
+        <div
+          ref={dotsRef}
+          className="transcript-rail-dots"
+          style={{
+            height: dotPitch * dots.length,
+            "--rail-dot-mark": `${dotMarkPx}px`,
+          } as CSSProperties}
+        >
           {dots.map((dot, index) => {
             const promptId = `transcript-rail-prompt-${dot.itemIndex}`;
             return (
@@ -198,7 +215,7 @@ export function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChan
                 key={dot.itemIndex}
                 type="button"
                 className="transcript-rail-dot"
-                style={{ height: RAIL_ROW_PX }}
+                style={{ height: dotPitch }}
                 aria-label={t("chat.jumpToPrompt", { index: index + 1 })}
                 aria-describedby={promptId}
                 aria-current={index === currentDotIndex ? "true" : undefined}

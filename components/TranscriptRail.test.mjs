@@ -32,7 +32,7 @@ test("opens the prompt tip on keyboard focus, not only on hover", () => {
   // 聚焦态与悬停态共用一套圆点样式，键盘用户看到的提示与鼠标一致。
   assert.match(
     styles,
-    /\.transcript-rail-dot:hover \.transcript-rail-dot-mark,\s*\.transcript-rail-dot:focus-visible \.transcript-rail-dot-mark \{[^}]*width: 12px;[^}]*background: var\(--accent-hover\);/,
+    /\.transcript-rail-dot:hover \.transcript-rail-dot-mark,\s*\.transcript-rail-dot:focus-visible \.transcript-rail-dot-mark \{[^}]*width: min\(12px, calc\(var\(--rail-dot-mark, 6px\) \* 2\)\);[^}]*background: var\(--accent-hover\);/,
   );
   assert.match(declarations(".transcript-rail-dot:focus-visible"), /outline: 2px solid var\(--accent\);/);
 });
@@ -145,12 +145,13 @@ test("derives the rail geometry from the region constants", async () => {
   assert.doesNotMatch(styles, /max-width: 899px/);
 });
 
-test("gives every dot a hit area as tall as its row", async () => {
-  const { RAIL_MAX_HEIGHT_PX, RAIL_ROW_PX } = await import("../lib/transcript-rail.ts");
-  // 节距就是命中区高度：24px 达标，相邻两点的命中区正好相接，不再靠伪元素外扩。
+test("lays every dot out with the measured pitch", async () => {
+  const { RAIL_ROW_PX } = await import("../lib/transcript-rail.ts");
+  // 空间足够时节距就是命中区高度 24px；放不下时由 railDotPitch 压缩节距，
+  // 每条提问仍然保留一个可见圆点。
   assert.equal(RAIL_ROW_PX, 24);
-  assert.equal(Math.floor(RAIL_MAX_HEIGHT_PX / RAIL_ROW_PX), 7, "180px 的圆点列放下 7 个整圆点");
-  assert.match(source, /style=\{\{ height: RAIL_ROW_PX \}\}/);
+  assert.match(source, /style=\{\{ height: dotPitch \}\}/);
+  assert.match(source, /const next = railDotPitch\(available, dots\.length\);/);
   assert.doesNotMatch(styles, /\.transcript-rail-dot::before/);
   assert.match(declarations(".transcript-rail-dot {"), /width: var\(--transcript-rail-lane\);/);
 });
@@ -234,13 +235,15 @@ test("puts the rail ahead of the transcript in the tab order", () => {
   assert.ok(up > 0 && dots > up && down > dots);
 });
 
-test("centers the dot column against its measured height", () => {
-  // 圆点列会被上下两条按钮压到上限值以下，滚动位置按量到的 clientHeight 算；
-  // 圆心落在行高一半处，落在 lib/transcript-rail.test.mjs 覆盖。
-  assert.match(source, /railScrollTop\(currentDotIndex, dots\.length, container\.clientHeight\)/);
-  assert.doesNotMatch(source, /railScrollTop\(currentDotIndex, dots\.length, RAIL_MAX_HEIGHT_PX\)/);
-  // 窗口缩放改变高度时重算，不必等当前圆点变化。
-  assert.match(source, /const observer = new ResizeObserver\(apply\);\s*observer\.observe\(container\);/);
+test("compresses the dot column instead of scrolling it", () => {
+  // 全部圆点都要露出来：列高由节距乘数量得出，节距按可用高度均分；列内滚动与
+  // 滚动位置居中都不再存在。
+  assert.match(source, /const next = railDotPitch\(available, dots\.length\);/);
+  assert.match(source, /style=\{\{\s*height: dotPitch \* dots\.length,\s*"--rail-dot-mark": `\$\{dotMarkPx\}px`,\s*\} as CSSProperties\}/);
+  // 窗口缩放改变高度时重算，不必等圆点数量变化。
+  assert.match(source, /const observer = new ResizeObserver\(apply\);\s*observer\.observe\(rail\);/);
+  assert.doesNotMatch(source, /railScrollTop/);
+  assert.doesNotMatch(styles, /overflow-y: auto/);
 });
 
 test("reports whether the rail is actually visible", () => {
