@@ -20,6 +20,8 @@ const TITLE_SINGLE_TURN = "伪造会话 single-turn";
 const TITLE_EMPTY = "伪造会话 empty";
 const TITLE_BRANCH = "伪造会话 branch";
 const TITLE_SUBAGENT = "伪造会话 subagent";
+const TITLE_TOOLS = "伪造会话 tools";
+const TITLE_LONG = "伪造会话 long";
 const USER_TEXT = "伪造会话 single-turn 的用户消息";
 
 const originalAgentDir = getAgentDir();
@@ -152,6 +154,105 @@ test("subagent 场景挂一个标题带 Sub 前缀的子会话", async (t) => {
   assert.ok(info.title.startsWith("Sub"));
 });
 
+test("tools 场景读回思考块、工具调用与结果回填", async (t) => {
+  const sandbox = createSandbox(t);
+  const [session] = await seedSessions("tools", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+  assert.equal(session.title, TITLE_TOOLS);
+
+  const manager = await SessionManager.open(session.path, dirname(session.path), undefined, {
+    suppressBreadcrumb: true,
+  });
+  try {
+    const messages = manager
+      .getEntries()
+      .filter((entry) => entry.type === "message")
+      .map((entry) => entry.message);
+    const assistantMessages = messages.filter((message) => message.role === "assistant");
+    const thinkingBlocks = assistantMessages.flatMap((message) =>
+      message.content.filter((block) => block.type === "thinking"),
+    );
+    const toolCalls = assistantMessages.flatMap((message) =>
+      message.content.filter((block) => block.type === "toolCall"),
+    );
+    const toolResults = messages.filter((message) => message.role === "toolResult");
+
+    assert.equal(thinkingBlocks.length, 2, "每轮助手消息都应带一个思考块");
+    assert.equal(toolCalls.length, 2, "两轮各有一个工具调用");
+    assert.deepEqual(toolCalls.map((call) => call.name), ["read", "bash"]);
+    assert.equal(toolResults.length, toolCalls.length, "每个工具调用都应有一条结果回填");
+    for (const result of toolResults) {
+      const call = toolCalls.find((candidate) => candidate.id === result.toolCallId);
+      assert.ok(call, `结果回填应指向已存在的调用 ${result.toolCallId}`);
+      assert.equal(result.toolName, call.name);
+    }
+  } finally {
+    await manager.close();
+  }
+});
+
+test("tools 场景的 messageCount 与读回条目数一致", async (t) => {
+  const sandbox = createSandbox(t);
+  const [session] = await seedSessions("tools", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+
+  const previous = switchAgentDir(sandbox.agentDir);
+  t.after(() => restoreAgentDir(previous));
+
+  const info = listInfoFor(await SessionManager.listAll(), session.id);
+  const manager = await SessionManager.open(session.path, dirname(session.path), undefined, {
+    suppressBreadcrumb: true,
+  });
+  try {
+    const messageEntries = manager.getEntries().filter((entry) => entry.type === "message");
+    assert.equal(messageEntries.length, 8);
+    assert.equal(info.messageCount, messageEntries.length);
+  } finally {
+    await manager.close();
+  }
+});
+
+test("long 场景至少 24 组消息，时间戳严格递增且用量为正", async (t) => {
+  const sandbox = createSandbox(t);
+  const [session] = await seedSessions("long", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+  assert.equal(session.title, TITLE_LONG);
+
+  const manager = await SessionManager.open(session.path, dirname(session.path), undefined, {
+    suppressBreadcrumb: true,
+  });
+  try {
+    const messages = manager
+      .getEntries()
+      .filter((entry) => entry.type === "message")
+      .map((entry) => entry.message);
+    const userMessages = messages.filter((message) => message.role === "user");
+    const assistantMessages = messages.filter((message) => message.role === "assistant");
+
+    assert.ok(userMessages.length >= 24, `应有至少 24 组消息，实际 ${userMessages.length}`);
+    assert.equal(assistantMessages.length, userMessages.length);
+    assert.equal(messages.length, userMessages.length * 2, "用户与助手消息应交替出现");
+    messages.forEach((message, index) => {
+      assert.equal(message.role, index % 2 === 0 ? "user" : "assistant");
+    });
+
+    const step = messages[1].timestamp - messages[0].timestamp;
+    assert.ok(step > 0, "时间戳应递增");
+    for (let index = 1; index < messages.length; index += 1) {
+      assert.ok(
+        messages[index].timestamp > messages[index - 1].timestamp,
+        `第 ${index} 条消息的时间戳应严格大于前一条`,
+      );
+      assert.equal(messages[index].timestamp - messages[index - 1].timestamp, step);
+    }
+
+    const totalTokens = assistantMessages.map((message) => message.usage.totalTokens);
+    assert.ok(
+      totalTokens.every((tokens) => tokens > 0),
+      `助手消息的 usage.totalTokens 应全为正数，实际 ${totalTokens.join(",")}`,
+    );
+  } finally {
+    await manager.close();
+  }
+});
+
 test("branch 与 subagent 场景重复铺设不增加文件，也不留下中间目录", async (t) => {
   const sandbox = createSandbox(t);
   const sessionsDir = fixturesDir(sandbox.agentDir);
@@ -174,11 +275,30 @@ test("branch 与 subagent 场景重复铺设不增加文件，也不留下中间
   assert.deepEqual(readdirSync(sessionsDir).sort(), ["fixture-branch", "fixture-subagent"]);
 });
 
+test("tools 与 long 场景重复铺设不增加文件，也不留下中间目录", async (t) => {
+  const sandbox = createSandbox(t);
+  const sessionsDir = fixturesDir(sandbox.agentDir);
+
+  for (const scenario of ["tools", "long"]) {
+    const scenarioDir = join(sessionsDir, `fixture-${scenario}`);
+    await seedSessions(scenario, { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+    const first = jsonlFiles(scenarioDir);
+
+    await seedSessions(scenario, { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+    const second = jsonlFiles(scenarioDir);
+
+    assert.equal(first.length, 1, `${scenario} 场景应只有一个会话文件`);
+    assert.equal(second.length, first.length);
+  }
+
+  assert.deepEqual(readdirSync(sessionsDir).sort(), ["fixture-long", "fixture-tools"]);
+});
+
 test("新场景同样拒绝带 sessions 以外条目的 agentDir", async (t) => {
   const sandbox = createSandbox(t);
   writeFileSync(join(sandbox.agentDir, "models.yml"), "");
 
-  for (const scenario of ["branch", "subagent"]) {
+  for (const scenario of ["branch", "subagent", "tools", "long"]) {
     await assert.rejects(
       () => seedSessions(scenario, { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
       /models\.yml/,
