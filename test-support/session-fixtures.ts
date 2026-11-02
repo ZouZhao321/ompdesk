@@ -67,23 +67,28 @@ const FS_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
 /**
  * 同一 agentDir 上的铺设与复位在进程内排队：每次铺设都会清扫该目录下所有
  * `.staging-*` 与 `.backup-fixture-*` 并整体替换场景目录，并发执行时一个铺设会
- * 删掉另一个的 staging 或回滚备份。队列按解析后的路径分桶，执行完最后一个排队者
- * 后自动摘除；跨进程不设约束，样本目录只给测试与手工验证使用。
+ * 删掉另一个的 staging 或回滚备份。队列按 `comparableDirectory` 的目录比较键分桶：
+ * 符号链接、大小写变体与真实路径指向同一目录时必须共用一条队列，按字面路径分桶会
+ * 让它们各自拿到一把锁。执行完最后一个排队者后自动摘除表项；跨进程不设约束，
+ * 样本目录只给测试与手工验证使用。
+ *
+ * 导出仅供测试验证排队语义：真实铺设的并发窗口太短，无法稳定复现锁失效。
  */
 const agentDirQueues = new Map<string, Promise<void>>();
 
-function withAgentDirLock<T>(agentDir: string, operation: () => Promise<T>): Promise<T> {
-  const previous = agentDirQueues.get(agentDir) ?? Promise.resolve();
+export function withAgentDirLock<T>(agentDir: string, operation: () => Promise<T>): Promise<T> {
+  const key = comparableDirectory(agentDir);
+  const previous = agentDirQueues.get(key) ?? Promise.resolve();
   // 前一个操作失败也要让后面排队的继续：两个分支都接操作本身，只传递完成信号。
   const run = previous.then(operation, operation);
   const settled = run.then(
     () => undefined,
     () => undefined,
   );
-  agentDirQueues.set(agentDir, settled);
+  agentDirQueues.set(key, settled);
   return run.finally(() => {
     // 后面已有排队者时它已经接管队尾，这里不能把它的表项删掉。
-    if (agentDirQueues.get(agentDir) === settled) agentDirQueues.delete(agentDir);
+    if (agentDirQueues.get(key) === settled) agentDirQueues.delete(key);
   });
 }
 
@@ -196,8 +201,11 @@ export async function seedSessions(
   const scenarioDir = join(agentDir, SESSIONS_DIR, `${FIXTURE_PREFIX}${scenario}`);
 
   return withAgentDirLock(agentDir, async () => {
-    await assertFixtureAgentDir(agentDir);
     const sessionsDir = join(agentDir, SESSIONS_DIR);
+    // sessions 的真实路径检查必须早于 assertFixtureAgentDir 的 mkdir 与清扫的删除：
+    // 链接目标一旦先被建目录或删掉 staging，守卫就失去意义。
+    assertSessionsDirInsideAgentDir(agentDir);
+    await assertFixtureAgentDir(agentDir);
     await sweepStaleDirectories(agentDir);
     await assertFixtureSessionsDir(sessionsDir);
     const stagingDir = join(sessionsDir, `${STAGING_PREFIX}${randomUUID()}`);
@@ -227,9 +235,9 @@ export async function seedSessions(
 /**
  * 手工入口：删掉 agentDir 下所有样本目录与替换阶段残留的中间目录。
  *
- * 守卫与 seedSessions 共用同一套（活动 agent 目录关系、真实用户配置根、顶层条目
- * 检查）：误传真实 agent 目录会被拒绝，符号链接也按真实路径判断。删除前只做只读
- * 检查：目录不存在就直接返回，检查不创建任何目录。
+ * 守卫与 seedSessions 共用同一套（活动 agent 目录关系、真实用户配置根、顶层条目、
+ * sessions 真实路径与内容）：误传真实 agent 目录会被拒绝，符号链接也按真实路径
+ * 判断。删除前只做只读检查：目录不存在就直接返回，检查不创建任何目录。
  */
 export async function resetSessionFixtures(agentDir: string): Promise<void> {
   const resolved = resolveFixtureAgentDir(agentDir);
@@ -237,8 +245,10 @@ export async function resetSessionFixtures(agentDir: string): Promise<void> {
     const entries = await readAgentDirEntries(resolved);
     if (entries === null) return;
     assertOnlySessions(entries);
-    await sweepStaleDirectories(resolved);
     const sessionsDir = join(resolved, SESSIONS_DIR);
+    assertSessionsDirInsideAgentDir(resolved);
+    await sweepStaleDirectories(resolved);
+    await assertFixtureSessionsDir(sessionsDir);
     for (const entry of await listSubdirectories(sessionsDir)) {
       if (entry.name.startsWith(FIXTURE_PREFIX)) {
         await removeWithRetry(join(sessionsDir, entry.name));
@@ -369,6 +379,23 @@ function assertOnlySessions(entries: readonly string[]): void {
   if (unexpected.length > 0) {
     throw new Error(
       `session-fixtures: agentDir 只能包含 ${SESSIONS_DIR} 与替换备份，实际还有 ${unexpected.join("、")}`,
+    );
+  }
+}
+
+/**
+ * `sessions` 的真实路径必须位于 agentDir 归一化路径之内：`sessions` 被换成指向别处
+ * 的符号链接时，`readdir` 与 `mkdir` 都照常工作，清扫会删掉链接目标里的 `.staging-*`，
+ * 样本也会写进链接目标。调用方必须在任何写入或删除之前执行本检查。
+ */
+function assertSessionsDirInsideAgentDir(agentDir: string): void {
+  const root = comparableDirectory(agentDir);
+  const sessions = comparableDirectory(join(agentDir, SESSIONS_DIR));
+  if (relativePathWithinNormalizedRoot(root, sessions) === null) {
+    throw new Error(
+      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 必须位于 agentDir 之内，`
+        + `实际解析到 ${sessions}（agentDir 为 ${root}）：`
+        + "符号链接会让清扫与样本写入落到链接目标。",
     );
   }
 }
