@@ -47,7 +47,17 @@ const SESSIONS_DIR = "sessions";
 const FIXTURE_PREFIX = "fixture-";
 const STAGING_PREFIX = ".staging-";
 const BACKUP_PREFIX = ".backup-";
-// Windows 上关闭写入句柄到改名或删除之间有延迟，rename 与 rm 会短暂报 EPERM/EBUSY/EACCES。
+// Windows 上关闭写入句柄到改名或删除之间有延迟，rename 与 rm 会短暂报这些错误：
+// EPERM/EBUSY/EACCES 来自句柄竞争，ENOTEMPTY 来自递归删除期间目录又被写入，
+// EMFILE/ENFILE 来自瞬时句柄耗尽。都按同一套延迟重试。
+const FS_RETRYABLE_CODES: Record<string, true> = {
+  EPERM: true,
+  EBUSY: true,
+  EACCES: true,
+  ENOTEMPTY: true,
+  EMFILE: true,
+  ENFILE: true,
+};
 const FS_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
 
 const SCENARIO_TITLES: Record<SessionScenario, string> = {
@@ -670,7 +680,7 @@ async function renameWithRetry(from: string, to: string): Promise<void> {
   await retryWhileBusy(() => rename(from, to));
 }
 
-/** 删除目录同样会在 Windows 上撞到 EPERM/EBUSY，与改名共用一套重试。 */
+/** 删除目录同样会在 Windows 上撞到句柄竞争，与改名共用一套重试。 */
 async function removeWithRetry(target: string): Promise<void> {
   await retryWhileBusy(() => rm(target, { recursive: true, force: true }));
 }
@@ -681,7 +691,7 @@ async function retryWhileBusy<T>(operation: () => Promise<T>): Promise<T> {
       return await operation();
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      const retryable = code === "EPERM" || code === "EBUSY" || code === "EACCES";
+      const retryable = code !== undefined && FS_RETRYABLE_CODES[code] === true;
       if (!retryable || attempt >= FS_RETRY_DELAYS_MS.length) {
         throw error;
       }
