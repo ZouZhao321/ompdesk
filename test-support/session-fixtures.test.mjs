@@ -413,3 +413,34 @@ test("用例自己切换活动 agent 目录，结束后恢复原值", (t) => {
   assert.equal(getAgentDir(), before.agentDir);
   assert.equal(process.env.PI_CODING_AGENT_DIR, before.env);
 });
+
+test("beforeRestore 抛错时仍恢复活动目录并删除沙箱", () => {
+  const before = { agentDir: getAgentDir(), env: process.env.PI_CODING_AGENT_DIR };
+  const cleanups = [];
+  const sandbox = createAgentDirSandbox(
+    { after: (callback) => cleanups.push(callback) },
+    {
+      prefix: "ompdesk-sandbox-cleanup-",
+      dirs: [],
+      beforeRestore() {
+        throw new Error("beforeRestore 故意抛错");
+      },
+    },
+  );
+  assert.notEqual(getAgentDir(), before.agentDir, "沙箱应把活动目录切到 runtime/agent");
+
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.map(String).join(" "));
+  try {
+    for (const cleanup of cleanups) cleanup();
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal(cleanups.length, 1);
+  assert.equal(getAgentDir(), before.agentDir, "清理后应恢复进入沙箱前的活动目录");
+  assert.equal(process.env.PI_CODING_AGENT_DIR, before.env);
+  assert.equal(existsSync(sandbox.root), false, "清理应删除沙箱目录");
+  assert.match(warnings.join("\n"), /beforeRestore/, "清理失败只告警，不抛给用例");
+});

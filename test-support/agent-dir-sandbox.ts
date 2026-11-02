@@ -58,11 +58,17 @@ export function restoreAgentDir(snapshot: AgentDirSnapshot): void {
   __resetDirsFromEnvForTests();
 }
 
+function warnCleanupFailure(action: string, error: unknown): void {
+  console.warn(`ompdesk 测试沙箱清理失败：${action}`, error);
+}
+
 /**
  * 铺出沙箱并把活动目录切进去，用例结束自动恢复与清理。
  *
- * 清理失败只记录：history.db 的句柄是模块级的，Windows 上关闭句柄到目录可删除
- * 之间有延迟，rm 会短暂报 EBUSY；临时目录交给系统回收，不翻转用例结果。
+ * 清理分四步执行，每步单独兜错并保证后面的步骤仍然执行：活动 agent 目录必须
+ * 恢复，临时目录必须尝试删除，否则后续用例会指向已删除的沙箱。失败只记录：
+ * history.db 的句柄是模块级的，Windows 上关闭句柄到目录可删除之间有延迟，rm 会
+ * 短暂报 EBUSY；临时目录交给系统回收，不翻转用例结果。
  */
 export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSandboxOptions): AgentDirSandbox {
   const root = mkdtempSync(join(tmpdir(), options.prefix));
@@ -71,13 +77,28 @@ export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSa
 
   const previous = switchAgentDir(agentDir);
   t.after(() => {
-    options.beforeRestore?.();
-    restoreAgentDir(previous);
-    resetSessionIndexForTests();
     try {
-      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      options.beforeRestore?.();
     } catch (error) {
-      console.warn(`ompdesk 测试沙箱清理失败：${root}`, error);
+      warnCleanupFailure(`beforeRestore（${root}）`, error);
+    } finally {
+      try {
+        restoreAgentDir(previous);
+      } catch (error) {
+        warnCleanupFailure(`恢复活动 agent 目录（${root}）`, error);
+      } finally {
+        try {
+          resetSessionIndexForTests();
+        } catch (error) {
+          warnCleanupFailure(`重置会话索引（${root}）`, error);
+        } finally {
+          try {
+            rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+          } catch (error) {
+            warnCleanupFailure(`删除临时目录 ${root}`, error);
+          }
+        }
+      }
     }
   });
 
