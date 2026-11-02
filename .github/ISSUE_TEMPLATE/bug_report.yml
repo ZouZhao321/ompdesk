@@ -61,6 +61,13 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: provider
+    attributes:
+      label: 模型提供方
+      description: 出问题这一轮使用的服务与模型名，决定问题出在界面还是模型调用。
+      placeholder: "例如 deepseek-v4.1-flash / 自建 OpenAI 兼容端点"
+
   - type: textarea
     id: logs
     attributes:

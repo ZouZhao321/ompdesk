@@ -83,7 +83,7 @@ A logging failure never fails the request or operation being logged.
 | `error` | Request or agent run that failed, a thrown route handler, a `client.error` report, compaction that ended with an error. |
 | `warn` | Rejected credentials or hosts, `4xx` requests, audit actions that failed, aborted or incomplete agent work, SSE close by controller failure or heartbeat failure. |
 | `info` | Successful requests, audit successes, run/tool/compaction lifecycle, stream open and normal close, `process.start`. |
-| `debug` | Diagnostic records; nothing in the current server paths requires debug, so normal operation produces none. |
+| `debug` | Diagnostic records: the periodic `process.memory` sample, and nothing else on the current server paths. |
 
 Concrete mappings:
 
@@ -101,6 +101,7 @@ Concrete mappings:
 | `OMP_LOG_LEVEL` | `debug` | Most verbose level written to the log **file and the stdout mirror**: `error`, `warn`, `info` or `debug`, case-insensitive. An unknown value falls back to `debug`. |
 | `OMPDESK_LOG_STDOUT` | unset | Mirror records to stdout. `1`, `true`, `yes`, `on` enable it; `0`, `false`, `no`, `off` disable it. When unset, stdout mirroring is on only when `NODE_ENV` is not `production`. |
 | `OMPDESK_SLOW_REQUEST_MS` | `1000` | Threshold for the `slow` flag on `http.request`. A positive number of milliseconds; anything else keeps the default. |
+| `OMPDESK_MEMORY_SAMPLE_MS` | `60000` | Interval between `process.memory` samples. `0` turns sampling off. A non-number, a negative value or anything below `1000` keeps the default. |
 | `OMPDESK_TRUST_PROXY` | unset | Trust `x-forwarded-for` / `x-real-ip` from a reverse proxy in front of ompdesk. `1`, `true`, `yes`, `on` enable it. When unset, the proxy records the client address as `local`: a directly reachable server cannot distinguish a real forwarding header from one the caller made up. |
 
 The Settings panel does not change the level or retention; both are process
@@ -163,6 +164,28 @@ applied.
 | `authEnabled` | Whether password access is on at startup. |
 | `mode` | `development` or `production`. |
 | `pid` | Server process id. |
+
+`process.memory` — one record per sample: immediately when sampling starts, then
+once per `OMPDESK_MEMORY_SAMPLE_MS`. It is written by the server process only;
+the session worker processes it spawns keep their own memory outside
+`process.memoryUsage()`. Sampling starts with the transport policy: at
+`process.start` in a source checkout, and on the first record when the server
+runs from a build. Tests and callers that pass an explicit log file start no
+sampler.
+
+| Field | Meaning |
+| --- | --- |
+| `rss` | Resident set size: physical memory the process holds, in bytes. |
+| `heapTotal` | JavaScript heap the runtime allocated, in bytes. |
+| `heapUsed` | JavaScript heap currently in use, in bytes. |
+| `external` | Native and buffer memory outside the JavaScript heap, in bytes. |
+| `arrayBuffers` | Part of `external` held by `ArrayBuffer`s and `Buffer`s, in bytes; `0` when the runtime does not report it. |
+| `uptimeSec` | Seconds since the process started. |
+| `intervalMs` | The interval this monitor is sampling at, so a gap can be told from a changed cadence. |
+
+`rss` is the figure a task manager shows. `heapUsed` against `heapTotal` says
+whether the heap is near its allocation; `external` above `rss - heapTotal`
+means the growth sits in buffers rather than in JavaScript objects.
 
 ### `http`
 

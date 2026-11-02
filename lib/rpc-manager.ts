@@ -32,6 +32,7 @@ import { untrustedProjectSessionOptions } from "./project-trust";
 import { resolveSessionSystemPrompts } from "./session-system-prompt";
 import { readDefaultModelRole } from "./model-roles";
 import { getOmpRuntime, getSettingsForCwd } from "./omp-runtime";
+import { flushSessionTelemetry, sessionTelemetry } from "./telemetry";
 import { PRESET_FULL } from "./tool-presets";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import type { SlashCommandInfo } from "./omp-types";
@@ -114,6 +115,10 @@ const IDLE_RESET_EVENT_TYPES = new Set([
 ]);
 
 const MAX_SUBAGENT_HISTORY = 128;
+
+// Upper bound on the telemetry flush that runs before a session is torn down;
+// an unreachable collector otherwise holds shutdown for the exporter timeout.
+const SHUTDOWN_FLUSH_TIMEOUT_MS = 3_000;
 
 const HANDOFF_ALLOWED_COMMAND_TYPES: Record<string, true> = {
   abort: true,
@@ -665,6 +670,7 @@ export class AgentSessionWrapper {
       this.promptRunning = false;
       this.resetIdleTimer();
       this.emit({ type: "prompt_done" });
+      void flushSessionTelemetry();
       notifyRunningChange();
     }
   }
@@ -912,7 +918,10 @@ export class AgentSessionWrapper {
             type: "prompt_error",
             errorMessage: error instanceof Error ? error.message : String(error),
           });
-          if (!streamingBehavior) this.emit({ type: "prompt_done" });
+          if (!streamingBehavior) {
+            this.emit({ type: "prompt_done" });
+            void flushSessionTelemetry();
+          }
           notifyRunningChange();
         };
 
@@ -935,7 +944,10 @@ export class AgentSessionWrapper {
           writeAgentRunRecords(queuedCommand
             ? this.runLog.command(queuedCommand, { ok: true, durationMs: performance.now() - startedAt })
             : this.runLog.finish());
-          if (!streamingBehavior) this.emit({ type: "prompt_done" });
+          if (!streamingBehavior) {
+            this.emit({ type: "prompt_done" });
+            void flushSessionTelemetry();
+          }
           notifyRunningChange();
         }).catch(failPrompt);
         return null;
@@ -1395,7 +1407,13 @@ export class AgentSessionWrapper {
         }
         await this.inner.extensionRunner?.emit?.({ type: "session_shutdown", reason: "quit" });
       } finally {
-        this.destroy();
+        // Destroy first so a slow collector cannot keep a dismantled session
+        // reachable; flushing afterwards is process-wide and loses nothing.
+        try {
+          this.destroy();
+        } finally {
+          await flushSessionTelemetry(SHUTDOWN_FLUSH_TIMEOUT_MS);
+        }
       }
     })();
     return this.shutdownPromise;
@@ -2030,7 +2048,14 @@ export async function startRpcSession(
       const systemPrompts = await resolveSessionSystemPrompts(sessionCwd);
 
       const { modelRegistry } = runtime;
-      const scope = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
+      // OTLP export is opt-in through `OTEL_EXPORTER_OTLP_*`; without an
+      // endpoint this resolves to `undefined` and nothing is instrumented.
+      // The enable switch is process-wide, so it reads the shared Settings
+      // instance rather than this session's project-scoped clone.
+      const [telemetry, scope] = await Promise.all([
+        sessionTelemetry(runtime.settings, modelRegistry),
+        resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings),
+      ]);
       const defaultRole = readDefaultModelRole(settings);
       const hasExistingMessages = sessionManager.buildSessionContext().messages.length > 0;
       const initial = hasExistingMessages
@@ -2053,6 +2078,9 @@ export async function startRpcSession(
         ...(toolsOption !== undefined ? { toolNames: toolsOption, restrictToolNames: true } : {}),
         ...(untrusted ?? {}),
       };
+      // Assign rather than spread so the option key is checked against
+      // `CreateAgentSessionOptions`; a spread would let a renamed key pass.
+      if (telemetry) sessionOptions.telemetry = telemetry;
       // omp's own applier, so a prompt file goes through the same templates the
       // CLI renders it with instead of overwriting the whole system prompt.
       applyResolvedSystemPromptInputs(sessionOptions, systemPrompts.systemPrompt, systemPrompts.appendPrompt);

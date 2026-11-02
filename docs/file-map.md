@@ -89,6 +89,7 @@ git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文�
 request-security.ts  请求来源与主机校验
 source-wrap-preference.ts 源码视图换行开关的共享状态，查看器与预览共用
 logging.ts           服务端日志入口
+memory-monitor.ts    进程内存采样：process.memory 记录的数据来源
 sse-lifecycle.ts     两条 SSE 路由共用的连接生命周期
 http-dispatcher.ts   代理环境变量接线的运行时分支
 web-auth.ts          密码锁的读取方
@@ -116,10 +117,11 @@ session-map.ts       .jsonl → 轮次树，并合并 fork 文件
 session-archive.ts   归档标记读写
 session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
 session-title.ts     omp 自带标题生成器的薄封装
+telemetry.ts         OTLP 导出：进程内注册一次 provider，每会话给配置，轮末 flush
 transcript-follow.ts 跟随开关的判定：提交与回到底部的处置、跳转停跟随、滚动位置的观测
 transcript-items.ts  把消息数组切成“一轮一项”的扁平条目：锚点、可见过程消息、正式回答与尾部
 transcript-live-tail.ts 把流式消息作为列表末尾的合成项接到条目数组，键与定位和条目同源
-transcript-rail.ts   提问跳转条的几何：落位与隐藏阈值、圆点、当前轮、圆点列内部滚动与逐轮步进
+transcript-rail.ts   提问跳转条的几何：落位与隐藏阈值、圆点、当前轮、压缩节距与逐轮步进
 transcript-rail-jump.ts 跳转的待清算目标：列表停稳或兜底到期时按实测高度只重新对齐一次
 transcript-view-state.ts 按会话与轮锚点保存过程组/工具块的展开状态与已取回的延迟内容正文
 transcript-virtual-list.ts 虚拟列表要的条目键与首屏定位，以及跟随输出开关
