@@ -1631,16 +1631,10 @@ span.linenumber {
   flex-direction: column;
   align-items: center;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
 }
-.transcript-rail-dots::-webkit-scrollbar {
-  display: none;
-}
-/* 行高由 lib/transcript-rail.ts 的 RAIL_ROW_PX 给出：24px 既是节距也是命中区高度
-   （WCAG 2.5.8 的最小目标），每个圆点各占一行、相邻命中区不重叠，也不用伪元素再
-   向外扩；这里只画 6px 圆点与胶囊。 */
+/* 行高由 lib/transcript-rail.ts 的 railDotPitch 给出：空间足够时以 RAIL_ROW_PX
+   为上限，圆点多到放不下时按数量压缩，所有提问都保留一个可见圆点；这里只画
+   圆点与胶囊，尺寸由 --rail-dot-mark 跟着节距走。 */
 .transcript-rail-dot {
   position: relative;
   display: flex;
@@ -1660,19 +1654,19 @@ span.linenumber {
 }
 .transcript-rail-dot-mark {
   display: block;
-  width: 6px;
-  height: 6px;
+  width: var(--rail-dot-mark, 6px);
+  height: var(--rail-dot-mark, 6px);
   border-radius: 999px;
   background: var(--text-dim);
   transition: width 0.12s ease, background-color 0.12s ease;
 }
 .transcript-rail-dot:hover .transcript-rail-dot-mark,
 .transcript-rail-dot:focus-visible .transcript-rail-dot-mark {
-  width: 12px;
+  width: min(12px, calc(var(--rail-dot-mark, 6px) * 2));
   background: var(--accent-hover);
 }
 .transcript-rail-dot[aria-current="true"] .transcript-rail-dot-mark {
-  width: 12px;
+  width: min(12px, calc(var(--rail-dot-mark, 6px) * 2));
   background: var(--accent);
 }
 /* 圆点的可访问描述：提问开头的文字版，只有屏幕阅读器读得到；

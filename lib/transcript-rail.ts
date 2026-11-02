@@ -5,16 +5,12 @@ export const RAIL_COLUMN_WIDTH_PX = 820;
 /** 版心内边距（px）：行盒两侧各留一份，app/globals.css 的 --chat-column-padding 与它同值。 */
 export const RAIL_COLUMN_PADDING_PX = 16;
 /**
- * 相邻圆点的中心距（px），也就是每个圆点的行高。行高同时就是命中区高度（WCAG 2.5.8
- * 的最小目标），相邻命中区因此正好相邻、不重叠也不留死区；圆点 6px 在行内居中。
+ * 相邻圆点的中心距上限（px），也是每条提问在空间足够时的命中区高度。
+ *
+ * 圆点列铺满上下两条按钮之间的可用高度：圆点多到放不下时按数量压缩节距，
+ * 所有提问始终各占一个可见圆点，与提问一一对应。
  */
 export const RAIL_ROW_PX = 24;
-/**
- * 圆点容器的最高高度（px）：7 个整圆点。必须是节距的整数倍——非整倍数时容器底边会
- * 切在行中间，那里露出的半个圆点既看不全也点不到，与「行高即命中区」冲突；168px 让
- * 底边落在行边界上，放得下的圆点整块可点，放不下的整块由容器内部滚动带走。
- */
-export const RAIL_MAX_HEIGHT_PX = 168;
 /** 悬停提示里保留的提问字符数，超出由两行省略收起。 */
 const RAIL_PROMPT_CHARS = 160;
 
@@ -87,21 +83,14 @@ export function railCurrentDotIndex(
 }
 
 /**
- * 圆点容器的内部滚动位置：把当前圆点放到容器正中，再夹回内容范围。
+ * 圆点列的行高：把全部圆点铺进可用高度，上限是 `RAIL_ROW_PX`。
  *
- * 行高是圆点的节距，圆点在行内垂直居中，圆心因此在行高的一半处。内容高度由
- * 固定行高乘圆点数得出，容器高度是圆点列的可见高度（调用方读实际 clientHeight，
- * 上下两条按钮挤占后它比上限值小）。只有当前圆点变化才重算，滚动位置不随列表
- * 滚动抖动。
+ * 圆点数少于可放数量时保持 24px 节距；多到放不下时按数量均分，圆点数与提问数
+ * 因此始终一致，没有藏在列内滚动里的圆点。
  */
-export function railScrollTop(currentDotIndex: number, dotCount: number, containerHeight: number): number {
-  if (dotCount <= 0 || containerHeight <= 0) return 0;
-  const contentHeight = dotCount * RAIL_ROW_PX;
-  const maxScroll = Math.max(contentHeight - containerHeight, 0);
-  if (maxScroll === 0) return 0;
-  const index = Math.min(Math.max(currentDotIndex, 0), dotCount - 1);
-  const dotCenter = index * RAIL_ROW_PX + RAIL_ROW_PX / 2;
-  return Math.min(Math.max(dotCenter - containerHeight / 2, 0), maxScroll);
+export function railDotPitch(availableHeight: number, dotCount: number): number {
+  if (dotCount <= 0 || availableHeight <= 0) return RAIL_ROW_PX;
+  return Math.min(RAIL_ROW_PX, availableHeight / dotCount);
 }
 
 /** 逐轮跳转的方向：-1 上一条，1 下一条。 */
