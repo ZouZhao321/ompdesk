@@ -53,13 +53,15 @@ COPY --from=build --chown=omp:omp /app/public ./public
 COPY --from=build --chown=omp:omp /app/bin ./bin
 COPY --from=build --chown=omp:omp /app/next.config.ts /app/package.json ./
 
-# OMPDESK_HOSTNAME binds every interface because a container is only reachable
-# from outside when it does; publish the port to 127.0.0.1 on the host to keep
+# A container is only reachable from outside when the server binds every
+# interface, so the image opts out of the loopback-only rule with
+# OMPDESK_ALLOW_NON_LOOPBACK; publish the port to 127.0.0.1 on the host to keep
 # it local. OMPDESK_NO_OPEN because there is no browser in here to open.
 ENV HOME=/home/omp \
     NODE_ENV=production \
     PORT=30141 \
     OMPDESK_HOSTNAME=0.0.0.0 \
+    OMPDESK_ALLOW_NON_LOOPBACK=1 \
     OMPDESK_NO_OPEN=1
 
 # `~/.omp/agent` is the directory the omp CLI writes: mount the host's copy here
