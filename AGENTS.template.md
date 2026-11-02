@@ -86,8 +86,29 @@ Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 
 ## 测试数据
 
 - 测试样本只从 `test-support/session-fixtures.ts` 生成，不手写会话文件。
-- 手工验证必须把 `PI_CODING_AGENT_DIR` 指向任务临时目录，生产历史不参与。
-- 手工验证时先铺样本再启动 `bun run dev`；发消息或切模型前，把 `agent.db` 与 `models.yml` 复制进该目录，或在该目录内重新登录。
+- 手工验证分两步，两步用的 agent 目录必须不同：铺样本会把标题写进活动目录的
+  `history.db`，活动目录与目标 `agentDir` 相同会直接报错。
+  1. 铺样本。首次先用 `bun run scratch` 建任务目录；活动目录放任务临时目录之外的
+     运行时目录，样本落到任务目录：
+
+     ```bash
+     bun run scratch manual-check "手工验证会话样本"
+     PI_CODING_AGENT_DIR="$PWD/.tmp/session-runtime" bun -e '
+       const { seedSessions } = await import("./test-support/session-fixtures.ts");
+       await seedSessions("branch", { agentDir: process.cwd() + "/.tmp/manual-check/agent", cwd: process.cwd() });
+     '
+     ```
+
+     铺样本时不要把 `PI_CODING_AGENT_DIR` 指向 `.tmp/manual-check/agent`：那是目标
+     `agentDir`，标题索引会写进样本目录。
+  2. 用铺好的目录启动开发服务，界面只显示这批样本：
+
+     ```bash
+     PI_CODING_AGENT_DIR="$PWD/.tmp/manual-check/agent" bun run dev
+     ```
+
+     要发消息或切模型时，把 `~/.omp/agent/agent.db` 与 `~/.omp/agent/models.yml`
+     复制进该目录，或在该目录内重新登录。
 
 ## 界面改动
 
