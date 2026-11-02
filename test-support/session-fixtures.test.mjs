@@ -15,7 +15,7 @@ import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { interopDefault: true });
-const { seedSessions, resetSessionFixtures } = await jiti.import("./session-fixtures.ts");
+const { seedSessions, resetSessionFixtures, withAgentDirLock } = await jiti.import("./session-fixtures.ts");
 const { createAgentDirSandbox, restoreAgentDir, switchAgentDir } = await jiti.import("./agent-dir-sandbox.ts");
 const { SessionManager } = await jiti.import("@oh-my-pi/pi-coding-agent");
 const { getAgentDir, getBaseConfigRoot, __resetDirsFromEnvForTests } = await jiti.import("@oh-my-pi/pi-utils/dirs");
@@ -388,6 +388,46 @@ test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
   assert.equal(listInfoFor(infos, emptySessions[0].id).title, TITLE_EMPTY);
 });
 
+/**
+ * 等价路径必须排进同一条队列：第一个操作在锁内停留，第二个操作只有等它结束才会
+ * 开始。按字面路径分桶时两者同时进入，记录顺序会出现交错。
+ */
+async function assertVariantsShareQueue(realAgentDir, variantAgentDir) {
+  const order = [];
+  const first = withAgentDirLock(realAgentDir, async () => {
+    order.push("first-start");
+    await pause(50);
+    order.push("first-end");
+  });
+  const second = withAgentDirLock(variantAgentDir, async () => {
+    order.push("second");
+  });
+  await Promise.all([first, second]);
+
+  assert.deepEqual(order, ["first-start", "first-end", "second"]);
+}
+
+test("同一 agentDir 的符号链接与真实路径共用一条队列", async (t) => {
+  const sandbox = createSandbox(t);
+  const linkAgentDir = join(sandbox.root, "agent-link");
+  if (!linkDirectory(t, sandbox.agentDir, linkAgentDir)) return;
+
+  await assertVariantsShareQueue(sandbox.agentDir, linkAgentDir);
+});
+
+test("同一 agentDir 的大小写变体共用一条队列", async (t) => {
+  // 大小写不敏感的文件系统才让变体指向同一目录；Windows 上稳定成立，其他平台跳过。
+  if (process.platform !== "win32") {
+    t.skip("大小写变体只在大小写不敏感的文件系统上指向同一目录");
+    return;
+  }
+  const sandbox = createSandbox(t);
+  const variantAgentDir = sandbox.agentDir.toUpperCase();
+  assert.notEqual(variantAgentDir, sandbox.agentDir, "变体路径必须与真实路径写法不同");
+
+  await assertVariantsShareQueue(sandbox.agentDir, variantAgentDir);
+});
+
 test("铺样本前清掉替换阶段残留的 .staging- 与 .backup- 目录", async (t) => {
   const sandbox = createSandbox(t);
   const sessionsDir = fixturesDir(sandbox.agentDir);
@@ -447,6 +487,29 @@ test("sessions 下指向别处的非 fixture 符号链接同样被守卫拒绝",
 
   assert.deepEqual(readdirSync(realSessions), ["real.jsonl"], "拒绝时不得改动链接目标");
   assert.deepEqual(readdirSync(sessionsDir), ["C--Users-alex-project"], "拒绝时不得删除链接");
+});
+
+test("sessions 本身指向 agentDir 之外时铺设与复位都拒绝，且不碰链接目标", async (t) => {
+  const sandbox = createSandbox(t);
+  const outsideSessions = join(sandbox.root, "outside-sessions");
+  const leftover = join(outsideSessions, ".staging-killed");
+  mkdirSync(leftover, { recursive: true });
+  writeFileSync(join(leftover, "keep.jsonl"), "");
+  if (!linkDirectory(t, outsideSessions, join(sandbox.agentDir, "sessions"))) return;
+
+  // 名字检查只看 sessions 下的条目：sessions 自己是链接时它会照常放行，清扫与
+  // 写入就落到链接目标。守卫必须在任何写入或删除之前按真实路径拒绝。
+  await assert.rejects(
+    () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+    /必须位于 agentDir 之内/,
+  );
+  await assert.rejects(
+    () => resetSessionFixtures(sandbox.agentDir),
+    /必须位于 agentDir 之内/,
+  );
+
+  assert.deepEqual(readdirSync(outsideSessions), [".staging-killed"], "拒绝时不得在链接目标里新建或删除条目");
+  assert.deepEqual(readdirSync(leftover), ["keep.jsonl"], "拒绝时不得删掉链接目标里的残留");
 });
 
 test("会话扫描看不到 agentDir 顶层的替换备份", async (t) => {
