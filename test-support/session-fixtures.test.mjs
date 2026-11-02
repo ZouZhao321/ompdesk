@@ -7,17 +7,16 @@
  * history.db，相同的话样本入口就写进了真实目录。
  */
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { interopDefault: true });
 const { seedSessions, resetSessionFixtures } = await jiti.import("./session-fixtures.ts");
+const { createAgentDirSandbox, restoreAgentDir, switchAgentDir } = await jiti.import("./agent-dir-sandbox.ts");
 const { SessionManager } = await jiti.import("@oh-my-pi/pi-coding-agent");
-const { getAgentDir, setAgentDir, __resetDirsFromEnvForTests } = await jiti.import("@oh-my-pi/pi-utils/dirs");
-const { resetSessionIndexForTests } = await jiti.import("@oh-my-pi/pi-coding-agent/session/session-index");
+const { getAgentDir } = await jiti.import("@oh-my-pi/pi-utils/dirs");
 
 const TITLE_SINGLE_TURN = "伪造会话 single-turn";
 const TITLE_EMPTY = "伪造会话 empty";
@@ -27,49 +26,19 @@ const TITLE_TOOLS = "伪造会话 tools";
 const TITLE_LONG = "伪造会话 long";
 const USER_TEXT = "伪造会话 single-turn 的用户消息";
 
-/** 切换 omp 的活动 agent 目录，返回切换前的值供恢复。 */
-function switchAgentDir(dir) {
-  const snapshot = { agentDir: getAgentDir(), env: process.env.PI_CODING_AGENT_DIR };
-  setAgentDir(dir);
-  __resetDirsFromEnvForTests();
-  return snapshot;
-}
-
-function restoreAgentDir(snapshot) {
-  setAgentDir(snapshot.agentDir);
-  if (snapshot.env === undefined) delete process.env.PI_CODING_AGENT_DIR;
-  else process.env.PI_CODING_AGENT_DIR = snapshot.env;
-  __resetDirsFromEnvForTests();
-}
-
 /**
  * 每个用例一份目录：活动目录、样本目录与工作目录各自独立，测试结束整体删除。
  */
 function createSandbox(t) {
-  const root = mkdtempSync(join(tmpdir(), "ompdesk-session-fixtures-"));
-  const runtimeAgentDir = join(root, "runtime", "agent");
-  const agentDir = join(root, "agent");
-  const cwd = join(root, "project");
-  for (const dir of [runtimeAgentDir, agentDir, cwd]) mkdirSync(dir, { recursive: true });
-
-  const previous = switchAgentDir(runtimeAgentDir);
-  t.after(() => {
-    restoreAgentDir(previous);
-    // history.db 的 sqlite 句柄在进程内保持打开，Windows 上删不掉文件本身。
-    resetSessionIndexForTests();
-    // Windows 上关闭句柄到目录可删除之间有延迟，rm 会短暂报 EBUSY；清理失败
-    // 不应翻转用例结果，临时目录交给系统回收。
-    try {
-      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-    } catch (error) {
-      console.warn(`ompdesk session-fixtures 测试清理失败：${root}`, error);
-    }
+  const sandbox = createAgentDirSandbox(t, {
+    prefix: "ompdesk-session-fixtures-",
+    dirs: ["agent", "project"],
   });
-
+  const agentDir = join(sandbox.root, "agent");
   return {
-    root,
+    root: sandbox.root,
     agentDir,
-    cwd,
+    cwd: join(sandbox.root, "project"),
     /** 把活动 agent 目录切到样本目录，之后的 SessionManager.listAll 才扫描样本。 */
     readFixtures() {
       switchAgentDir(agentDir);
