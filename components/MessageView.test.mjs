@@ -226,7 +226,9 @@ test("renders thinking markdown directly without a collapsible card", () => {
   assert.doesNotMatch(html, /aria-expanded/);
 });
 
-test("skips the loading state once a deferred thought has been fetched", () => {
+test("skips the loading state once a deferred thought has been fetched", (t) => {
+  // 单例里写入的正文会跨用例存活，结束时按会话清掉，避免顺序相关。
+  t.after(() => transcriptViewState.forgetSession("session-thinking"));
   const message = {
     role: "assistant",
     provider: "openai",
