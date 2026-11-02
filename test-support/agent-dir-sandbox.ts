@@ -87,7 +87,20 @@ export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSa
   const agentDir = join(root, RUNTIME_AGENT_DIR);
   for (const dir of [RUNTIME_AGENT_DIR, ...options.dirs]) mkdirSync(join(root, dir), { recursive: true });
 
-  const previous = switchAgentDir(agentDir);
+  let previous: AgentDirSnapshot;
+  try {
+    previous = switchAgentDir(agentDir);
+  } catch (error) {
+    // 切换可能停在半路（目录已改、索引还是旧的），此时 t.after 尚未注册，没人会
+    // 收拾这棵临时目录：先删掉，再把原始错误交给用例。
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch (cleanupError) {
+      warnCleanupFailure(`删除临时目录 ${root}`, cleanupError);
+    }
+    throw error;
+  }
+
   t.after(() => {
     try {
       options.beforeRestore?.();
