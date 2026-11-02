@@ -4,8 +4,9 @@
  *
  * 每个场景落在 <agentDir>/sessions/fixture-<scenario>。生成过程先写到同一层的
  * .staging-<随机> 目录，成功后整体替换场景目录：重复铺设不会累积文件，中途失败
- * 也不会留下半个场景；替换阶段被杀的进程留下的 .staging-* 与 .backup-* 在下次
- * 铺设前清掉。
+ * 也不会留下半个场景。被替换的旧场景改名到 <agentDir> 顶层的 .backup-<随机>
+ * 目录：它在 sessions 之外，删不掉也不会被会话列表当成额外会话。替换阶段被杀的
+ * 进程留下的 .staging-* 与 .backup-* 在下次铺设与复位前清掉。
  *
  * branch 与 subagent 场景的父会话先由 SessionManager.create 写出，经 staging 原子
  * 替换进场景目录后再用 SessionManager.open + createBranchedSession 补写子会话：
@@ -46,7 +47,10 @@ const DEFAULT_TIMESTAMP = "2026-01-01T00:00:00.000Z";
 const SESSIONS_DIR = "sessions";
 const FIXTURE_PREFIX = "fixture-";
 const STAGING_PREFIX = ".staging-";
+// 备份落在 agentDir 顶层而不是 sessions 里：删除失败也不会留下会被会话扫描读到的
+// .jsonl，只有我们自己的 fixture-* 备份会被守卫与清扫识别。
 const BACKUP_PREFIX = ".backup-";
+const FIXTURE_BACKUP_PREFIX = `${BACKUP_PREFIX}${FIXTURE_PREFIX}`;
 // Windows 上关闭写入句柄到改名或删除之间有延迟，rename 与 rm 会短暂报这些错误：
 // EPERM/EBUSY/EACCES 来自句柄竞争，ENOTEMPTY 来自递归删除期间目录又被写入，
 // EMFILE/ENFILE 来自瞬时句柄耗尽。都按同一套延迟重试。
@@ -159,8 +163,7 @@ export async function seedSessions(
   scenario: SessionScenario,
   options: SeedOptions,
 ): Promise<SeededSession[]> {
-  const agentDir = requireAgentDir(options?.agentDir);
-  assertActiveAgentDirSeparate(agentDir);
+  const agentDir = resolveFixtureAgentDir(options?.agentDir);
   if (!Object.hasOwn(SCENARIO_TITLES, scenario)) {
     throw new Error(`session-fixtures: 未知场景 ${String(scenario)}`);
   }
@@ -171,14 +174,14 @@ export async function seedSessions(
 
   await assertFixtureAgentDir(agentDir);
   const sessionsDir = join(agentDir, SESSIONS_DIR);
-  await sweepStaleDirectories(sessionsDir);
+  await sweepStaleDirectories(agentDir);
   await assertFixtureSessionsDir(sessionsDir);
   const stagingDir = join(sessionsDir, `${STAGING_PREFIX}${randomUUID()}`);
   await mkdir(stagingDir, { recursive: true });
 
   try {
     const plan = await buildScenario(scenario, { cwd: options.cwd, title, messageTime }, stagingDir);
-    const children = await replaceDirectory(stagingDir, scenarioDir, () => plan.extend(scenarioDir));
+    const children = await replaceDirectory(stagingDir, scenarioDir, agentDir, () => plan.extend(scenarioDir));
     return [...plan.sessions, ...children].map((session) => ({
       id: session.id,
       path: join(scenarioDir, basename(session.file)),
@@ -199,18 +202,19 @@ export async function seedSessions(
 /**
  * 手工入口：删掉 agentDir 下所有样本目录与替换阶段残留的中间目录。
  *
- * 删除前只做只读检查：目录不存在就直接返回，存在时只允许包含 sessions，与
- * seedSessions 的守卫一致，误传真实 agent 目录会被拒绝；检查不创建任何目录。
+ * 守卫与 seedSessions 共用同一套（活动 agent 目录关系、真实用户配置根、顶层条目
+ * 检查）：误传真实 agent 目录会被拒绝，符号链接也按真实路径判断。删除前只做只读
+ * 检查：目录不存在就直接返回，检查不创建任何目录。
  */
 export async function resetSessionFixtures(agentDir: string): Promise<void> {
-  const resolved = requireAgentDir(agentDir);
+  const resolved = resolveFixtureAgentDir(agentDir);
   const entries = await readAgentDirEntries(resolved);
   if (entries === null) return;
   assertOnlySessions(entries);
+  await sweepStaleDirectories(resolved);
   const sessionsDir = join(resolved, SESSIONS_DIR);
-  for (const entry of await listSessionDirectories(sessionsDir)) {
-    const stale = entry.name.startsWith(STAGING_PREFIX) || entry.name.startsWith(BACKUP_PREFIX);
-    if (entry.name.startsWith(FIXTURE_PREFIX) || stale) {
+  for (const entry of await listSubdirectories(sessionsDir)) {
+    if (entry.name.startsWith(FIXTURE_PREFIX)) {
       await removeWithRetry(join(sessionsDir, entry.name));
     }
   }
@@ -221,6 +225,34 @@ function requireAgentDir(agentDir: string | undefined): string {
     throw new Error("session-fixtures: 必须提供非空的 agentDir");
   }
   return resolve(agentDir);
+}
+
+/**
+ * seedSessions 与 resetSessionFixtures 共用的入口守卫：解析非空路径，再拒绝位于
+ * 真实用户配置根之下的目标，以及与活动 agent 目录冲突的目标。两处必须用同一套
+ * 判断，否则复位会绕过铺设的守卫，把真实目录里的样本删掉。
+ */
+function resolveFixtureAgentDir(agentDir: string | undefined): string {
+  const resolved = requireAgentDir(agentDir);
+  assertOutsideConfigRoot(resolved);
+  assertActiveAgentDirSeparate(resolved);
+  return resolved;
+}
+
+/**
+ * 真实用户配置根（`~/.omp`，含 profiles 与 PI_CONFIG_DIR 覆盖）之下的一切目录都
+ * 可能是真实 agent 目录：它可能尚未创建（顶层为空）或只含 sessions，条目检查都会
+ * 放行；符号链接按真实路径判断，指回配置根的链接同样拒绝。
+ */
+function assertOutsideConfigRoot(agentDir: string): void {
+  const configRoot = comparableDirectory(getBaseConfigRoot());
+  if (relativePathWithinNormalizedRoot(configRoot, comparableDirectory(agentDir)) !== null) {
+    throw new Error(
+      `session-fixtures: agentDir 不能位于真实用户配置根 ${configRoot} 之下（${agentDir}）：`
+        + "真实的 agent 目录可能尚未创建或只含 sessions，条目检查会放行，样本就会写进用户数据。"
+        + '请改用任务临时目录，例如 join(mkdtempSync(join(tmpdir(), "ompdesk-")), "agent")',
+    );
+  }
 }
 
 /**
@@ -305,21 +337,12 @@ function parseTimestamp(timestamp: string): number {
 
 /**
  * 只接受空目录或只有 sessions 的 agentDir：真实的 agent 目录带 agent.db 或
- * models.yml，放行会把样本写进用户数据。
+ * models.yml，放行会把样本写进用户数据。替换阶段残留的备份也放行，交给清扫删除。
  *
- * 尚未创建的真实 agent 目录（`~/.omp/agent` 首次运行前）顶层是空的，条目检查会
- * 直接放行再 mkdir；因此与活动目录守卫一致，配置根之下一律拒绝。
+ * 配置根之下的目录由 resolveFixtureAgentDir 提前拒绝；尚未创建的 agentDir
+ * 顶层为空，检查会直接放行，随后 mkdir。
  */
 async function assertFixtureAgentDir(agentDir: string): Promise<void> {
-  const configRoot = comparableDirectory(getBaseConfigRoot());
-  if (relativePathWithinNormalizedRoot(configRoot, comparableDirectory(agentDir)) !== null) {
-    throw new Error(
-      `session-fixtures: agentDir 不能位于真实用户配置根 ${configRoot} 之下（${agentDir}）：`
-        + "真实的 agent 目录可能尚未创建，空目录检查会放行，样本就写进了用户数据。"
-        + '请改用任务临时目录，例如 join(mkdtempSync(join(tmpdir(), "ompdesk-")), "agent")',
-    );
-  }
-
   const entries = await readAgentDirEntries(agentDir);
   if (entries === null) {
     await mkdir(agentDir, { recursive: true });
@@ -338,12 +361,17 @@ async function readAgentDirEntries(agentDir: string): Promise<string[] | null> {
   }
 }
 
-/** 只放行空目录或只有 sessions：带 agent.db、models.yml 的是真实 agent 目录。 */
+/**
+ * 只放行空目录、sessions 与替换阶段我们自己留下的 fixture 备份：带 agent.db、
+ * models.yml 的是真实 agent 目录。备份由清扫删除，名字必须是我们生成的形状。
+ */
 function assertOnlySessions(entries: readonly string[]): void {
-  const unexpected = entries.filter((name) => name !== SESSIONS_DIR);
+  const unexpected = entries.filter(
+    (name) => name !== SESSIONS_DIR && !name.startsWith(FIXTURE_BACKUP_PREFIX),
+  );
   if (unexpected.length > 0) {
     throw new Error(
-      `session-fixtures: agentDir 只能包含 ${SESSIONS_DIR}，实际还有 ${unexpected.join("、")}`,
+      `session-fixtures: agentDir 只能包含 ${SESSIONS_DIR} 与替换备份，实际还有 ${unexpected.join("、")}`,
     );
   }
 }
@@ -353,7 +381,7 @@ function assertOnlySessions(entries: readonly string[]): void {
  * 放行会把样本混进用户会话。
  */
 async function assertFixtureSessionsDir(sessionsDir: string): Promise<void> {
-  const unexpected = (await listSessionDirectories(sessionsDir))
+  const unexpected = (await listSubdirectories(sessionsDir))
     .filter((entry) => !entry.name.startsWith(FIXTURE_PREFIX))
     .map((entry) => entry.name);
   if (unexpected.length > 0) {
@@ -364,10 +392,10 @@ async function assertFixtureSessionsDir(sessionsDir: string): Promise<void> {
   }
 }
 
-async function listSessionDirectories(sessionsDir: string): Promise<Dirent[]> {
+async function listSubdirectories(root: string): Promise<Dirent[]> {
   let entries: Dirent[];
   try {
-    entries = await readdir(sessionsDir, { withFileTypes: true });
+    entries = await readdir(root, { withFileTypes: true });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
@@ -376,12 +404,19 @@ async function listSessionDirectories(sessionsDir: string): Promise<Dirent[]> {
 }
 
 /**
- * 进程在替换阶段被杀会留下 .staging-* 或 .backup-* 目录，里面的 .jsonl 会被
- * 会话列表当成额外会话，铺样本前先扫掉。
+ * 进程在替换阶段被杀会留下 .staging-*（sessions 下）或 .backup-*（agentDir 顶层）
+ * 目录：staging 里的 .jsonl 会被会话列表当成额外会话，必须先扫掉；备份在 sessions
+ * 之外，只是不再需要的垃圾，同样一并删除。铺样本与复位前都会调用。
  */
-async function sweepStaleDirectories(sessionsDir: string): Promise<void> {
-  for (const entry of await listSessionDirectories(sessionsDir)) {
-    if (entry.name.startsWith(STAGING_PREFIX) || entry.name.startsWith(BACKUP_PREFIX)) {
+async function sweepStaleDirectories(agentDir: string): Promise<void> {
+  for (const entry of await listSubdirectories(agentDir)) {
+    if (entry.name.startsWith(FIXTURE_BACKUP_PREFIX)) {
+      await removeWithRetry(join(agentDir, entry.name));
+    }
+  }
+  const sessionsDir = join(agentDir, SESSIONS_DIR);
+  for (const entry of await listSubdirectories(sessionsDir)) {
+    if (entry.name.startsWith(STAGING_PREFIX)) {
       await removeWithRetry(join(sessionsDir, entry.name));
     }
   }
@@ -658,15 +693,16 @@ function toolResultMessage(call: ToolCallSpec, text: string, timestamp: number):
  * 用 staging 目录整体替换场景目录，替换后在同一目录补写会话；任一步失败都删掉
  * 新目录并恢复原场景。
  *
- * 备份与 staging 同层，并真正以 .backup- 开头：这样清扫与 fixture-* 守卫都能
- * 覆盖替换阶段被杀的进程留下的备份。
+ * 备份落在 agentDir 顶层（`.backup-fixture-<scenario>-<uuid>`），不在 sessions 里：
+ * 删除失败也不会有 .jsonl 被会话扫描当成额外会话，残留由下次铺设或复位清扫。
  */
 async function replaceDirectory<T>(
   stagingDir: string,
   targetDir: string,
+  backupRoot: string,
   finish: () => Promise<T>,
 ): Promise<T> {
-  const backupDir = join(dirname(targetDir), `${BACKUP_PREFIX}${basename(targetDir)}-${randomUUID()}`);
+  const backupDir = join(backupRoot, `${BACKUP_PREFIX}${basename(targetDir)}-${randomUUID()}`);
   const replaceExisting = await pathExists(targetDir);
   if (replaceExisting) {
     await renameWithRetry(targetDir, backupDir);
@@ -699,7 +735,7 @@ async function replaceDirectory<T>(
     try {
       await removeWithRetry(backupDir);
     } catch (error) {
-      // 备份删不掉不影响已铺好的场景；残留的 .backup-* 会被列表当成额外会话，
+      // 备份删不掉不影响已铺好的场景，也不会出现在会话列表里：它在 sessions 之外，
       // 交给下次清扫或 resetSessionFixtures 处理，这里只记录，不翻转成功结果。
       console.warn(`session-fixtures: 删除备份 ${backupDir} 失败`, error);
     }
