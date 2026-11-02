@@ -162,12 +162,16 @@ function harness() {
     effects.push(["followTicket", followTicket]);
   };
   // Use an indirection only for fetch so responses can be scheduled per test.
+  bindings.loadSessionRef = { current: null };
   const callbackBindings = { ...bindings, fetch: (...args) => bindings.fetch(...args) };
   bindings.loadSession = callback("loadSession", callbackBindings);
+  bindings.loadSessionRef.current = bindings.loadSession;
   bindings.loadContext = callback("loadContext", callbackBindings);
   bindings.settleContextNavigation = callback("settleContextNavigation", bindings);
   // 两条导航路径共用同一个运行时搬移：命令成功才写运行时确认值，失败只留回执。
   bindings.moveRuntimeLeaf = callback("moveRuntimeLeaf", bindings);
+  // 两条导航路径共用同一个生命周期：先取到真实的导航入口再交给两条轻量入口。
+  bindings.runNavigation = callback("runNavigation", bindings);
   bindings.handleNavigate = callback("handleNavigate", bindings);
   bindings.handleLeafChange = callback("handleLeafChange", bindings);
   return { bindings, commands, effects, memory, storage, ui };
