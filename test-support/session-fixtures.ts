@@ -46,8 +46,8 @@ const SESSIONS_DIR = "sessions";
 const FIXTURE_PREFIX = "fixture-";
 const STAGING_PREFIX = ".staging-";
 const BACKUP_PREFIX = ".backup-";
-// Windows 上关闭写入句柄到目录可改名之间有延迟，rename 会短暂报 EPERM/EBUSY。
-const RENAME_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
+// Windows 上关闭写入句柄到改名或删除之间有延迟，rename 与 rm 会短暂报 EPERM/EBUSY/EACCES。
+const FS_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
 
 const SCENARIO_TITLES: Record<SessionScenario, string> = {
   "single-turn": "伪造会话 single-turn",
@@ -577,7 +577,12 @@ async function replaceDirectory<T>(
     await renameWithRetry(stagingDir, targetDir);
     result = await finish();
   } catch (error) {
-    await rm(targetDir, { recursive: true, force: true });
+    // 回滚删不掉新目录时用警告保底，不让清理错误盖掉原始错误，也不跳过备份恢复。
+    try {
+      await removeWithRetry(targetDir);
+    } catch (cleanupError) {
+      console.warn(`session-fixtures: 回滚删除 ${targetDir} 失败`, cleanupError);
+    }
     if (replaceExisting) {
       await renameWithRetry(backupDir, targetDir);
     }
@@ -586,9 +591,11 @@ async function replaceDirectory<T>(
 
   if (replaceExisting) {
     try {
-      await rm(backupDir, { recursive: true, force: true });
-    } catch {
-      // 备份删不掉不影响已铺好的场景；残留目录由下次清扫或 resetSessionFixtures 处理。
+      await removeWithRetry(backupDir);
+    } catch (error) {
+      // 备份删不掉不影响已铺好的场景；残留的 .backup-* 会被列表当成额外会话，
+      // 交给下次清扫或 resetSessionFixtures 处理，这里只记录，不翻转成功结果。
+      console.warn(`session-fixtures: 删除备份 ${backupDir} 失败`, error);
     }
   }
   return result;
@@ -605,17 +612,25 @@ async function pathExists(target: string): Promise<boolean> {
 }
 
 async function renameWithRetry(from: string, to: string): Promise<void> {
+  await retryWhileBusy(() => rename(from, to));
+}
+
+/** 删除目录同样会在 Windows 上撞到 EPERM/EBUSY，与改名共用一套重试。 */
+async function removeWithRetry(target: string): Promise<void> {
+  await retryWhileBusy(() => rm(target, { recursive: true, force: true }));
+}
+
+async function retryWhileBusy<T>(operation: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
-      await rename(from, to);
-      return;
+      return await operation();
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       const retryable = code === "EPERM" || code === "EBUSY" || code === "EACCES";
-      if (!retryable || attempt >= RENAME_RETRY_DELAYS_MS.length) {
+      if (!retryable || attempt >= FS_RETRY_DELAYS_MS.length) {
         throw error;
       }
-      await delay(RENAME_RETRY_DELAYS_MS[attempt]);
+      await delay(FS_RETRY_DELAYS_MS[attempt]);
     }
   }
 }
