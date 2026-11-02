@@ -681,7 +681,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}?${params}`);
       if (res.status === 404) {
-        if (showLoading && ownsHistory()) {
+        // 在途导航会自己写叶子与正文，这次 404 不能先把它们清掉；让导航落定后的
+        // 那次载入去判定会话是否真的不存在。
+        if (showLoading && ownsHistory() && navigatingLeafRef.current === null) {
           setData(null);
           appliedLeafIdRef.current = null;
           runtimeLeafIdRef.current = null;
@@ -2596,9 +2598,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // 先记下位置再判定：抑制器合上期间的那串滚动也要更新基准，松开后的第一帧
     // 才不会把落点误当成一次新的位置变化。
     const previousScroll = lastScrollRef.current;
-    const positionChanged = previousScroll === null
-      || previousScroll.container !== container
-      || previousScroll.top !== container.scrollTop;
+    const movedTowardEnd = previousScroll !== null
+      && previousScroll.container === container
+      && previousScroll.top < container.scrollTop;
     lastScrollRef.current = { container, top: container.scrollTop };
     // 跳转自己的落点还在滚：这一串位置不参与判定，读到的一律丢掉。抑制器到点自己
     // 失效，调用方漏了松开也不会让跟随永久停摆。
@@ -2613,7 +2615,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       type: "scroll",
       userDriven: Date.now() <= userScrollIntentUntilRef.current,
       distanceFromBottom: container.scrollHeight - container.scrollTop - container.clientHeight,
-      positionChanged,
+      movedTowardEnd,
     });
   }, [applyFollow, releaseFollowObservation]);
 

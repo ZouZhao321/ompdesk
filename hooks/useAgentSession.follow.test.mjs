@@ -107,7 +107,9 @@ test("recovers an idle jump's pause once the user drags back to the bottom", () 
 
   // 列表停稳（或兜底定时器到期）松开抑制器。
   h.releaseFollowObservation();
-  // 空闲期手动滑到底：位置一到贴底距离内就恢复，不看会话是否在跑、也不看窗口。
+  // 空闲期手动滑回底部：先离开底部、再朝末尾滑进贴底距离，位置真的在变才恢复。
+  h.reading(FOLLOW_BOTTOM_THRESHOLD_PX + 200);
+  assert.equal(h.isPaused(), true);
   h.reading(FOLLOW_BOTTOM_THRESHOLD_PX);
   assert.equal(h.isPaused(), false);
 });
