@@ -18,7 +18,7 @@ const jiti = createJiti(import.meta.url, { interopDefault: true });
 const { seedSessions, resetSessionFixtures } = await jiti.import("./session-fixtures.ts");
 const { createAgentDirSandbox, restoreAgentDir, switchAgentDir } = await jiti.import("./agent-dir-sandbox.ts");
 const { SessionManager } = await jiti.import("@oh-my-pi/pi-coding-agent");
-const { getAgentDir, getBaseConfigRoot } = await jiti.import("@oh-my-pi/pi-utils/dirs");
+const { getAgentDir, getBaseConfigRoot, __resetDirsFromEnvForTests } = await jiti.import("@oh-my-pi/pi-utils/dirs");
 
 const TITLE_SINGLE_TURN = "伪造会话 single-turn";
 const TITLE_EMPTY = "伪造会话 empty";
@@ -80,18 +80,49 @@ function listInfoFor(infos, id) {
   return info;
 }
 
+// staging 轮询从 2ms 起按倍数退避到上限，总窗口 10 秒：long 场景在慢机器上写会话
+// 文件可能远超固定 1 秒窗口，而轮询本身不该和铺设抢 CPU。
+const STAGING_POLL_INITIAL_MS = 2;
+const STAGING_POLL_MAX_MS = 70;
+const STAGING_WAIT_WINDOW_MS = 10_000;
+
+function hasStagingDirectory(sessionsDir) {
+  return existsSync(sessionsDir) && readdirSync(sessionsDir).some((name) => name.startsWith(".staging-"));
+}
+
+function pause(ms) {
+  return new Promise((resume) => setTimeout(resume, ms));
+}
+
 /**
  * 等到第一个铺设把 staging 目录写进 sessions。这一刻之后才开始铺第二个场景时，
  * 不排队的话它的清扫会删掉第一个铺设正在写的中间目录。
+ *
+ * 首个铺设的 promise 一起参与竞争：它提前失败时立刻把错误上抛，不让「没有产出
+ * staging」的断言在 1 秒后把真正的原因盖掉；它已经铺完却始终没看到 staging 时，
+ * 中间目录不会再出现，直接放行让两个铺设各自跑完。
  */
-async function waitForStaging(sessionsDir) {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    if (existsSync(sessionsDir) && readdirSync(sessionsDir).some((name) => name.startsWith(".staging-"))) {
-      return;
-    }
-    await new Promise((resume) => setTimeout(resume, 5));
+async function waitForStaging(sessionsDir, seeding) {
+  let seedingFailure = null;
+  let seedingSettled = false;
+  const settlement = seeding.then(
+    () => {
+      seedingSettled = true;
+    },
+    (error) => {
+      seedingFailure = error;
+      seedingSettled = true;
+    },
+  );
+  const deadline = Date.now() + STAGING_WAIT_WINDOW_MS;
+  for (let pollDelay = STAGING_POLL_INITIAL_MS; ; pollDelay = Math.min(pollDelay * 2, STAGING_POLL_MAX_MS)) {
+    if (hasStagingDirectory(sessionsDir)) return;
+    if (seedingFailure !== null) throw seedingFailure;
+    if (seedingSettled) return;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) assert.fail("铺设没有在预期时间内产出 staging 目录");
+    await Promise.race([settlement, pause(Math.min(pollDelay, remaining))]);
   }
-  assert.fail("铺设没有在预期时间内产出 staging 目录");
 }
 
 test("single-turn 场景生成后能被 SessionManager.listAll 读回", async (t) => {
@@ -337,11 +368,9 @@ test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
 
   // 铺设会清扫整棵目录下的 staging 与备份：不排队时后来者会把先行者正在写的
   // staging 删掉。先让 long 开始铺，等它的 staging 落盘后再铺第二个场景，两个
-  // 铺设同时在飞，两边都必须完整落地。
+  // 铺设同时在飞，两边都必须完整落地。等待期间先行者若提前失败，这里立刻上抛。
   const long = seedSessions("long", options);
-  // 等待期间先挂上失败处理，避免它的拒绝冒成未处理拒绝；Promise.all 仍能看到。
-  long.catch(() => {});
-  await waitForStaging(sessionsDir);
+  await waitForStaging(sessionsDir, long);
   const empty = seedSessions("empty", options);
   const [longSessions, emptySessions] = await Promise.all([long, empty]);
 
@@ -376,6 +405,48 @@ test("铺样本前清掉替换阶段残留的 .staging- 与 .backup- 目录", as
   sandbox.readFixtures();
   const infos = await SessionManager.listAll();
   assert.deepEqual(infos.map((info) => info.id), [reseeding.id], "残留目录不得变成额外会话");
+});
+
+test("替换残留是指向别处的符号链接时同样被清掉，链接目标保持原样", async (t) => {
+  const sandbox = createSandbox(t);
+  const sessionsDir = fixturesDir(sandbox.agentDir);
+  await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+
+  // 链接条目不是目录：只按 isDirectory() 过滤时这些残留会留下来，staging 里的
+  // .jsonl 会被会话列表读成额外会话。
+  const linkTarget = join(sandbox.root, "link-target");
+  mkdirSync(linkTarget, { recursive: true });
+  writeFileSync(join(linkTarget, "keep.jsonl"), "");
+  if (!linkDirectory(t, linkTarget, join(sessionsDir, ".staging-linked"))) return;
+  if (!linkDirectory(t, linkTarget, join(sandbox.agentDir, ".backup-fixture-linked"))) return;
+
+  await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+
+  assert.deepEqual(readdirSync(sessionsDir), ["fixture-single-turn"], "staging 链接必须被清掉");
+  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "备份链接必须被清掉");
+  assert.deepEqual(readdirSync(linkTarget), ["keep.jsonl"], "删除链接不得跟进目标目录");
+});
+
+test("sessions 下指向别处的非 fixture 符号链接同样被守卫拒绝", async (t) => {
+  const sandbox = createSandbox(t);
+  const sessionsDir = fixturesDir(sandbox.agentDir);
+  mkdirSync(sessionsDir, { recursive: true });
+
+  // 真实的 agent 目录按工作目录分桶：指向真实会话目录的链接必须走同一条拒绝路径，
+  // 否则样本会混进用户会话。
+  const realSessions = join(sandbox.root, "real-sessions");
+  mkdirSync(realSessions, { recursive: true });
+  writeFileSync(join(realSessions, "real.jsonl"), "");
+  const link = join(sessionsDir, "C--Users-alex-project");
+  if (!linkDirectory(t, realSessions, link)) return;
+
+  await assert.rejects(
+    () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+    /只允许 fixture-/,
+  );
+
+  assert.deepEqual(readdirSync(realSessions), ["real.jsonl"], "拒绝时不得改动链接目标");
+  assert.deepEqual(readdirSync(sessionsDir), ["C--Users-alex-project"], "拒绝时不得删除链接");
 });
 
 test("会话扫描看不到 agentDir 顶层的替换备份", async (t) => {
@@ -475,29 +546,32 @@ test("活动 agent 目录位于真实用户配置根之下时拒绝铺样本", a
   // 配置根是「家目录 + PI_CONFIG_DIR」，而 PI_CONFIG_DIR 只能是相对家目录的目录名：
   // 用指回沙箱的相对路径把配置根搬进临时目录，切换活动目录即使落盘也碰不到真实配置根。
   const savedConfigDir = process.env.PI_CONFIG_DIR;
-  process.env.PI_CONFIG_DIR = relative(homedir(), join(sandbox.root, "config-root"));
-  const configRoot = getBaseConfigRoot();
-  // 配置根下确定不存在的子目录：守卫只比较路径，切过去不写任何文件。
-  const absent = join(configRoot, `absent-agent-${randomUUID()}`);
-  let before;
   try {
+    process.env.PI_CONFIG_DIR = relative(homedir(), join(sandbox.root, "config-root"));
+    // 目录解析是模块级缓存：改完环境变量必须复位，否则守卫拿到的是旧配置根配新路径。
+    __resetDirsFromEnvForTests();
+    const configRoot = getBaseConfigRoot();
+    // 配置根下确定不存在的子目录：守卫只比较路径，切过去不写任何文件。
+    const absent = join(configRoot, `absent-agent-${randomUUID()}`);
     assert.equal(relative(sandbox.root, configRoot), "config-root", "配置根应落在沙箱里");
     assert.equal(existsSync(absent), false, "用例依赖的路径不得事先存在");
-    before = switchAgentDir(absent);
-    assert.equal(getAgentDir(), absent, "活动目录应切到不存在的子目录");
-    await assert.rejects(
-      () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-      /活动 agent 目录位于真实用户配置根/,
-    );
-    assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
-  } finally {
+    const before = switchAgentDir(absent);
     try {
-      if (before) restoreAgentDir(before);
+      assert.equal(getAgentDir(), absent, "活动目录应切到不存在的子目录");
+      await assert.rejects(
+        () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+        /活动 agent 目录位于真实用户配置根/,
+      );
+      assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
     } finally {
-      if (savedConfigDir === undefined) delete process.env.PI_CONFIG_DIR;
-      else process.env.PI_CONFIG_DIR = savedConfigDir;
+      restoreAgentDir(before);
     }
     assert.equal(existsSync(absent), false, "切到不存在的目录不得落盘");
+  } finally {
+    if (savedConfigDir === undefined) delete process.env.PI_CONFIG_DIR;
+    else process.env.PI_CONFIG_DIR = savedConfigDir;
+    // 恢复环境变量之后同样复位：缓存里的配置根必须回到用例开始前的那一份。
+    __resetDirsFromEnvForTests();
   }
 });
 
@@ -614,8 +688,10 @@ test("resetSessionFixtures 拒绝真实用户配置根下的 agentDir，符号�
   const sandbox = createSandbox(t);
   // 与铺样本的用例一致：把配置根搬进沙箱，避免复位真的碰到用户配置根。
   const savedConfigDir = process.env.PI_CONFIG_DIR;
-  process.env.PI_CONFIG_DIR = relative(homedir(), join(sandbox.root, "config-root"));
   try {
+    process.env.PI_CONFIG_DIR = relative(homedir(), join(sandbox.root, "config-root"));
+    // 目录解析是模块级缓存：改完环境变量必须复位，否则复位守卫比较的是旧配置根。
+    __resetDirsFromEnvForTests();
     // 写之前先确认配置根确实落在沙箱里：PI_CONFIG_DIR 没生效或跨盘时
     // getBaseConfigRoot() 会指回真实配置根，victim 就写进了用户数据。
     assert.equal(
@@ -640,6 +716,8 @@ test("resetSessionFixtures 拒绝真实用户配置根下的 agentDir，符号�
   } finally {
     if (savedConfigDir === undefined) delete process.env.PI_CONFIG_DIR;
     else process.env.PI_CONFIG_DIR = savedConfigDir;
+    // 恢复环境变量之后同样复位：缓存里的配置根必须回到用例开始前的那一份。
+    __resetDirsFromEnvForTests();
   }
 });
 
