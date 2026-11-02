@@ -75,6 +75,7 @@ export function ProjectRow({
     <div
       ref={menuRef}
       className="sidebar-project-row"
+      data-project-path={project}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
       onFocus={() => setFocusWithin(true)}

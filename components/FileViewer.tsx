@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
-import {
-  Prism as SyntaxHighlighter,
-  createElement as renderSyntaxNode,
-  type SyntaxHighlighterProps,
-} from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { useEffect, useState, useRef, useCallback, useMemo, type MouseEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import { useTheme } from "@/hooks/useTheme";
+import { SourceView, SOURCE_CODE_STYLE, SOURCE_LINE_NUMBER_STYLE } from "./SourceCodeView";
 import {
   DOCX_PREVIEW_MAX_BYTES,
   getFileExt,
@@ -28,17 +22,29 @@ import { FrontmatterCard } from "./FrontmatterCard";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
 import { useI18n } from "@/hooks/useI18n";
+import { useCommentTranslationLookup, useCommentTranslationPreference } from "@/hooks/useCommentTranslation";
+import { extractCommentEntries } from "@/lib/comment-entries";
+import {
+  commentTranslationKeys,
+  commentTranslationRows,
+  commentTranslationTarget,
+} from "@/lib/comment-translation-render";
+import { setCommentTranslationPreference } from "@/lib/comment-translation-preference";
+import { setSourceWrapLines } from "@/lib/source-wrap-preference";
+import { useSourceWrapLines } from "@/hooks/useSourceWrapLines";
 
 interface Props {
   filePath: string;
   cwd?: string;
   sourceSessionId?: string | null;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, sourceSessionId?: string | null) => void;
   onMentionLines?: (relativePath: string, startLine: number, endLine: number) => void;
   /** Insert this file's relative path into the chat input (@ mention). */
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   gitRefreshKey?: number;
   initialDisplayMode?: DisplayMode;
+  /** 面板中只有当前标签保持文件监听与快捷键；隐藏标签传 false。 */
+  active?: boolean;
 }
 
 interface FileData {
@@ -55,34 +61,6 @@ const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   diff: "Diff",
 };
 
-const FILE_CODE_STYLE: CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 13,
-  lineHeight: 1.6,
-};
-
-const FILE_LINE_NUMBER_STYLE: CSSProperties = {
-  width: 48,
-  minWidth: 48,
-  padding: "0 10px",
-  textAlign: "right",
-  color: "var(--text-dim)",
-  background: "var(--bg-panel)",
-  borderRight: "1px solid var(--border)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  fontStyle: "normal",
-  fontVariantNumeric: "tabular-nums",
-  lineHeight: "20.8px",
-  userSelect: "none",
-  flexShrink: 0,
-  verticalAlign: "top",
-};
-
-type SourceCodeRendererProps = Parameters<NonNullable<SyntaxHighlighterProps["renderer"]>>[0] & {
-  wrapLines: boolean;
-};
-
 interface SelectedLineRange {
   startLine: number;
   endLine: number;
@@ -97,11 +75,29 @@ function MentionIcon() {
   );
 }
 
+/** 相邻的源码行，跳过不占行号的译文行。 */
+function adjacentSourceLine(element: HTMLElement, direction: "next" | "previous"): HTMLElement | null {
+  let sibling = direction === "next" ? element.nextElementSibling : element.previousElementSibling;
+  while (sibling) {
+    if (sibling instanceof HTMLElement && sibling.matches(".file-source-line[data-line-number]")) return sibling;
+    sibling = direction === "next" ? sibling.nextElementSibling : sibling.previousElementSibling;
+  }
+  return null;
+}
+
 function closestSourceLine(node: Node): HTMLElement | null {
   const element = node.nodeType === Node.ELEMENT_NODE
     ? node as Element
     : node.parentElement;
-  return element?.closest<HTMLElement>(".file-source-line[data-line-number]") ?? null;
+  if (!element) return null;
+
+  const sourceLine = element.closest<HTMLElement>(".file-source-line[data-line-number]");
+  if (sourceLine) return sourceLine;
+
+  // 译文行属于它上方那条源码行：选区落进译文行时按该行取行号，
+  // 引用到对话的行号与关闭译文时完全一致。
+  const translation = element.closest<HTMLElement>(".file-comment-translation");
+  return translation ? adjacentSourceLine(translation, "previous") : null;
 }
 
 function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | null): SelectedLineRange | null {
@@ -128,8 +124,8 @@ function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | nu
       selectedSuffix.selectNodeContents(startContent);
       selectedSuffix.setStart(range.startContainer, range.startOffset);
       if (selectedSuffix.toString().length === 0) {
-        const nextLine = startElement.nextElementSibling;
-        if (nextLine instanceof HTMLElement && nextLine.matches(".file-source-line[data-line-number]")) {
+        const nextLine = adjacentSourceLine(startElement, "next");
+        if (nextLine) {
           startElement = nextLine;
           startLine = Number(startElement.dataset.lineNumber);
         }
@@ -142,8 +138,8 @@ function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | nu
       selectedPrefix.selectNodeContents(endContent);
       selectedPrefix.setEnd(range.endContainer, range.endOffset);
       if (selectedPrefix.toString().length === 0) {
-        const previousLine = endElement.previousElementSibling;
-        if (previousLine instanceof HTMLElement && previousLine.matches(".file-source-line[data-line-number]")) {
+        const previousLine = adjacentSourceLine(endElement, "previous");
+        if (previousLine) {
           endElement = previousLine;
           endLine = Number(endElement.dataset.lineNumber);
         }
@@ -155,47 +151,75 @@ function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | nu
   return { startLine, endLine };
 }
 
-function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: SourceCodeRendererProps) {
-  return rows.map((row, lineIndex) => {
-    const children = row.children ?? [];
-    const firstChildClasses = children[0]?.properties?.className;
-    const hasLineNumber = Array.isArray(firstChildClasses)
-      && firstChildClasses.includes("react-syntax-highlighter-line-number");
-    const lineNumberNode = hasLineNumber ? children[0] : null;
-    const contentNodes = hasLineNumber ? children.slice(1) : children;
+type WatchPayload = { size?: number; mtime?: string };
 
-    return (
-      <span
-        className="file-source-line"
-        data-line-number={lineIndex + 1}
-        key={`source-line-${lineIndex}`}
-        style={{ display: "flex", minWidth: "100%" }}
-      >
-        {lineNumberNode && renderSyntaxNode({
-          node: lineNumberNode,
-          stylesheet,
-          useInlineStyles,
-          key: `source-line-number-${lineIndex}`,
-        })}
-        <span
-          className="file-source-line-content"
-          style={{
-            flex: "1 1 auto",
-            minWidth: 0,
-            overflowWrap: wrapLines ? "anywhere" : "normal",
-            whiteSpace: wrapLines ? "pre-wrap" : "pre",
-          }}
-        >
-          {contentNodes.map((node, tokenIndex) => renderSyntaxNode({
-            node,
-            stylesheet,
-            useInlineStyles,
-            key: `source-token-${lineIndex}-${tokenIndex}`,
-          }))}
-        </span>
-      </span>
-    );
-  });
+function parseWatchPayload(event: MessageEvent): WatchPayload {
+  try {
+    return JSON.parse(event.data) as WatchPayload;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 订阅单个文件的 watch 流：只有当前标签保持连接，重连时用 connected 带回的
+ * mtime 判断隐藏期间是否有变化，变化才调用 onChanged。
+ */
+function useFileWatch({
+  filePath,
+  sourceSessionId,
+  active,
+  onChanged,
+}: {
+  filePath: string;
+  sourceSessionId?: string | null;
+  active: boolean;
+  onChanged: (payload: WatchPayload) => void;
+}): boolean {
+  const [watching, setWatching] = useState(false);
+  const esRef = useRef<EventSource | null>(null);
+  const lastMtimeRef = useRef<string | null>(null);
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged;
+
+  useEffect(() => {
+    setWatching(false);
+
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+    if (!active) return;
+
+    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
+    esRef.current = es;
+
+    const applyChange = (payload: WatchPayload) => {
+      if (typeof payload.mtime === "string") lastMtimeRef.current = payload.mtime;
+      onChangedRef.current(payload);
+    };
+
+    es.addEventListener("connected", (e) => {
+      setWatching(true);
+      const d = parseWatchPayload(e);
+      if (typeof d.mtime !== "string") return;
+      if (lastMtimeRef.current && lastMtimeRef.current !== d.mtime) {
+        applyChange(d);
+        return;
+      }
+      lastMtimeRef.current = d.mtime;
+    });
+    es.addEventListener("change", (e) => applyChange(parseWatchPayload(e)));
+    es.addEventListener("error", () => setWatching(false));
+    es.onerror = () => setWatching(false);
+
+    return () => {
+      es.close();
+      esRef.current = null;
+    };
+  }, [active, filePath, sourceSessionId]);
+
+  return watching;
 }
 
 function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceSessionId?: string | null }) {
@@ -315,7 +339,7 @@ function DiffView({ patch }: { patch: string }) {
       style={{
         width: "max-content",
         minWidth: "100%",
-        ...FILE_CODE_STYLE,
+        ...SOURCE_CODE_STYLE,
       }}
     >
       {segments.map((seg, si) => {
@@ -365,7 +389,7 @@ function DiffView({ patch }: { patch: string }) {
               }}
             >
               <span
-                style={FILE_LINE_NUMBER_STYLE}
+                style={SOURCE_LINE_NUMBER_STYLE}
               >
                 {line.type === "removed" ? line.oldLineNo : line.newLineNo}
               </span>
@@ -401,45 +425,30 @@ function DiffView({ patch }: { patch: string }) {
   );
 }
 
-function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
+function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ src: string; w: number; h: number } | null>(null);
-  const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
   useEffect(() => {
     setBust(0);
     setSize(null);
-    setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => setWatching(true));
-    es.addEventListener("change", (e) => {
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
-      setBust((b) => b + 1);
-    });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
+    setNaturalSize(null);
   }, [filePath, sourceSessionId]);
+
+  const watching = useFileWatch({
+    filePath,
+    sourceSessionId,
+    active,
+    onChanged: (d) => {
+      if (typeof d.size === "number") setSize(d.size);
+      setNaturalSize(null);
+      setBust((b) => b + 1);
+    },
+  });
 
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
 
@@ -503,14 +512,12 @@ function formatDuration(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
+function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -519,34 +526,19 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
     setSize(null);
     setDuration(null);
     setError(null);
-    setWatching(false);
+  }, [filePath, sourceSessionId]);
 
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => setWatching(true));
-    es.addEventListener("change", (e) => {
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
+  const watching = useFileWatch({
+    filePath,
+    sourceSessionId,
+    active,
+    onChanged: (d) => {
+      if (typeof d.size === "number") setSize(d.size);
       setDuration(null);
       setError(null);
       setBust((b) => b + 1);
-    });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [filePath, sourceSessionId]);
+    },
+  });
 
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
 
@@ -620,13 +612,11 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
   );
 }
 
-function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
+function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const { t } = useI18n();
-  const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileExt(filePath);
   const isPdf = ext === "pdf";
@@ -638,12 +628,6 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
     setBust(0);
     setSize(null);
     setError(null);
-    setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
 
     fetch(getFileApiUrl(filePath, "meta", sourceSessionId))
       .then((r) => r.json())
@@ -657,33 +641,24 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
         }
       })
       .catch((e) => setError(String(e)));
+  }, [filePath, isPdf, sourceSessionId]);
 
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => setWatching(true));
-    es.addEventListener("change", (e) => {
-      try {
-        const d = JSON.parse((e as MessageEvent).data) as { size?: number };
-        if (typeof d.size === "number") {
-          setSize(d.size);
-          if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
-            setError("DOCX too large for preview (>10MB)");
-            return;
-          }
+  const watching = useFileWatch({
+    filePath,
+    sourceSessionId,
+    active,
+    onChanged: (d) => {
+      if (typeof d.size === "number") {
+        setSize(d.size);
+        if (!isPdf && d.size > DOCX_PREVIEW_MAX_BYTES) {
+          setError("DOCX too large for preview (>10MB)");
+          return;
         }
-      } catch { /* ignore */ }
+      }
       setError(null);
       setBust((b) => b + 1);
-    });
-    es.addEventListener("error", () => setWatching(false));
-    es.onerror = () => setWatching(false);
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [filePath, isPdf, sourceSessionId]);
+    },
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -742,31 +717,29 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   );
 }
 
-export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode }: Props) {
+export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode, active = true }: Props) {
   if (isImagePath(filePath)) {
-    return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
+    return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
   if (isAudioPath(filePath)) {
-    return <AudioViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
+    return <AudioViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
   if (isDocumentPreviewPath(filePath)) {
-    return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
+    return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} onAtMention={onAtMention} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} onAtMention={onAtMention} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} active={active} />;
 }
 
-function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode }: Props) {
+function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode, active = true }: Props) {
   const { isDark } = useTheme();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
   const [gitDiffLoading, setGitDiffLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("source");
-  const [wrapLines, setWrapLines] = useState(false);
-  const [watching, setWatching] = useState(false);
-  const esRef = useRef<EventSource | null>(null);
+  const wrapLines = useSourceWrapLines();
   const gitDiffRequestRef = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [selectedLineRange, setSelectedLineRange] = useState<SelectedLineRange | null>(null);
@@ -811,53 +784,22 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     }
   }, [cwd]);
 
-  // Initial load + SSE watch setup
+  // Initial load
   useEffect(() => {
     setLoading(true);
     setError(null);
     setData(null);
     setGitDiff(null);
     setDisplayMode("source");
-    setWrapLines(false);
-    setWatching(false);
-
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
 
     fetchContent(filePath).finally(() => setLoading(false));
+  }, [filePath, fetchContent]);
 
-    // Set up SSE watch
-    const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
-    esRef.current = es;
-
-    es.addEventListener("connected", () => {
-      setWatching(true);
-    });
-
-    es.addEventListener("change", () => {
-      void fetchContent(filePath);
-      void fetchGitDiff(filePath);
-    });
-
-    es.addEventListener("error", () => {
-      setWatching(false);
-    });
-
-    es.onerror = () => {
-      setWatching(false);
-    };
-
-    return () => {
-      es.close();
-      esRef.current = null;
-    };
-  }, [filePath, fetchContent, fetchGitDiff, sourceSessionId]);
-
+  // 只有当前标签刷新 git diff
   useEffect(() => {
+    if (!active) return;
     void fetchGitDiff(filePath);
-  }, [fetchGitDiff, filePath, gitRefreshKey]);
+  }, [active, fetchGitDiff, filePath, gitRefreshKey]);
 
   useEffect(() => {
     // HTML gets the same rendered-first treatment as markdown: a generated page
@@ -871,16 +813,20 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const hasGitDiff = gitDiff?.supported === true && typeof gitDiff.patch === "string";
   const isDeletedDiff = hasGitDiff && gitDiff.status === "deleted";
 
+  // 切换标签、关闭面板或文件已被删除时都不保持监听。
+  const watching = useFileWatch({
+    filePath,
+    sourceSessionId,
+    active: active && !isDeletedDiff,
+    onChanged: () => {
+      void fetchContent(filePath);
+      void fetchGitDiff(filePath);
+    },
+  });
+
   useEffect(() => {
     if (!hasGitDiff && displayMode === "diff") setDisplayMode("source");
   }, [displayMode, hasGitDiff]);
-
-  useEffect(() => {
-    if (!isDeletedDiff || !esRef.current) return;
-    esRef.current.close();
-    esRef.current = null;
-    setWatching(false);
-  }, [isDeletedDiff]);
 
   // Opened from the Changes list (initialDisplayMode === "diff"): switch to the
   // diff view once the git diff has resolved. We do this after the diff loads
@@ -906,22 +852,59 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     [data],
   );
 
+  // 注释译文只对 .ts/.tsx 生效；开关默认关闭，关闭时不产生任何译文行。
+  const supportsCommentTranslation = /\.(ts|tsx)$/i.test(filePath);
+  const commentTranslationEnabled = useCommentTranslationPreference();
+  const translationTarget = commentTranslationTarget(locale);
+  const showCommentTranslations = supportsCommentTranslation
+    && commentTranslationEnabled
+    && displayMode === "source"
+    && !isDeletedDiff;
+
+  const commentEntries = useMemo(
+    () => (supportsCommentTranslation && data
+      ? extractCommentEntries([{ path: filePath, content: data.content }]).entries
+      : []),
+    [data, filePath, supportsCommentTranslation],
+  );
+
+  const translationKeys = useMemo(
+    () => (showCommentTranslations ? commentTranslationKeys(commentEntries, translationTarget) : []),
+    [commentEntries, showCommentTranslations, translationTarget],
+  );
+
+  const commentTranslations = useCommentTranslationLookup(translationKeys, active && showCommentTranslations);
+
+  // 译文行按源码行号索引；字典或开关变化都会让这个映射重建，查看器随之更新。
+  const translationRows = useMemo(
+    () => commentTranslationRows({
+      entries: commentEntries,
+      translations: commentTranslations,
+      targetLanguage: translationTarget,
+      enabled: showCommentTranslations,
+    }),
+    [commentEntries, commentTranslations, showCommentTranslations, translationTarget],
+  );
+
   useEffect(() => {
+    if (!active || !onMentionLines || displayMode !== "source") {
+      setSelectedLineRange(null);
+      return;
+    }
     const updateSelectedLineRange = () => {
       const root = contentRef.current;
       setSelectedLineRange(
-        onMentionLines && displayMode === "source" && root
+        displayMode === "source" && root
           ? getSelectedSourceLineRange(root, window.getSelection())
           : null,
       );
     };
 
     updateSelectedLineRange();
-    if (!onMentionLines || displayMode !== "source") return;
 
     document.addEventListener("selectionchange", updateSelectedLineRange);
     return () => document.removeEventListener("selectionchange", updateSelectedLineRange);
-  }, [data?.content, displayMode, onMentionLines]);
+  }, [active, data?.content, displayMode, onMentionLines]);
 
   const mentionLineRange = useCallback((lineRange: SelectedLineRange | null) => {
     if (!onMentionLines || !lineRange) return;
@@ -933,7 +916,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   }, [cwd, filePath, onMentionLines]);
 
   useEffect(() => {
-    if (!onMentionLines || displayMode !== "source") return;
+    if (!active || !onMentionLines || displayMode !== "source") return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.repeat || event.key.toLowerCase() !== "i" || (!event.metaKey && !event.ctrlKey) || event.altKey || event.shiftKey) return;
@@ -951,7 +934,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [displayMode, mentionLineRange, onMentionLines]);
+  }, [active, displayMode, mentionLineRange, onMentionLines]);
 
   if (loading || (initialDisplayMode === "diff" && gitDiffLoading && !data)) {
     return (
@@ -1079,7 +1062,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
               <>
                 <button
                   type="button"
-                  onClick={() => setWrapLines((value) => !value)}
+                  onClick={() => setSourceWrapLines(!wrapLines)}
                   title={wrapLines ? t("i18n.disableWrap") : t("i18n.enableWrap")}
                   aria-label={wrapLines ? t("i18n.disableWrap") : t("i18n.enableWrap")}
                   aria-pressed={wrapLines}
@@ -1096,6 +1079,24 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                     <path d="M3 18h7" />
                   </svg>
                 </button>
+                {supportsCommentTranslation && (
+                  <button
+                    type="button"
+                    onClick={() => setCommentTranslationPreference(!commentTranslationEnabled)}
+                    title={commentTranslationEnabled ? t("i18n.hideCommentTranslations") : t("i18n.showCommentTranslations")}
+                    aria-label={commentTranslationEnabled ? t("i18n.hideCommentTranslations") : t("i18n.showCommentTranslations")}
+                    aria-pressed={commentTranslationEnabled}
+                    className="file-viewer-icon-button"
+                    style={{
+                      background: commentTranslationEnabled ? "var(--bg-selected)" : "transparent",
+                      color: commentTranslationEnabled ? "var(--text)" : "var(--text-muted)",
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" />
+                    </svg>
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -1159,7 +1160,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                     if (event.defaultPrevented || event.button !== 0) return;
                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
-                    onOpenFile(linkedFile);
+                    onOpenFile(linkedFile, sourceSessionId);
                   };
 
                   return <a href={href} {...props} onClick={handleClick}>{children}</a>;
@@ -1184,38 +1185,14 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
             </ReactMarkdown>
           </div>
         ) : (
-          <SyntaxHighlighter
-            className={wrapLines ? "file-source-view is-wrapped" : "file-source-view"}
-            language={language === "text" ? "plaintext" : language}
-            style={isDark ? vscDarkPlus : vs}
-            showLineNumbers
-            lineNumberStyle={{
-              ...FILE_LINE_NUMBER_STYLE,
-            }}
-            customStyle={{
-              margin: 0,
-              padding: 0,
-              border: 0,
-              background: "var(--bg)",
-              ...FILE_CODE_STYLE,
-              width: wrapLines ? "100%" : "max-content",
-              minWidth: "100%",
-              minHeight: "100%",
-              overflow: "visible",
-            }}
-            codeTagProps={{
-              style: {
-                fontFamily: "var(--font-mono)",
-                overflowWrap: wrapLines ? "anywhere" : "normal",
-              },
-            }}
-            renderer={(rendererProps) => (
-              <SourceCodeRenderer {...rendererProps} wrapLines={wrapLines} />
-            )}
-            wrapLongLines={wrapLines}
-          >
-            {content}
-          </SyntaxHighlighter>
+          <SourceView
+            content={content}
+            language={language}
+            wrapLines={wrapLines}
+            isDark={isDark}
+            translations={translationRows}
+            translationLabel={t("comments.translationPrefix")}
+          />
         )}
       </div>
     </div>

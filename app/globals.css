@@ -1556,7 +1556,7 @@ span.linenumber {
   to   { stroke-dashoffset: 0;  opacity: 1; }
 }
 
-/* Subagents occupy a real desktop column beside the chat, never an overlay. */
+/* Chat content is a single column; the right panel is a sibling element outside this layout. */
 .chat-content-layout {
   display: flex;
   flex: 1 1 0%;
@@ -1570,21 +1570,6 @@ span.linenumber {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-}
-.subagent-column {
-  display: flex;
-  flex: 0 0 clamp(280px, 28vw, 360px);
-  width: clamp(280px, 28vw, 360px);
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  border-left: 1px solid var(--border);
-  background: var(--bg-panel);
-}
-@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) {
-  .subagent-column {
-    display: none !important;
-  }
 }
 
 /* Keep the panel border as the idle separator; this element only expands the hit target. */
@@ -1775,10 +1760,6 @@ span.linenumber {
     min-height: 44px;
   }
   .sidebar-brand-button {
-    min-width: 44px !important;
-    min-height: 44px;
-  }
-  .sidebar-new-session-button {
     min-width: 44px !important;
     min-height: 44px;
   }

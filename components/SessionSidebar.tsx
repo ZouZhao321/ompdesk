@@ -28,14 +28,6 @@ import { ProjectRow } from "./ProjectRow";
 import { ProjectSortControl } from "./ProjectSortControl";
 import { projectMenuRowStyle } from "./project-menu-row-style";
 
-declare global {
-  interface Window {
-    piDesktop?: {
-      selectDirectory: () => Promise<string | null>;
-    };
-  }
-}
-
 interface Props {
   selectedSessionId: string | null;
   selectedRuntimeId?: string;
@@ -373,7 +365,7 @@ function PiWebTitle() {
   const [scrambling, setScrambling] = useState(false);
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const target = showVersion ? `${process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}/${process.env.NEXT_PUBLIC_OMP_VERSION ?? "0.0.0"}` : "omp";
+  const target = showVersion ? `${process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}/${process.env.NEXT_PUBLIC_OMP_VERSION ?? "0.0.0"}` : "ompdesk";
   const display = useScramble(target, scrambling);
 
   const triggerScramble = useCallback((toVersion: boolean) => {
@@ -1143,90 +1135,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <PiWebTitle />
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              className="sidebar-new-session-button"
-              onClick={() => handleNewSession()}
-              disabled={!selectedCwd}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                background: "var(--bg-hover)",
-                border: "1px solid var(--border)",
-                color: selectedCwd ? "var(--text-muted)" : "var(--text-dim)",
-                cursor: selectedCwd ? "pointer" : "not-allowed",
-                height: 32,
-                padding: "0 12px 0 10px",
-                borderRadius: 7,
-                fontSize: 12,
-                fontWeight: 500,
-                letterSpacing: "-0.01em",
-                flexShrink: 0,
-                transition: "background 0.12s, color 0.12s, border-color 0.12s",
-              }}
-              title={selectedCwd ? t("sidebar.newSessionTitle", { path: selectedCwd }) : t("sidebar.selectProject")}
-              onMouseEnter={(event) => {
-                if (!selectedCwd) return;
-                event.currentTarget.style.background = "var(--bg-selected)";
-                event.currentTarget.style.color = "var(--accent)";
-                event.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-              }}
-              onMouseLeave={(event) => {
-                event.currentTarget.style.background = "var(--bg-hover)";
-                event.currentTarget.style.color = selectedCwd ? "var(--text-muted)" : "var(--text-dim)";
-                event.currentTarget.style.borderColor = "var(--border)";
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <line x1="6" y1="1" x2="6" y2="11" />
-                <line x1="1" y1="6" x2="11" y2="6" />
-              </svg>
-              {t("sidebar.new")}
-            </button>
-            <button
-              className="sidebar-header-icon-button"
-              onClick={() => loadSessions(false, true)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "var(--bg-hover)",
-                border: `1px solid ${sessionRefreshDone ? "rgba(74,222,128,0.4)" : "var(--border)"}`,
-                color: sessionRefreshDone ? "#4ade80" : "var(--text-muted)",
-                cursor: "pointer",
-                width: 32, height: 32,
-                borderRadius: 7,
-                padding: 0,
-                flexShrink: 0,
-                transition: "background 0.3s, color 0.3s, border-color 0.3s",
-              }}
-              onMouseEnter={(event) => {
-                if (sessionRefreshDone) return;
-                event.currentTarget.style.background = "var(--bg-selected)";
-                event.currentTarget.style.color = "var(--accent)";
-                event.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-              }}
-              onMouseLeave={(event) => {
-                if (sessionRefreshDone) return;
-                event.currentTarget.style.background = "var(--bg-hover)";
-                event.currentTarget.style.color = "var(--text-muted)";
-                event.currentTarget.style.borderColor = "var(--border)";
-              }}
-              title={t("sidebar.refresh")}
-            >
-              {sessionRefreshDone ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-
+        <PiWebTitle />
       </div>
 
 
@@ -1234,12 +1143,15 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         style={{
           display: "flex",
           alignItems: "center",
+          gap: 6,
           minHeight: 42,
           padding: "6px 8px 4px 14px",
           flexShrink: 0,
+          // 排序菜单以整行为定位参照，窄侧栏下右对齐才不会被裁掉左缘。
+          position: "relative",
         }}
       >
-        <h2 style={{ margin: 0, flex: 1, color: "var(--text-muted)", fontSize: 13, fontWeight: 600, letterSpacing: "0.01em" }}>
+        <h2 style={{ margin: 0, flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-muted)", fontSize: 13, fontWeight: 600, letterSpacing: "0.01em" }}>
           {t("sidebar.projects")}
         </h2>
         <ProjectSortControl
@@ -1250,6 +1162,46 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           onDismiss={closeProjectSortMenu}
           onSelectMode={chooseProjectSortMode}
         />
+        <button
+          className="sidebar-header-icon-button"
+          onClick={() => loadSessions(false, true)}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "var(--bg-hover)",
+            border: `1px solid ${sessionRefreshDone ? "rgba(74,222,128,0.4)" : "var(--border)"}`,
+            color: sessionRefreshDone ? "#4ade80" : "var(--text-muted)",
+            cursor: "pointer",
+            width: 32, height: 32,
+            borderRadius: 7,
+            padding: 0,
+            flexShrink: 0,
+            transition: "background 0.3s, color 0.3s, border-color 0.3s",
+          }}
+          onMouseEnter={(event) => {
+            if (sessionRefreshDone) return;
+            event.currentTarget.style.background = "var(--bg-selected)";
+            event.currentTarget.style.color = "var(--accent)";
+            event.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
+          }}
+          onMouseLeave={(event) => {
+            if (sessionRefreshDone) return;
+            event.currentTarget.style.background = "var(--bg-hover)";
+            event.currentTarget.style.color = "var(--text-muted)";
+            event.currentTarget.style.borderColor = "var(--border)";
+          }}
+          title={t("sidebar.refresh")}
+        >
+          {sessionRefreshDone ? (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          )}
+        </button>
         <button
           type="button"
           onClick={handleCustomPathClick}
@@ -1268,6 +1220,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             background: "var(--bg-hover)",
             color: "var(--text-muted)",
             cursor: "pointer",
+            flexShrink: 0,
             transition: "background 0.12s, color 0.12s",
           }}
           onMouseEnter={(event) => {
@@ -1895,6 +1848,7 @@ function ArchivedSessionsSection({
             return (
               <div
                 key={s.id}
+                data-session-id={s.id}
                 className="sidebar-session-row"
                 onClick={() => onSelectSession(s)}
                 style={{
@@ -2262,6 +2216,7 @@ function SessionItem({
 
   return (
     <div
+      data-session-id={session.id}
       className="sidebar-session-row"
       onClick={confirmDelete || renaming ? undefined : onClick}
       onContextMenu={confirmDelete || renaming ? undefined : handleContextMenu}
