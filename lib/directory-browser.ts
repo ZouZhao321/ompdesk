@@ -59,9 +59,11 @@ export function normalizeDirectory(directory: string): string {
   }
 
   const pathApi = selectPathApi(directory);
-  const launchCwd = process.env.OMPDESK_LAUNCH_CWD;
-  const baseDirectory = launchCwd ? pathApi.resolve(launchCwd) : process.cwd();
-  return pathApi.resolve(baseDirectory, directory);
+  // 绝对输入自带根，按输入形态规整即可；交给宿主 path 会把别平台的路径拼成盘符路径。
+  if (pathApi.isAbsolute(directory)) return pathApi.normalize(directory);
+
+  // 相对输入的基准是启动器注入的宿主 cwd，必须用宿主 path 拼接。
+  return path.resolve(process.env.OMPDESK_LAUNCH_CWD ?? process.cwd(), directory);
 }
 
 export function getParentDirectory(directory: string): string | null {
