@@ -1599,6 +1599,9 @@ span.linenumber {
   bottom: 0;
   left: 0;
   right: 0;
+  /* 车道自带 layout containment，是独立的层叠上下文；层级写在车道上，整条
+     跳转条（圆点与提示）才稳定压在滚动容器之上、始终接收指针事件。 */
+  z-index: 30;
   pointer-events: none;
   container: transcript-rail-lane / inline-size;
 }
@@ -1614,7 +1617,6 @@ span.linenumber {
     calc(50% - var(--transcript-rail-inset) - var(--transcript-rail-lane))
   );
   width: var(--transcript-rail-lane);
-  z-index: 30;
   display: flex;
   flex-direction: column;
   align-items: center;
