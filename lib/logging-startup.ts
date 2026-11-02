@@ -10,7 +10,7 @@ import { importRuntimeModule } from "./runtime-import";
  * mode the panel is looking at.
  */
 
-export type StartupMode = "development" | "production" | "desktop";
+export type StartupMode = "development" | "production";
 
 interface AuthStoreModule {
   getWebAuthStatus(): { enabled: boolean };
@@ -79,7 +79,6 @@ export function resolveListenAddress(
 }
 
 export function resolveStartupMode(env: NodeJS.ProcessEnv = process.env): StartupMode {
-  if (env.OMPDESK_DESKTOP === "1") return "desktop";
   return env.NODE_ENV === "production" ? "production" : "development";
 }
 

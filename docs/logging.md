@@ -106,7 +106,7 @@ Concrete mappings:
 The Settings panel does not change the level or retention; both are process
 configuration. Restart the server after changing these variables.
 
-## Standard output, Docker and the desktop app
+## Standard output and Docker
 
 The file transport is always on. Stdout is a mirror, decided by
 `OMPDESK_LOG_STDOUT` or, when it is unset, by development mode. The mirror
@@ -118,16 +118,12 @@ filter:
 | `bun run dev`, local development | `development` | on | `OMPDESK_LOG_STDOUT=0` |
 | Production server (`next start`, the npm package) | `production` | off | `OMPDESK_LOG_STDOUT=1` |
 | Docker image | `production` (set in the image) | off | `-e OMPDESK_LOG_STDOUT=1`, then `docker logs` shows the same records |
-| Desktop app (`OMPDESK_DESKTOP=1`) | `production` | off | `OMPDESK_LOG_STDOUT=1`; the Tauri shell drains the child's stdout and stderr into its own `omp-desktop.log` in the system temp directory, prefixing each line with `[server]` |
 
-The desktop shell keeps stdout mirrored off by default so its own log file does
-not receive a second, continuously growing copy of the server log. Turning the
-mirror on intentionally duplicates records there; the Settings → Logs panel
-still reads the server's file, not the shell's. The mirror applies the same key
-redaction as the file path, including records the SDK writes on its own.
+The mirror applies the same key redaction as the file path, including records the
+SDK writes on its own.
 
-`process.start` records `mode` as `development`, `production` or `desktop`, so a
-log file says which of these produced it.
+`process.start` records `mode` as `development` or `production`, so a log file
+says which of these produced it.
 
 ## Correlation ids
 
@@ -165,7 +161,7 @@ applied.
 | `runtime` | `bun <version>` or `node <version>`. |
 | `listenAddress` | Address derived from `--hostname`/`--port` or `OMPDESK_HOSTNAME`/`PORT`. |
 | `authEnabled` | Whether password access is on at startup. |
-| `mode` | `development`, `production` or `desktop`. |
+| `mode` | `development` or `production`. |
 | `pid` | Server process id. |
 
 ### `http`
