@@ -30,6 +30,7 @@ function harness({ intentUntil = 0, scrollHeight = 4000, clientHeight = 800, now
     "followObservationHeldRef",
     "followObservationHoldUntilRef",
     "scrollContainerRef",
+    "lastScrollRef",
     "setAutoFollow",
     "scrollToBottom",
     "FOLLOW_OBSERVATION_HOLD_MS",
@@ -43,6 +44,7 @@ function harness({ intentUntil = 0, scrollHeight = 4000, clientHeight = 800, now
     { current: false },
     { current: 0 },
     { current: container },
+    { current: null },
     (following) => {
       // 与生产 setAutoFollowPaused 一致：同一个值不产生状态变化。
       if (paused === !following) return;
@@ -176,8 +178,11 @@ test("recovers following once a forgotten hold expires", () => {
   h.reading(0);
   assert.equal(h.isPaused(), true);
 
-  // 过了截止时间，滚动观测自己收回抑制器：位置重新参与判定，滑到底就把跟随带回来。
+  // 过了截止时间，滚动观测自己收回抑制器：位置重新参与判定。
   clock += FOLLOW_OBSERVATION_HOLD_MS;
+  h.reading(100);
+  assert.equal(h.isPaused(), true);
+  // 位置真的滑到底才把跟随带回来；只有高度变化不算。
   h.reading(0);
   assert.equal(h.isPaused(), false);
   // 恢复不下发滚动：位置已经到底，别再把视图拽一次。

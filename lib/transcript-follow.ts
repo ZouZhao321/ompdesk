@@ -30,6 +30,11 @@ export type FollowEvent =
     userDriven: boolean;
     /** 距列表底部的像素。 */
     distanceFromBottom: number;
+    /**
+     * scrollTop 是否真的变了。内容增高、行重新测量会改变距底部的距离，但位置没动；
+     * 这种观测不能当作「用户回到末尾」把跟随重新打开。
+     */
+    positionChanged: boolean;
   };
 
 /** 一次事件的结论：写回的跟随状态，以及要执行的滚动。 */
@@ -65,10 +70,12 @@ export function reduceFollow(event: FollowEvent): FollowOutcome | null {
     case "pause":
       return { paused: true, scrollToEnd: null };
     case "scroll": {
-      if (event.distanceFromBottom <= FOLLOW_BOTTOM_THRESHOLD_PX) {
+      if (event.positionChanged && event.distanceFromBottom <= FOLLOW_BOTTOM_THRESHOLD_PX) {
         return { paused: false, scrollToEnd: null };
       }
-      return event.userDriven ? { paused: true, scrollToEnd: null } : null;
+      return event.userDriven && event.distanceFromBottom > FOLLOW_BOTTOM_THRESHOLD_PX
+        ? { paused: true, scrollToEnd: null }
+        : null;
     }
   }
 }
