@@ -22,8 +22,8 @@ try {
 const OMP_SDK_REQUEST = /^@oh-my-pi\//;
 
 const nextConfig: NextConfig = {
-  // Desktop builds (scripts/stage-desktop.mjs) redirect the production build
-  // into src-tauri/server/.next so packaging never touches the dev `.next/`.
+  // Smoke runs (scripts/smoke-dev.mjs) redirect the build output away from the
+  // dev `.next/` directory through this override.
   distDir: process.env.OMPDESK_DIST_DIR || ".next",
   outputFileTracingRoot: __dirname,
   serverExternalPackages: [

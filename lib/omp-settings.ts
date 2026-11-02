@@ -9,6 +9,7 @@ import { type AnySetting, lookup } from "@oh-my-pi/pi-coding-agent/config/regist
 import { cfgSkills, type SkillsSettings } from "@oh-my-pi/pi-coding-agent/extensibility/settings";
 import type { Settings } from "@oh-my-pi/pi-coding-agent";
 import type { AnyUiMetadata, SettingTab } from "@oh-my-pi/pi-tui/overlays/settings-defs";
+import type { SettingsFieldType } from "./settings-api";
 
 export { SETTING_TABS, TAB_GROUPS, TAB_METADATA, type SettingTab } from "@oh-my-pi/pi-tui/overlays/settings-defs";
 
@@ -73,4 +74,22 @@ export function isCredential(path: SettingPath): boolean {
 /** Paths shown on `tab`, in omp's settings-panel order. */
 export function getPathsForTab(tab: SettingTab): SettingPath[] {
   return orderedSettings().filter((setting) => setting.ui?.tab === tab).map((setting) => setting.id);
+}
+
+/**
+ * 把设置项映射成浏览器能渲染的控件类型；没有可渲染类型时返回 null。
+ * @param path 设置路径
+ * @returns 控件类型，设置项不展示时返回 null
+ */
+export function getSettingsFieldType(path: SettingPath): SettingsFieldType | null {
+  const schemaType = getType(path);
+  const ui = getUi(path);
+  if (!ui) return null;
+  if (schemaType === "boolean") return "boolean";
+  if (schemaType === "enum") return "select";
+  if (schemaType === "string") return isCredential(path) ? "secret" : ui.options ? "select" : "text";
+  if (schemaType === "number") return ui.options ? "select" : null;
+  if (schemaType === "array") return ui.options ? "multiselect" : null;
+  if (schemaType === "record") return path === "providers.maxInFlightRequests" ? "providerLimits" : "text";
+  return null;
 }

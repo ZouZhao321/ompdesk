@@ -92,6 +92,9 @@ password once in **Settings → Access** and let it persist in the mounted
 
 ## Reaching it beyond the host
 
+Outside a container the server listens on loopback only by default, and
+`OMPDESK_HOSTNAME` is for containers or a reverse proxy.
+
 `0.0.0.0` inside the container is not the same as publishing on `0.0.0.0` on the
 host — the `-p 127.0.0.1:30141:30141` above keeps it local, and it stays that
 way. Forward the loopback port into a tailnet instead of widening it; see
