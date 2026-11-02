@@ -1723,7 +1723,7 @@ span.linenumber {
   color: var(--text-dim);
   cursor: default;
 }
-/* 悬停提示放在圆点列之外，才不会被那层内部滚动裁掉。右偏移就是车道宽加上间距，
+/* 悬停提示放在圆点列之外，浮层不参与列布局。右偏移就是车道宽加上间距，
    两个数都从容器变量来，组件不再手算。 */
 .transcript-rail-tip {
   position: absolute;
