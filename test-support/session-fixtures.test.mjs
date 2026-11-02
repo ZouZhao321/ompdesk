@@ -327,9 +327,9 @@ test("铺样本前清掉替换阶段残留的 .staging- 与 .backup- 目录", as
   const sessionsDir = fixturesDir(sandbox.agentDir);
   await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
 
-  // 模拟替换阶段被杀的进程：场景目录只剩在 .backup-<uuid> 里，另有半个 staging。
+  // 模拟替换阶段被杀的进程：备份与 staging 都在 sessions 同层，备份名以 .backup- 开头。
   const scenarioDir = join(sessionsDir, "fixture-single-turn");
-  cpSync(scenarioDir, join(sessionsDir, ".backup-killed"), { recursive: true });
+  cpSync(scenarioDir, join(sessionsDir, ".backup-fixture-single-turn-killed"), { recursive: true });
   mkdirSync(join(sessionsDir, ".staging-killed"), { recursive: true });
 
   const [reseeding] = await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
