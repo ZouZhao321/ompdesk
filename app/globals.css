@@ -1666,7 +1666,7 @@ span.linenumber {
 }
 .transcript-rail-dot:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -3px;
+  outline-offset: -1px;
   border-radius: 6px;
 }
 .transcript-rail-dot-mark {
