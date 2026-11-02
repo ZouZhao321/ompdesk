@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { SubagentPanel, isSubagentActive } from "./SubagentPanel";
+import { CommentTranslationPanel } from "./CommentTranslationPanel";
 import { ChatWindow } from "./ChatWindow";
 import { FileExplorerPanel } from "./FileExplorerPanel";
 import { GitChangesPanel } from "./GitChangesPanel";
@@ -1106,6 +1107,13 @@ export function AppShell() {
             active={tab.id === activePanelTabId && rightPanelOpen}
           />
         );
+      case "comments":
+        return (
+          <CommentTranslationPanel
+            cwd={activeCwd ?? undefined}
+            active={tab.id === activePanelTabId && rightPanelOpen}
+          />
+        );
       default:
         return assertNever(tab);
     }
@@ -2162,6 +2170,14 @@ export function AppShell() {
               showDot={runningSubagentCount > 0 && activePanelTab?.kind !== "subagents"}
             >
               <PanelViewIcon kind="subagents" />
+            </PanelViewButton>
+            <PanelViewButton
+              active={activePanelTab?.kind === "comments"}
+              title={translate("comments.title")}
+              onClick={() => handleToggleViewTab("comments")}
+              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+            >
+              <PanelViewIcon kind="comments" />
             </PanelViewButton>
           </div>
           <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
