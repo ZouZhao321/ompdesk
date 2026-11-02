@@ -23,7 +23,7 @@ import { mkdir, readdir, rename, rm, stat } from "fs/promises";
 import { basename, dirname, join, resolve } from "path";
 import { setTimeout as delay } from "timers/promises";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
-import { getAgentDir } from "@oh-my-pi/pi-utils/dirs";
+import { getAgentDir, getBaseConfigRoot, relativePathWithinNormalizedRoot } from "@oh-my-pi/pi-utils/dirs";
 
 export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent" | "tools" | "long";
 
@@ -214,20 +214,33 @@ function requireAgentDir(agentDir: string | undefined): string {
 }
 
 /**
- * 设置标题会写活动 agent 目录的 history.db。活动目录与目标 agentDir 指向同一
- * 真实目录时，样本会在真实目录留下索引，所以在写任何文件之前就拒绝。
+ * 设置标题会写活动 agent 目录的 history.db。两种活动目录都会把样本索引写进用户
+ * 数据，必须在写任何文件之前拒绝：与目标 agentDir 指向同一真实目录的，以及位于
+ * 真实用户配置根（`~/.omp`，含 profiles 与 PI_CONFIG_DIR 覆盖）之下的。
  *
  * 符号链接与大小写不敏感平台（Windows 与 macOS 默认）都会让字面路径不同却指向
  * 同一目录：比较前先解析真实路径，目录还不存在时回退到 resolve，再折叠大小写。
  */
 function assertActiveAgentDirSeparate(agentDir: string): void {
-  if (comparableDirectory(getAgentDir()) !== comparableDirectory(agentDir)) return;
-  throw new Error(
-    `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：`
-      + "setSessionName 会把标题写进该目录的 history.db。"
-      + "铺样本前先把活动目录切到目标之外，例如 setAgentDir(runtimeDir) 后再调用 "
-      + "seedSessions(scenario, { agentDir })",
-  );
+  const activeAgentDir = getAgentDir();
+  if (comparableDirectory(activeAgentDir) === comparableDirectory(agentDir)) {
+    throw new Error(
+      `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：`
+        + "setSessionName 会把标题写进该目录的 history.db。"
+        + "铺样本前先把活动目录切到目标之外，例如 setAgentDir(runtimeDir) 后再调用 "
+        + "seedSessions(scenario, { agentDir })",
+    );
+  }
+
+  const configRoot = comparableDirectory(getBaseConfigRoot());
+  if (relativePathWithinNormalizedRoot(configRoot, comparableDirectory(activeAgentDir)) !== null) {
+    throw new Error(
+      `session-fixtures: 活动 agent 目录位于真实用户配置根 ${configRoot} 之下（${activeAgentDir}）：`
+        + "setSessionName 会把标题写进该目录的 history.db。"
+        + "铺样本前先把活动目录切到任务临时目录，例如 "
+        + 'setAgentDir(join(tmpdir(), "runtime/agent"))',
+    );
+  }
 }
 
 /** 目录比较键：真实路径优先，路径不存在时用绝对路径，大小写不敏感平台统一折叠。 */

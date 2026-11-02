@@ -16,7 +16,7 @@ const jiti = createJiti(import.meta.url, { interopDefault: true });
 const { seedSessions, resetSessionFixtures } = await jiti.import("./session-fixtures.ts");
 const { createAgentDirSandbox, restoreAgentDir, switchAgentDir } = await jiti.import("./agent-dir-sandbox.ts");
 const { SessionManager } = await jiti.import("@oh-my-pi/pi-coding-agent");
-const { getAgentDir } = await jiti.import("@oh-my-pi/pi-utils/dirs");
+const { getAgentDir, getBaseConfigRoot } = await jiti.import("@oh-my-pi/pi-utils/dirs");
 
 const TITLE_SINGLE_TURN = "伪造会话 single-turn";
 const TITLE_EMPTY = "伪造会话 empty";
@@ -369,6 +369,21 @@ test("活动 agent 目录经符号链接指向目标目录时同样拒绝铺样�
 
   assert.deepEqual(readdirSync(sandbox.agentDir).sort(), before, "拒绝时目标目录不得新增文件");
   assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
+});
+
+test("活动 agent 目录位于真实用户配置根之下时拒绝铺样本", async (t) => {
+  const sandbox = createSandbox(t);
+  // 用真实配置根下的未建目录作为活动目录：守卫只看路径，拒绝时不会产生任何写入。
+  const before = switchAgentDir(join(getBaseConfigRoot(), "agent"));
+  try {
+    await assert.rejects(
+      () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+      /真实用户配置根/,
+    );
+    assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
+  } finally {
+    restoreAgentDir(before);
+  }
 });
 
 test("缺失的 agentDir 与非样本目录都会被拒绝", async (t) => {
