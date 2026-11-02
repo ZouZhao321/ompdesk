@@ -57,6 +57,8 @@ bun install
 bun run dev        # http://127.0.0.1:30141
 bun test           # 用 Bun 跑，不用 node --test
 bun run typecheck
+bun run ci         # 整条链路：typecheck → test → build → smoke:dev
+bun run verify     # 在 ci 之前多一遍 check（typecheck + lint）
 bun run smoke:dev  # 起 dev server，请求 / 与 /api/home，扫描构建失败标记
 ```
 
@@ -64,8 +66,10 @@ bun run smoke:dev  # 起 dev server，请求 / 与 /api/home，扫描构建失�
 - 启用了密码锁的机器（`~/.omp/agent/ompdesk-auth.json` 存在）跑冒烟要带
   `OMPDESK_SMOKE_AUTH=用户名:密码`，否则首页固定返回 401，看起来像构建失败。
 - `bun run lint` 有大量存量告警，不能当门禁；只看改动文件范围的 eslint 结果。
-- `bun test` 在本机 Windows 上本来就有一批失败（路径与 Node 版本相关、`omp_inv/` 草稿目录），
-  判断回归看失败集合有没有变化，不看总数是否为零。
+- `bun test` 的判据是全套零失败，不是「失败集合有没有变化」：`bun run ci` 与
+  `bun run verify` 都在 typecheck 之后跑测试，测试一挂，build 与冒烟不会执行。
+  依赖本机会话库的用例在本机没有会话时改铺 `test-support/session-fixtures.ts` 的
+  确定性样本，只有会话库不可读才跳过。
 
 ## 验证阶梯
 

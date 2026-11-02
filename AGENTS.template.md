@@ -73,7 +73,8 @@ Lint：`bun run lint`
 
 真实模型冒烟默认跳过，只有 `OMPDESK_LIVE_SMOKE=1 bun test lib/live-model-smoke.test.mjs`
 才发出真实请求；`OMPDESK_LIVE_MODEL` 可选，用 omp 选择器语法（`provider/modelId`
-或 `modelId`，可带 `:thinkingLevel`）。历史会话夹具依赖本机会话库，没有夹具时自动跳过。
+或 `modelId`，可带 `:thinkingLevel`）。历史会话夹具优先用本机会话库，本机没有会话时铺
+`test-support/session-fixtures.ts` 的确定性样本，只有会话库不可读才跳过。
 
 开发期间不要执行 `bun run build`：会污染 `.next/` 并破坏 `bun run dev`。例外是
 `bun run desktop:build`，它经 `scripts/stage-desktop.mjs` 通过 `OMPDESK_DIST_DIR`
