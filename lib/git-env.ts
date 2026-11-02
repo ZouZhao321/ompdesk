@@ -7,18 +7,24 @@
  */
 
 /**
- * git 的仓库本地环境变量：指定仓库位置、索引、对象库、命名空间与配置来源，钩子注入后
- * 会盖过 `git -C`。清单取自 git(1) 的 ENVIRONMENT VARIABLES 一节中与仓库绑定或与仓库
- * 发现相关的条目（配置注入只需摘掉 `GIT_CONFIG_COUNT`，git 依据它决定是否读取成对的
- * `GIT_CONFIG_KEY_<n>` / `GIT_CONFIG_VALUE_<n>`）。测试直接引用本常量，
- * 增删条目不需要手抄第二份。
+ * git 的仓库本地环境变量：指定仓库位置、索引、对象库与命名空间，钩子注入后会盖过
+ * `git -C`。清单取自 git(1) 的 ENVIRONMENT VARIABLES 一节中与仓库绑定或与仓库发现相关
+ * 的条目。测试直接引用本常量，增删条目不需要手抄第二份。
  *
  * `GIT_CEILING_DIRECTORIES` 与 `GIT_DISCOVERY_ACROSS_FILESYSTEM` 不指定仓库，但改变
  * `-C` 之后的仓库发现：前者让上溯提前停下，后者决定能否跨文件系统上溯，钩子里的取值
  * 同样会让命令找到别处仓库，所以一并剥离。
  *
- * 刻意保留：`GIT_CONFIG_GLOBAL` / `GIT_CONFIG_SYSTEM` / `GIT_CONFIG_NOSYSTEM` 只换配置
- * 来源、不改变 `-C` 指向的仓库；`GIT_AUTHOR_*` / `GIT_COMMITTER_*` 只影响提交身份。
+ * `GIT_CONFIG_PARAMETERS` 是外层 git 传给子进程（包括钩子）的 `-c` 参数，`-c
+ * core.worktree=<别处>` 一类取值会改掉仓库位置，同样剥离。
+ *
+ * 刻意保留的是配置来源与提交身份。`GIT_CONFIG` 与 `GIT_CONFIG_COUNT`（连同成对的
+ * `GIT_CONFIG_KEY_<n>` / `GIT_CONFIG_VALUE_<n>`）由调用方显式提供，用来携带
+ * `safe.directory`、代理与证书设置；`GIT_CONFIG_GLOBAL` / `GIT_CONFIG_SYSTEM` /
+ * `GIT_CONFIG_NOSYSTEM` 只换配置文件位置。它们都不改 `-C` 指向的仓库，剥离则会改变本
+ * 模块之外所有 git 调用的行为。代价是这些来源里写了 `core.worktree` 仍会生效：调用方
+ * 的配置按受信任输入处理，只摘掉钩子会注入的那几个变量。
+ * `GIT_AUTHOR_*` / `GIT_COMMITTER_*` 只影响提交身份。
  */
 export const REPO_LOCATION_ENV_KEYS: readonly string[] = [
   "GIT_DIR",
@@ -33,9 +39,7 @@ export const REPO_LOCATION_ENV_KEYS: readonly string[] = [
   "GIT_QUARANTINE_PATH",
   "GIT_CEILING_DIRECTORIES",
   "GIT_DISCOVERY_ACROSS_FILESYSTEM",
-  "GIT_CONFIG",
   "GIT_CONFIG_PARAMETERS",
-  "GIT_CONFIG_COUNT",
   "GIT_SHALLOW_FILE",
   "GIT_REPLACE_REF_BASE",
 ];
