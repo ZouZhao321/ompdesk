@@ -487,7 +487,10 @@ async function branchSession(
     if (!leafId) {
       throw new Error("session-fixtures: 父会话没有可分支的末端");
     }
-    manager.createBranchedSession(leafId);
+    const branchedFile = manager.createBranchedSession(leafId);
+    if (!branchedFile) {
+      throw new Error("session-fixtures: createBranchedSession 没有生成子会话文件");
+    }
     for (const message of options.messages) manager.appendMessage(message);
     if (options.title) await manager.setSessionName(options.title, "user");
     await manager.flush();
