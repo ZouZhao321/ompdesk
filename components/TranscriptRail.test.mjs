@@ -253,6 +253,16 @@ test("puts the rail ahead of the transcript in the tab order", () => {
   assert.ok(up > 0 && dots > up && down > dots);
 });
 
+test("moves focus with arrow keys without jumping, and forwards the wheel", () => {
+  // 方向键只移动焦点与 roving 停靠点，跳转仍由 Enter/Space 触发；跳转条上的滚轮
+  // 转给转写区，导航条不吞滚轮。
+  assert.match(source, /setKeyboardDotIndex\(clamped\);/);
+  assert.doesNotMatch(source, /onJump\(dots\[clamped\]/);
+  assert.match(source, /onWheel=\{\(event\) => onWheelScroll\?\.\(event\.deltaY\)\}/);
+  assert.match(chatWindow, /onWheelScroll=\{handleRailWheelScroll\}/);
+  assert.match(chatWindow, /scroller\.scrollBy\(\{ top: deltaY \}\)/);
+});
+
 test("compresses the dot column instead of scrolling it", () => {
   // 全部圆点都要露出来：列高由节距乘数量得出，节距按可用高度均分；列内滚动与
   // 滚动位置居中都不再存在。

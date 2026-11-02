@@ -21,6 +21,8 @@ interface Props {
    * 调用方据此跳过不可见时的测量。
    */
   onVisibilityChange?: (visible: boolean) => void;
+  /** 在跳转条上滚动时把 deltaY 转给转写区，导航条不吞滚轮。 */
+  onWheelScroll?: (deltaY: number) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -59,7 +61,7 @@ function Chevron({ direction }: { direction: "up" | "down" }) {
  * 节距，全部圆点始终露出；节距会小到失去可用命中区时整条收起。移动档与没有
  * 多余车道时由 CSS 隐藏，首帧不会闪现。
  */
-export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChange, t }: Props) {
+export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChange, onWheelScroll, t }: Props) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const dotsRef = useRef<HTMLDivElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
@@ -99,9 +101,15 @@ export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotInd
   const pitch = dotPitch ?? RAIL_ROW_PX;
   // 节距变小时圆点跟着缩，相邻圆点才不会连成一条实线。
   const dotMarkPx = Math.min(6, Math.max(1, pitch / 2));
-  // 圆点用 roving tabindex：Tab 只停在当前圆点上，方向键在圆点之间移动，
-  // 长会话不会因为每个圆点都是停留点而挡住键盘用户。
-  const activeDotIndex = currentDotIndex >= 0 ? currentDotIndex : 0;
+  // 圆点用 roving tabindex：Tab 只停在一个圆点上，方向键在圆点之间移动焦点，
+  // 跳转仍由 Enter/Space 触发；长会话不会因为每个圆点都是停留点而挡住键盘用户。
+  // 键盘移动后的停靠点单独记着：末轮较短、跳转不一定能改当前轮，焦点与停靠点
+  // 不能因此分家。
+  const [keyboardDotIndex, setKeyboardDotIndex] = useState<number | null>(null);
+  useEffect(() => {
+    setKeyboardDotIndex((current) => (current !== null && current === currentDotIndex ? null : current));
+  }, [currentDotIndex]);
+  const activeDotIndex = keyboardDotIndex ?? (currentDotIndex >= 0 ? currentDotIndex : 0);
   const handleDotKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let target = index;
     if (event.key === "ArrowUp") target = index - 1;
@@ -112,9 +120,9 @@ export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotInd
     event.preventDefault();
     const clamped = Math.min(Math.max(target, 0), dots.length - 1);
     if (clamped === index) return;
-    onJump(dots[clamped].itemIndex);
+    setKeyboardDotIndex(clamped);
     dotsRef.current?.querySelectorAll<HTMLButtonElement>(".transcript-rail-dot")[clamped]?.focus();
-  }, [dots, onJump]);
+  }, [dots.length]);
 
   // 移动档与窄转写区都用 display: none 收起，量到零尺寸即不可见。
   const visibilityListenerRef = useRef(onVisibilityChange);
@@ -199,6 +207,7 @@ export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotInd
         className="transcript-rail"
         role="navigation"
         aria-label={t("chat.transcriptRail")}
+        onWheel={(event) => onWheelScroll?.(event.deltaY)}
         style={{ gap: RAIL_ROW_GAP_PX, display: railHidden ? "none" : undefined }}
       >
         <button

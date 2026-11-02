@@ -653,6 +653,15 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
 
   const [railVisible, setRailVisible] = useState(true);
 
+  // 跳转条覆盖在滚动容器右侧：滚轮落在它上面时转给列表，并派发一次滚轮事件让
+  // 用户的滚动意图窗口刷新，跟随判定仍把这次滚动当成用户操作。
+  const handleRailWheelScroll = useCallback((deltaY: number) => {
+    const scroller = scrollContainerRef.current;
+    if (!scroller) return;
+    scroller.dispatchEvent(new WheelEvent("wheel", { deltaY, bubbles: true }));
+    scroller.scrollBy({ top: deltaY });
+  }, [scrollContainerRef]);
+
   // 是否可见由跳转条自己量：移动档与窄转写区都由 CSS 收起，这里不重复判定断点。
   const handleRailVisibilityChange = useCallback((visible: boolean) => {
     railVisibleRef.current = visible;
@@ -1069,6 +1078,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
             currentDotIndex={railCurrentIndex}
             onJump={handleRailJump}
             onVisibilityChange={handleRailVisibilityChange}
+            onWheelScroll={handleRailWheelScroll}
             t={t}
           />
         )}
