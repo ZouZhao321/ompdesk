@@ -45,6 +45,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      # 规格只允许在现有 Linux 作业里加步骤，不新增 Windows 作业：路径分隔符、
+      # 重命名与删除的句柄竞争这些 Windows 专属分支在这里没有回归保护，仍需
+      # 在 Windows 本地手工跑 `bun test` 验证（见 PR 描述）。
       - name: Run tests
         run: bun run test
 
