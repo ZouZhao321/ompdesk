@@ -442,15 +442,18 @@ test("beforeRestore 抛错时仍恢复活动目录并删除沙箱", () => {
       },
     },
   );
-  assert.notEqual(getAgentDir(), before.agentDir, "沙箱应把活动目录切到 runtime/agent");
-
   const warnings = [];
   const originalWarn = console.warn;
   console.warn = (...args) => warnings.push(args.map(String).join(" "));
   try {
-    for (const cleanup of cleanups) cleanup();
+    assert.notEqual(getAgentDir(), before.agentDir, "沙箱应把活动目录切到 runtime/agent");
   } finally {
-    console.warn = originalWarn;
+    // 断言失败也要跑完清理：活动目录停在沙箱上会让后续用例级联失败。
+    try {
+      for (const cleanup of cleanups) cleanup();
+    } finally {
+      console.warn = originalWarn;
+    }
   }
 
   assert.equal(cleanups.length, 1);
