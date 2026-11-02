@@ -8,9 +8,10 @@ export const RAIL_COLUMN_PADDING_PX = 16;
  * 相邻圆点的中心距上限（px），也是每条提问在空间足够时的命中区高度。
  *
  * 圆点列铺满上下两条按钮之间的可用高度：圆点多到放不下时按数量压缩节距，
- * 所有提问始终各占一个可见圆点，与提问一一对应。
+ * 所有提问始终各占一个可见圆点，与提问一一对应。节距取紧凑的 14px，命中区
+ * 高度跟随节距，不为了放大命中区把整列撑开。
  */
-export const RAIL_ROW_PX = 24;
+export const RAIL_ROW_PX = 14;
 /** 悬停提示里保留的提问字符数，超出由两行省略收起。 */
 const RAIL_PROMPT_CHARS = 160;
 
@@ -85,7 +86,7 @@ export function railCurrentDotIndex(
 /**
  * 圆点列的行高：把全部圆点铺进可用高度，上限是 `RAIL_ROW_PX`。
  *
- * 圆点数少于可放数量时保持 24px 节距；多到放不下时按数量均分，圆点数与提问数
+ * 圆点数少于可放数量时保持 14px 节距；多到放不下时按数量均分，圆点数与提问数
  * 因此始终一致，没有藏在列内滚动里的圆点。
  */
 export function railDotPitch(availableHeight: number, dotCount: number): number {
