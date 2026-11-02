@@ -68,7 +68,12 @@ export function normalizeDirectory(directory: string): string {
   // 绝对输入自带根，按输入形态规整即可；交给宿主 path 会把别平台的路径拼成盘符路径。
   if (pathApi.isAbsolute(directory)) return pathApi.normalize(directory);
 
-  // 相对输入的基准是启动器注入的宿主 cwd，必须用宿主 path 拼接。
+  // 相对输入的基准是宿主状态，必须用宿主 path 拼接。普通相对路径的基准是启动器注入的
+  // 宿主 cwd；盘符相对输入（`C:folder`，盘符后没有分隔符，`path.win32.isAbsolute` 判
+  // false）的基准是「C 盘的当前目录」——Windows 宿主有这个状态，宿主 `path.resolve` 就
+  // 按它解析；POSIX 宿主没有盘符当前目录，只能落成 `<hostCwd>/C:folder`，该路径在
+  // POSIX 上并不存在，但输入不会被 win32 归一成 `C:\folder` 而指向别处。两种形态的
+  // 结果都由 normalizeDirectory 用例固定。
   return path.resolve(process.env.OMPDESK_LAUNCH_CWD ?? process.cwd(), directory);
 }
 
