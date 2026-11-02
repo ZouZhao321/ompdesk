@@ -706,7 +706,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           // 重发只做一次，再次让位就放弃。
           if (retryAfterSettled) {
             queueMicrotask(() => {
-              void loadSessionRef.current?.(sid, false, includeState, false);
+              void loadSessionRef.current?.(sessionIdRef.current ?? sid, showLoading, includeState, false);
             });
           }
           return null;
