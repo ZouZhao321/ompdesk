@@ -603,6 +603,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   const railScrollCleanupRef = useRef<(() => void) | null>(null);
   const railVisibleRef = useRef(false);
   const [topItemIndex, setTopItemIndex] = useState<number | null>(null);
+  const [railAtBottom, setRailAtBottom] = useState(false);
 
   // 顶部可见条目以列表报告的已渲染条目为准：偏移是列表的测量值，这里只补一个
   // 滚动容器与列表容器的矩形差，不按平均高度反推。跳转条在单轮、移动档、窄转写区
@@ -615,6 +616,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
     const visibleTop = scroller.getBoundingClientRect().top - list.getBoundingClientRect().top;
     const next = railTopVisibleItemIndex(railRenderedItemsRef.current, visibleTop);
     setTopItemIndex((current) => (current === next ? current : next));
+    // 最后一段比视口短时，贴底也会让顶部可见条目停在上一轮：高亮另按贴底判一次，
+    // 口径与跟随、「回到底部」按钮相同。
+    const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
+      <= FOLLOW_BOTTOM_THRESHOLD_PX;
+    setRailAtBottom((current) => (current === atBottom ? current : atBottom));
   }, [scrollContainerRef]);
 
   // 测量合并成一帧一次，滚动与列表报告共用这一个调度：流式期间每个数据块都会报告
@@ -657,8 +663,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onAttentionNeed
   }, [scrollContainerRef, scheduleRailMeasure, syncRailTopItem]);
 
   const railCurrentIndex = useMemo(
-    () => (topItemIndex === null ? -1 : railCurrentDotIndex(railDots, topItemIndex)),
-    [railDots, topItemIndex],
+    () => (topItemIndex === null ? -1 : railCurrentDotIndex(railDots, topItemIndex, railAtBottom)),
+    [railDots, topItemIndex, railAtBottom],
   );
 
   // 跳转只把条目下标交给列表，目标位置由列表自己算。

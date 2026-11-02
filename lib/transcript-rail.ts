@@ -61,13 +61,23 @@ function previewPrompt(prompt: string | null): string | null {
 }
 
 /**
- * 当前圆点：条目下标不超过顶部可见条目的最后一个。
+ * 当前圆点：贴底时是最后一个，否则是条目下标不超过顶部可见条目的最后一个。
+ *
+ * 最后一段内容比视口短时，停在底部也会发现视口顶边落在上一轮里；高亮跟着顶部
+ * 可见条目走就会停在倒数第二个，所以贴底单独给最后一个圆点。贴底判据与跟随、
+ * 「回到底部」按钮共用 `FOLLOW_BOTTOM_THRESHOLD_PX`。
  *
  * 顶部可见条目落在第一个提问之前时返回 -1，此时不高亮任何圆点。页首插槽不是
  * 条目，顶部停在页首时顶部可见条目就是第一条数据项；它本身是提问锚点时高亮它，
  * 列表顶部没有被隐藏的提问。
  */
-export function railCurrentDotIndex(dots: readonly TranscriptRailDot[], topItemIndex: number): number {
+export function railCurrentDotIndex(
+  dots: readonly TranscriptRailDot[],
+  topItemIndex: number,
+  atBottom: boolean,
+): number {
+  if (dots.length === 0) return -1;
+  if (atBottom) return dots.length - 1;
   let current = -1;
   for (let index = 0; index < dots.length; index += 1) {
     if (dots[index].itemIndex > topItemIndex) break;
