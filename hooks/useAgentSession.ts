@@ -658,10 +658,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return false;
   }, [followSessionIdentity]);
 
+  const loadSessionRef = useRef<((sid: string, showLoading?: boolean, includeState?: boolean, retryAfterSettled?: boolean) => Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | null>) | null>(null);
+
   const loadSession = useCallback(async (
     sid: string,
     showLoading = false,
     includeState = false,
+    retryAfterSettled = true,
   ): Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | null> => {
     const requestId = ++historyRequestRef.current;
     const ownsHistory = () => mountedRef.current && sessionIdRef.current === sid && historyRequestRef.current === requestId;
@@ -697,7 +700,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const navigating = navigatingLeafRef.current;
       if (navigatingAtRequest !== null || navigating !== null
         || navigationGenerationRef.current !== navigationGeneration) {
-        if (!navigating) return null;
+        if (!navigating) {
+          // 导航已经落定：这次读到的是它落定前的视图，回写会把叶子与正文拉回去。
+          // 这次载入没应用，它带的运行态读取也没人补，重发一次读取落定后的视图；
+          // 重发只做一次，再次让位就放弃。
+          if (retryAfterSettled) {
+            queueMicrotask(() => {
+              void loadSessionRef.current?.(sid, false, includeState, false);
+            });
+          }
+          return null;
+        }
         navigating.deferredLoad = {
           sessionId: sid,
           includeState: navigating.deferredLoad?.sessionId === sid
@@ -767,6 +780,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (ownsHistory() && (showLoading || messagesLoaded)) setLoading(false);
     }
   }, [applyActiveLeaf, followSessionIdentity, followRuntimeState, onSessionForked]);
+  // 让位后的重发走同一个入口：只在导航落定后补一次，避免递归引用自身。
+  loadSessionRef.current = loadSession;
 
   /**
    * 整段载入一份上下文。失效要分两种报：请求号被更晚的一次载入换掉属于「被接管」，
@@ -793,11 +808,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!ownsContext()) {
         return contextRequestRef.current !== requestId ? "superseded" : "invalidated";
       }
-      appliedLeafIdRef.current = leafId;
       if (d.sessionId) followSessionIdentity(d.sessionId, d.runtimeId ?? null);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
       setContextUsage(d.contextUsage ?? null);
+      // 叶子在整段正文与运行态都落地之后才记为已应用：中途抛错会走 failed，
+      // 退回叶子时不能把失败的叶子当成成功的那条。
+      appliedLeafIdRef.current = leafId;
       // 切分支或切叶是整段替换消息，既不会重挂列表也不走追加路径，跟随看不到任何
       // 信号；重新载入成功就当作一次回底事件。滚动不能在这次提交之前做，只记一张
       // 票号，由提交后的 effect 落到新列表的末尾。
@@ -1986,24 +2003,27 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [addNotice, t]);
 
-  const handleNavigate = useCallback(async (entryId: string) => {
-    if (bashRunningRef.current) return;
+  // 地图条目与分支叶子两条入口共用同一份导航生命周期：写高亮、载入整段上下文、
+  // 成功后才搬运行时叶子，finally 补发被让位的整段载入。
+  const runNavigation = useCallback(async (leafId: string | null) => {
     const sid = sessionIdRef.current;
     if (!sid) return;
-    const navigation: PendingNavigation = { leafId: entryId };
+    const navigation: PendingNavigation = { leafId };
     navigationGenerationRef.current += 1;
     navigatingLeafRef.current = navigation;
     try {
       // 先写叶子再等载入：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
       // 同一段上下文被重载一遍又把视图拽回末尾。
-      applyActiveLeaf(entryId);
+      applyActiveLeaf(leafId);
       // 载入没应用（失败或本次作废）就不动运行时：拿一条没载入成功的叶子发命令，会把
       // 运行时停在那条分支上。退回叶子统一由 settleContextNavigation 负责。
-      if (!await settleContextNavigation(sid, entryId, await loadContext(sid, entryId))) return;
-      // 载入可能把会话迁移到别的 id，命令要发给当前的会话，而不是请求开始时那个。
+      if (!await settleContextNavigation(sid, leafId, await loadContext(sid, leafId))) return;
+      // 分支根（null）没有可指的运行时叶子；载入可能把会话迁移到别的 id，命令按
+      // 当前的会话发。
+      if (!leafId) return;
       const commandSessionId = sessionIdRef.current;
       if (!commandSessionId) return;
-      await moveRuntimeLeaf(commandSessionId, entryId);
+      await moveRuntimeLeaf(commandSessionId, leafId);
     } finally {
       // 被这次导航让位的整段载入在落定后补发一次：它只是晚了一步，落定后的持久化
       // 视图才是它本来要读的那份。会话已经换走则不补——界面归新会话的载入。
@@ -2015,6 +2035,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [applyActiveLeaf, loadContext, loadSession, moveRuntimeLeaf, settleContextNavigation]);
 
+  const handleNavigate = useCallback(async (entryId: string) => {
+    if (bashRunningRef.current) return;
+    await runNavigation(entryId);
+  }, [runNavigation]);
+
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
     // 只有高亮、运行时与在途导航都没有别的说法时才跳过：高亮在载入前就写下了，命令
@@ -2022,31 +2047,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const navigating = navigatingLeafRef.current;
     if (leafId === activeLeafIdRef.current
       && (leafId === runtimeLeafIdRef.current || navigating?.leafId === leafId)) return;
-    const sid = sessionIdRef.current;
-    if (!sid) return;
-    const navigation: PendingNavigation = { leafId };
-    navigationGenerationRef.current += 1;
-    navigatingLeafRef.current = navigation;
-    try {
-      // 状态与 ref 一起先写，载入失败或作废时一起退回。只在成功后写 ref 会让失败后的
-      // 状态与 ref 分开，点回原叶子被去重判据吞掉。
-      applyActiveLeaf(leafId);
-      // 与 handleNavigate 同一规则：载入没应用就不动运行时，退回叶子同上。
-      if (!await settleContextNavigation(sid, leafId, await loadContext(sid, leafId))) return;
-      // 分支根（null）没有可指的运行时叶子；其余同样按载入后的会话 id 发命令。
-      if (!leafId) return;
-      const commandSessionId = sessionIdRef.current;
-      if (!commandSessionId) return;
-      await moveRuntimeLeaf(commandSessionId, leafId);
-    } finally {
-      // 与 handleNavigate 同一收尾：让位的整段载入在这里补发一次，会话换走则不补。
-      const deferredLoad = navigation.deferredLoad;
-      if (navigatingLeafRef.current === navigation) navigatingLeafRef.current = null;
-      if (deferredLoad && mountedRef.current && sessionIdRef.current === deferredLoad.sessionId) {
-        void loadSession(deferredLoad.sessionId, false, deferredLoad.includeState);
-      }
-    }
-  }, [applyActiveLeaf, loadContext, loadSession, moveRuntimeLeaf, settleContextNavigation]);
+    await runNavigation(leafId);
+  }, [runNavigation]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
