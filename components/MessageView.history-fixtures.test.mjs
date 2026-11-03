@@ -228,7 +228,9 @@ if (localFixture.reason) console.log(`[history-fixtures] ${localFixture.reason}`
 test("历史会话的消息（至多 20 条）都能渲染出消息自身内容", { skip: localFixture.environmentError ?? false }, async (t) => {
   const fixture = localFixture.fixture ?? await seedFixture(t);
   if (!fixture) {
-    t.skip("临时目录里无法铺设会话样本，跳过历史会话夹具");
+    // 沙箱目录建不出来只有跑到这里才知道，没法挪到注册期；Bun 的 node:test 兼容层里
+    // `t.skip()` 会抛 NotImplementedError，所以打印原因后直接返回，不写成跳过。
+    console.log("[history-fixtures] 临时目录里无法铺设会话样本，跳过历史会话夹具");
     return;
   }
   const { session, messages } = fixture;
