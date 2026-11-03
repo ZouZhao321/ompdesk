@@ -42,20 +42,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Typecheck
-        run: bun run typecheck
-
-      # 规格只允许在现有 Linux 作业里加步骤，不新增 Windows 作业：路径分隔符、
-      # 重命名与删除的句柄竞争这些 Windows 专属分支在这里没有回归保护，仍需
-      # 在 Windows 本地手工跑 `bun test` 验证（见 PR 描述）。
-      - name: Run tests
-        run: bun run test
-
-      - name: Build package
-        run: bun run build
-
-      # `bun run build` 只编译生产图谱。开发图谱里把 node: 内置模块带进 edge 或
-      # 浏览器产物的错误能绕开它，表现成页面 500；这一步真实启动 dev server 并
-      # 请求首页与一个 API 路由，失败时打印编译日志。
-      - name: Smoke dev build
-        run: bun run smoke:dev
+      # 流水线只在 package.json 的 `ci` 脚本里定义一次（typecheck → test → build →
+      # smoke:dev）；本地 `bun run verify` 与推送前钩子用的是同一份定义，改流程只改
+      # 那一处，CI 与本地不会再分叉。
+      #
+      # eslint 不进这道门禁：全仓 `bun run lint` 现有存量 error（React 编译器的
+      # memoization 检查，落在 components/ 与 hooks/），加进来必然红。复现命令
+      # `bun run lint`；改动本身仍要求范围内的 eslint 无 error，例如
+      # `bunx eslint test-support lib`。
+      #
+      # 不新增 Windows 作业：路径分隔符、重命名与删除的句柄竞争这些 Windows 专属分支
+      # 在这里没有回归保护，仍需在 Windows 本地手工跑 `bun test` 验证（见 PR 描述）。
+      #
+      # 最后一步会真实启动 dev server 请求首页与一个 API 路由：`bun run build` 只编译
+      # 生产图谱，开发图谱里把 node: 内置模块带进 edge 或浏览器产物的错误能绕开它，
+      # 表现成页面 500；冒烟失败时打印编译日志。
+      - name: Verify (typecheck, tests, build, dev smoke)
+        run: bun run ci
