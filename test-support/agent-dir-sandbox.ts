@@ -84,10 +84,16 @@ export function switchAgentDir(dir: string): AgentDirSnapshot {
 }
 
 export function restoreAgentDir(snapshot: AgentDirSnapshot): void {
-  setAgentDir(snapshot.agentDir);
-  if (snapshot.env === undefined) delete process.env.PI_CODING_AGENT_DIR;
-  else process.env.PI_CODING_AGENT_DIR = snapshot.env;
-  resetAgentDirState();
+  // `setAgentDir` 抛错时 `PI_CODING_AGENT_DIR` 也必须回到快照：环境变量与目录解析
+  // 是同一份事实的两处投影，只留下沙箱环境的话，后续任何一次从环境重建都会再指回
+  // 即将删除的沙箱目录。
+  try {
+    setAgentDir(snapshot.agentDir);
+  } finally {
+    if (snapshot.env === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = snapshot.env;
+    resetAgentDirState();
+  }
 }
 
 /** 目录解析与会话索引都从当前环境重建，两者必须一起复位。 */
