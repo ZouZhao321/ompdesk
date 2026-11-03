@@ -7,7 +7,10 @@ bun scripts/release.ts patch          # 1.0.26 -> 1.0.27，也可以写 1.1.0、
 bun scripts/release.ts finish 1.0.27   # 发版 PR 合并之后执行
 ```
 
-两个产物：npm 包 `ompdesk`（`.github/workflows/publish-npm.yml` 在 `v*` 标签推送时发布）与 GitHub Release（`finish` 创建）。
+两个产物：
+
+- GitHub Release：标签推送后由 `.github/workflows/release.yml` 构建、打成 `ompdesk-<版本>.tgz`，附 `SHA256SUMS.txt`，并用更新记录里这一版的段落做说明。
+- npm 包 `ompdesk`：`.github/workflows/publish-npm.yml` 在同一个标签上发布。
 
 ## 准备：开一个发版 PR
 
@@ -44,10 +47,12 @@ bun scripts/release.ts finish 1.0.27   # 发版 PR 合并之后执行
 通过后依次执行：
 
 1. 打附注标签 `v<版本>` 并推送；
-2. 用 `CHANGELOG.md` 里这个版本的段落建 GitHub Release，已存在时改成更新说明；
+2. 标签推送触发 `release.yml`：构建、`npm pack` 出 tgz、装进临时项目起服务验证首页、生成校验和、建 GitHub Release 并附上 tgz 与校验和；
 3. 盯这个提交上的全部 CI 运行，直到都完成；有失败就打印工作流名与链接并以非零退出。
 
-标签推送会触发 `publish-npm.yml`，因此 `finish` 等待的运行里包含 npm 发布。
+`release.yml` 的说明文字由 `bun scripts/release.ts notes <版本>` 从 `CHANGELOG.md` 取，CI 与本地用的是同一份解析。
+
+标签推送同时触发 `publish-npm.yml`，因此 `finish` 等待的运行里既有打包也有 npm 发布。
 
 ## 版本号约定
 

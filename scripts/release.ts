@@ -375,19 +375,16 @@ function cmdFinish(input: string, dryRun: boolean): void {
 	git(["tag", "-a", tag, "-m", tag]);
 	git(["push", "origin", `refs/tags/${tag}`], { inherit: true });
 
-	const notes = `${section}\n`;
-	if (run(["gh", "release", "view", tag], { allowFailure: true }).code === 0) {
-		run(["gh", "release", "edit", tag, "--notes-file", "-"], { stdin: notes, inherit: true });
-	} else {
-		run(["gh", "release", "create", tag, "--verify-tag", "--title", tag, "--notes-file", "-"], {
-			stdin: notes,
-			inherit: true,
-		});
-	}
-
-	console.log(`\n已发出 ${tag}，盯 CI…`);
+	console.log(`\n已推出 ${tag}，等远端 CI 打包并建 Release，然后盯 CI…`);
 	watchCI(sha, slug);
 	console.log(`\n${tag} 发布完成。`);
+}
+
+function cmdNotes(input: string): void {
+	const target = normalizeVersion(input);
+	if (!target) fail(`版本号「${input}」不合法，写 1.0.27 或 v1.0.27`);
+	const section = extractChangelogSection(fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"), target);
+	process.stdout.write(`${section}\n`);
 }
 
 if (import.meta.main) {
@@ -399,13 +396,17 @@ if (import.meta.main) {
 	if (!command || command === "--help" || command === "help") {
 		console.error(`用法：
   bun scripts/release.ts <版本|major|minor|patch>   准备发版并开 PR
-  bun scripts/release.ts finish <版本>              合并后打标签、建 Release、盯 CI
+  bun scripts/release.ts finish <版本>              合并后打标签、推标签、盯 CI
+  bun scripts/release.ts notes <版本>               打印这一版的更新记录，供 CI 生成 Release 说明
   bun scripts/release.ts ... --dry-run              只检查并打印计划`);
 		process.exit(command ? 0 : 1);
 	}
 	if (command === "finish") {
 		if (!value) fail("finish 需要版本号");
 		cmdFinish(value, dryRun);
+	} else if (command === "notes") {
+		if (!value) fail("notes 需要版本号");
+		cmdNotes(value);
 	} else {
 		cmdPrepare(command, dryRun);
 	}
