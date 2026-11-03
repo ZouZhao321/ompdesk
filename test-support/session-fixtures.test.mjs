@@ -329,10 +329,10 @@ test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
   const sessionsDir = fixturesDir(sandbox.agentDir);
   const options = { agentDir: sandbox.agentDir, cwd: sandbox.cwd };
 
-  // 铺设会清扫整棵目录下的 staging 与备份：不排队时后来者会把先行者正在写的
-  // staging 删掉。握手用 `onStagingReady`：它在锁内、staging 已落盘时调用，先行者
-  // 停在这里等放行，后来者只可能在先行者发布完成之后才进来。锁失效时后来者会删掉
-  // staging，先行者的原子替换随之失败，用例报错而不是静默退化成串行。
+  // 铺设会清扫整棵目录下的 staging 与备份：两个铺设同时进来时，后来者的清扫会删掉
+  // 先行者正在写的 staging。握手用 `onStagingReady`：它在锁内、staging 已落盘时调用，
+  // 先行者停在这里等放行，第二个铺设此刻已在飞行中，两边都必须完整落地。排队顺序由
+  // 「共用一条队列」的用例单独钉死，这里验证接上锁之后的端到端结果。
   let releaseLong;
   const longPaused = new Promise((release) => {
     releaseLong = release;
@@ -355,8 +355,8 @@ test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
   const empty = seedSessions("empty", {
     ...options,
     onStagingReady: () => {
-      // 先行者已发布：没排队的话它此刻还卡在 staging 阶段，场景目录尚不存在。
-      assert.ok(existsSync(join(sessionsDir, "fixture-long")), "后来者必须在先行者发布完成之后才进入");
+      // 排队正常时先行者已完成发布：后来者进入的那一刻，场景目录必须已在盘上。
+      assert.ok(existsSync(join(sessionsDir, "fixture-long")), "后来者进入时先行者应已发布完成");
     },
   });
   releaseLong();
