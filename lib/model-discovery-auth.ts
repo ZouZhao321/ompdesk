@@ -2,11 +2,20 @@ import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { kNoAuth, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
+import type { AuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { getOmpRuntime } from "./omp-runtime";
 
 export interface ModelDiscoveryAuth {
   apiKey?: string;
   headers: Record<string, string>;
+}
+
+export interface ModelDiscoveryAuthDeps {
+  /**
+   * 解析凭据用的 AuthStorage。省略时取进程级 runtime 的实例（打开真实
+   * `~/.omp/agent/agent.db` 并做在线刷新）；测试注入离线实例即可脱离用户凭据。
+   */
+  authStorage?: AuthStorage;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -21,6 +30,7 @@ function stringRecord(value: unknown): Record<string, string> {
 export async function resolveModelDiscoveryAuth(
   providerName: string,
   provider: Record<string, unknown>,
+  deps: ModelDiscoveryAuthDeps = {},
 ): Promise<ModelDiscoveryAuth> {
   let tempDir: string | undefined;
   try {
@@ -43,7 +53,7 @@ export async function resolveModelDiscoveryAuth(
 
     // A throwaway registry over the submitted provider config, sharing the real
     // AuthStorage so an already-saved key for this provider still resolves.
-    const { authStorage } = await getOmpRuntime();
+    const authStorage = deps.authStorage ?? (await getOmpRuntime()).authStorage;
     const registry = new ModelRegistry(authStorage, modelsPath);
     await registry.refresh("offline");
     const loadError = registry.getError();

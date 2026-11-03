@@ -26,6 +26,9 @@ const nextConfig: NextConfig = {
   // dev `.next/` directory through this override.
   distDir: process.env.OMPDESK_DIST_DIR || ".next",
   outputFileTracingRoot: __dirname,
+  // The repository manages AGENTS.md itself; `next dev` must not write its own
+  // block into that file or create one in a fresh worktree.
+  agentRules: false,
   serverExternalPackages: [
     "undici",
     "@oh-my-pi/pi-coding-agent",
@@ -56,10 +59,21 @@ const nextConfig: NextConfig = {
     return config;
   },
   // Allow the dev server to be reached over the loopback interface (the
-  // browser tab connects to http://127.0.0.1:30141) and from LAN devices.
-  allowedDevOrigins: ["127.0.0.1", "192.168.*.*"],
+  // browser tab connects to http://127.0.0.1:30141). The server itself never
+  // binds a LAN address, so no other origin belongs here.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   async headers() {
     return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" },
+        ],
+      },
       {
         source: "/",
         headers: [

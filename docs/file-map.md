@@ -85,6 +85,7 @@ comment-translation-generation.ts 勾选条目的批量译文生成：字典命�
 comment-translation-validation.ts 译文逐字片段校验：路径、标识符、数字与括号片段
 comment-translation-route.ts 生成接口的请求校验与处理器
 comment-translation-model.ts 生成接口的模型接线：可见模型选择与 completeSimple 调用
+git-env.ts           createGitEnv()：git 子进程环境，剥离钩子注入的仓库定位变量
 git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文件，非仓库返回 null
 request-security.ts  请求来源与主机校验
 source-wrap-preference.ts 源码视图换行开关的共享状态，查看器与预览共用
@@ -206,4 +207,5 @@ instrumentation.ts  启动时接线（代理、日志）
 next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
 bin/                启动器、密码存储、Bun 定位
 scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息）
+test-support/       测试样本：会话夹具经 SessionManager 生成，测试与手工验证共用同一入口
 ```
