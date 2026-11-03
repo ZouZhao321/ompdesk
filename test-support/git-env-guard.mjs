@@ -10,10 +10,25 @@ import ts from "typescript";
  *
  * 只认一条规则：首个参数是字面量 `"git"` 的调用。不看函数名，所以 `execFile`、`spawn`、
  * `execFileSync` 以及 `const run = execFileAsync` 这类换名字的包装都会扫到；先把 `"git"`
- * 存进变量再传的调用 AST 追不到，靠调用方的模块清单与 `callSiteLines()` 的逐调用点核对兜底。
+ * 存进变量再传的调用 AST 追不到，靠调用方的模块清单与 `subprocessCallSiteLines()` 的逐调用点
+ * 核对兜底。
  */
 
 const GIT_LITERAL_RE = /(["'`])git\1/;
+
+/**
+ * 子进程入口清单。扫描器按首参认 git、不看函数名，调用点清单必须按同一批入口建：只钉一个
+ * 名字的话，模块改用 `spawn`、`execFileSync` 之后合规调用会被判成漏扫，而
+ * `execFile(gitBinary, …)` 这种首参存变量的调用反而两边都看不见。
+ */
+export const SUBPROCESS_ENTRY_POINTS = Object.freeze([
+  "exec",
+  "execFile",
+  "execFileSync",
+  "execSync",
+  "spawn",
+  "spawnSync",
+]);
 
 /** 文本预筛：与下面的 AST 规则同形，供调用方在解析前跳过不碰 git 的文件。 */
 export function mentionsGitLiteral(source) {
@@ -127,19 +142,68 @@ export function gitSubprocessCalls(source, filename = "source.ts") {
 }
 
 /**
- * 收集源码里以指定标识符为被调函数的调用点行号。扫描器只认首参为字面量 `"git"` 的调用，
- * 先把首参存进变量的调用它追不到：调用方用这份清单核对模块里的子进程调用点都被扫到，
- * 光数扫到的条数挡不住漏扫。
+ * 被调用的名字：标识符本身，或属性访问的最后一段（`cp.execFile`、`util.promisify`）。
+ * 正则字面量的 `.exec` 也落进这段，本守卫只用于 git 子进程模块，误报方向是多数一条。
  */
-export function callSiteLines(source, calleeName, filename = "source.ts") {
+function referenceName(node) {
+  if (ts.isIdentifier(node)) return node.text;
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  return null;
+}
+
+/** `promisify(execFile)` 与 `promisify(cp.execFile)` 这类把入口包一层的写法。 */
+function isPromisifiedEntry(expression, names) {
+  if (!ts.isCallExpression(expression)) return false;
+  if (referenceName(expression.expression) !== "promisify") return false;
+  return expression.arguments.some((argument) => names.has(referenceName(argument)));
+}
+
+/** 初始化表达式是否只是入口的别名：`const run = execFile`、`const execFileAsync = promisify(execFile)`。 */
+function aliasesEntryPoint(expression, names) {
+  return names.has(referenceName(expression)) || isPromisifiedEntry(expression, names);
+}
+
+/**
+ * 入口名集合：清单里的六个名字，加上本地声明的别名。别名套别名按声明迭代到不再新增，
+ * `const run = execFileAsync` 也能解析到 `execFile`。
+ */
+function entryPointNames(sourceFile) {
+  const names = new Set(SUBPROCESS_ENTRY_POINTS);
+  const declarations = [];
+  const collect = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      declarations.push(node);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFile);
+
+  let added = true;
+  while (added) {
+    added = false;
+    for (const declaration of declarations) {
+      if (names.has(declaration.name.text)) continue;
+      if (aliasesEntryPoint(declaration.initializer, names)) {
+        names.add(declaration.name.text);
+        added = true;
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * 收集源码里全部子进程入口的调用点行号。入口名取 `SUBPROCESS_ENTRY_POINTS`、属性访问写法
+ * （`cp.spawn`）与本地别名（`const execFileAsync = promisify(execFile)`）。扫描器只认首参为
+ * 字面量 `"git"` 的调用，先把首参存进变量的调用它追不到：调用方用这份清单核对模块里的
+ * 子进程调用点都被扫到，光数扫到的条数挡不住漏扫。
+ */
+export function subprocessCallSiteLines(source, filename = "source.ts") {
   const sourceFile = parseSource(source, filename);
+  const names = entryPointNames(sourceFile);
   const lines = [];
   const visit = (node) => {
-    if (
-      ts.isCallExpression(node)
-      && ts.isIdentifier(node.expression)
-      && node.expression.text === calleeName
-    ) {
+    if (ts.isCallExpression(node) && names.has(referenceName(node.expression))) {
       lines.push(lineOf(sourceFile, node));
     }
     ts.forEachChild(node, visit);
