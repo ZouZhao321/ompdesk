@@ -106,8 +106,11 @@ interface ConfigParameter {
 }
 
 /**
- * 解析 `GIT_CONFIG_PARAMETERS`：条目以空格分隔，每条形如 `'键'='值'` 或 `'键'`（没有值
- * 表示布尔真）。格式认不出时返回 null。
+ * 解析 `GIT_CONFIG_PARAMETERS`：条目以空格分隔，每条形如 `'键'='值'`、`'键=值'` 或
+ * `'键'`（没有值表示布尔真）。格式认不出时返回 null。
+ *
+ * 两种带值写法在 git 里不是一回事：`'键'='值'` 拆成两段引号，键就是前一段的全部内容；
+ * `'键=值'` 只有一段引号，git 去引号后在第一个 `=` 处切键，键名是 `=` 之前的部分。
  */
 function parseConfigParameters(raw: string): ConfigParameter[] | null {
   const parameters: ConfigParameter[] = [];
@@ -125,8 +128,17 @@ function parseConfigParameters(raw: string): ConfigParameter[] | null {
       const value = readQuotedSegment(raw, index + 1);
       if (!value) return null;
       index = value.end;
+      parameters.push({ key: key.text, start, end: index });
+      continue;
     }
-    parameters.push({ key: key.text, start, end: index });
+    // 单段写法 `'键=值'`：`=` 落在引号里面，键名取去引号后第一个 `=` 之前的部分。
+    // 写回仍用原切片，值不必解码再编码。
+    const separator = key.text.indexOf("=");
+    parameters.push({
+      key: separator === -1 ? key.text : key.text.slice(0, separator),
+      start,
+      end: index,
+    });
   }
   return parameters;
 }
