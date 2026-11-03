@@ -21,8 +21,12 @@ Pull requests are welcome for focused changes. Before opening one:
 bun install
 bun test
 bun run typecheck
-bun run lint
+bunx eslint <changed files and directories>
 ```
+
+`bun run lint` still reports pre-existing errors in `components/` and `hooks/` (React compiler
+memoization checks), so it is not part of `bun run ci` or the CI job — reproduce with
+`bun run lint`, and judge the eslint result of the files you touched.
 
 Match the surrounding code, keep one logical change per commit, and write commit titles as
 `type(scope): 中文描述` with `type` from `feat`, `fix`, `refactor`, `test`, `docs`, `chore`,

@@ -73,7 +73,8 @@ Lint：`bun run lint`
 
 真实模型冒烟默认跳过，只有 `OMPDESK_LIVE_SMOKE=1 bun test lib/live-model-smoke.test.mjs`
 才发出真实请求；`OMPDESK_LIVE_MODEL` 可选，用 omp 选择器语法（`provider/modelId`
-或 `modelId`，可带 `:thinkingLevel`）。历史会话夹具依赖本机会话库，没有夹具时自动跳过。
+或 `modelId`，可带 `:thinkingLevel`）。历史会话夹具优先用本机会话库，本机没有会话时铺
+`test-support/session-fixtures.ts` 的确定性样本，只有会话库不可读才跳过。
 
 开发期间不要执行 `bun run build`：会污染 `.next/` 并破坏 `bun run dev`。例外是
 `bun run desktop:build`，它经 `scripts/stage-desktop.mjs` 通过 `OMPDESK_DIST_DIR`
@@ -82,6 +83,33 @@ Lint：`bun run lint`
 运行环境固定为 Bun：`@oh-my-pi/pi-*` 以 TypeScript 源码发布并 import `bun:sqlite`，
 Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 为 ESM
 `import`，只靠 `serverExternalPackages` 不够。测试用 `bun test`，不用 `node --test`。
+
+## 测试数据
+
+- 测试样本只从 `test-support/session-fixtures.ts` 生成，不手写会话文件。
+- 手工验证分两步，两步用的 agent 目录必须不同：铺样本会把标题写进活动目录的
+  `history.db`，活动目录与目标 `agentDir` 相同会直接报错。
+  1. 铺样本。首次先用 `bun run scratch` 建任务目录；活动目录放任务临时目录之外的
+     运行时目录，样本落到任务目录：
+
+     ```bash
+     bun run scratch manual-check "手工验证会话样本"
+     PI_CODING_AGENT_DIR="$PWD/.tmp/session-runtime" bun -e '
+       const { seedSessions } = await import("./test-support/session-fixtures.ts");
+       await seedSessions("branch", { agentDir: process.cwd() + "/.tmp/manual-check/agent", cwd: process.cwd() });
+     '
+     ```
+
+     铺样本时不要把 `PI_CODING_AGENT_DIR` 指向 `.tmp/manual-check/agent`：那是目标
+     `agentDir`，标题索引会写进样本目录。
+  2. 用铺好的目录启动开发服务，界面只显示这批样本：
+
+     ```bash
+     PI_CODING_AGENT_DIR="$PWD/.tmp/manual-check/agent" bun run dev
+     ```
+
+     要发消息或切模型时，把 `~/.omp/agent/agent.db` 与 `~/.omp/agent/models.yml`
+     复制进该目录，或在该目录内重新登录。
 
 ## 界面改动
 
@@ -175,4 +203,4 @@ ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `descri
 - `模型角色清单`: 新增或改角色时对齐 SDK 定义；来源 SDK 的 `ModelRole` 类型，`grep -n "export type ModelRole"`
 - `主题色值`: 改配色时找变量名与真实取值；来源 `/api/theme` 与 `pi-tui/src/theme/*.json`，请求接口或读主题 JSON
 - `依赖与运行时版本`: 判断 Bun、Node 与 Next 的版本约束；来源 `package.json` 的 `engines` 与 `bun.lock`，读 `package.json`
-- `测试样本会话`: 复现界面测试时定位数据；来源 `~/.omp/agent/sessions/`，按会话 id 检索
+- `测试样本会话`: 复现界面测试时定位数据；来源 `test-support/session-fixtures.ts` 的场景，铺到任务临时目录

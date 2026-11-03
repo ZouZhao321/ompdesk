@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { createGitEnv } from "./git-env";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,7 +21,7 @@ export async function listGitFiles(cwd: string): Promise<string[] | null> {
       {
         timeout: GIT_LIST_TIMEOUT_MS,
         maxBuffer: GIT_LIST_MAX_BUFFER,
-        env: { ...process.env, LC_ALL: "C" },
+        env: createGitEnv(),
       },
     );
     return stdout.split("\0").filter(Boolean);
