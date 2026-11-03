@@ -17,11 +17,13 @@ import { normalizeToolCalls } from "@/lib/normalize";
 import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
 import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
+import { FOLLOW_OBSERVATION_HOLD_MS, reduceFollow, type FollowEvent } from "@/lib/transcript-follow";
 import type { ChatDraftImage } from "@/lib/draft-store";
 import { rememberSessionContinuation, clearSessionContinuation } from "@/lib/workspace-memory";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { ContextUsage, GoalStatusInfo, SessionStatsInfo, SlashCommandInfo } from "@/lib/omp-types";
 import type { ModelRoleAssignment } from "@/lib/api-types";
+import type { TranslationParams } from "@/lib/i18n/types";
 
 export interface SessionData {
   runtimeId?: string;
@@ -44,6 +46,34 @@ interface StreamingState {
   isStreaming: boolean;
   streamingMessage: Partial<AgentMessage> | null;
 }
+
+/**
+ * 一次整段载入的结果。
+ * - `applied`：正文已落到界面；
+ * - `failed`：请求归本次导航所有但失败了，界面还是旧一段；
+ * - `superseded`：更晚的一次整段载入已经接管界面，本次结果作废且有别人负责纠正；
+ * - `invalidated`：会话 id 或运行时换掉了，本次结果作废，但没有更晚的载入会来纠正。
+ */
+type ContextLoadOutcome = "applied" | "failed" | "superseded" | "invalidated";
+
+/**
+ * 一次在途导航：目标叶子，以及被它让位、等它收尾补发的整段载入。null 本身是合法
+ * 目标（分支根），所以用一层对象把「没有导航」与「正导航到分支根」分开。
+ */
+type PendingNavigation = {
+  leafId: string | null;
+  deferredLoad?: { sessionId: string; includeState: boolean };
+};
+
+/**
+ * 整段载入被在途导航让位时的返回值：这次没有回写，由导航收尾补发一次。与 `null`
+ * （请求失败、被更晚的载入接管、会话不存在）分开，调用方可以据此判断「未应用但
+ * 会重发」；`promoteNewSession` 这类门控只在真正应用时继续，deferred 不算成功。
+ */
+type SessionLoadDeferred = { deferred: true };
+
+/** 整段载入已应用、但调用方没有要求运行态时的返回值；与「未读运行态」区分开。 */
+type SessionLoadApplied = { applied: true };
 
 type StreamAction =
   | { type: "start" }
@@ -182,13 +212,22 @@ export interface UseAgentSessionOptions {
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSessionStatsPanelOpen?: () => void;
   setToolPreset?: (preset: "none" | "default" | "full") => void;
+  /**
+   * 把转写视图带到末尾。定位由虚拟列表执行，hook 只负责决定什么时候该带，
+   * 不再自己动滚动元素。必填：缺了它「跟随中」的状态就没有落点，漏接由 typecheck 兜住。
+   */
+  scrollTranscriptToEnd: (behavior: ScrollBehavior) => void;
+  /**
+   * 导航失败的回执走当前界面语言。与滚动落点同理，由调用方注入，hook 不猜文案。
+   */
+  t: (key: string, params?: TranslationParams) => string;
 }
 
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
-const PROGRAMMATIC_SCROLL_IGNORE_MS = 700;
 const USER_SCROLL_INTENT_MS = 1200;
-const AUTO_FOLLOW_BOTTOM_THRESHOLD_PX = 72;
+// 跟随观测抑制器的截止时长与判定都在 lib/transcript-follow.ts：抑制器只能由外部
+// 松开，漏配对时由截止时间兜住。
 const PROMPT_SETTLE_INITIAL_DELAY_MS = 800;
 const PROMPT_SETTLE_POLL_MS = 600;
 const PROMPT_SETTLE_MAX_MS = 20_000;
@@ -374,7 +413,7 @@ type SlashCommandsResponse = {
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     session, newSessionCwd, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
-    modelsRefreshKey, onBranchDataChange, onSessionStatsPanelOpen,
+    modelsRefreshKey, onBranchDataChange, onSessionStatsPanelOpen, t,
   } = opts;
 
   const isNew = session === null && newSessionCwd !== null;
@@ -383,6 +422,30 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
+  // 当前叶子：分支导航点的就是它时叶子没变，跳过整段重载，正在上滚阅读的视图不会
+  // 被拽回末尾。凡是写 activeLeafId 的地方都要同时写它（载入、404 清空、两条导航
+  // 路径），两边不一致就会把没变判成变了，或者反过来吞掉真导航。
+  const activeLeafIdRef = useRef<string | null>(null);
+  // 最近一次真的载入成功的叶子，只在整段载入应用后写（含首屏载入与 404 清空）。
+  // 导航载入失败或本次作废时，退回目标只能是它：上一次请求的叶子可能自己也没
+  // 载入成功，退回去会把界面停在一条从没载入过的分支上。
+  const appliedLeafIdRef = useRef<string | null>(null);
+  // 运行时真的已经停在上面的叶子：只在该叶的导航命令成功后写（整段载入同时反映运行态，
+  // 也一起写）。高亮在载入前就写下了，命令失败后运行时仍停在旧叶子上，只看高亮会把
+  // 同一条分支的重试静默吞掉。
+  const runtimeLeafIdRef = useRef<string | null>(null);
+  // 在途导航的目标叶子与被它让位的整段载入（见 PendingNavigation）。
+  const navigatingLeafRef = useRef<PendingNavigation | null>(null);
+  // 导航代数：每开始一次导航就加一。整段载入在发出时记下它，解析后据此判断自己
+  // 代表的是不是发出那一刻的持久化视图——导航已经把叶子与正文写下去了，慢一步的
+  // 整段载入不能把它们拉回去。
+  const navigationGenerationRef = useRef(0);
+  // 「当前叶子」唯一的写入口：状态与去重用的 ref 在同一时机写，两条导航路径不会
+  // 各自决定先后。载入失败时调用方用同一个入口把两者一起退回。
+  const applyActiveLeaf = useCallback((leafId: string | null) => {
+    activeLeafIdRef.current = leafId;
+    setActiveLeafId(leafId);
+  }, []);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
@@ -453,16 +516,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const bashRunningRef = useRef(false);
   const bashRecoveryIdRef = useRef(0);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
-  const initialScrollDoneRef = useRef(false);
-  const completionScrollAllowedRef = useRef(true);
   const [autoFollowPaused, setAutoFollowPaused] = useState(false);
+  // 载入后的回底票号：载入与滚动在同一个同步块里时，滚的还是提交前的旧列表。
+  const [contextFollowTicket, setContextFollowTicket] = useState(0);
   const [goalStatus, setGoalStatus] = useState<GoalStatusInfo | null>(null);
   const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
-  const ignoreProgrammaticScrollUntilRef = useRef(0);
-  // Forward reference: handleSend/executeBash are declared above setAutoFollow.
-  const setAutoFollowRef = useRef<(following: boolean) => void>(() => {});
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  // 上一次观测到的容器与 scrollTop：只有位置真的变了才算一次滚动，内容增高与行
+  // 重测量引起的距离变化不算。
+  const lastScrollRef = useRef<{ container: HTMLElement; top: number } | null>(null);
+  // 跳转的落点由列表带着滚一串：这一串里读到的位置说明不了用户意图。一次性抑制器
+  // 在跳转开始时合上，由列表停止滚动或跳转的兜底定时器松开。
+  const followObservationHeldRef = useRef(false);
+  // 抑制器的截止时间：它只能由外部松开，漏配对会把跟随永久锁死且静默。到点由滚动
+  // 观测自己收回，最坏也只是这段窗口内的位置不参与判定。
+  const followObservationHoldUntilRef = useRef(0);
+  // Forward reference: handleSend/executeBash are declared above applyFollow.
+  const applyFollowRef = useRef<(event: FollowEvent) => void>(() => {});
+  // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
+  const scrollTranscriptToEndRef = useRef(opts.scrollTranscriptToEnd);
+  scrollTranscriptToEndRef.current = opts.scrollTranscriptToEnd;
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const ensuringNewSessionRef = useRef<Promise<string | null> | null>(null);
   const newSessionPromotedRef = useRef(false);
@@ -591,18 +664,33 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return false;
   }, [followSessionIdentity]);
 
-  const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
+  const loadSessionRef = useRef<((sid: string, showLoading?: boolean, includeState?: boolean, retryAfterSettled?: boolean) => Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | SessionLoadApplied | null>) | null>(null);
+
+  const loadSession = useCallback(async (
+    sid: string,
+    showLoading = false,
+    includeState = false,
+    retryAfterSettled = true,
+  ): Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | SessionLoadApplied | null> => {
     const requestId = ++historyRequestRef.current;
     const ownsHistory = () => mountedRef.current && sessionIdRef.current === sid && historyRequestRef.current === requestId;
+    // 发出这次请求时的导航代数与在途目标。导航会自己写叶子与正文，这次载入只代表
+    // 发出那一刻的持久化视图。
+    const navigationGeneration = navigationGenerationRef.current;
+    const navigatingAtRequest = navigatingLeafRef.current;
     let messagesLoaded = false;
     try {
       if (showLoading) setLoading(true);
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}?${params}`);
       if (res.status === 404) {
-        if (showLoading && ownsHistory()) {
+        // 在途导航会自己写叶子与正文，这次 404 不能先把它们清掉；让导航落定后的
+        // 那次载入去判定会话是否真的不存在。
+        if (showLoading && ownsHistory() && navigatingLeafRef.current === null) {
           setData(null);
-          setActiveLeafId(null);
+          appliedLeafIdRef.current = null;
+          runtimeLeafIdRef.current = null;
+          applyActiveLeaf(null);
           setMessages([]);
           setError(null);
         }
@@ -611,12 +699,46 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
       if (!ownsHistory()) return null;
+      // 请求在途期间有导航开始、结束或仍挂着：叶子、正文与运行态都归那次导航。这次
+      // 载入读到的是发出那一刻的持久化视图，照常回写会把在途导航已写下的高亮拉回
+      // 旧叶子。导航还挂着就把会话记在它身上，由它的 finally 补发一次——命令与事件
+      // 触发的刷新（compact、handoff、改名、reload、rewind、agent_end 等）不该在导航
+      // 窗口里整段丢掉，否则 entryIds 会一直落后于 messages，promoteNewSession 这类
+      // 门控也跟着消失。导航已经落定（只有代数不同）说明没有人在等这次回写，丢弃。
+      const navigating = navigatingLeafRef.current;
+      if (navigatingAtRequest !== null || navigating !== null
+        || navigationGenerationRef.current !== navigationGeneration) {
+        if (!navigating) {
+          // 导航已经落定：这次读到的是它落定前的视图，回写会把叶子与正文拉回去。
+          // 这次载入没应用，它带的运行态读取也没人补，重发一次读取落定后的视图；
+          // 重发只做一次，再次让位就放弃。
+          if (retryAfterSettled) {
+            queueMicrotask(() => {
+              void loadSessionRef.current?.(sessionIdRef.current ?? sid, showLoading, includeState, false);
+            });
+          }
+          return null;
+        }
+        navigating.deferredLoad = {
+          sessionId: sid,
+          includeState: navigating.deferredLoad?.sessionId === sid
+            ? navigating.deferredLoad.includeState || includeState
+            : includeState,
+        };
+        return { deferred: true };
+      }
       if (d.runtimeId || d.sessionId !== sid) {
         followSessionIdentity(d.sessionId, d.runtimeId);
         sid = d.sessionId;
       }
       setData(d);
-      setActiveLeafId(d.leafId);
+      // 载入就是一次真实的叶子切换，界面与运行态同时落到这条叶上：高亮、载入成功
+      // 过的叶子与运行时确认值一起写。只在导航路径写 ref 会让首屏之后点已高亮的
+      // 当前叶子被判成换了叶子，整段重载并把视图拽回末尾；一轮结束后叶子前进了，
+      // ref 却还停在旧叶子上，点旧叶子又被去重判据静默吞掉。
+      appliedLeafIdRef.current = d.leafId;
+      runtimeLeafIdRef.current = d.leafId;
+      applyActiveLeaf(d.leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
       setContextUsage(d.contextUsage ?? null);
@@ -627,7 +749,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
       messagesLoaded = true;
       if (showLoading) setLoading(false);
-      if (!includeState) return null;
+      if (!includeState) return { applied: true };
 
       try {
         const requestedRuntimeId = runtimeIdRef.current;
@@ -665,9 +787,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (ownsHistory() && (showLoading || messagesLoaded)) setLoading(false);
     }
-  }, [followSessionIdentity, followRuntimeState, onSessionForked]);
+  }, [applyActiveLeaf, followSessionIdentity, followRuntimeState, onSessionForked]);
+  // 让位后的重发走同一个入口：只在导航落定后补一次，避免递归引用自身。
+  loadSessionRef.current = loadSession;
 
-  const loadContext = useCallback(async (sid: string, leafId: string | null) => {
+  /**
+   * 整段载入一份上下文。失效要分两种报：请求号被更晚的一次载入换掉属于「被接管」，
+   * 界面、运行时与叶子都归那条新载入；会话切换、运行时重绑与卸载属于「本次作废」，
+   * 没有更晚的载入来纠正叶子，退不退由调用方按会话是否还挂着决定。
+   */
+  const loadContext = useCallback(async (sid: string, leafId: string | null): Promise<ContextLoadOutcome> => {
     const requestId = ++contextRequestRef.current;
     const requestedRuntimeId = runtimeIdRef.current;
     const ownsContext = () => mountedRef.current && sessionIdRef.current === sid
@@ -684,15 +813,27 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         context: { messages: AgentMessage[]; entryIds: string[] };
         contextUsage?: ContextUsage;
       };
-      if (!ownsContext()) return false;
+      if (!ownsContext()) {
+        return contextRequestRef.current !== requestId ? "superseded" : "invalidated";
+      }
       if (d.sessionId) followSessionIdentity(d.sessionId, d.runtimeId ?? null);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
       setContextUsage(d.contextUsage ?? null);
-      return true;
+      // 叶子在整段正文与运行态都落地之后才记为已应用：中途抛错会走 failed，
+      // 退回叶子时不能把失败的叶子当成成功的那条。
+      appliedLeafIdRef.current = leafId;
+      // 切分支或切叶是整段替换消息，既不会重挂列表也不走追加路径，跟随看不到任何
+      // 信号；重新载入成功就当作一次回底事件。滚动不能在这次提交之前做，只记一张
+      // 票号，由提交后的 effect 落到新列表的末尾。
+      setContextFollowTicket((ticket) => ticket + 1);
+      return "applied";
     } catch (e) {
-      if (ownsContext()) console.error("Failed to load context:", e);
-      return false;
+      if (!ownsContext()) {
+        return contextRequestRef.current !== requestId ? "superseded" : "invalidated";
+      }
+      console.error("Failed to load context:", e);
+      return "failed";
     }
   }, [followSessionIdentity]);
 
@@ -1664,7 +1805,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentRunning(true);
     setAgentPhase(isSlashCommandPrompt ? { kind: "running_command" } : { kind: "waiting_model" });
     dispatch({ type: "start" });
-    setAutoFollowRef.current(true);
+    // 提交后一律回到底部：上滚过的视图不会停在历史中间。
+    applyFollowRef.current({ type: "submit" });
 
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
     let sentSessionId: string | null = null;
@@ -1751,7 +1893,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (agentRunningRef.current || bashRunningRef.current) return;
     const inputText = `${excludeFromContext ? "!!" : "!"}${command}`;
     bashRunningRef.current = true;
-    setAutoFollowRef.current(true);
+    // 执行 shell 命令同样把视图带到末尾。
+    applyFollowRef.current({ type: "submit" });
     setPendingBash({ command, excludeFromContext });
     setBashRunning(true);
     try {
@@ -1824,25 +1967,96 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [onSessionForked]);
 
-  const handleNavigate = useCallback(async (entryId: string) => {
-    if (bashRunningRef.current) return;
+  /**
+   * 一次导航的载入结果落到叶子上，两条导航路径共用；返回这次载入是否真的应用。
+   * 退回目标只能是最近一次真的载入成功过的叶子：连点 A→B→C 时 B 自己也可能没载入
+   * 成功，退回 B 会把界面停在一条从没载入过的分支上；一次都没载入成功过就退回 null，
+   * 不能退到还在途的那条叶子上——它同样没载入成功。
+   */
+  const settleContextNavigation = useCallback(async (
+    sid: string,
+    leafId: string | null,
+    outcome: ContextLoadOutcome,
+  ): Promise<boolean> => {
+    if (outcome === "applied") return true;
+    // 更晚的一次载入已经接管界面与运行时，叶子归它。
+    if (outcome === "superseded" || !mountedRef.current) return false;
+    // 会话已经换走：叶子归新会话的首屏载入，别拿旧会话的值去写。
+    if (outcome === "invalidated" && sessionIdRef.current !== sid) return false;
+    // 只在自己仍是最新写入者时退回：更晚的导航或一次整段载入已经把叶子挪走了。
+    if (activeLeafIdRef.current !== leafId) return false;
+    applyActiveLeaf(appliedLeafIdRef.current);
+    // 请求自己失败时消息区仍停在旧一段：补一条回执，用户才知道高亮为什么弹了回去。
+    // 这里不再补发一次载入——第二次载入同样可能失败，成功时还会把正在上滚阅读的视图
+    // 拽回末尾，与「失败就别动视图」正好相反。会话或运行时失效时界面本来就停在
+    // applied 那条分支上，连回执都不需要。
+    if (outcome === "failed") {
+      addNotice({ type: "error", message: t("chat.branchLoadFailed") });
+    }
+    return false;
+  }, [addNotice, applyActiveLeaf, t]);
+
+  /**
+   * 把运行时叶子挪到目标。只有命令成功才说明运行时真的停在那条分支上，确认值因此
+   * 只在成功后写：失败时它停在旧叶子上，同一叶子的重试不会被切叶的去重判据吞掉。
+   * 失败只留一条通用回执，命令的原始异常留在日志里。
+   */
+  const moveRuntimeLeaf = useCallback(async (sid: string, leafId: string) => {
+    try {
+      await sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }, runtimeIdRef);
+      runtimeLeafIdRef.current = leafId;
+    } catch (e) {
+      console.error("Failed to move the runtime leaf:", e);
+      addNotice({ type: "error", message: t("chat.branchSwitchFailed") });
+    }
+  }, [addNotice, t]);
+
+  // 地图条目与分支叶子两条入口共用同一份导航生命周期：写高亮、载入整段上下文、
+  // 成功后才搬运行时叶子，finally 补发被让位的整段载入。
+  const runNavigation = useCallback(async (leafId: string | null) => {
     const sid = sessionIdRef.current;
     if (!sid) return;
-    sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }, runtimeIdRef).catch(() => {});
-    setActiveLeafId(entryId);
-    await loadContext(sid, entryId);
-  }, [loadContext]);
+    const navigation: PendingNavigation = { leafId };
+    navigationGenerationRef.current += 1;
+    navigatingLeafRef.current = navigation;
+    try {
+      // 先写叶子再等载入：两次点击之间隔着一次异步载入，ref 落后就判成又换了一次叶子，
+      // 同一段上下文被重载一遍又把视图拽回末尾。
+      applyActiveLeaf(leafId);
+      // 载入没应用（失败或本次作废）就不动运行时：拿一条没载入成功的叶子发命令，会把
+      // 运行时停在那条分支上。退回叶子统一由 settleContextNavigation 负责。
+      if (!await settleContextNavigation(sid, leafId, await loadContext(sid, leafId))) return;
+      // 分支根（null）没有可指的运行时叶子；载入可能把会话迁移到别的 id，命令按
+      // 当前的会话发。
+      if (!leafId) return;
+      const commandSessionId = sessionIdRef.current;
+      if (!commandSessionId) return;
+      await moveRuntimeLeaf(commandSessionId, leafId);
+    } finally {
+      // 被这次导航让位的整段载入在落定后补发一次：它只是晚了一步，落定后的持久化
+      // 视图才是它本来要读的那份。会话已经换走则不补——界面归新会话的载入。
+      const deferredLoad = navigation.deferredLoad;
+      if (navigatingLeafRef.current === navigation) navigatingLeafRef.current = null;
+      if (deferredLoad && mountedRef.current && sessionIdRef.current === deferredLoad.sessionId) {
+        void loadSession(deferredLoad.sessionId, false, deferredLoad.includeState);
+      }
+    }
+  }, [applyActiveLeaf, loadContext, loadSession, moveRuntimeLeaf, settleContextNavigation]);
+
+  const handleNavigate = useCallback(async (entryId: string) => {
+    if (bashRunningRef.current) return;
+    await runNavigation(entryId);
+  }, [runNavigation]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
-    setActiveLeafId(leafId);
-    const sid = sessionIdRef.current;
-    if (!sid) return;
-    if (!await loadContext(sid, leafId)) return;
-    if (leafId && mountedRef.current && sessionIdRef.current) {
-      sendAgentCommand(sessionIdRef.current, { type: "navigate_tree", targetId: leafId }, runtimeIdRef).catch(() => {});
-    }
-  }, [loadContext]);
+    // 只有高亮、运行时与在途导航都没有别的说法时才跳过：高亮在载入前就写下了，命令
+    // 失败后运行时仍停在旧叶子上，只看高亮会把同一条分支的重试静默吞掉。
+    const navigating = navigatingLeafRef.current;
+    if (leafId === activeLeafIdRef.current
+      && (leafId === runtimeLeafIdRef.current || navigating?.leafId === leafId)) return;
+    await runNavigation(leafId);
+  }, [runNavigation]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
@@ -2001,7 +2215,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ...(args ? { customInstructions: args } : {}),
           }, runtimeIdRef);
           setCompactResult(readCompactResult(result, "manual"));
-          if (await loadSession(sid, true)) promoteNewSession();
+          const reloaded = await loadSession(sid, true);
+          if (reloaded && !("deferred" in reloaded)) promoteNewSession();
           return complete({ handled: true, message: "Compacted context" });
         }
 
@@ -2021,7 +2236,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (!sid) return complete({ handled: true, error: "No active session to name" });
           if (!args) return complete({ handled: true, error: "Usage: /name <name>" });
           await sendAgentCommand(sid, { type: "set_session_name", name: args }, runtimeIdRef);
-          if (await loadSession(sid)) promoteNewSession();
+          const reloaded = await loadSession(sid);
+          if (reloaded && !("deferred" in reloaded)) promoteNewSession();
           return complete({ handled: true, message: `Session renamed to ${args}` });
         }
 
@@ -2106,7 +2322,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             // omp 18 hands off in place, so the session keeps its id and gains
             // a handoff compaction entry: reload this transcript rather than
             // navigating to a replacement session.
-            if (mountedRef.current && await loadSession(sessionIdRef.current ?? currentSid, true)) promoteNewSession();
+            const reloaded = await loadSession(sessionIdRef.current ?? currentSid, true);
+            if (mountedRef.current && reloaded && !("deferred" in reloaded)) promoteNewSession();
             return complete({ handled: true, message: "Context handed off and compacted in place" });
           } finally {
             if (mountedRef.current) {
@@ -2313,26 +2530,62 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [setToolPresetState]);
 
-  // Single writer for the follow flag so the ref (read by the scroll effects)
-  // and the state (read by the jump-to-bottom button) never drift apart.
+  // 跟随开关只写状态：滚动位置由列表按这个开关决定，这里不再直接改滚动元素。
   const setAutoFollow = useCallback((following: boolean) => {
-    completionScrollAllowedRef.current = following;
     setAutoFollowPaused((paused) => (paused === !following ? paused : !following));
   }, []);
-  setAutoFollowRef.current = setAutoFollow;
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-    messagesEndRef.current?.scrollIntoView({ behavior });
+    scrollTranscriptToEndRef.current(behavior);
+  }, []);
+
+  // 跟随状态的唯一写入口：判定在 lib/transcript-follow.ts，这里只落状态与滚动。
+  const applyFollow = useCallback((event: FollowEvent) => {
+    const outcome = reduceFollow(event);
+    if (!outcome) return;
+    // 回底会带着列表滚一次：先清掉用户滚动意图窗口，否则这次滚动会被当成用户驱动，
+    // 回底立刻又被判回暂停。跳转的落点不靠窗口，而由 followObservationHeldRef 挡住。
+    if (outcome.scrollToEnd) userScrollIntentUntilRef.current = 0;
+    setAutoFollow(!outcome.paused);
+    if (outcome.scrollToEnd) scrollToBottom(outcome.scrollToEnd);
+  }, [scrollToBottom, setAutoFollow]);
+  applyFollowRef.current = applyFollow;
+
+  // 载入后的回底排在提交之后：请求发出时新的那份消息还没提交，量到的是旧列表的
+  // 高度，落点会停在旧末端（新分支更长时尤其明显）。两帧分别给 React 提交新条目与
+  // 列表量到新高度，之后按载入事件一口气落到末尾。
+  useEffect(() => {
+    if (contextFollowTicket === 0) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => applyFollowRef.current({ type: "load" }));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [contextFollowTicket]);
+
+  // 跳转自己的落点不参与跟随判定：合上抑制器，由列表停止滚动或跳转的兜底定时器松开。
+  // 每次合上都刷新截止时间，配对漏掉时由观测自己收回。
+  const holdFollowObservation = useCallback(() => {
+    followObservationHeldRef.current = true;
+    followObservationHoldUntilRef.current = Date.now() + FOLLOW_OBSERVATION_HOLD_MS;
+  }, []);
+
+  const releaseFollowObservation = useCallback(() => {
+    followObservationHeldRef.current = false;
+    followObservationHoldUntilRef.current = 0;
   }, []);
 
   const resumeAutoFollow = useCallback(() => {
-    // Clear any lingering intent window so the smooth scroll we are about to
-    // start is not mistaken for the user scrolling away again.
-    userScrollIntentUntilRef.current = 0;
-    setAutoFollow(true);
-    scrollToBottom("smooth");
-  }, [scrollToBottom, setAutoFollow]);
+    applyFollow({ type: "resume" });
+  }, [applyFollow]);
+
+  // 跳转是一次有意的位置改变：停掉跟随，「回到底部」按钮因此出现。
+  const pauseAutoFollow = useCallback(() => {
+    applyFollow({ type: "pause" });
+  }, [applyFollow]);
 
   const markUserScrollIntent = useCallback((event: Event) => {
     if (event instanceof KeyboardEvent) {
@@ -2343,24 +2596,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleScrollPositionChange = useCallback(() => {
-    if (!agentRunningRef.current && !bashRunningRef.current) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    // The auto-follow effect refreshes the programmatic-scroll window on every
-    // streaming chunk, so during a stream it is always open. Honour a scroll
-    // the user actually drove (wheel/touch/pointer/keys) regardless of it,
-    // otherwise following could never be paused mid-turn.
-    const userDriven = Date.now() <= userScrollIntentUntilRef.current;
-    if (!userDriven && Date.now() < ignoreProgrammaticScrollUntilRef.current) return;
-    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distanceFromBottom <= AUTO_FOLLOW_BOTTOM_THRESHOLD_PX) {
-      setAutoFollow(true);
-      return;
+    // 先记下位置再判定：抑制器合上期间的那串滚动也要更新基准，松开后的第一帧
+    // 才不会把落点误当成一次新的位置变化。
+    const previousScroll = lastScrollRef.current;
+    const movedTowardEnd = previousScroll !== null
+      && previousScroll.container === container
+      && previousScroll.top < container.scrollTop;
+    lastScrollRef.current = { container, top: container.scrollTop };
+    // 跳转自己的落点还在滚：这一串位置不参与判定，读到的一律丢掉。抑制器到点自己
+    // 失效，调用方漏了松开也不会让跟随永久停摆。
+    if (followObservationHeldRef.current && Date.now() < followObservationHoldUntilRef.current) return;
+    if (followObservationHeldRef.current) {
+      // 到点收回走同一个松开入口：合上状态与截止时间只有一处写。
+      releaseFollowObservation();
     }
-    if (userDriven) {
-      setAutoFollow(false);
-    }
-  }, [setAutoFollow]);
+    // 位置判定与运行状态无关：跳转在空闲期停掉的跟随，靠用户把视图滑回底部自愈，
+    // 按运行状态早退会把这条路堵死。
+    applyFollow({
+      type: "scroll",
+      userDriven: Date.now() <= userScrollIntentUntilRef.current,
+      distanceFromBottom: container.scrollHeight - container.scrollTop - container.clientHeight,
+      movedTowardEnd,
+    });
+  }, [applyFollow, releaseFollowObservation]);
 
   const displayedSessionIdRef = useRef(session?.id);
   useEffect(() => {
@@ -2377,7 +2637,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       loadSession(session.id, true, true).then((agentState) => {
         const sid = sessionIdRef.current;
         if (!mountedRef.current || !sid) return;
-        if (agentState?.running) {
+        // 首屏载入没有在途导航可让位；这里只是把「让位」与「未读运行态」从结果里摘掉。
+        if (!agentState || "deferred" in agentState || !("running" in agentState)) return;
+        if (agentState.running) {
           loadTools(sid);
           if (
             agentState.state?.isStreaming
@@ -2455,29 +2717,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
   }, [messages.length, loading, handleScrollPositionChange, markUserScrollIntent]);
 
-  useEffect(() => {
-    if ((!agentRunning && !bashRunning) || !completionScrollAllowedRef.current) return;
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const frame = requestAnimationFrame(() => {
-      ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
-      container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [agentRunning, bashRunning, messages.length, streamState.streamingMessage, agentPhase, pendingBash]);
-
-  useEffect(() => {
-    if (messages.length === 0) return;
-    if (!initialScrollDoneRef.current) {
-      initialScrollDoneRef.current = true;
-      scrollToBottom("instant");
-      return;
-    }
-    if (completionScrollAllowedRef.current) {
-      scrollToBottom(agentRunningRef.current || bashRunningRef.current ? "instant" : "smooth");
-    }
-  }, [messages.length, agentRunning, bashRunning, scrollToBottom]);
-
   // Load model list
   useEffect(() => {
     const controller = new AbortController();
@@ -2527,16 +2766,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     isAutoModelSelection: isNew && newSessionModel === null,
     agentPhase,
     isNew,
-    autoFollowPaused, resumeAutoFollow,
+    autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,
+    // 转写整段替换的次数：调用方据此丢弃挂在旧条目下标上的待办（例如跳转的落点）。
+    contextFollowTicket,
     goalStatus,
     // Refs
-    sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
+    sessionIdRef, eventSourceRef, scrollContainerRef,
     // Actions
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange, handleRoleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
-    handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages,
+    handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,
     bashRunning, pendingBash,
     // Subscriptions

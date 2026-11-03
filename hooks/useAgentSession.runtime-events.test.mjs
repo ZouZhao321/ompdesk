@@ -1,26 +1,9 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 import { isBlockingExtensionUiRequest } from "../lib/browser-notifications.ts";
 import { normalizeToolCalls } from "../lib/normalize.ts";
-
-const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
-const ast = ts.createSourceFile("useAgentSession.ts", source, ts.ScriptTarget.Latest, true);
-const callbacks = new Map();
-const declarations = new Map();
-function collect(node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
-    && node.initializer && ts.isCallExpression(node.initializer)
-    && node.initializer.expression.getText(ast) === "useCallback") {
-    callbacks.set(node.name.text, node.initializer.arguments[0].getText(ast));
-  }
-  if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
-    declarations.set(node.name.text, node.getText(ast));
-  }
-  ts.forEachChild(node, collect);
-}
-collect(ast);
+import { callbacks, declarations } from "./useAgentSession.test-support.mjs";
 
 const callbackNames = [
   "closeEvents", "followSessionIdentity", "followRuntimeState", "cancelEventStreamGrace",
