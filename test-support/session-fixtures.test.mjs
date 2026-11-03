@@ -80,49 +80,12 @@ function listInfoFor(infos, id) {
   return info;
 }
 
-// staging 轮询从 2ms 起按倍数退避到上限，总窗口 10 秒：long 场景在慢机器上写会话
-// 文件可能远超固定 1 秒窗口，而轮询本身不该和铺设抢 CPU。
-const STAGING_POLL_INITIAL_MS = 2;
-const STAGING_POLL_MAX_MS = 70;
-const STAGING_WAIT_WINDOW_MS = 10_000;
-
 function hasStagingDirectory(sessionsDir) {
   return existsSync(sessionsDir) && readdirSync(sessionsDir).some((name) => name.startsWith(".staging-"));
 }
 
 function pause(ms) {
   return new Promise((resume) => setTimeout(resume, ms));
-}
-
-/**
- * 等到第一个铺设把 staging 目录写进 sessions。这一刻之后才开始铺第二个场景时，
- * 不排队的话它的清扫会删掉第一个铺设正在写的中间目录。
- *
- * 首个铺设的 promise 一起参与竞争：它提前失败时立刻把错误上抛，不让「没有产出
- * staging」的断言在 1 秒后把真正的原因盖掉；它已经铺完却始终没看到 staging 时，
- * 中间目录不会再出现，直接放行让两个铺设各自跑完。
- */
-async function waitForStaging(sessionsDir, seeding) {
-  let seedingFailure = null;
-  let seedingSettled = false;
-  const settlement = seeding.then(
-    () => {
-      seedingSettled = true;
-    },
-    (error) => {
-      seedingFailure = error;
-      seedingSettled = true;
-    },
-  );
-  const deadline = Date.now() + STAGING_WAIT_WINDOW_MS;
-  for (let pollDelay = STAGING_POLL_INITIAL_MS; ; pollDelay = Math.min(pollDelay * 2, STAGING_POLL_MAX_MS)) {
-    if (hasStagingDirectory(sessionsDir)) return;
-    if (seedingFailure !== null) throw seedingFailure;
-    if (seedingSettled) return;
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) assert.fail("铺设没有在预期时间内产出 staging 目录");
-    await Promise.race([settlement, pause(Math.min(pollDelay, remaining))]);
-  }
 }
 
 test("single-turn 场景生成后能被 SessionManager.listAll 读回", async (t) => {
@@ -367,11 +330,36 @@ test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
   const options = { agentDir: sandbox.agentDir, cwd: sandbox.cwd };
 
   // 铺设会清扫整棵目录下的 staging 与备份：不排队时后来者会把先行者正在写的
-  // staging 删掉。先让 long 开始铺，等它的 staging 落盘后再铺第二个场景，两个
-  // 铺设同时在飞，两边都必须完整落地。等待期间先行者若提前失败，这里立刻上抛。
-  const long = seedSessions("long", options);
-  await waitForStaging(sessionsDir, long);
-  const empty = seedSessions("empty", options);
+  // staging 删掉。握手用 `onStagingReady`：它在锁内、staging 已落盘时调用，先行者
+  // 停在这里等放行，后来者只可能在先行者发布完成之后才进来。锁失效时后来者会删掉
+  // staging，先行者的原子替换随之失败，用例报错而不是静默退化成串行。
+  let releaseLong;
+  const longPaused = new Promise((release) => {
+    releaseLong = release;
+  });
+  let longEntered;
+  const longInLock = new Promise((resolve) => {
+    longEntered = resolve;
+  });
+
+  const long = seedSessions("long", {
+    ...options,
+    onStagingReady: async () => {
+      longEntered();
+      await longPaused;
+    },
+  });
+  await longInLock;
+  assert.ok(hasStagingDirectory(sessionsDir), "先行者应停在 staging 阶段等待放行");
+
+  const empty = seedSessions("empty", {
+    ...options,
+    onStagingReady: () => {
+      // 先行者已发布：没排队的话它此刻还卡在 staging 阶段，场景目录尚不存在。
+      assert.ok(existsSync(join(sessionsDir, "fixture-long")), "后来者必须在先行者发布完成之后才进入");
+    },
+  });
+  releaseLong();
   const [longSessions, emptySessions] = await Promise.all([long, empty]);
 
   assert.equal(longSessions.length, 1);
