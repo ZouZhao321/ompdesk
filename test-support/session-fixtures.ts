@@ -305,8 +305,9 @@ function assertOutsideConfigRoot(agentDir: string): void {
  * 目标 agentDir 内部的（会在样本树里生成 history.db，破坏下一次铺设与复位），以及
  * 位于真实用户配置根（`~/.omp`，含 profiles 与 PI_CONFIG_DIR 覆盖）之下的。
  *
- * 符号链接与大小写不敏感平台（Windows 与 macOS 默认）都会让字面路径不同却指向
- * 同一目录：比较前先解析真实路径，目录还不存在时解析最近的已存在祖先，再折叠大小写。
+ * 符号链接与 Windows 上的路径大小写都会让字面路径不同却指向同一目录：比较前先解析
+ * 真实路径（macOS 上它同时把大小写变体归一到磁盘写法），目录还不存在时解析最近的
+ * 已存在祖先，Windows 上再折叠大小写。
  */
 function assertActiveAgentDirSeparate(agentDir: string): void {
   const activeAgentDir = getAgentDir();

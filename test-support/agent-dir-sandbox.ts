@@ -134,8 +134,8 @@ function activeAgentDirWithinSandbox(root: string): boolean {
     return true;
   }
   // 与样本守卫共用同一套归一：沙箱根里的符号链接（macOS 的 /var → /private/var）
-  // 与大小写不敏感平台都要折叠。否则经链接写成的活动目录会被判成在沙箱之外，
-  // 删掉沙箱后活动目录就指向了已删除的路径。
+  // 由真实路径解析归一，Windows 上再折叠大小写。否则经链接写成的活动目录会被判成
+  // 在沙箱之外，删掉沙箱后活动目录就指向了已删除的路径。
   try {
     return relativePathWithinNormalizedRoot(comparableDirectory(root), comparableDirectory(activeAgentDir)) !== null;
   } catch (error) {
