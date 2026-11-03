@@ -64,10 +64,17 @@ const REPO_LOCATION_CONFIG_KEY_FLAGS: Record<string, true> = Object.fromEntries(
   REPO_LOCATION_CONFIG_KEYS.map((key) => [key, true]),
 );
 
-/** Windows 上的环境变量键名大小写不定，按大写找到实际的键名。 */
-function findEnvKey(env: NodeJS.ProcessEnv, name: string): string | undefined {
+/**
+ * 按大小写不敏感找出同名变量的全部实际键名。
+ *
+ * Windows 上键名大小写不敏感，一个名字只有一个键；POSIX 上 `GIT_CONFIG_COUNT` 与
+ * `git_config_count` 是两个变量、可以并存，而 git 只读精确大小写的那个。只取第一个
+ * 匹配会漏掉另一份，被漏掉的那份仍然带着仓库定位键，所以调用方必须对全部变体逐个
+ * 处理，遇到读不齐就整组删掉。
+ */
+function findEnvKeys(env: NodeJS.ProcessEnv, name: string): string[] {
   const upperCaseName = name.toUpperCase();
-  return Object.keys(env).find((key) => key.toUpperCase() === upperCaseName);
+  return Object.keys(env).filter((key) => key.toUpperCase() === upperCaseName);
 }
 
 /**
@@ -200,10 +207,13 @@ function readCountedConfig(env: NodeJS.ProcessEnv, rawCount: string): CountedCon
 
   const entries: CountedConfigEntry[] = [];
   for (let index = 0; index < count; index += 1) {
-    const keyName = findEnvKey(env, `GIT_CONFIG_KEY_${index}`);
-    if (!keyName) return null;
-    const valueName = findEnvKey(env, `GIT_CONFIG_VALUE_${index}`);
-    entries.push({ key: env[keyName] ?? "", value: valueName ? env[valueName] : undefined });
+    // 同一个索引出现大小写不同的多份时读不出 git 实际启用的那份（它只认精确大小写）：
+    // 按读不齐处理，整组丢掉。值缺失是合法的，多份则不合法。
+    const keyNames = findEnvKeys(env, `GIT_CONFIG_KEY_${index}`);
+    if (keyNames.length !== 1) return null;
+    const valueNames = findEnvKeys(env, `GIT_CONFIG_VALUE_${index}`);
+    if (valueNames.length > 1) return null;
+    entries.push({ key: env[keyNames[0]] ?? "", value: valueNames.length === 1 ? env[valueNames[0]] : undefined });
   }
   return entries;
 }
@@ -216,8 +226,15 @@ function readCountedConfig(env: NodeJS.ProcessEnv, rawCount: string): CountedCon
  * 原样交给子进程，与 `GIT_CONFIG_PARAMETERS` 解析失败时整条丢掉的 fail-closed 口径一致。
  */
 function stripRepoLocationCountedConfig(env: NodeJS.ProcessEnv): void {
-  const countName = findEnvKey(env, "GIT_CONFIG_COUNT");
-  if (!countName) return;
+  const countNames = findEnvKeys(env, "GIT_CONFIG_COUNT");
+  if (countNames.length === 0) return;
+  // 多份 count 变体并存时不知道 git 实际读的是哪一组，逐组过滤会留下未检查的条目：
+  // 与读不齐时同一口径，整组丢掉。
+  if (countNames.length > 1) {
+    deleteCountedConfig(env);
+    return;
+  }
+  const countName = countNames[0];
 
   const entries = readCountedConfig(env, env[countName] ?? "");
   if (!entries) {
@@ -238,24 +255,35 @@ function stripRepoLocationCountedConfig(env: NodeJS.ProcessEnv): void {
 }
 
 /**
- * 构造 git 子进程环境：剥离仓库本地环境变量与仓库定位配置，并固定消息语言，让错误文本
- * 与系统语言无关。
+ * 剥离 `env` 里的仓库本地环境变量与仓库定位配置，返回新对象，入参不动。
+ *
+ * 单独导出是为了让「同一变量的大小写变体并存」这类只可能出现在 POSIX 进程环境里的
+ * 局面能直接喂普通对象测试：Windows 的环境变量名大小写不敏感，`process.env` 上根本
+ * 造不出两份只差大小写的变量。
  *
  * Windows 上环境变量的键名大小写不定，`git_dir` 与 `GIT_DIR` 是同一个变量：删除时按
- * 大写键名匹配，否则小写写法的变量会残留下来继续盖过 `-C`。配置来源变量同理。
+ * 大写键名匹配，否则小写写法的变量会残留下来继续盖过 `-C`。POSIX 上大小写变体是不同
+ * 的变量、可以并存，git 只读精确大小写的那个：配置来源变量对全部变体逐个过滤。
  */
-export function createGitEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, LC_ALL: "C" };
-  for (const key of Object.keys(env)) {
-    if (REPO_LOCATION_ENV_KEY_FLAGS[key.toUpperCase()]) delete env[key];
+export function stripRepoLocationEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const stripped: NodeJS.ProcessEnv = { ...env };
+  for (const key of Object.keys(stripped)) {
+    if (REPO_LOCATION_ENV_KEY_FLAGS[key.toUpperCase()]) delete stripped[key];
   }
 
-  const parametersName = findEnvKey(env, "GIT_CONFIG_PARAMETERS");
-  if (parametersName) {
-    const filtered = stripRepoLocationParameters(env[parametersName] ?? "");
-    if (filtered === null) delete env[parametersName];
-    else env[parametersName] = filtered;
+  for (const parametersName of findEnvKeys(stripped, "GIT_CONFIG_PARAMETERS")) {
+    const filtered = stripRepoLocationParameters(stripped[parametersName] ?? "");
+    if (filtered === null) delete stripped[parametersName];
+    else stripped[parametersName] = filtered;
   }
-  stripRepoLocationCountedConfig(env);
-  return env;
+  stripRepoLocationCountedConfig(stripped);
+  return stripped;
+}
+
+/**
+ * 构造 git 子进程环境：剥离仓库本地环境变量与仓库定位配置，并固定消息语言，让错误文本
+ * 与系统语言无关。
+ */
+export function createGitEnv(): NodeJS.ProcessEnv {
+  return stripRepoLocationEnv({ ...process.env, LC_ALL: "C" });
 }
