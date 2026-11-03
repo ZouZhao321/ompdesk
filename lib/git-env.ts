@@ -168,11 +168,36 @@ interface CountedConfigEntry {
   value: string | undefined;
 }
 
+/** `GIT_CONFIG_COUNT` 只认十进制整数：`Number.parseInt` 会把 `3abc` 读成 3、把 `1.5` 读成 1。 */
+const CONFIG_COUNT_RE = /^[0-9]+$/;
+
+/** 三件套的全部键名：count 与按索引编号的键值。读不齐时整组删掉，一条都不能留给子进程。 */
+const COUNTED_CONFIG_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_[0-9]+|VALUE_[0-9]+)$/i;
+
+/** 删掉三件套的全部变量，包括按索引编号的键值。 */
+function deleteCountedConfig(env: NodeJS.ProcessEnv): void {
+  for (const key of Object.keys(env)) {
+    if (COUNTED_CONFIG_KEY_RE.test(key)) delete env[key];
+  }
+}
+
 /**
  * 收集 `GIT_CONFIG_COUNT` 三件套里的条目。`GIT_CONFIG_VALUE_<n>` 可以缺省（等于布尔真），
- * 但 `GIT_CONFIG_KEY_<n>` 缺一条就是调用方自己传坏了，返回 null 表示不动这段环境。
+ * 但 count 不是十进制整数、或者 `GIT_CONFIG_KEY_<n>` 缺一条，返回 null 表示这组变量读不出
+ * 完整内容——没读到的条目里可能正藏着仓库定位键，调用方必须整组丢掉。
  */
-function readCountedConfig(env: NodeJS.ProcessEnv, count: number): CountedConfigEntry[] | null {
+function readCountedConfig(env: NodeJS.ProcessEnv, rawCount: string): CountedConfigEntry[] | null {
+  if (!CONFIG_COUNT_RE.test(rawCount)) return null;
+  const count = Number(rawCount);
+  if (!Number.isSafeInteger(count)) return null;
+  // 先数现有键：count 比键还多就必然缺号，不必按 count 循环（它的取值可以很大）。
+  const keyIndexes = new Set<number>();
+  for (const key of Object.keys(env)) {
+    const match = /^GIT_CONFIG_KEY_([0-9]+)$/i.exec(key);
+    if (match) keyIndexes.add(Number(match[1]));
+  }
+  if (count > keyIndexes.size) return null;
+
   const entries: CountedConfigEntry[] = [];
   for (let index = 0; index < count; index += 1) {
     const keyName = findEnvKey(env, `GIT_CONFIG_KEY_${index}`);
@@ -186,23 +211,25 @@ function readCountedConfig(env: NodeJS.ProcessEnv, count: number): CountedConfig
 /**
  * 摘掉三件套里的仓库定位键。键与值成对按索引编号，删掉中间一条必须重排索引，否则
  * git 读到空号就报错。
+ *
+ * 三件套读不出完整内容时整组删掉：留着等于把没检查过的 `core.worktree` / `core.bare`
+ * 原样交给子进程，与 `GIT_CONFIG_PARAMETERS` 解析失败时整条丢掉的 fail-closed 口径一致。
  */
 function stripRepoLocationCountedConfig(env: NodeJS.ProcessEnv): void {
   const countName = findEnvKey(env, "GIT_CONFIG_COUNT");
   if (!countName) return;
-  const count = Number.parseInt(env[countName] ?? "", 10);
-  if (!Number.isInteger(count) || count <= 0) return;
 
-  const entries = readCountedConfig(env, count);
-  if (!entries) return;
+  const entries = readCountedConfig(env, env[countName] ?? "");
+  if (!entries) {
+    deleteCountedConfig(env);
+    return;
+  }
   const kept = entries.filter(
     (entry) => REPO_LOCATION_CONFIG_KEY_FLAGS[entry.key.trim().toLowerCase()] !== true,
   );
   if (kept.length === entries.length) return;
 
-  for (const key of Object.keys(env)) {
-    if (/^GIT_CONFIG_(KEY|VALUE)_\d+$/i.test(key)) delete env[key];
-  }
+  deleteCountedConfig(env);
   kept.forEach((entry, index) => {
     env[`GIT_CONFIG_KEY_${index}`] = entry.key;
     if (entry.value !== undefined) env[`GIT_CONFIG_VALUE_${index}`] = entry.value;
