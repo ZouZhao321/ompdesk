@@ -24,6 +24,19 @@ import { comparableDirectory } from "./path-compare";
 /** 活动 agent 目录在沙箱里的固定位置。 */
 const RUNTIME_AGENT_DIR = "runtime/agent";
 
+/**
+ * 建沙箱目录失败：父目录不存在、无权限、被占用都是环境限制，调用方可以据此跳过用例。
+ *
+ * 只有 `mkdtempSync` / `mkdirSync` 这一步的失败用这个类型。切换与复位活动目录另有
+ * 错误路径，抛出去的是 SDK 或本模块自己的错误——那些是回归，必须让用例失败。
+ */
+export class SandboxDirectoryCreateError extends Error {
+  constructor(target: string, cause: unknown) {
+    super(`无法创建沙箱目录：${target}`, { cause });
+    this.name = "SandboxDirectoryCreateError";
+  }
+}
+
 export interface AgentDirSnapshot {
   agentDir: string;
   env: string | undefined;
@@ -133,6 +146,21 @@ function warnCleanupFailure(action: string, error: unknown): void {
 }
 
 /**
+ * 建临时目录并铺出子目录。只有这一步的失败包成 `SandboxDirectoryCreateError`：
+ * 建不出目录是环境限制，后续的切换与复位失败才是回归。
+ */
+function createSandboxRoot(options: AgentDirSandboxOptions): string {
+  let root: string | undefined;
+  try {
+    root = mkdtempSync(join(tmpdir(), options.prefix));
+    for (const dir of [RUNTIME_AGENT_DIR, ...options.dirs]) mkdirSync(join(root, dir), { recursive: true });
+    return root;
+  } catch (error) {
+    throw new SandboxDirectoryCreateError(root ?? `前缀 ${options.prefix} 的临时目录`, error);
+  }
+}
+
+/**
  * 铺出沙箱并把活动目录切进去，用例结束自动恢复与清理。
  *
  * 清理先跑 `beforeRestore`，再恢复活动 agent 目录；两步各自兜错，失败只记录，
@@ -142,9 +170,8 @@ function warnCleanupFailure(action: string, error: unknown): void {
  * 有延迟——同样只记录。
  */
 export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSandboxOptions): AgentDirSandbox {
-  const root = mkdtempSync(join(tmpdir(), options.prefix));
+  const root = createSandboxRoot(options);
   const agentDir = join(root, RUNTIME_AGENT_DIR);
-  for (const dir of [RUNTIME_AGENT_DIR, ...options.dirs]) mkdirSync(join(root, dir), { recursive: true });
 
   let previous: AgentDirSnapshot;
   try {
