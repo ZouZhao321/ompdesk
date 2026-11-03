@@ -21,7 +21,15 @@ import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 const RECOVERY_PAGE = "/recover";
 const RECOVERY_API = "/api/web-access/recovery";
 
+const SECURITY_HEADERS = {
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+};
+
 const AUTHENTICATE_HEADERS = {
+  ...SECURITY_HEADERS,
   "Cache-Control": "no-store",
   "WWW-Authenticate": 'Basic realm="ompdesk", charset="UTF-8"',
 };
@@ -103,9 +111,9 @@ export function proxy(request: NextRequest) {
       },
     );
     if (!isApiRequest) {
-      return new NextResponse("Untrusted request", { status: 403 });
+      return new NextResponse("Untrusted request", { status: 403, headers: SECURITY_HEADERS });
     }
-    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+    return NextResponse.json({ error: "Untrusted API request" }, { status: 403, headers: SECURITY_HEADERS });
   }
 
   // Recovery stays reachable while locked out — that is the whole point of it —
@@ -130,8 +138,8 @@ export function proxy(request: NextRequest) {
     const message = "Password access is enabled but the ompdesk credential file could not be read."
       + " Run `ompdesk --reset-password` on the server to set a new password.";
     return isApiRequest
-      ? NextResponse.json({ error: message }, { status: 503, headers: { "Cache-Control": "no-store" } })
-      : new NextResponse(message, { status: 503, headers: { "Cache-Control": "no-store" } });
+      ? NextResponse.json({ error: message }, { status: 503, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } })
+      : new NextResponse(message, { status: 503, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } });
   }
 
   if (authorization.decision === "unauthorized") {
