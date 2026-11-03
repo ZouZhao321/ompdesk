@@ -111,7 +111,12 @@ export function normalizeDirectory(directory: string): string {
 }
 
 export function getParentDirectory(directory: string): string | null {
-  const pathApi = isWindowsPathInput(directory) ? path.win32 : path.posix;
+  // 与 `normalizeDirectory` 同一套选择规则：Windows 形态自带分隔符语义，用 win32；
+  // POSIX 绝对输入用 posix；相对输入的上级由宿主状态决定，必须用宿主 `path`——交给
+  // posix 会把 Windows 宿主上的 `Users\alex` 当成一个名字，上级判成 `.`。
+  const pathApi = isWindowsPathInput(directory)
+    ? path.win32
+    : (path.posix.isAbsolute(directory) ? path.posix : path);
   const normalized = pathApi.normalize(directory);
   const parent = pathApi.dirname(normalized);
   return parent === normalized ? null : parent;
