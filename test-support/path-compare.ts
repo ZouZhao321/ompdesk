@@ -2,17 +2,23 @@
  * 目录比较键：判断两个路径是否指向同一个目录（或一个在另一个之内）时统一用它归一。
  *
  * 只做 `resolve` 会漏掉两类差异：符号链接（macOS 的 `/var` → `/private/var`、被换成
- * 链接的 `~/.omp`）与大小写不敏感平台（Windows 与 macOS 默认）上的大小写。配置根
- * 守卫、活动 agent 目录守卫与沙箱删除前的检查都用这一份实现，任一处用别的规则，
- * 就会出现「一边判定在外部、一边把仍在使用的目录删掉」。
+ * 链接的 `~/.omp`）与 Windows 上的路径大小写。配置根守卫、活动 agent 目录守卫与沙箱
+ * 删除前的检查都用这一份实现，任一处用别的规则，就会出现「一边判定在外部、一边把仍在
+ * 使用的目录删掉」。
  */
 import { realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 
-/** 目录比较键：真实路径优先，缺失的尾段拼回最近的已存在祖先之上，大小写不敏感平台统一折叠。 */
+/**
+ * 目录比较键：真实路径优先，缺失的尾段拼回最近的已存在祖先之上，Windows 上再折叠大小写。
+ *
+ * 折叠只给 Windows：macOS 默认大小写不敏感，但 `realpath` 已经把已存在的路径按磁盘上的
+ * 写法归一，大小写变体自己就会撞在一起；再折叠缺失的尾段，则在大小写敏感的卷上把
+ * `Agent` 与 `agent` 并成同一个键，包含关系跟着误判。
+ */
 export function comparableDirectory(directory: string): string {
   const real = realPathOfNearestAncestor(resolve(directory));
-  return process.platform === "win32" || process.platform === "darwin" ? real.toLowerCase() : real;
+  return process.platform === "win32" ? real.toLowerCase() : real;
 }
 
 /**
