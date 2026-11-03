@@ -93,7 +93,8 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3.14"
+          # 与 verify 作业保持一致：bun.lock 是 lockfileVersion 2，1.3.x 读不了它。
+          bun-version: "1.4.2"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
