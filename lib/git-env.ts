@@ -23,9 +23,11 @@
  * 受信任输入处理，一律保留，只剥离直接改变仓库定位与对象库的变量；剥掉其中任一种都会
  * 替调用方丢掉这些设置，并改变本模块之外所有 git 调用的行为。
  *
- * 残余风险：配置来源里写了 `core.worktree` 一类仓库定位键仍会盖过 `-C`，钩子经
- * `git -c core.worktree=<别处>` 调用时 `GIT_CONFIG_PARAMETERS` 正带着这种取值。要根治
- * 得在调用点用 `git rev-parse --show-toplevel` 校验目标，而不是把配置来源也删掉。
+ * 例外是配置里能改变仓库定位的键（`REPO_LOCATION_CONFIG_KEYS`）：钩子经
+ * `git -c core.worktree=<别处>` 调用时 `GIT_CONFIG_PARAMETERS` 正带着这种取值，`worktree
+ * add/remove` 一类写操作就会落到别的仓库。这类键从 `GIT_CONFIG_PARAMETERS` 与
+ * `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_<n>` / `GIT_CONFIG_VALUE_<n>` 三件套里摘掉，其余
+ * 条目连原文一起保留。`GIT_CONFIG`（配置文件路径）只给路径，内容不读也不改。
  */
 export const REPO_LOCATION_ENV_KEYS: readonly string[] = [
   "GIT_DIR",
@@ -50,15 +52,165 @@ const REPO_LOCATION_ENV_KEY_FLAGS: Record<string, true> = Object.fromEntries(
 );
 
 /**
- * 构造 git 子进程环境：剥离仓库本地环境变量，并固定消息语言，让错误文本与系统语言无关。
+ * 配置里能改变仓库定位的键。它们和上面那批环境变量做的是同一件事：`core.worktree` 换掉
+ * 工作区、`core.bare` 把仓库当裸仓库，之后 `-C <目录>` 找到的仓库就不再是目标目录。
+ * git 的配置键名大小写不敏感（`Core.WorkTree` 与 `core.worktree` 同一个键），比较时先
+ * 转小写。
+ */
+export const REPO_LOCATION_CONFIG_KEYS: readonly string[] = ["core.worktree", "core.bare"];
+
+/** 键名的比较口径：去掉两端空白后转小写，再查这份表。 */
+const REPO_LOCATION_CONFIG_KEY_FLAGS: Record<string, true> = Object.fromEntries(
+  REPO_LOCATION_CONFIG_KEYS.map((key) => [key, true]),
+);
+
+/** Windows 上的环境变量键名大小写不定，按大写找到实际的键名。 */
+function findEnvKey(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const upperCaseName = name.toUpperCase();
+  return Object.keys(env).find((key) => key.toUpperCase() === upperCaseName);
+}
+
+/**
+ * `GIT_CONFIG_PARAMETERS` 里值的单引号转义：git 的 sq-quote 把字面单引号写成 `'\''`。
+ * 值里的反斜杠不参与转义（`'core.worktree'='D:\work'` 就是这样传的），所以只认这一种
+ * 序列，别把它当成通用的反斜杠转义。
+ */
+const SQ_QUOTED_QUOTE = "'\\''";
+
+/**
+ * 读一段 sq-quoted 文本，返回解出的内容与段落结束后的位置。`start` 处必须是开引号；
+ * 引号没闭合时返回 null，交给调用方把整条变量丢掉。
+ */
+function readQuotedSegment(raw: string, start: number): { text: string; end: number } | null {
+  if (raw[start] !== "'") return null;
+  let text = "";
+  let index = start + 1;
+  while (index < raw.length) {
+    if (raw.startsWith(SQ_QUOTED_QUOTE, index)) {
+      text += "'";
+      index += SQ_QUOTED_QUOTE.length;
+      continue;
+    }
+    if (raw[index] === "'") return { text, end: index + 1 };
+    text += raw[index];
+    index += 1;
+  }
+  return null;
+}
+
+interface ConfigParameter {
+  key: string;
+  /** 该条参数在原始串里的起止位置：保留时按原文切片拼回，值不必解码再编码。 */
+  start: number;
+  end: number;
+}
+
+/**
+ * 解析 `GIT_CONFIG_PARAMETERS`：条目以空格分隔，每条形如 `'键'='值'` 或 `'键'`（没有值
+ * 表示布尔真）。格式认不出时返回 null。
+ */
+function parseConfigParameters(raw: string): ConfigParameter[] | null {
+  const parameters: ConfigParameter[] = [];
+  let index = 0;
+  while (index < raw.length) {
+    if (raw[index] === " ") {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    const key = readQuotedSegment(raw, index);
+    if (!key) return null;
+    index = key.end;
+    if (raw[index] === "=") {
+      const value = readQuotedSegment(raw, index + 1);
+      if (!value) return null;
+      index = value.end;
+    }
+    parameters.push({ key: key.text, start, end: index });
+  }
+  return parameters;
+}
+
+/**
+ * 摘掉 `GIT_CONFIG_PARAMETERS` 里的仓库定位键，其余条目原样保留。返回 null 表示这条变量
+ * 的格式 git 自己也读不了，调用方应当整条丢掉。
+ */
+function stripRepoLocationParameters(raw: string): string | null {
+  const parameters = parseConfigParameters(raw);
+  if (!parameters) return null;
+  const kept = parameters.filter(
+    (parameter) => REPO_LOCATION_CONFIG_KEY_FLAGS[parameter.key.trim().toLowerCase()] !== true,
+  );
+  if (kept.length === parameters.length) return raw;
+  return kept.map((parameter) => raw.slice(parameter.start, parameter.end)).join(" ");
+}
+
+interface CountedConfigEntry {
+  key: string;
+  value: string | undefined;
+}
+
+/**
+ * 收集 `GIT_CONFIG_COUNT` 三件套里的条目。`GIT_CONFIG_VALUE_<n>` 可以缺省（等于布尔真），
+ * 但 `GIT_CONFIG_KEY_<n>` 缺一条就是调用方自己传坏了，返回 null 表示不动这段环境。
+ */
+function readCountedConfig(env: NodeJS.ProcessEnv, count: number): CountedConfigEntry[] | null {
+  const entries: CountedConfigEntry[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const keyName = findEnvKey(env, `GIT_CONFIG_KEY_${index}`);
+    if (!keyName) return null;
+    const valueName = findEnvKey(env, `GIT_CONFIG_VALUE_${index}`);
+    entries.push({ key: env[keyName] ?? "", value: valueName ? env[valueName] : undefined });
+  }
+  return entries;
+}
+
+/**
+ * 摘掉三件套里的仓库定位键。键与值成对按索引编号，删掉中间一条必须重排索引，否则
+ * git 读到空号就报错。
+ */
+function stripRepoLocationCountedConfig(env: NodeJS.ProcessEnv): void {
+  const countName = findEnvKey(env, "GIT_CONFIG_COUNT");
+  if (!countName) return;
+  const count = Number.parseInt(env[countName] ?? "", 10);
+  if (!Number.isInteger(count) || count <= 0) return;
+
+  const entries = readCountedConfig(env, count);
+  if (!entries) return;
+  const kept = entries.filter(
+    (entry) => REPO_LOCATION_CONFIG_KEY_FLAGS[entry.key.trim().toLowerCase()] !== true,
+  );
+  if (kept.length === entries.length) return;
+
+  for (const key of Object.keys(env)) {
+    if (/^GIT_CONFIG_(KEY|VALUE)_\d+$/i.test(key)) delete env[key];
+  }
+  kept.forEach((entry, index) => {
+    env[`GIT_CONFIG_KEY_${index}`] = entry.key;
+    if (entry.value !== undefined) env[`GIT_CONFIG_VALUE_${index}`] = entry.value;
+  });
+  env[countName] = String(kept.length);
+}
+
+/**
+ * 构造 git 子进程环境：剥离仓库本地环境变量与仓库定位配置，并固定消息语言，让错误文本
+ * 与系统语言无关。
  *
  * Windows 上环境变量的键名大小写不定，`git_dir` 与 `GIT_DIR` 是同一个变量：删除时按
- * 大写键名匹配，否则小写写法的变量会残留下来继续盖过 `-C`。
+ * 大写键名匹配，否则小写写法的变量会残留下来继续盖过 `-C`。配置来源变量同理。
  */
 export function createGitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, LC_ALL: "C" };
   for (const key of Object.keys(env)) {
     if (REPO_LOCATION_ENV_KEY_FLAGS[key.toUpperCase()]) delete env[key];
   }
+
+  const parametersName = findEnvKey(env, "GIT_CONFIG_PARAMETERS");
+  if (parametersName) {
+    const filtered = stripRepoLocationParameters(env[parametersName] ?? "");
+    if (filtered === null) delete env[parametersName];
+    else env[parametersName] = filtered;
+  }
+  stripRepoLocationCountedConfig(env);
   return env;
 }
