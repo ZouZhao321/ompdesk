@@ -63,7 +63,10 @@ test("reuses an open event stream and hides an empty agent phase", () => {
   assert.match(ensureSource, /eventSourceSessionIdRef\.current === sid/);
   assert.match(ensureSource, /current\.readyState === EventSource\.OPEN/);
   assert.match(ensureSource, /attempt\?\.source === current && attempt\.pending/);
-  assert.match(chatWindowSource, /agentRunning && !streamState\.streamingMessage && agentPhase/);
+  // 页尾只在没有流式正文、且有阶段可显示时画阶段标签；流式正文已经是列表最后一项，
+  // 页尾只关心它在不在，整份 streamState 不能当依赖。
+  assert.match(chatWindowSource, /const streamingMessageInList = streamState\.streamingMessage !== null;/);
+  assert.match(chatWindowSource, /agentRunning && !streamingMessageInList && agentPhase/);
   assert.match(chatWindowSource, /return null;/);
 });
 
@@ -211,32 +214,98 @@ test("rehydrates handoff as busy without misreporting compaction", () => {
   );
 });
 
-test("lets a user scroll pause auto-follow mid-stream", () => {
+test("feeds the scroll position into the follow reducer", () => {
   const scrollHandlerSource = source.slice(
     source.indexOf("const handleScrollPositionChange"),
     source.indexOf("  // Load session on mount"),
   );
 
-  // The auto-follow effect refreshes the programmatic-scroll window on every
-  // streaming chunk, so gating every scroll event on it made the follow flag
-  // impossible to clear while the model was producing output.
-  assert.match(scrollHandlerSource, /const userDriven = Date\.now\(\) <= userScrollIntentUntilRef\.current/);
-  assert.match(scrollHandlerSource, /if \(!userDriven && Date\.now\(\) < ignoreProgrammaticScrollUntilRef\.current\) return/);
-  assert.match(scrollHandlerSource, /distanceFromBottom <= AUTO_FOLLOW_BOTTOM_THRESHOLD_PX\)\s*\{\s*setAutoFollow\(true\)/);
-  assert.match(scrollHandlerSource, /if \(userDriven\) \{\s*setAutoFollow\(false\)/);
+  // 「暂停只认用户驱动、恢复按位置」的判定在 lib/transcript-follow.ts，由它的逻辑
+  // 测试覆盖；跳转落点的抑制与三条状态序列由 useAgentSession.follow.test.mjs 覆盖。
+  // 这里只钉住接线：滚动位置按两个字段交给判定，抑制器合着时整条观测不参与。
+  assert.match(scrollHandlerSource, /if \(followObservationHeldRef\.current && Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/);
+  assert.match(scrollHandlerSource, /type: "scroll"/);
+  assert.match(scrollHandlerSource, /userDriven: Date\.now\(\) <= userScrollIntentUntilRef\.current/);
+  assert.match(scrollHandlerSource, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
+  // 按运行状态早退会让空闲期跳转停掉的跟随永远恢复不了。
+  assert.doesNotMatch(scrollHandlerSource, /agentRunningRef|bashRunningRef/);
+  // 旧的时间窗方案整体删掉，不留一个恒真的断言当挡箭牌。
+  assert.doesNotMatch(source, /ignoreProgrammaticScrollUntilRef/);
+  assert.doesNotMatch(source, /completionScrollAllowedRef/);
+  assert.doesNotMatch(source, /PROGRAMMATIC_SCROLL_IGNORE_MS/);
+});
+
+test("restores follow and brings the view to the end when a prompt is submitted", () => {
+  const sendSource = source.slice(
+    source.indexOf("  const handleSend = useCallback"),
+    source.indexOf("  const executeBash = useCallback"),
+  );
+  const bashSource = source.slice(
+    source.indexOf("  const executeBash = useCallback"),
+    source.indexOf("  const handleAbort = useCallback"),
+  );
+
+  // 发送提问与执行 shell 命令都走同一条提交处置，判定在 lib/transcript-follow.ts。
+  assert.match(sendSource, /applyFollowRef\.current\(\{ type: "submit" \}\)/);
+  assert.match(bashSource, /applyFollowRef\.current\(\{ type: "submit" \}\)/);
+  // 结论落到状态与滚动入口：恢复跟随打开列表的 followOutput，回底走列表定位。
+  // 意图窗口的清理也在回底之前，由 useAgentSession.follow.test.mjs 的行为测试覆盖。
+  assert.match(
+    source,
+    /const applyFollow = useCallback\(\(event: FollowEvent\) => \{\s*const outcome = reduceFollow\(event\);\s*if \(!outcome\) return;[\s\S]*?setAutoFollow\(!outcome\.paused\);\s*if \(outcome\.scrollToEnd\) scrollToBottom\(outcome\.scrollToEnd\);\s*\}, \[scrollToBottom, setAutoFollow\]\);/,
+  );
+  assert.match(chatWindowSource, /list\.scrollToIndex\(\{ index: "LAST", align: "end", behavior: resolved \}\);/);
+});
+
+test("defers the post-load follow until the new transcript commits", () => {
+  const loadContextSource = source.slice(
+    source.indexOf("const loadContext = useCallback"),
+    source.indexOf("const loadTools = useCallback"),
+  );
+
+  // 载入与滚动不能在同一个同步块里：此刻新的那份消息还没提交，量到的是旧列表的
+  // 高度，落点会停在旧末端。载入只记票号。
+  assert.doesNotMatch(loadContextSource, /applyFollowRef\.current/);
+  assert.match(loadContextSource, /setContextFollowTicket\(\(ticket\) => ticket \+ 1\);/);
+  // 提交后再等两帧：一帧给 React 提交新条目，一帧给列表量到新高度。
+  assert.match(
+    source,
+    /useEffect\(\(\) => \{\s*if \(contextFollowTicket === 0\) return;\s*let inner = 0;\s*const outer = requestAnimationFrame\(\(\) => \{\s*inner = requestAnimationFrame\(\(\) => applyFollowRef\.current\(\{ type: "load" \}\)\);\s*\}\);[\s\S]*?\}, \[contextFollowTicket\]\);/,
+  );
 });
 
 test("exposes a paused-follow flag and a jump-to-bottom action", () => {
-  // The ref drives the scroll effects and the state drives the button; one
-  // writer keeps them from drifting apart.
-  assert.match(source, /const setAutoFollow = useCallback\(\(following: boolean\) => \{\s*completionScrollAllowedRef\.current = following;\s*setAutoFollowPaused\(/);
-  assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{[\s\S]*?userScrollIntentUntilRef\.current = 0;[\s\S]*?setAutoFollow\(true\);[\s\S]*?scrollToBottom\("smooth"\)/);
-  assert.match(source, /autoFollowPaused, resumeAutoFollow,/);
-  // A new prompt or shell command resumes following.
-  assert.doesNotMatch(source, /completionScrollAllowedRef\.current = true;/);
+  // 单一写入点：跟随开关只由 setAutoFollow 写，状态不会和判定漂移。
+  assert.match(source, /const setAutoFollow = useCallback\(\(following: boolean\) => \{\s*setAutoFollowPaused\(/);
+  assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{\s*applyFollow\(\{ type: "resume" \}\);\s*\}, \[applyFollow\]\);/);
+  // 意图窗口的清理只在 applyFollow 里做，而且只跟着回底走：跳转的落点由抑制器挡住，
+  // 不再借窗口。
+  assert.equal(source.match(/userScrollIntentUntilRef\.current = 0/g)?.length, 1);
+  assert.match(source, /if \(outcome\.scrollToEnd\) userScrollIntentUntilRef\.current = 0;/);
+  assert.match(source, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/);
+  // Scrolling is the list's job: the hook hands the jump to the list handle
+  // instead of touching the scroll element itself. 入口是必填的：漏接在 typecheck 暴露，
+  // 不会出现状态写着「跟随中」却没有落点。
+  assert.match(source, /scrollTranscriptToEnd: \(behavior: ScrollBehavior\) => void;/);
+  assert.match(source, /const scrollToBottom = useCallback\(\(behavior: ScrollBehavior = "smooth"\) => \{\s*scrollTranscriptToEndRef\.current\(behavior\);\s*\}, \[\]\);/);
+  assert.doesNotMatch(source, /scrollTranscriptToEndRef\.current\?\./);
+  assert.doesNotMatch(source, /scrollIntoView/);
+  assert.doesNotMatch(source, /container\.scrollTo\(/);
 
-  assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow,/);
-  assert.match(chatWindowSource, /\{sessionBusy && autoFollowPaused && \(/);
+  assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/);
+  // 按钮有两个来源：跟随暂停，或停稳帧实测列表不在底部。前者管用户上滚与跳转，后者
+  // 让「跟随开着但列表没跟上」时也留一个恢复入口。
+  assert.match(chatWindowSource, /\{\(autoFollowPaused \|\| !transcriptAtBottom\) && \(/);
+  // 位置只在列表停稳后再确认一帧才落成状态：首屏与 load 回底途中的程序化滚动会
+  // 短暂离开底部，列表自己的 atBottomStateChange 在途中也报 false，接进状态就会把
+  // 按钮钉出来。唯一的来源是这一帧实测。
+  assert.doesNotMatch(chatWindowSource, /atBottomStateChange=/);
+  assert.match(
+    chatWindowSource,
+    /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*settleRailJumpNow\(\);\s*if \(transcriptAtBottomFrameRef\.current !== 0\) return;\s*transcriptAtBottomFrameRef\.current = requestAnimationFrame\(\(\) => \{\s*transcriptAtBottomFrameRef\.current = 0;\s*const atBottom = measureTranscriptAtBottom\(\);\s*if \(atBottom !== null\) setTranscriptAtBottom\(atBottom\);/,
+  );
+  assert.doesNotMatch(chatWindowSource, /transcriptAtBottomRef/);
+  assert.doesNotMatch(chatWindowSource, /\{sessionBusy && autoFollowPaused && \(/);
   assert.match(chatWindowSource, /onClick=\{resumeAutoFollow\}/);
 });
 
@@ -248,10 +317,14 @@ test("renders the transcript with omp's hideThinkingBlock setting", () => {
   assert.match(chatWindowSource, /useSyncedDisplaySettings\(/);
   assert.match(chatWindowSource, /displayOptions = useMemo<DisplayOptions>\(\(\) => \(\{ hideThinking: hideThinkingBlock \}\)/);
   // Turn grouping has to agree with what MessageView renders, or a message
-  // made only of thinking blocks leaves an empty row behind.
-  assert.match(chatWindowSource, /hasDisplayableProcessMessage\(messages\[processIdx\], displayOptions\)/);
-  assert.match(chatWindowSource, /splitFinalAssistantBlocks\(finalAssistant, displayOptions\)/);
-  assert.match(chatWindowSource, /findFinalAssistantIndex\(messages, userIdx, endIdx, displayOptions\)/);
+  // made only of thinking blocks leaves an empty row behind. The judgment
+  // lives in lib/transcript-items.ts; the transcript only consumes its items
+  // and hands its own display options to the builder.
+  const transcriptItemsSource = readFileSync(new URL("../lib/transcript-items.ts", import.meta.url), "utf8");
+  assert.match(chatWindowSource, /buildTranscriptItems\(messages, entryIds, \{\s*displayOptions,/);
+  assert.match(transcriptItemsSource, /hasDisplayableProcessMessage\(messages\[processIdx\], displayOptions\)/);
+  assert.match(transcriptItemsSource, /splitFinalAssistantBlocks\(finalAssistant, displayOptions\)/);
+  assert.match(transcriptItemsSource, /findFinalAssistantIndex\(messages, anchorIndex, endIndex, displayOptions\)/);
 });
 
 test("/branch and /rewind reach the rewind plan through a normalized command name", () => {
