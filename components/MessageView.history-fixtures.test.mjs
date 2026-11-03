@@ -11,7 +11,7 @@ const jiti = createJiti(import.meta.url);
 const { buildSessionContext, invalidateSessionListCache, listAllSessions } = await jiti.import("../lib/session-reader.ts");
 const { getDisplayableAssistantBlocks } = await jiti.import("../lib/message-display.ts");
 const { seedSessions } = await jiti.import("../test-support/session-fixtures.ts");
-const { createAgentDirSandbox, switchAgentDir } = await jiti.import("../test-support/agent-dir-sandbox.ts");
+const { SandboxDirectoryCreateError, createAgentDirSandbox, switchAgentDir } = await jiti.import("../test-support/agent-dir-sandbox.ts");
 
 /** 按 mtime 从新到旧扫描时，最多检查多少个候选会话就放弃。 */
 const CANDIDATE_LIMIT = 10;
@@ -38,9 +38,13 @@ function isUnreadableStoreError(error) {
   return UNREADABLE_STORE_ERROR_CODES.has(errorCode(error));
 }
 
-/** 临时目录建不出来（父目录不存在、无权限、被占用）都是环境限制，跳过而不是失败。 */
-function isTempDirError(error) {
-  return isMissingPathError(error) || isUnreadableStoreError(error);
+/**
+ * 只有沙箱目录建不出来才算可跳过的环境问题：`mkdtempSync` / `mkdirSync` 的失败被
+ * 沙箱包成 `SandboxDirectoryCreateError`。切换与复位活动目录失败抛的是别的类型——
+ * 那是 SDK 契约或本模块的回归，必须让用例失败，而不是当成环境限制跳过。
+ */
+function isSandboxDirectoryCreateError(error) {
+  return error instanceof SandboxDirectoryCreateError;
 }
 
 /**
@@ -123,7 +127,7 @@ async function selectLocalFixture() {
  * 真实会话目录。铺好之后仍走 `listAllSessions()` → `buildSessionContext()` 的产品读取
  * 路径，覆盖与真实历史一致。
  *
- * 临时目录都建不出来才返回 null，由用例按环境问题跳过。
+ * 沙箱目录建不出来才返回 null，由用例按环境问题跳过。
  */
 async function seedFixture(t) {
   let sandbox;
@@ -135,10 +139,12 @@ async function seedFixture(t) {
       beforeRestore: invalidateSessionListCache,
     });
   } catch (error) {
-    // 只容忍临时目录建不出来：那是环境限制，不是回归。铺设样本与切换目录在 try 之外，
-    // 它们的失败（EPERM/EBUSY/EACCES 也在其中）会直接抛出，不会变成 CI 跳过。
-    if (!isTempDirError(error)) throw error;
-    console.log(`[history-fixtures] 无法在临时目录铺设会话样本：${error.message}`);
+    // 只容忍沙箱目录建不出来：那是环境限制，不是回归。切换与复位活动目录在沙箱
+    // 内部，失败时抛的是别的错误类型（EPERM/EBUSY 也可能出现在那里），会直接让
+    // 用例失败，不会被当成 CI 跳过。
+    if (!isSandboxDirectoryCreateError(error)) throw error;
+    const cause = error.cause instanceof Error ? error.cause.message : String(error.cause ?? "无更多信息");
+    console.log(`[history-fixtures] 无法在临时目录铺设会话样本：${error.message}（${cause}）`);
     return null;
   }
 
