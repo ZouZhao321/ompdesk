@@ -46,7 +46,8 @@
     "verify:push": "bun scripts/verify-push.mjs",
     "smoke:dev": "bun scripts/smoke-dev.mjs",
     "scratch": "bun scripts/scratch.mjs",
-    "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
+    "release": "bun scripts/release.ts",
+    "release:finish": "bun scripts/release.ts finish"
   },
   "dependencies": {
     "@oh-my-pi/pi-agent-core": "~18.10.4",
