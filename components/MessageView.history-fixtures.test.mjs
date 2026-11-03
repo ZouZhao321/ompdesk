@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { isAbsolute, relative, resolve } from "node:path";
+import { join } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
 
@@ -10,22 +10,41 @@ import { renderMessage, visibleText } from "../lib/testing/render-harness.mjs";
 const jiti = createJiti(import.meta.url);
 const { buildSessionContext, invalidateSessionListCache, listAllSessions } = await jiti.import("../lib/session-reader.ts");
 const { getDisplayableAssistantBlocks } = await jiti.import("../lib/message-display.ts");
+const { seedSessions } = await jiti.import("../test-support/session-fixtures.ts");
+const { SandboxDirectoryCreateError, createAgentDirSandbox, switchAgentDir } = await jiti.import("../test-support/agent-dir-sandbox.ts");
 
 /** 按 mtime 从新到旧扫描时，最多检查多少个候选会话就放弃。 */
 const CANDIDATE_LIMIT = 10;
 /** 单次用例渲染的消息条数上限。 */
 const MESSAGE_LIMIT = 20;
-/** 指向一个会话目录即可把夹具限制在该目录下，用于演示无会话时的跳过路径。 */
-const SESSION_DIR_ENV = "OMPDESK_FIXTURE_SESSION_DIR";
 
-function pathKey(filePath) {
-  const resolved = resolve(filePath);
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+/** 会话库或会话文件不存在：全新 CI runner 的正常状态，不是环境故障，应当改用样本会话。 */
+const MISSING_PATH_ERROR_CODES = new Set(["ENOENT", "ENOTDIR"]);
+
+/** 会话库存在却读不出来：权限或占用问题，属于环境限制，跳过用例而不是失败。 */
+const UNREADABLE_STORE_ERROR_CODES = new Set(["EACCES", "EPERM", "EBUSY"]);
+
+function errorCode(error) {
+  return error && typeof error === "object" ? error.code : undefined;
 }
 
-function isInside(dir, filePath) {
-  const rel = relative(pathKey(dir), pathKey(filePath));
-  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+/** 路径不存在（库扫描目录或会话文件没了）不是故障，走样本回退。 */
+function isMissingPathError(error) {
+  return MISSING_PATH_ERROR_CODES.has(errorCode(error));
+}
+
+/** 只有会话库不可读才算可跳过的环境问题；harness 与 SDK 的契约变化必须失败。 */
+function isUnreadableStoreError(error) {
+  return UNREADABLE_STORE_ERROR_CODES.has(errorCode(error));
+}
+
+/**
+ * 只有沙箱目录建不出来才算可跳过的环境问题：`mkdtempSync` / `mkdirSync` 的失败被
+ * 沙箱包成 `SandboxDirectoryCreateError`。切换与复位活动目录失败抛的是别的类型——
+ * 那是 SDK 契约或本模块的回归，必须让用例失败，而不是当成环境限制跳过。
+ */
+function isSandboxDirectoryCreateError(error) {
+  return error instanceof SandboxDirectoryCreateError;
 }
 
 /**
@@ -38,41 +57,30 @@ function isInside(dir, filePath) {
  * 读取走 `loadEntriesFromFile()`：它只解析 JSONL，不创建 writer、不取单写者锁、也
  * 不触发迁移写回（`getSessionEntries()` 背后的 `SessionManager.open()` 会取锁）。
  * 用例因此不会写入或修改任何会话文件，也不会和正在写文件的会话进程抢锁。
+ *
+ * `fixture` 非空表示找到了可渲染的真实会话。会话库或会话文件不存在（全新 CI runner
+ * 就是这种状态）返回 `reason` 让用例改铺样本；只有会话库存在却读不出来才把
+ * `environmentError` 设为跳过原因。
  */
-const FIXTURE_IO_ERROR_CODES = new Set(["ENOENT", "EACCES", "EPERM", "EBUSY", "ENOTDIR", "EISDIR"]);
-
-/** 只有本机会话库不可读才算可跳过的环境问题；harness 与 SDK 的契约变化必须失败。 */
-function isFixtureEnvironmentError(error) {
-  return Boolean(
-    error && typeof error === "object" && FIXTURE_IO_ERROR_CODES.has(error.code),
-  );
-}
-
-async function selectFixture() {
+async function selectLocalFixture() {
   let sessions;
   try {
     invalidateSessionListCache();
     sessions = await listAllSessions({ force: true });
   } catch (error) {
-    if (!isFixtureEnvironmentError(error)) throw error;
-    return {
-      fixture: null,
-      reason: `读取本机会话列表失败，跳过历史会话夹具：${error.message}`,
-    };
+    if (isMissingPathError(error)) {
+      return { fixture: null, reason: "本机没有会话库，改用样本会话", environmentError: null };
+    }
+    if (!isUnreadableStoreError(error)) throw error;
+    const reason = `本机会话库不可读，跳过历史会话夹具：${error.message}`;
+    return { fixture: null, reason, environmentError: reason };
   }
-  const overrideDir = process.env[SESSION_DIR_ENV]?.trim();
   const candidates = sessions
     .filter((session) => typeof session.path === "string" && session.path.length > 0)
-    .filter((session) => !overrideDir || isInside(overrideDir, session.path))
     .sort((a, b) => b.modified.localeCompare(a.modified) || a.path.localeCompare(b.path));
 
   if (candidates.length === 0) {
-    return {
-      fixture: null,
-      reason: overrideDir
-        ? `环境变量 ${SESSION_DIR_ENV}=${overrideDir} 下没有会话文件，跳过历史会话夹具`
-        : "本机没有已记录的会话文件，跳过历史会话夹具",
-    };
+    return { fixture: null, reason: "本机没有已记录的会话文件，改用样本会话", environmentError: null };
   }
 
   const inspected = candidates.slice(0, CANDIDATE_LIMIT);
@@ -85,20 +93,72 @@ async function selectFixture() {
       const entries = parsed.filter((entry) => entry.type !== "session");
       const { messages } = buildSessionContext(entries, entries.at(-1)?.id ?? null);
       if (messages.length > 0) {
-        return { fixture: { session, messages: messages.slice(0, MESSAGE_LIMIT) }, reason: null };
+        return {
+          fixture: { session, messages: messages.slice(0, MESSAGE_LIMIT) },
+          reason: null,
+          environmentError: null,
+        };
       }
     } catch (error) {
-      if (!isFixtureEnvironmentError(error)) throw error;
-      console.log(
-        `[history-fixtures] 跳过无法读取的会话 ${session.path}: ${error.message}`,
-      );
+      if (isMissingPathError(error)) {
+        // 列出与读取之间文件没了：不是回归，换下一个候选，最终没有可用的就走样本。
+        console.log(
+          `[history-fixtures] 会话文件在列出之后消失，跳过 ${session.path}: ${error.message}`,
+        );
+      } else if (isUnreadableStoreError(error)) {
+        console.log(
+          `[history-fixtures] 跳过无法读取的会话 ${session.path}: ${error.message}`,
+        );
+      } else {
+        throw error;
+      }
     }
   }
 
   return {
     fixture: null,
-    reason: `最新的 ${inspected.length} 个会话文件都没有可渲染的消息，跳过历史会话夹具`,
+    reason: `最新的 ${inspected.length} 个会话文件都没有可渲染的消息，改用样本会话`,
+    environmentError: null,
   };
+}
+
+/**
+ * 本机没有会话时铺一份确定性样本：临时目录 + 活动目录切换，用例结束自动清理，不碰
+ * 真实会话目录。铺好之后仍走 `listAllSessions()` → `buildSessionContext()` 的产品读取
+ * 路径，覆盖与真实历史一致。
+ *
+ * 沙箱目录建不出来才返回 null，由用例按环境问题跳过。
+ */
+async function seedFixture(t) {
+  let sandbox;
+  try {
+    sandbox = createAgentDirSandbox(t, {
+      prefix: "ompdesk-history-fixtures-",
+      dirs: ["agent", "project"],
+      // 列表缓存跟着活动目录走，恢复原目录前先清掉指向样本的缓存。
+      beforeRestore: invalidateSessionListCache,
+    });
+  } catch (error) {
+    // 只容忍沙箱目录建不出来：那是环境限制，不是回归。切换与复位活动目录在沙箱
+    // 内部，失败时抛的是别的错误类型（EPERM/EBUSY 也可能出现在那里），会直接让
+    // 用例失败，不会被当成 CI 跳过。
+    if (!isSandboxDirectoryCreateError(error)) throw error;
+    const cause = error.cause instanceof Error ? error.cause.message : String(error.cause ?? "无更多信息");
+    console.log(`[history-fixtures] 无法在临时目录铺设会话样本：${error.message}（${cause}）`);
+    return null;
+  }
+
+  const agentDir = join(sandbox.root, "agent");
+  const cwd = join(sandbox.root, "project");
+  // tools 场景一轮覆盖正文、思考、工具调用（read 与 bash）与结果回填，样本只有一条
+  // 会话，夹具挑选结果不随文件 mtime 变化。
+  await seedSessions("tools", { agentDir, cwd });
+  // 活动目录切到样本目录，listAllSessions() 才扫描到这里。
+  switchAgentDir(agentDir);
+
+  const { fixture, reason } = await selectLocalFixture();
+  assert.ok(fixture, `样本会话没有读到可渲染的消息：${reason}`);
+  return fixture;
 }
 
 /**
@@ -161,12 +221,18 @@ function contentFragments(message) {
   return [...fragments];
 }
 
-const { fixture, reason } = await selectFixture();
+const localFixture = await selectLocalFixture();
 // Bun 的 reporter 只打印 skip 计数，不显示 skip 选项里的原因；这里把它写进输出。
-if (reason) console.log(`[history-fixtures] ${reason}`);
+if (localFixture.reason) console.log(`[history-fixtures] ${localFixture.reason}`);
 
-test("真实历史会话的消息（至多 20 条）都能渲染出消息自身内容", { skip: reason ?? false }, () => {
-  assert.ok(fixture, "夹具选择结果与跳过原因不一致");
+test("历史会话的消息（至多 20 条）都能渲染出消息自身内容", { skip: localFixture.environmentError ?? false }, async (t) => {
+  const fixture = localFixture.fixture ?? await seedFixture(t);
+  if (!fixture) {
+    // 沙箱目录建不出来只有跑到这里才知道，没法挪到注册期；Bun 的 node:test 兼容层里
+    // `t.skip()` 会抛 NotImplementedError，所以打印原因后直接返回，不写成跳过。
+    console.log("[history-fixtures] 临时目录里无法铺设会话样本，跳过历史会话夹具");
+    return;
+  }
   const { session, messages } = fixture;
 
   assert.ok(messages.length > 0, `${session.path} 没有可渲染的消息`);

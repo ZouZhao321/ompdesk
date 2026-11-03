@@ -13,6 +13,6 @@
 ---
 
 - [ ] `bun run typecheck` 通过
-- [ ] `bun run lint` 通过
+- [ ] 改动范围的 eslint 无 error（全仓 `bun run lint` 的存量 error 不算，见 CI 说明）
 - [ ] `bun test` 通过
 - [ ] 涉及界面的改动已在浏览器实际操作验证
