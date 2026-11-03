@@ -41,12 +41,22 @@ export async function listWindowsDrives(): Promise<BrowsableDirectory[]> {
 /**
  * 按输入形态判断是不是 Windows 路径。
  *
- * 盘符形态（`C:\x`、`C:/x` 与盘符相对的 `C:x`）与双反斜杠开头的 UNC 在任何宿主上
- * 都只能是 Windows 路径。单个反斜杠开头的 `\Users` 只是 Windows 的根相对写法：
- * POSIX 上 `\data\log` 是合法的相对名字，只有 Windows 宿主才按 Windows 判断，
- * 这与 `file-access.ts` 的 `isWindowsAbsolutePath` 一致。正斜杠开头的
- * `//server/share` 同理只在 Windows 宿主上才当 UNC：POSIX 上 `//tmp/x` 与 `/tmp/x`
- * 等价，判成 Windows 会让 `path.win32` 把它归一成 `\\tmp\x`，随后 stat 失败。
+ * 这里判断的是「该用 win32 的路径 API 处理这个输入吗」，不是「这是不是 Windows 绝对
+ * 路径」。`file-access.ts` 的 `isWindowsAbsolutePath`（`path-security.ts` 里有一份同实现
+ * 的私有副本）负责后一件事，用于选择解析 API 并做根目录包含判断。两个判定有意在两处
+ * 不同，`directory-browser.test.mjs` 的跨模块用例逐条钉住：
+ *
+ * - `C:folder` 与 `C:`：盘符相对输入不是绝对路径，`isWindowsAbsolutePath` 判 false；
+ *   这里判 true，因为它已经限定在 Windows，只是没有根，归一化时要走宿主的盘符当前目录。
+ * - `\Users`：Windows 的根相对写法，宿主是 Windows 时这里判 true；它不是绝对路径，
+ *   `isWindowsAbsolutePath` 判 false。POSIX 上 `\data\log` 是合法的相对名字，只有
+ *   Windows 宿主才按 Windows 判断。
+ * - `//server/share`：任何宿主上都是 UNC，`isWindowsAbsolutePath` 判 true；这里在 POSIX
+ *   上判 false。POSIX 上 `//tmp/x` 与 `/tmp/x` 等价，判成 Windows 会让 `path.win32` 把它
+ *   归一成 `\\tmp\x`，随后 stat 失败。
+ *
+ * 其余输入两侧一致：`C:\x`、`C:/x` 与 `\\server\share` 都判 true，`/x` 与普通相对名字
+ * 都判 false。
  */
 export function isWindowsPathInput(
   directory: string,
