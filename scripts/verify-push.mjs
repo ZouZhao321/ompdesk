@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 /**
- * 推送前校验：跑与 CI verify job 相同的流程——锁文件一致性、类型检查、测试、构建、开发冒烟。
+ * 推送前校验：先确认锁文件一致，再跑与 CI 完全相同的 `bun run ci`
+ * （typecheck → test → build → smoke:dev）。流水线只在 package.json 里定义一次，
+ * 这里不再抄一份步骤清单，避免钩子与 CI 分叉。
  *
  * 锁文件用 `bun install --frozen-lockfile --dry-run` 校验：CI 上它会真的安装，
  * 这里只确认 package.json 与 bun.lock 没有脱节，几毫秒完成，不动 node_modules。
@@ -23,10 +25,7 @@ if (!process.env.OMPDESK_SMOKE_PORT) {
 
 const STEPS = [
   { name: "锁文件一致性", args: ["install", "--frozen-lockfile", "--dry-run"] },
-  { name: "类型检查", args: ["run", "typecheck"] },
-  { name: "测试", args: ["run", "test"] },
-  { name: "构建", args: ["run", "build"] },
-  { name: "开发冒烟", args: ["run", "smoke:dev"] },
+  { name: "CI 流水线", args: ["run", "ci"] },
 ];
 
 for (const step of STEPS) {
@@ -42,4 +41,4 @@ for (const step of STEPS) {
   }
 }
 
-process.stdout.write("\n[verify] 五项检查全部通过\n");
+process.stdout.write("\n[verify] 锁文件一致性与 CI 流水线全部通过\n");

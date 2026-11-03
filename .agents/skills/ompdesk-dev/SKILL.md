@@ -58,14 +58,16 @@ bun run dev        # http://127.0.0.1:30141
 bun test           # 用 Bun 跑，不用 node --test
 bun run typecheck
 bun run ci         # 整条链路：typecheck → test → build → smoke:dev
-bun run verify     # 在 ci 之前多一遍 check（typecheck + lint）
+bun run verify     # 与 ci 同一份定义
 bun run smoke:dev  # 起 dev server，请求 / 与 /api/home，扫描构建失败标记
 ```
 
 - 开发期间不要执行 `bun run build`：会污染 `.next/` 并打断正在运行的开发服务器。
 - 启用了密码锁的机器（`~/.omp/agent/ompdesk-auth.json` 存在）跑冒烟要带
   `OMPDESK_SMOKE_AUTH=用户名:密码`，否则首页固定返回 401，看起来像构建失败。
-- `bun run lint` 有大量存量告警，不能当门禁；只看改动文件范围的 eslint 结果。
+- `bun run lint` 有存量 error（React 编译器的 memoization 检查，落在 `components/`
+  与 `hooks/`），所以它不在 `ci` 里：复现用 `bun run lint`，判据只看改动文件范围的
+  eslint 结果，例如 `bunx eslint test-support lib`。
 - `bun test` 的判据是全套零失败，不是「失败集合有没有变化」：`bun run ci` 与
   `bun run verify` 都在 typecheck 之后跑测试，测试一挂，build 与冒烟不会执行。
   依赖本机会话库的用例在本机没有会话时改铺 `test-support/session-fixtures.ts` 的
