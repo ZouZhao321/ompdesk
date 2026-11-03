@@ -10,7 +10,7 @@ import ts from "typescript";
  *
  * 只认一条规则：首个参数是字面量 `"git"` 的调用。不看函数名，所以 `execFile`、`spawn`、
  * `execFileSync` 以及 `const run = execFileAsync` 这类换名字的包装都会扫到；先把 `"git"`
- * 存进变量再传的调用 AST 追不到，靠调用方的模块清单兜底。
+ * 存进变量再传的调用 AST 追不到，靠调用方的模块清单与 `callSiteLines()` 的逐调用点核对兜底。
  */
 
 const GIT_LITERAL_RE = /(["'`])git\1/;
@@ -25,6 +25,22 @@ function scriptKindFor(filename) {
   if (filename.endsWith(".tsx")) return ts.ScriptKind.TSX;
   if (/\.(mjs|cjs|js|jsx)$/.test(filename)) return ts.ScriptKind.JS;
   return ts.ScriptKind.TS;
+}
+
+/** 解析源码；`filename` 只用于选择解析模式与报错定位。 */
+function parseSource(source, filename) {
+  return ts.createSourceFile(
+    filename,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKindFor(filename),
+  );
+}
+
+/** 调用点在源码里的行号（从 1 起），用于报错定位。 */
+function lineOf(sourceFile, node) {
+  return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
 }
 
 /**
@@ -93,25 +109,43 @@ function findOptionsArgument(call, scopes) {
  * `filename` 只用于选择解析模式与报错定位。
  */
 export function gitSubprocessCalls(source, filename = "source.ts") {
-  const sourceFile = ts.createSourceFile(
-    filename,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKindFor(filename),
-  );
+  const sourceFile = parseSource(source, filename);
   const declarations = declarationScopes(sourceFile);
 
   const calls = [];
   const visit = (node) => {
     if (ts.isCallExpression(node) && isGitLiteral(node.arguments[0])) {
-      const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-      calls.push({ line, options: findOptionsArgument(node, declarations) });
+      calls.push({
+        line: lineOf(sourceFile, node),
+        options: findOptionsArgument(node, declarations),
+      });
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
   return calls;
+}
+
+/**
+ * 收集源码里以指定标识符为被调函数的调用点行号。扫描器只认首参为字面量 `"git"` 的调用，
+ * 先把首参存进变量的调用它追不到：调用方用这份清单核对模块里的子进程调用点都被扫到，
+ * 光数扫到的条数挡不住漏扫。
+ */
+export function callSiteLines(source, calleeName, filename = "source.ts") {
+  const sourceFile = parseSource(source, filename);
+  const lines = [];
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node)
+      && ts.isIdentifier(node.expression)
+      && node.expression.text === calleeName
+    ) {
+      lines.push(lineOf(sourceFile, node));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return lines;
 }
 
 /** 对象字面量里是否有 `env: createGitEnv()` 属性。 */
