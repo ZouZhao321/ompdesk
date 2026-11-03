@@ -8,8 +8,8 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
@@ -406,18 +406,40 @@ test("同一 agentDir 的符号链接与真实路径共用一条队列", async (
   await assertVariantsShareQueue(sandbox.agentDir, linkAgentDir);
 });
 
-test("同一 agentDir 的大小写变体共用一条队列", async (t) => {
-  // 大小写不敏感的文件系统才让变体指向同一目录；Windows 上稳定成立，其他平台跳过。
-  if (process.platform !== "win32") {
-    t.skip("大小写变体只在大小写不敏感的文件系统上指向同一目录");
-    return;
+/**
+ * 文件系统是否大小写不敏感：在临时目录里建一个目录，再看它的全大写写法是否指向同一处。
+ * 只按 `process.platform` 判断两头都会错：macOS 可以装在大小写敏感的卷上，Linux 的挂载
+ * 点也可以不区分大小写。
+ */
+function probeCaseInsensitiveFilesystem() {
+  const root = mkdtempSync(join(tmpdir(), "ompdesk-case-probe-"));
+  try {
+    mkdirSync(join(root, "probe"));
+    return existsSync(join(root, "PROBE"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
-  const sandbox = createSandbox(t);
-  const variantAgentDir = sandbox.agentDir.toUpperCase();
-  assert.notEqual(variantAgentDir, sandbox.agentDir, "变体路径必须与真实路径写法不同");
+}
 
-  await assertVariantsShareQueue(sandbox.agentDir, variantAgentDir);
-});
+/** 跳过与否在注册时定下，探测只做一次。 */
+const CASE_INSENSITIVE_FILESYSTEM = probeCaseInsensitiveFilesystem();
+
+test(
+  "同一 agentDir 的大小写变体共用一条队列",
+  {
+    // Bun 的 node:test 实现里 `t.skip()` 抛 NotImplementedError，跳过只能给在注册选项上。
+    skip: CASE_INSENSITIVE_FILESYSTEM
+      ? false
+      : "大小写敏感的文件系统上大小写变体是两个不同的目录，无法共用一条队列",
+  },
+  async (t) => {
+    const sandbox = createSandbox(t);
+    const variantAgentDir = sandbox.agentDir.toUpperCase();
+    assert.notEqual(variantAgentDir, sandbox.agentDir, "变体路径必须与真实路径写法不同");
+
+    await assertVariantsShareQueue(sandbox.agentDir, variantAgentDir);
+  },
+);
 
 test("铺样本前清掉替换阶段残留的 .staging- 与 .backup- 目录", async (t) => {
   const sandbox = createSandbox(t);
