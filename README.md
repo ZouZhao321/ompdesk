@@ -19,7 +19,11 @@
   ompdesk develops independently of both projects.
 </p>
 
-ompdesk is the browser workspace for [omp (oh-my-pi)](https://github.com/can1357/oh-my-pi). It reads the sessions the `omp` CLI already writes and runs omp's own SDK in-process against the same `~/.omp/agent` directory. A conversation started in a terminal continues in the browser, and the reverse.
+ompdesk is a browser workspace for [omp](https://github.com/can1357/oh-my-pi). omp is a terminal coding agent in the same family as Claude Code, Codex, and pi. Use ompdesk to follow a long run from a phone, review the files and diffs an agent changed, or find an earlier conversation without scrolling terminal output.
+
+It is a single-user tool for one machine, with no model provider, no team accounts, and no hosted service. If you work only at the terminal, omp alone is enough.
+
+It reads the sessions the `omp` CLI already writes and runs omp's own SDK in-process against the same `~/.omp/agent` directory. A conversation started in a terminal continues in the browser, and the reverse.
 
 It is not a separate agent and does not copy omp's data: sessions, settings, model roles, credentials, skills, plugins, extensions, and Model Context Protocol (MCP) configuration are the ones omp already uses.
 
