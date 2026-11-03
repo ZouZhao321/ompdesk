@@ -53,3 +53,17 @@ export function splitFinalAssistantBlocks(
 export function countToolCallBlocks(blocks: AssistantContentBlock[]): number {
   return blocks.filter((block): block is ToolCallContent => block.type === "toolCall").length;
 }
+
+/** 思考块展示哪种内容：正文、加载态、错误，还是占位提示。 */
+export type ThinkingDisplay = "text" | "loading" | "error" | "placeholder";
+
+/**
+ * 思考块展示什么。正文一旦在手就优先渲染：正文已经取回、重新请求却失败时，错误
+ * 文案不该把它盖掉，加载态同理。
+ */
+export function thinkingDisplayState(hasText: boolean, loading: boolean, error: string | null): ThinkingDisplay {
+  if (hasText) return "text";
+  if (loading) return "loading";
+  if (error !== null && error.length > 0) return "error";
+  return "placeholder";
+}

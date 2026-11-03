@@ -9,8 +9,9 @@ import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
-import { getAssistantErrorMessage, isHiddenAssistantBlock } from "@/lib/message-display";
+import { getAssistantErrorMessage, isHiddenAssistantBlock, thinkingDisplayState } from "@/lib/message-display";
 import { useDisplaySettings } from "@/hooks/useDisplaySettings";
+import { planDeferredContent, settleDeferredContent, thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
@@ -196,6 +197,11 @@ interface Props {
   prevTimestamp?: number;
   sessionId?: string;
   /**
+   * 本条消息所属轮的提问锚点 entryId。展开状态与延迟加载标记都按它分桶，
+   * 所以条目的渲染单元被卸载重建后状态不变；单条消息不带轮时退化为自身 entryId。
+   */
+  turnAnchorEntryId?: string;
+  /**
    * Files this turn wrote, derived by the caller from the whole turn's
    * successful write/edit tool calls. ChatWindow computes this because the
    * saved-message path splits tool calls into their own entries, leaving the
@@ -231,12 +237,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, turnAnchorEntryId, writtenFiles }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} sessionId={sessionId} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} turnAnchorEntryId={turnAnchorEntryId} writtenFiles={writtenFiles} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -249,7 +255,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
   }
   if (message.role === "bashExecution") {
-    return <BashExecutionView message={message as BashExecutionMessage} sessionId={sessionId} />;
+    return <BashExecutionView message={message as BashExecutionMessage} sessionId={sessionId} turnAnchorEntryId={turnAnchorEntryId} />;
   }
   return null;
 }, (prev, next) => {
@@ -267,7 +273,8 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.onEditContent === next.onEditContent
     && prev.showTimestamp === next.showTimestamp
     && prev.prevTimestamp === next.prevTimestamp
-    && prev.sessionId === next.sessionId;
+    && prev.sessionId === next.sessionId
+    && prev.turnAnchorEntryId === next.turnAnchorEntryId;
 });
 
 function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, sessionId }: {
@@ -488,6 +495,7 @@ function AssistantMessageView({
   prevTimestamp,
   sessionId,
   entryId,
+  turnAnchorEntryId,
   writtenFiles,
 }: {
   message: AssistantMessage;
@@ -500,6 +508,7 @@ function AssistantMessageView({
   prevTimestamp?: number;
   sessionId?: string;
   entryId?: string;
+  turnAnchorEntryId?: string;
   writtenFiles?: WrittenFile[];
 }) {
   const { t } = useI18n();
@@ -679,7 +688,7 @@ function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
-          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
+          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} entryId={entryId} turnAnchorEntryId={turnAnchorEntryId} blockIndex={originalIndex} />
         ))}
       </div>
 
@@ -758,18 +767,18 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
+function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, sessionId, entryId, turnAnchorEntryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; entryId?: string; turnAnchorEntryId?: string; blockIndex: number }) {
   if (block.type === "text") {
     return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
   }
   if (block.type === "thinking") {
-    return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} entryId={entryId} blockIndex={blockIndex} />;
+    return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} entryId={entryId} turnAnchorEntryId={turnAnchorEntryId} blockIndex={blockIndex} />;
   }
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
     const duration = toolCallDurations?.get(tc.toolCallId);
-    return <ToolCallBlock block={tc} result={result} duration={duration} />;
+    return <ToolCallBlock block={tc} result={result} duration={duration} sessionId={sessionId} turnAnchorEntryId={turnAnchorEntryId} />;
   }
   return null;
 }
@@ -778,16 +787,59 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile, sessionId }: { block: 
   return <SafeMarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId}>{block.text}</SafeMarkdownBody>;
 }
 
-function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
+/** 思考块在视图状态里的位置：会话、锚点与部位标识。 */
+interface ThinkingViewKey {
+  entryId: string;
+  sessionId: string | undefined;
+  anchorEntryId: string;
+  part: string;
+}
+
+/**
+ * 思考块的视图状态键，读写共用这一条推导。锚点取本轮提问的 entryId，没有就退回
+ * 思考块自己的；只有 entryId 是必需的——还没落盘的会话共用空会话桶，读和写因此
+ * 落在同一处。
+ */
+function thinkingViewKey(
+  sessionId: string | undefined,
+  entryId: string | undefined,
+  turnAnchorEntryId: string | undefined,
+  blockIndex: number,
+): ThinkingViewKey | null {
+  if (!entryId) return null;
+  return {
+    entryId,
+    sessionId,
+    anchorEntryId: turnAnchorEntryId ?? entryId,
+    part: thinkingPart(entryId, blockIndex),
+  };
+}
+
+/**
+ * 这条思考块的延迟内容。取回过的正文与「已加载」标记一起存在视图状态里：条目
+ * 滚出视野被虚拟列表卸载后重建，首帧直接渲染正文，既不再请求也不回落占位文案。
+ */
+function readThinkingContent(key: ThinkingViewKey | null): string | null {
+  if (key === null) return null;
+  return transcriptViewState.loadedContent(key.sessionId, key.anchorEntryId, key.part);
+}
+
+function ThinkingBlock({ block, duration, sessionId, entryId, turnAnchorEntryId, blockIndex }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
   entryId?: string;
+  turnAnchorEntryId?: string;
   blockIndex: number;
 }) {
   const { t } = useI18n();
-  const [content, setContent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(block.deferred === true);
+  const viewKey = thinkingViewKey(sessionId, entryId, turnAnchorEntryId, blockIndex);
+  const [content, setContent] = useState<string | null>(() => (
+    block.deferred ? readThinkingContent(viewKey) : null
+  ));
+  const [loading, setLoading] = useState(() => (
+    block.deferred === true && readThinkingContent(viewKey) === null
+  ));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -799,7 +851,20 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
     }
 
     let cancelled = false;
-    if (!sessionId || !entryId) {
+    const key = thinkingViewKey(sessionId, entryId, turnAnchorEntryId, blockIndex);
+    // 正文按 entryId 定位，与会话 id 无关：视图状态里已有正文就先渲染，会话还没
+    // 落盘也不会把它换成错误文案。只有确实没有正文时才轮到会话 id 决定去请求还是报错。
+    const plan = planDeferredContent(readThinkingContent(key), sessionId, entryId);
+    if (plan.kind === "stored") {
+      // 正文已经在手，重建后不必再请求。
+      setContent(plan.content);
+      setLoading(false);
+      setError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (plan.kind === "unavailable" || key === null) {
       setLoading(false);
       setError(t("i18n.thinkingUnavailable"));
       return () => {
@@ -809,9 +874,18 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
 
     setLoading(true);
     setError(null);
-    void loadThinkingContent(sessionId, entryId, blockIndex)
+    void loadThinkingContent(plan.sessionId, plan.entryId, blockIndex)
       .then((value) => {
-        if (!cancelled) setContent(value);
+        // 正文先落视图状态，再由这次挂载决定要不要上屏：请求途中条目被虚拟列表卸载
+        // 时这里已经 cancelled，滚回来重建直接从视图状态渲染，不重新请求、不闪加载态。
+        settleDeferredContent(
+          transcriptViewState,
+          key.sessionId,
+          key.anchorEntryId,
+          key.part,
+          value,
+          cancelled ? null : setContent,
+        );
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
@@ -823,20 +897,21 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
     return () => {
       cancelled = true;
     };
-  }, [block.deferred, block.thinking, blockIndex, entryId, sessionId, t]);
+  }, [block.deferred, block.thinking, blockIndex, entryId, sessionId, t, turnAnchorEntryId]);
 
   const text = block.deferred ? content : block.thinking;
   const hasText = typeof text === "string" && text.trim().length > 0;
+  const display = thinkingDisplayState(hasText, loading, error);
 
   return (
     <div className="markdown-thinking" aria-label={t("i18n.thinking")}>
       <div className="markdown-thinking-content">
-        {loading ? (
+        {display === "text" ? (
+          <MarkdownBody className="markdown-thinking-body">{text ?? ""}</MarkdownBody>
+        ) : display === "loading" ? (
           <span className="markdown-thinking-status">{t("i18n.loadingThinking")}</span>
-        ) : error ? (
+        ) : display === "error" ? (
           <span className="markdown-thinking-error">{error}</span>
-        ) : hasText ? (
-          <MarkdownBody className="markdown-thinking-body">{text}</MarkdownBody>
         ) : (
           <span className="markdown-thinking-status">{t("chat.thinking")}</span>
         )}
@@ -849,7 +924,13 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
 }
 
 
-function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number }) {
+/** 待办类工具：结果自带阶段清单，界面换成专用的勾选预览。 */
+function isTodoToolCall(toolName: string): boolean {
+  const normalized = toolName.toLowerCase();
+  return normalized === "todo" || normalized.endsWith(".todo") || normalized.endsWith("_todo");
+}
+
+function ToolCallBlock({ block, result, duration, sessionId, turnAnchorEntryId }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; sessionId?: string; turnAnchorEntryId?: string }) {
   const normalizedToolName = block.toolName.toLowerCase();
   const isEditTool = normalizedToolName === "edit" ||
     normalizedToolName.startsWith("edit_") ||
@@ -857,28 +938,19 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     normalizedToolName.endsWith("_edit") ||
     normalizedToolName.includes("str_replace") ||
     normalizedToolName.includes("replace_editor");
-  const [expanded, setExpanded] = useState(isEditTool);
-  const inputStr = JSON.stringify(block.input, null, 2);
-  const isTodoTool = normalizedToolName === "todo" || normalizedToolName.endsWith(".todo") || normalizedToolName.endsWith("_todo");
+  const isTodoTool = isTodoToolCall(block.toolName);
   const isBashTool = normalizedToolName === "bash" || normalizedToolName.startsWith("bash ") || normalizedToolName.endsWith(".bash") || normalizedToolName.endsWith("_bash");
-  const resultDiff = result && !result.isError ? getResultDiff(result) : null;
-  const todoPhases = isTodoTool ? getTodoPreviewPhases(block, result) : null;
-  const diffStats = resultDiff
-    ? resultDiff.text.split(/\r?\n/).reduce(
-        (stats, line) => {
-          if (line.startsWith("+") && !line.startsWith("+++")) stats.added += 1;
-          if (line.startsWith("-") && !line.startsWith("---")) stats.removed += 1;
-          return stats;
-        },
-        { added: 0, removed: 0 },
-      )
-    : null;
-
-  const resultText = result
-    ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
-    : null;
-  const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
+  const resultText = useMemo(
+    () => (result
+      ? result.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("\n")
+      : null),
+    [result],
+  );
+  const todoPhases = useMemo(
+    () => (isTodoTool ? getTodoPreviewPhases(block, result) : null),
+    [isTodoTool, block, result],
+  );
 
   if (isBashTool) {
     return (
@@ -897,9 +969,59 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     return <TodoChecklistPreview phases={todoPhases} />;
   }
 
-  const hasStructuredPreview = Boolean(todoPhases || resultDiff);
-  const headerPreview = getStructuredToolPreview(block, todoPhases);
+  // 折叠卡片自己订展开状态：bash 与待办在上面两条提前返回里已经走掉，不必因为
+  // 视图仓库里别处的展开重渲染。
+  return (
+    <ToolCallCard
+      block={block}
+      result={result}
+      resultText={resultText}
+      duration={duration}
+      sessionId={sessionId}
+      anchorEntryId={turnAnchorEntryId ?? block.toolCallId}
+      part={toolCallPart(block.toolCallId)}
+      defaultExpanded={isEditTool}
+    />
+  );
+}
 
+/**
+ * 可折叠的工具调用卡片。展开状态的订阅与最贵的输入序列化、diff 统计都在这里，
+ * 只有真正画出卡片的工具调用才付这份开销。
+ */
+function ToolCallCard({ block, result, resultText, duration, sessionId, anchorEntryId, part, defaultExpanded }: {
+  block: ToolCallContent;
+  result?: ToolResultMessage;
+  resultText: string | null;
+  duration?: number;
+  sessionId?: string;
+  anchorEntryId: string;
+  part: string;
+  defaultExpanded: boolean;
+}) {
+  // 展开状态记在视图状态里，条目卸载重建后回到用户最后一次的选择。
+  const expanded = useTranscriptExpanded(sessionId, anchorEntryId, part, defaultExpanded);
+  // 输入序列化与 diff 统计是整段转写里最贵的计算，按引用收住：条目因展开状态、
+  // 延迟正文或其他无关状态重渲染时不再重算。
+  const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
+  const resultDiff = useMemo(
+    () => (result && !result.isError ? getResultDiff(result) : null),
+    [result],
+  );
+  const diffStats = useMemo(() => {
+    if (!resultDiff) return null;
+    let added = 0;
+    let removed = 0;
+    for (const line of resultDiff.text.split(/\r?\n/)) {
+      if (line.startsWith("+") && !line.startsWith("+++")) added += 1;
+      if (line.startsWith("-") && !line.startsWith("---")) removed += 1;
+    }
+    return { added, removed };
+  }, [resultDiff]);
+  const headerPreview = useMemo(() => getToolPreview(block), [block]);
+  const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
+  const isError = result?.isError ?? false;
+  const hasStructuredPreview = Boolean(resultDiff);
 
   return (
     <div
@@ -913,7 +1035,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     >
 
       <button
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => transcriptViewState.toggleExpanded(sessionId, anchorEntryId, part, defaultExpanded)}
         aria-expanded={expanded}
         className="tool-call-toggle"
         style={{
@@ -1271,7 +1393,11 @@ function TodoChecklistRow({ task }: { task: TodoPreviewTask }) {
   );
 }
 
-function ConsoleOutputPreview({
+/**
+ * bash 输出预览。入参全是原始值，因此整体记忆：条目因别处的展开状态、延迟正文或
+ * 其他无关状态重渲染时，命令高亮与逐行 ANSI 解析都不再重跑。
+ */
+const ConsoleOutputPreview = memo(function ConsoleOutputPreview({
   command,
   output,
   pending,
@@ -1288,9 +1414,35 @@ function ConsoleOutputPreview({
 }) {
   const { isDark } = useTheme();
   const { t } = useI18n();
-  const normalizedLines = normalizeCustomPanelLines(output.split(/\r?\n/));
-  const outputLines = normalizedLines.length === 1 && normalizedLines[0] === "" ? [] : normalizedLines;
+  const outputLines = useMemo(() => {
+    const normalized = normalizeCustomPanelLines(output.split(/\r?\n/));
+    return normalized.length === 1 && normalized[0] === "" ? [] : normalized;
+  }, [output]);
   const statusLabel = pending ? t("chat.runningCommand") : isError ? "failed" : "";
+  // 行分类与 ANSI 解析只随输出与错误态变：一条长命令的输出不会每帧重新高亮一遍。
+  const lineElements = useMemo(
+    () => outputLines.map((line, lineIndex) => {
+      const plainLine = stripAnsi(line).trimStart();
+      const lineClass = isError || /^(?:error|fatal|failed|failure|✖|x\b)/i.test(plainLine)
+        ? "is-error"
+        : /^(?:warning|warn|!)/i.test(plainLine)
+        ? "is-warning"
+        : /^(?:success|passed|ok\b|✓|\+)/i.test(plainLine)
+        ? "is-success"
+        : "";
+      return (
+        <div key={lineIndex} className={`shell-output-line ${lineClass}`.trim()}>
+          {parseAnsiLine(line).map((segment, segmentIndex) => (
+            Object.keys(segment.style).length > 0
+              ? <span key={segmentIndex} style={segment.style}>{segment.text}</span>
+              : <span key={segmentIndex}>{segment.text}</span>
+          ))}
+          {line === "" ? "\u00a0" : null}
+        </div>
+      );
+    }),
+    [outputLines, isError],
+  );
 
   return (
     <div className={`shell-output-preview${isError ? " is-error" : ""}`}>
@@ -1334,26 +1486,7 @@ function ConsoleOutputPreview({
           {outputLines.length === 0 && !pending && (
             <span className="shell-output-empty">{t("i18n.noOutput")}</span>
           )}
-          {outputLines.map((line, lineIndex) => {
-            const plainLine = stripAnsi(line).trimStart();
-            const lineClass = isError || /^(?:error|fatal|failed|failure|✖|x\b)/i.test(plainLine)
-              ? "is-error"
-              : /^(?:warning|warn|!)/i.test(plainLine)
-              ? "is-warning"
-              : /^(?:success|passed|ok\b|✓|\+)/i.test(plainLine)
-              ? "is-success"
-              : "";
-            return (
-              <div key={lineIndex} className={`shell-output-line ${lineClass}`.trim()}>
-                {parseAnsiLine(line).map((segment, segmentIndex) => (
-                  Object.keys(segment.style).length > 0
-                    ? <span key={segmentIndex} style={segment.style}>{segment.text}</span>
-                    : <span key={segmentIndex}>{segment.text}</span>
-                ))}
-                {line === "" ? "\u00a0" : null}
-              </div>
-            );
-          })}
+          {lineElements}
           {pending && (
             <span className="shell-output-pending" aria-label={t("chat.runningCommand")}>▋</span>
           )}
@@ -1365,17 +1498,8 @@ function ConsoleOutputPreview({
       )}
     </div>
   );
-}
+});
 
-
-function getStructuredToolPreview(block: ToolCallContent, phases: TodoPreviewPhase[] | null): string {
-  if (phases) {
-    const tasks = phases.flatMap((phase) => phase.tasks);
-    const completed = tasks.filter((task) => task.status === "completed" || task.status === "abandoned").length;
-    return `${completed}/${tasks.length} tasks`;
-  }
-  return getToolPreview(block);
-}
 
 interface ResultDiff {
   text: string;
@@ -1993,7 +2117,7 @@ function formatUsage(usage: {
   return parts.join(" · ");
 }
 
-function BashExecutionView({ message, sessionId }: { message: BashExecutionMessage; sessionId?: string }) {
+function BashExecutionView({ message, sessionId, turnAnchorEntryId }: { message: BashExecutionMessage; sessionId?: string; turnAnchorEntryId?: string }) {
   const [fullOutput, setFullOutput] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
@@ -2047,7 +2171,7 @@ function BashExecutionView({ message, sessionId }: { message: BashExecutionMessa
 
   return (
     <div style={{ margin: "6px 0" }}>
-      <ToolCallBlock block={block} result={result} />
+      <ToolCallBlock block={block} result={result} sessionId={sessionId} turnAnchorEntryId={turnAnchorEntryId} />
       {message.truncated && fullOutputUrl && (
         <div style={{ padding: "4px 10px", fontSize: 11, marginTop: -1 }}>
           {showFullButton && (

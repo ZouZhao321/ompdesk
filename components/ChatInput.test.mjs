@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -282,4 +283,14 @@ test("hides the context indicator before usage is available", () => {
 
   assert.doesNotMatch(html, /data-context-available/);
   assert.doesNotMatch(html, /\? \/ \?/);
+});
+
+test("draws the input column from the shared transcript geometry", async () => {
+  const source = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
+  // 输入列与转写行盒共用一组版心常量；外层自带的内边距用同一个数，只加一次。
+  assert.match(source, /import \{ RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX \} from "@\/lib\/transcript-rail";/);
+  assert.match(source, /padding: `0 \$\{RAIL_COLUMN_PADDING_PX\}px 8px`/);
+  assert.match(source, /maxWidth: RAIL_COLUMN_WIDTH_PX, margin: "0 auto"/);
+  assert.doesNotMatch(source, /maxWidth: 820\b/);
+  assert.doesNotMatch(source, /padding: "0 16px 8px"/);
 });
