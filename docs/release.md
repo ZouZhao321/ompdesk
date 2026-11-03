@@ -1,199 +1,71 @@
-# Release Checklist
+# 发版流程
 
-This repo publishes two artifacts for each release:
-
-- npm package: `ompdesk`
-- GitHub Release: `ZouZhao321/ompdesk`
-
-Use this checklist from a clean `main` checkout.
-
-## Automated npm publishing
-
-Pushing a version tag matching `v*` starts
-`.github/workflows/publish-npm.yml`. The workflow:
-
-1. Checks that the tag version matches `package.json`.
-2. Installs dependencies with Bun and runs the production build.
-3. Publishes `ompdesk` to npm with provenance.
-
-Before the first release, configure npm trusted publishing for
-`ZouZhao321/ompdesk`:
-
-- workflow file: `.github/workflows/publish-npm.yml`
-- GitHub environment: `npm`
-- publisher: GitHub Actions
-
-The npm package must be configured to trust this repository and workflow, and
-the repository's `npm` environment must permit the release job to run. No npm
-token is stored in GitHub Actions.
-
-
-## 1. Preflight
+发版按需进行。合并到 `main` 的改动先累积在 `CHANGELOG.md` 的「未发布」段落，决定发版时执行 `scripts/release.ts`，分两步：
 
 ```bash
-git status --short --branch
-git log --oneline --decorate -5
-gh auth status
-npm whoami
-bun --version   # the published .next is built with Bun; engines.bun requires 1.3.14+
-node -e "const p=require('./package.json'); console.log(p.version)"
+bun scripts/release.ts patch          # 1.0.26 -> 1.0.27，也可以写 1.1.0、major、minor
+bun scripts/release.ts finish 1.0.27   # 发版 PR 合并之后执行
 ```
 
-Expected:
+两个产物：npm 包 `ompdesk`（`.github/workflows/publish-npm.yml` 在 `v*` 标签推送时发布）与 GitHub Release（`finish` 创建）。
 
-- `git status` is clean, or only contains changes you intentionally plan to release.
-- GitHub is authenticated as an account that can push and create releases.
-- npm is authenticated as an account that can publish `ompdesk`.
+## 准备：开一个发版 PR
 
-## 2. Publish to npm
+`bun scripts/release.ts <版本|major|minor|patch>` 先在本地做检查，全部通过才动手：
 
-```bash
-npm run release
-```
+- 当前在 `main` 且工作区干净；
+- HEAD 不落后于 `origin/main`；
+- `package.json` 的版本等于最新标签（版本号与标签脱节时先对齐）；
+- 目标版本大于最新标签，且本地与远端都没有这个标签；
+- `.worktrees/` 已被 Git 忽略；
+- `CHANGELOG.md` 的「未发布」段落非空。
 
-The release script runs:
+然后：
 
-```bash
-npm version patch --no-git-tag-version && npm run build && npm publish --access public
-```
+1. 从 `origin/main` 建工作副本 `.worktrees/chore/release-<版本>` 与同名分支；
+2. 把 `package.json` 的版本改成目标版本；
+3. 把「未发布」段落转成 `## [<版本>] - <日期>`，并在上面留一个空的「未发布」；
+4. 安装依赖（提交钩子要跑类型检查），提交 `chore(release): 发布 v<版本>`；
+5. 推送分支并开 PR，正文带上这一版的内容。
 
-Notes:
+命令结束时会打印 PR 地址和下一步要执行的 `finish` 命令。
 
-- This bumps `package.json` and `package-lock.json`.
-- It intentionally runs a production build. Do not run `next build` during normal development; release work is the exception.
-- If `npm view ompdesk version` briefly shows the previous version, check the exact version instead:
+加 `--dry-run` 只做检查并打印目标版本与发布内容，不建工作副本、不提交、不推送。
 
-```bash
-npm view ompdesk@<version> version --registry https://registry.npmjs.org/
-npm view ompdesk versions --json --registry https://registry.npmjs.org/
-```
+## 收口：打标签并发出去
 
-## 3. Commit the Version Bump
+发版 PR 合并、`main` 同步之后执行 `bun scripts/release.ts finish <版本>`。检查项：
 
-Replace `<version>` with the new package version, for example `0.7.5`.
+- `main`、工作区干净、HEAD 不落后于 `origin/main`；
+- `package.json` 的版本正是这个版本（发版 PR 已合并）；
+- 本地与远端都没有这个标签；
+- `CHANGELOG.md` 里有这个版本的段落。
 
-```bash
-git diff -- package.json package-lock.json
-git add package.json package-lock.json
-git commit -m "Release v<version>"
-```
+通过后依次执行：
 
-## 4. Tag and Push
+1. 打附注标签 `v<版本>` 并推送；
+2. 用 `CHANGELOG.md` 里这个版本的段落建 GitHub Release，已存在时改成更新说明；
+3. 盯这个提交上的全部 CI 运行，直到都完成；有失败就打印工作流名与链接并以非零退出。
 
-```bash
-git tag -a v<version> -m "v<version>"
-git push origin main --tags
-```
+标签推送会触发 `publish-npm.yml`，因此 `finish` 等待的运行里包含 npm 发布。
 
-Confirm the tag does not already exist before creating it when unsure:
+## 版本号约定
 
-```bash
-git ls-remote --tags origin v<version>
-gh release view v<version> --repo ZouZhao321/ompdesk
-```
+- 只接受三段数字，例如 `1.0.27`；带 `v` 会被规范化，带 `-rc.1` 这类后缀直接拒绝（`publish-npm.yml` 发布时不带 `--tag`，预发布号会顶替 `latest`）。
+- 必须大于最新标签，也必须等于合并进 `main` 的 `package.json` 版本；两者不一致时脚本在动手之前就停下。
+- `patch`、`minor`、`major` 以最新标签为基准递增。
 
-## 5. Generate Release Notes from Commits
+## CHANGELOG 写法
 
-Use the previous release tag as the base.
+「未发布」段落每条一行，格式 `type(scope)：描述（#PR）`。发版时整段搬到新版本标题下，新版本下面重新留一个空的「未发布」。
 
-```bash
-git log --oneline --decorate v<previous>..v<version>
-git log --format='%h%x09%s%n%b' v<previous>..v<version>
-git diff --stat v<previous>..v<version>
-```
+## 前置条件
 
-Write the release notes from those commits, not from memory. Include both Chinese and English sections. Keep commit hashes next to each item when useful.
+- `gh` 已登录，账号能推送分支、建 PR 与 Release。
+- npm 上 `ompdesk` 包已存在；`publish-npm.yml` 用可信发布，未配置可信发布者时需要 `NPM_TOKEN`。
+- provenance 只对公开仓库生成；仓库保持私有时，`publish-npm.yml` 的 `--provenance` 会让发布失败。
 
-Suggested structure:
+## 失败处理
 
-```markdown
-## 中文
-
-基于 `v<previous>..v<version>` 的提交整理。
-
-### 新增
-
-- ...
-
-### 修复
-
-- ...
-
-### 改进
-
-- ...
-
-### 内部调整
-
-- 发布 npm 包 `ompdesk@<version>`。
-
-## English
-
-Prepared from commits in `v<previous>..v<version>`.
-
-### Added
-
-- ...
-
-### Fixed
-
-- ...
-
-### Improved
-
-- ...
-
-### Internal
-
-- Published npm package `ompdesk@<version>`.
-```
-
-## 6. Create or Update the GitHub Release
-
-Create a new release:
-
-```bash
-gh release create v<version> \
-  --repo ZouZhao321/ompdesk \
-  --verify-tag \
-  --title "v<version>" \
-  --notes-file release-notes.md
-```
-
-If the release already exists and only the notes need updating:
-
-```bash
-gh release edit v<version> \
-  --repo ZouZhao321/ompdesk \
-  --notes-file release-notes.md
-```
-
-You can avoid a temporary file by passing notes through stdin:
-
-```bash
-gh release edit v<version> --repo ZouZhao321/ompdesk --notes-file - <<'EOF'
-## 中文
-
-...
-
-## English
-
-...
-EOF
-```
-
-## 7. Final Verification
-
-```bash
-gh release view v<version> --repo ZouZhao321/ompdesk
-npm view ompdesk@<version> version --registry https://registry.npmjs.org/
-git status --short --branch
-git log --oneline --decorate -3
-```
-
-Expected:
-
-- GitHub Release exists and is not a draft unless intentionally published as one.
-- npm exact version resolves.
-- `main` is aligned with `origin/main`.
-- `HEAD` points at the release commit and `v<version>` tag.
+- 准备阶段失败：脚本在改任何文件之前退出，修好检查项重跑即可。
+- `finish` 里 CI 失败：标签已经推出，脚本会打印失败的工作流与链接。修代码走新的 PR 并重新发版；npm 发布失败时在 Actions 里重跑那一次运行，不重复发版本号。
