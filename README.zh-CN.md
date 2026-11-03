@@ -140,7 +140,7 @@ tailscale serve --bg --tcp=30141 tcp://localhost:30141
 
 ### 模型与提供方
 
-- 按角色分配模型：`default`、`smol`、`slow`、`plan`、`commit`、`task`、`advisor`、`vision`、`designer`、`tiny`。
+- 按角色分配模型：`default`、`smol`、`slow`、`vision`、`plan`、`commit`、`tiny`、`memory`、`task`、`advisor`。
 - 在聊天栏把会话切换到某个角色，角色会随该轮记录，与终端里的 `/model` 行为一致。
 - 配置提供方、OAuth（第三方授权登录）与 API key；获取上游模型列表；测试提供方或模型；查看 models.dev 的价格数据。
 - 在模型面板里读写 `models.yml`。
@@ -166,13 +166,13 @@ omp 按工作类型分配模型，并没有一个全局模型。ompdesk 展示�
 | `default` | 普通对话轮次 |
 | `smol` | 子代理与后台任务使用的便宜、快速模型 |
 | `slow` | 难题上的深度推理 |
+| `vision` | 带图片的轮次 |
 | `plan` | 计划模式 |
 | `commit` | 提交信息与更新记录 |
+| `tiny` | 分类与路由 |
+| `memory` | 记忆提取与后台记忆维护 |
 | `task` | 子代理默认使用的模型 |
 | `advisor` | 每轮复核的第二个模型 |
-| `vision` | 带图片的轮次 |
-| `designer` | 界面与设计工作 |
-| `tiny` | 分类与路由 |
 
 聊天栏的模型选择器把角色列在普通模型列表之前。选中的角色会记录进会话，因此会话记录与 omp 的重试回退能看到同一份选择。
 
@@ -284,7 +284,7 @@ bun test
 - [项目信任](./docs/project-trust.md)（英文）：哪些资源需要信任，以及原因。
 - [Git 工作副本](./docs/worktrees.md)（英文）：切换、创建与删除。
 - [国际化](./docs/i18n.md)（英文）：新增语言与界面文案。
-- [发布检查表](./docs/release.md)（英文）：npm 与 GitHub 发布流程。
+- [发布检查表](./docs/release.md)：npm 与 GitHub 发布流程。
 
 ## 参与贡献
 

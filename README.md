@@ -140,7 +140,7 @@ On the phone open `http://<tailnet IPv4>:30141` (read the address with `tailscal
 
 ### Models and providers
 
-- Assign models per role: `default`, `smol`, `slow`, `plan`, `commit`, `task`, `advisor`, `vision`, `designer`, and `tiny`.
+- Assign models per role: `default`, `smol`, `slow`, `vision`, `plan`, `commit`, `tiny`, `memory`, `task`, and `advisor`.
 - Switch a session onto a role from the chat bar; the role is recorded with the turn, matching what `/model` does in the TUI.
 - Configure providers, OAuth logins, and API keys; discover upstream models; test a provider or model; browse models.dev pricing data.
 - Read and write `models.yml` from the Models panel.
@@ -166,13 +166,13 @@ omp has a model per scope of work, not one global model. ompdesk exposes the sam
 | `default` | Ordinary turns |
 | `smol` | Cheap, fast subagent and background work |
 | `slow` | Deep reasoning on hard problems |
+| `vision` | Turns that carry images |
 | `plan` | Plan mode |
 | `commit` | Commit messages and changelogs |
+| `tiny` | Classification and routing |
+| `memory` | Memory extraction and background memory upkeep |
 | `task` | The model subagents spawn with |
 | `advisor` | The second model that reviews every turn |
-| `vision` | Turns that carry images |
-| `designer` | UI and design work |
-| `tiny` | Classification and routing |
 
 The chat bar's model picker lists roles above the flat model list. Picking a role switches the session onto that role's model and records the role, so the transcript and omp's retry fallbacks agree on what drove the turn.
 
