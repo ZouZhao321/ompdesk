@@ -27,15 +27,44 @@ function scriptKindFor(filename) {
   return ts.ScriptKind.TS;
 }
 
-/** 把 options 参数还原成对象字面量：直接写的字面量，或同文件的同名变量声明。 */
-function resolveObjectLiteral(node, declarations) {
+/**
+ * 变量声明按所在作用域建表：同名声明出现在不同块里时各归各的块，解析时沿祖先链取最近的
+ * 那一份。按名字建一张全局表会让后出现的声明盖掉前一份，把没剥离环境的调用判成合规。
+ */
+function declarationScopes(sourceFile) {
+  const scopes = new Map();
+  const collect = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      let scope = node.parent;
+      while (scope && !ts.isBlock(scope) && !ts.isSourceFile(scope)
+        && !ts.isModuleBlock(scope) && !ts.isCaseBlock(scope)) {
+        scope = scope.parent;
+      }
+      if (scope) {
+        if (!scopes.has(scope)) scopes.set(scope, new Map());
+        scopes.get(scope).set(node.name.text, node);
+      }
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFile);
+  return scopes;
+}
+
+/** 把 options 参数还原成对象字面量：直接写的字面量，或作用域链上最近的同名变量声明。 */
+function resolveObjectLiteral(node, scopes) {
   if (!node) return null;
   if (ts.isObjectLiteralExpression(node)) return node;
   if (!ts.isIdentifier(node)) return null;
-  const declaration = declarations.get(node.text);
-  return declaration && ts.isObjectLiteralExpression(declaration.initializer)
-    ? declaration.initializer
-    : null;
+  for (let scope = node.parent; scope; scope = scope.parent) {
+    const declaration = scopes.get(scope)?.get(node.text);
+    if (declaration) {
+      return ts.isObjectLiteralExpression(declaration.initializer)
+        ? declaration.initializer
+        : null;
+    }
+  }
+  return null;
 }
 
 /**
@@ -51,9 +80,9 @@ function isGitLiteral(node) {
  * 子进程 API 的 options 一般排第三位（`execFile(file, args, options)`），`exec` 一类
  * 排第二位。取第一个能还原成对象字面量的实参，两种形状都覆盖。
  */
-function findOptionsArgument(call, declarations) {
+function findOptionsArgument(call, scopes) {
   for (const argument of call.arguments.slice(1)) {
-    const objectLiteral = resolveObjectLiteral(argument, declarations);
+    const objectLiteral = resolveObjectLiteral(argument, scopes);
     if (objectLiteral) return objectLiteral;
   }
   return null;
@@ -71,14 +100,7 @@ export function gitSubprocessCalls(source, filename = "source.ts") {
     true,
     scriptKindFor(filename),
   );
-  const declarations = new Map();
-  const collectDeclarations = (node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      declarations.set(node.name.text, node);
-    }
-    ts.forEachChild(node, collectDeclarations);
-  };
-  collectDeclarations(sourceFile);
+  const declarations = declarationScopes(sourceFile);
 
   const calls = [];
   const visit = (node) => {
