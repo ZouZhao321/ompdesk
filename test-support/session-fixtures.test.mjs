@@ -53,21 +53,31 @@ function fixturesDir(agentDir) {
 }
 
 /**
- * 建目录符号链接；Windows 建符号链接需要管理员或开发者模式，junction 不需要。
- * 环境不支持建链接时标记用例跳过并返回 false，其他错误照常抛出。
+ * 目录符号链接是否可用：Windows 建普通符号链接需要管理员或开发者模式（junction 不需要，
+ * 但目标形态各异）。探测只做一次，跳过给在注册选项上——Bun 的 node:test 实现里
+ * `t.skip()` 会抛 NotImplementedError。
  */
-function linkDirectory(t, target, link) {
+function probeDirectorySymlinks() {
+  const root = mkdtempSync(join(tmpdir(), "ompdesk-link-probe-"));
   try {
-    symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+    mkdirSync(join(root, "target"));
+    symlinkSync(join(root, "target"), join(root, "link"), process.platform === "win32" ? "junction" : "dir");
     return true;
   } catch (error) {
     const code = error?.code;
-    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP") {
-      t.skip("Creating directory symlinks requires additional privileges on this platform");
-      return false;
-    }
+    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP") return false;
     throw error;
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
+}
+
+const SYMLINKS_SUPPORTED = probeDirectorySymlinks();
+const SYMLINK_SKIP_REASON = "Creating directory symlinks requires additional privileges on this platform";
+
+/** 建目录符号链接；链接不可用时用例已在注册时跳过，这里不再兜底。 */
+function linkDirectory(target, link) {
+  symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
 }
 
 function jsonlFiles(dir) {
@@ -398,13 +408,17 @@ async function assertVariantsShareQueue(realAgentDir, variantAgentDir) {
   assert.deepEqual(order, ["first-start", "first-end", "second"]);
 }
 
-test("同一 agentDir 的符号链接与真实路径共用一条队列", async (t) => {
-  const sandbox = createSandbox(t);
-  const linkAgentDir = join(sandbox.root, "agent-link");
-  if (!linkDirectory(t, sandbox.agentDir, linkAgentDir)) return;
+test(
+  "同一 agentDir 的符号链接与真实路径共用一条队列",
+  { skip: SYMLINKS_SUPPORTED ? false : SYMLINK_SKIP_REASON },
+  async (t) => {
+    const sandbox = createSandbox(t);
+    const linkAgentDir = join(sandbox.root, "agent-link");
+    linkDirectory(sandbox.agentDir, linkAgentDir);
 
-  await assertVariantsShareQueue(sandbox.agentDir, linkAgentDir);
-});
+    await assertVariantsShareQueue(sandbox.agentDir, linkAgentDir);
+  },
+);
 
 /**
  * 文件系统是否大小写不敏感：在临时目录里建一个目录，再看它的全大写写法是否指向同一处。
@@ -460,70 +474,82 @@ test("铺样本前清掉替换阶段残留的 .staging- 与 .backup- 目录", as
   assert.deepEqual(infos.map((info) => info.id), [reseeding.id], "残留目录不得变成额外会话");
 });
 
-test("替换残留是指向别处的符号链接时同样被清掉，链接目标保持原样", async (t) => {
-  const sandbox = createSandbox(t);
-  const sessionsDir = fixturesDir(sandbox.agentDir);
-  await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+test(
+  "替换残留是指向别处的符号链接时同样被清掉，链接目标保持原样",
+  { skip: SYMLINKS_SUPPORTED ? false : SYMLINK_SKIP_REASON },
+  async (t) => {
+    const sandbox = createSandbox(t);
+    const sessionsDir = fixturesDir(sandbox.agentDir);
+    await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
 
-  // 链接条目不是目录：只按 isDirectory() 过滤时这些残留会留下来，staging 里的
-  // .jsonl 会被会话列表读成额外会话。
-  const linkTarget = join(sandbox.root, "link-target");
-  mkdirSync(linkTarget, { recursive: true });
-  writeFileSync(join(linkTarget, "keep.jsonl"), "");
-  if (!linkDirectory(t, linkTarget, join(sessionsDir, ".staging-linked"))) return;
-  if (!linkDirectory(t, linkTarget, join(sandbox.agentDir, ".backup-fixture-linked"))) return;
+    // 链接条目不是目录：只按 isDirectory() 过滤时这些残留会留下来，staging 里的
+    // .jsonl 会被会话列表读成额外会话。
+    const linkTarget = join(sandbox.root, "link-target");
+    mkdirSync(linkTarget, { recursive: true });
+    writeFileSync(join(linkTarget, "keep.jsonl"), "");
+    linkDirectory(linkTarget, join(sessionsDir, ".staging-linked"));
+    linkDirectory(linkTarget, join(sandbox.agentDir, ".backup-fixture-linked"));
 
-  await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+    await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
 
-  assert.deepEqual(readdirSync(sessionsDir), ["fixture-single-turn"], "staging 链接必须被清掉");
-  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "备份链接必须被清掉");
-  assert.deepEqual(readdirSync(linkTarget), ["keep.jsonl"], "删除链接不得跟进目标目录");
-});
+    assert.deepEqual(readdirSync(sessionsDir), ["fixture-single-turn"], "staging 链接必须被清掉");
+    assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "备份链接必须被清掉");
+    assert.deepEqual(readdirSync(linkTarget), ["keep.jsonl"], "删除链接不得跟进目标目录");
+  },
+);
 
-test("sessions 下指向别处的非 fixture 符号链接同样被守卫拒绝", async (t) => {
-  const sandbox = createSandbox(t);
-  const sessionsDir = fixturesDir(sandbox.agentDir);
-  mkdirSync(sessionsDir, { recursive: true });
+test(
+  "sessions 下指向别处的非 fixture 符号链接同样被守卫拒绝",
+  { skip: SYMLINKS_SUPPORTED ? false : SYMLINK_SKIP_REASON },
+  async (t) => {
+    const sandbox = createSandbox(t);
+    const sessionsDir = fixturesDir(sandbox.agentDir);
+    mkdirSync(sessionsDir, { recursive: true });
 
-  // 真实的 agent 目录按工作目录分桶：指向真实会话目录的链接必须走同一条拒绝路径，
-  // 否则样本会混进用户会话。
-  const realSessions = join(sandbox.root, "real-sessions");
-  mkdirSync(realSessions, { recursive: true });
-  writeFileSync(join(realSessions, "real.jsonl"), "");
-  const link = join(sessionsDir, "C--Users-alex-project");
-  if (!linkDirectory(t, realSessions, link)) return;
+    // 真实的 agent 目录按工作目录分桶：指向真实会话目录的链接必须走同一条拒绝路径，
+    // 否则样本会混进用户会话。
+    const realSessions = join(sandbox.root, "real-sessions");
+    mkdirSync(realSessions, { recursive: true });
+    writeFileSync(join(realSessions, "real.jsonl"), "");
+    const link = join(sessionsDir, "C--Users-alex-project");
+    linkDirectory(realSessions, link);
 
-  await assert.rejects(
-    () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-    /只允许 fixture-/,
-  );
+    await assert.rejects(
+      () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+      /只允许 fixture-/,
+    );
 
-  assert.deepEqual(readdirSync(realSessions), ["real.jsonl"], "拒绝时不得改动链接目标");
-  assert.deepEqual(readdirSync(sessionsDir), ["C--Users-alex-project"], "拒绝时不得删除链接");
-});
+    assert.deepEqual(readdirSync(realSessions), ["real.jsonl"], "拒绝时不得改动链接目标");
+    assert.deepEqual(readdirSync(sessionsDir), ["C--Users-alex-project"], "拒绝时不得删除链接");
+  },
+);
 
-test("sessions 本身指向 agentDir 之外时铺设与复位都拒绝，且不碰链接目标", async (t) => {
-  const sandbox = createSandbox(t);
-  const outsideSessions = join(sandbox.root, "outside-sessions");
-  const leftover = join(outsideSessions, ".staging-killed");
-  mkdirSync(leftover, { recursive: true });
-  writeFileSync(join(leftover, "keep.jsonl"), "");
-  if (!linkDirectory(t, outsideSessions, join(sandbox.agentDir, "sessions"))) return;
+test(
+  "sessions 本身指向 agentDir 之外时铺设与复位都拒绝，且不碰链接目标",
+  { skip: SYMLINKS_SUPPORTED ? false : SYMLINK_SKIP_REASON },
+  async (t) => {
+    const sandbox = createSandbox(t);
+    const outsideSessions = join(sandbox.root, "outside-sessions");
+    const leftover = join(outsideSessions, ".staging-killed");
+    mkdirSync(leftover, { recursive: true });
+    writeFileSync(join(leftover, "keep.jsonl"), "");
+    linkDirectory(outsideSessions, join(sandbox.agentDir, "sessions"));
 
-  // 名字检查只看 sessions 下的条目：sessions 自己是链接时它会照常放行，清扫与
-  // 写入就落到链接目标。守卫必须在任何写入或删除之前按真实路径拒绝。
-  await assert.rejects(
-    () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-    /必须位于 agentDir 之内/,
-  );
-  await assert.rejects(
-    () => resetSessionFixtures(sandbox.agentDir),
-    /必须位于 agentDir 之内/,
-  );
+    // 名字检查只看 sessions 下的条目：sessions 自己是链接时它会照常放行，清扫与
+    // 写入就落到链接目标。守卫必须在任何写入或删除之前按真实路径拒绝。
+    await assert.rejects(
+      () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+      /必须位于 agentDir 之内/,
+    );
+    await assert.rejects(
+      () => resetSessionFixtures(sandbox.agentDir),
+      /必须位于 agentDir 之内/,
+    );
 
-  assert.deepEqual(readdirSync(outsideSessions), [".staging-killed"], "拒绝时不得在链接目标里新建或删除条目");
-  assert.deepEqual(readdirSync(leftover), ["keep.jsonl"], "拒绝时不得删掉链接目标里的残留");
-});
+    assert.deepEqual(readdirSync(outsideSessions), [".staging-killed"], "拒绝时不得在链接目标里新建或删除条目");
+    assert.deepEqual(readdirSync(leftover), ["keep.jsonl"], "拒绝时不得删掉链接目标里的残留");
+  },
+);
 
 test("会话扫描看不到 agentDir 顶层的替换备份", async (t) => {
   const sandbox = createSandbox(t);
@@ -580,42 +606,50 @@ test("活动 agent 目录与目标 agentDir 相同时拒绝铺样本", async (t)
   assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
 });
 
-test("活动 agent 目录经符号链接指向目标目录时同样拒绝铺样本", async (t) => {
-  const sandbox = createSandbox(t);
-  const link = join(sandbox.root, "agent-link");
-  if (!linkDirectory(t, sandbox.agentDir, link)) return;
+test(
+  "活动 agent 目录经符号链接指向目标目录时同样拒绝铺样本",
+  { skip: SYMLINKS_SUPPORTED ? false : SYMLINK_SKIP_REASON },
+  async (t) => {
+    const sandbox = createSandbox(t);
+    const link = join(sandbox.root, "agent-link");
+    linkDirectory(sandbox.agentDir, link);
 
-  switchAgentDir(link);
-  const before = readdirSync(sandbox.agentDir).sort();
+    switchAgentDir(link);
+    const before = readdirSync(sandbox.agentDir).sort();
 
-  await assert.rejects(
-    () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-    /活动 agent 目录/,
-  );
-
-  assert.deepEqual(readdirSync(sandbox.agentDir).sort(), before, "拒绝时目标目录不得新增文件");
-  assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
-});
-
-test("符号链接下尚未创建的子目录仍按目标目录内部拒绝铺样本", async (t) => {
-  const sandbox = createSandbox(t);
-  const link = join(sandbox.root, "agent-link");
-  if (!linkDirectory(t, sandbox.agentDir, link)) return;
-
-  // 链接存在、叶子不存在：只有把缺失尾段拼回解析后的祖先，才看得出它落在目标之内。
-  const nested = join(link, "unbuilt-child");
-  const before = switchAgentDir(nested);
-  try {
     await assert.rejects(
       () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-      /位于目标 agentDir 内部/,
+      /活动 agent 目录/,
     );
+
+    assert.deepEqual(readdirSync(sandbox.agentDir).sort(), before, "拒绝时目标目录不得新增文件");
     assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
-    assert.equal(existsSync(nested), false, "拒绝时不得在符号链接下创建目录");
-  } finally {
-    restoreAgentDir(before);
-  }
-});
+  },
+);
+
+test(
+  "符号链接下尚未创建的子目录仍按目标目录内部拒绝铺样本",
+  { skip: SYMLINKS_SUPPORTED ? false : SYMLINK_SKIP_REASON },
+  async (t) => {
+    const sandbox = createSandbox(t);
+    const link = join(sandbox.root, "agent-link");
+    linkDirectory(sandbox.agentDir, link);
+
+    // 链接存在、叶子不存在：只有把缺失尾段拼回解析后的祖先，才看得出它落在目标之内。
+    const nested = join(link, "unbuilt-child");
+    const before = switchAgentDir(nested);
+    try {
+      await assert.rejects(
+        () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+        /位于目标 agentDir 内部/,
+      );
+      assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
+      assert.equal(existsSync(nested), false, "拒绝时不得在符号链接下创建目录");
+    } finally {
+      restoreAgentDir(before);
+    }
+  },
+);
 
 test("活动 agent 目录位于真实用户配置根之下时拒绝铺样本", async (t) => {
   const sandbox = createSandbox(t);
@@ -782,9 +816,11 @@ test("resetSessionFixtures 拒绝真实用户配置根下的 agentDir，符号�
 
     await assert.rejects(() => resetSessionFixtures(realAgentDir), /真实用户配置根/);
 
-    // 指向真实 agent 目录的符号链接：字面路径在沙箱里，只有真实路径露出配置根。
-    const link = join(sandbox.root, "agent-link");
-    if (linkDirectory(t, realAgentDir, link)) {
+    // 指向真实 agent 目录的符号链接：字面路径在沙箱里，只有真实路径露出配置根。链接建
+    // 不出来的平台上这一段整段不跑，其余断言仍然生效。
+    if (SYMLINKS_SUPPORTED) {
+      const link = join(sandbox.root, "agent-link");
+      linkDirectory(realAgentDir, link);
       await assert.rejects(() => resetSessionFixtures(link), /真实用户配置根/);
     }
 
