@@ -15,16 +15,17 @@
  * `-C` 之后的仓库发现：前者让上溯提前停下，后者决定能否跨文件系统上溯，钩子里的取值
  * 同样会让命令找到别处仓库，所以一并剥离。
  *
- * `GIT_CONFIG_PARAMETERS` 是外层 git 传给子进程（包括钩子）的 `-c` 参数，`-c
- * core.worktree=<别处>` 一类取值会改掉仓库位置，同样剥离。
+ * 配置来源与提交身份一律保留。`GIT_CONFIG`、`GIT_CONFIG_PARAMETERS`（外层 git 传给
+ * 子进程的 `-c` 参数）、`GIT_CONFIG_COUNT`（连同成对的 `GIT_CONFIG_KEY_<n>` /
+ * `GIT_CONFIG_VALUE_<n>`）由调用方显式提供，用来携带 `safe.directory`、代理与证书设置；
+ * `GIT_CONFIG_GLOBAL` / `GIT_CONFIG_SYSTEM` / `GIT_CONFIG_NOSYSTEM` 只换配置文件位置。
+ * `GIT_AUTHOR_*` / `GIT_COMMITTER_*` 只影响提交身份。取舍是统一的：配置来源按调用方的
+ * 受信任输入处理，一律保留，只剥离直接改变仓库定位与对象库的变量；剥掉其中任一种都会
+ * 替调用方丢掉这些设置，并改变本模块之外所有 git 调用的行为。
  *
- * 刻意保留的是配置来源与提交身份。`GIT_CONFIG` 与 `GIT_CONFIG_COUNT`（连同成对的
- * `GIT_CONFIG_KEY_<n>` / `GIT_CONFIG_VALUE_<n>`）由调用方显式提供，用来携带
- * `safe.directory`、代理与证书设置；`GIT_CONFIG_GLOBAL` / `GIT_CONFIG_SYSTEM` /
- * `GIT_CONFIG_NOSYSTEM` 只换配置文件位置。它们都不改 `-C` 指向的仓库，剥离则会改变本
- * 模块之外所有 git 调用的行为。代价是这些来源里写了 `core.worktree` 仍会生效：调用方
- * 的配置按受信任输入处理，只摘掉钩子会注入的那几个变量。
- * `GIT_AUTHOR_*` / `GIT_COMMITTER_*` 只影响提交身份。
+ * 残余风险：配置来源里写了 `core.worktree` 一类仓库定位键仍会盖过 `-C`，钩子经
+ * `git -c core.worktree=<别处>` 调用时 `GIT_CONFIG_PARAMETERS` 正带着这种取值。要根治
+ * 得在调用点用 `git rev-parse --show-toplevel` 校验目标，而不是把配置来源也删掉。
  */
 export const REPO_LOCATION_ENV_KEYS: readonly string[] = [
   "GIT_DIR",
@@ -39,7 +40,6 @@ export const REPO_LOCATION_ENV_KEYS: readonly string[] = [
   "GIT_QUARANTINE_PATH",
   "GIT_CEILING_DIRECTORIES",
   "GIT_DISCOVERY_ACROSS_FILESYSTEM",
-  "GIT_CONFIG_PARAMETERS",
   "GIT_SHALLOW_FILE",
   "GIT_REPLACE_REF_BASE",
 ];
