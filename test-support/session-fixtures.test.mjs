@@ -349,7 +349,10 @@ test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
       await longPaused;
     },
   });
-  await longInLock;
+  // 铺设可能在握手之前就失败（守卫拒绝、清扫出错）：单等握手会挂到用例超时，把原始
+  // 错误埋掉。两个 promise 一起等，铺设先落定时立刻按它的结果走——失败就重抛原始错误，
+  // 成功则说明它没停在 staging，交给下一行断言。
+  await Promise.race([longInLock, long]);
   assert.ok(hasStagingDirectory(sessionsDir), "先行者应停在 staging 阶段等待放行");
 
   const empty = seedSessions("empty", {
