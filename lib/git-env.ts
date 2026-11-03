@@ -71,11 +71,16 @@ function findEnvKey(env: NodeJS.ProcessEnv, name: string): string | undefined {
 }
 
 /**
- * `GIT_CONFIG_PARAMETERS` 里值的单引号转义：git 的 sq-quote 把字面单引号写成 `'\''`。
- * 值里的反斜杠不参与转义（`'core.worktree'='D:\work'` 就是这样传的），所以只认这一种
- * 序列，别把它当成通用的反斜杠转义。
+ * 单引号段里的转义序列长度，`raw[index]` 处不认识转义时返回 0。git 的 `sq_quote_buf()`
+ * 对段内两种字符输出 `'\X'`：字面单引号（`'\''`）与 `!`（`'\!'`，避开 csh 的历史展开），
+ * `sq_dequote()` 也只认这两种。值里的反斜杠不参与转义（`'core.worktree'='D:\work'`
+ * 就是这样传的），别把它当成通用的反斜杠转义。
  */
-const SQ_QUOTED_QUOTE = "'\\''";
+function quotedEscapeLength(raw: string, index: number): number {
+  if (raw[index] !== "'" || raw[index + 1] !== "\\" || raw[index + 3] !== "'") return 0;
+  const escaped = raw[index + 2];
+  return escaped === "'" || escaped === "!" ? 4 : 0;
+}
 
 /**
  * 读一段 sq-quoted 文本，返回解出的内容与段落结束后的位置。`start` 处必须是开引号；
@@ -86,9 +91,10 @@ function readQuotedSegment(raw: string, start: number): { text: string; end: num
   let text = "";
   let index = start + 1;
   while (index < raw.length) {
-    if (raw.startsWith(SQ_QUOTED_QUOTE, index)) {
-      text += "'";
-      index += SQ_QUOTED_QUOTE.length;
+    const escape = quotedEscapeLength(raw, index);
+    if (escape > 0) {
+      text += raw[index + 2];
+      index += escape;
       continue;
     }
     if (raw[index] === "'") return { text, end: index + 1 };
