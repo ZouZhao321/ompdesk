@@ -144,6 +144,8 @@ jobs:
           fi
 
       - name: Publish build release
+        # PR 上只验装包与起服务；发布只在 main 上做。
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
