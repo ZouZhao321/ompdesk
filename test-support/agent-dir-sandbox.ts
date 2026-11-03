@@ -11,7 +11,7 @@
  */
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { resetSessionIndexForTests } from "@oh-my-pi/pi-coding-agent/session/session-index";
 import {
   getAgentDir,
@@ -29,6 +29,7 @@ const RUNTIME_AGENT_DIR = "runtime/agent";
  *
  * 只有 `mkdtempSync` / `mkdirSync` 这一步的失败用这个类型。切换与复位活动目录另有
  * 错误路径，抛出去的是 SDK 或本模块自己的错误——那些是回归，必须让用例失败。
+ * `options.dirs` 写出沙箱外同样是代码问题，抛的是普通 `Error`，不能被当成环境限制跳过。
  */
 export class SandboxDirectoryCreateError extends Error {
   constructor(target: string, cause: unknown) {
@@ -152,17 +153,46 @@ function warnCleanupFailure(action: string, error: unknown): void {
 }
 
 /**
+ * `options.dirs` 必须是沙箱内的相对片段：绝对路径或含 `..` 的片段会把目录建到沙箱
+ * 之外，删沙箱时删不掉它，用例还会把数据写进真实目录。写错是调用方代码的问题，直接
+ * 抛普通错误——包成 `SandboxDirectoryCreateError` 会被当成环境限制而静默跳过用例。
+ */
+function assertSandboxDirectoryFragment(dir: string): void {
+  const outsideSandbox = dir.length === 0
+    || isAbsolute(dir)
+    || dir.split(/[\\/]/).includes("..");
+  if (outsideSandbox) {
+    throw new Error(`沙箱子目录必须是沙箱内的相对路径：${JSON.stringify(dir)}`);
+  }
+}
+
+/**
  * 建临时目录并铺出子目录。只有这一步的失败包成 `SandboxDirectoryCreateError`：
  * 建不出目录是环境限制，后续的切换与复位失败才是回归。
+ *
+ * 根目录建好之后 `mkdirSync` 才失败的话，这棵临时目录已经没人认领——`t.after` 还没
+ * 注册，先删掉再抛；删不掉只记录，保留目录交给系统回收。
  */
 function createSandboxRoot(options: AgentDirSandboxOptions): string {
-  let root: string | undefined;
+  for (const dir of options.dirs) assertSandboxDirectoryFragment(dir);
+
+  let root: string;
   try {
     root = mkdtempSync(join(tmpdir(), options.prefix));
+  } catch (error) {
+    throw new SandboxDirectoryCreateError(`前缀 ${options.prefix} 的临时目录`, error);
+  }
+
+  try {
     for (const dir of [RUNTIME_AGENT_DIR, ...options.dirs]) mkdirSync(join(root, dir), { recursive: true });
     return root;
   } catch (error) {
-    throw new SandboxDirectoryCreateError(root ?? `前缀 ${options.prefix} 的临时目录`, error);
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch (cleanupError) {
+      warnCleanupFailure(`删除临时目录 ${root}`, cleanupError);
+    }
+    throw new SandboxDirectoryCreateError(root, error);
   }
 }
 
