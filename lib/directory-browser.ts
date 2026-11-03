@@ -50,7 +50,8 @@ export async function listWindowsDrives(): Promise<BrowsableDirectory[]> {
  *   这里判 true，因为它已经限定在 Windows，只是没有根，归一化时要走宿主的盘符当前目录。
  * - `\Users`：Windows 的根相对写法，宿主是 Windows 时这里判 true；它不是绝对路径，
  *   `isWindowsAbsolutePath` 判 false。POSIX 上 `\data\log` 是合法的相对名字，只有
- *   Windows 宿主才按 Windows 判断。
+ *   Windows 宿主才按 Windows 判断。盘符不在判定范围内：`\work` 与 `/work` 都只给到
+ *   当前盘符的根，由 `normalizeDirectory` 按启动器 cwd 的盘符补全。
  * - `//server/share`：任何宿主上都是 UNC，`isWindowsAbsolutePath` 判 true；这里在 POSIX
  *   上判 false。POSIX 上 `//tmp/x` 与 `/tmp/x` 等价，判成 Windows 会让 `path.win32` 把它
  *   归一成 `\\tmp\x`，随后 stat 失败。
@@ -74,16 +75,24 @@ export function normalizeDirectory(directory: string): string {
     return path.resolve(homedir(), suffix);
   }
 
-  // 不能用宿主平台的 `path` 代替：在 Windows 上它把 `/Users/alex/project` 当成
-  // win32 路径解析成 `\\Users\\alex`，POSIX 输入的 `/` 语义会丢。
+  // 不能一律用宿主平台的 `path`：在 Windows 上它把 `/Users/alex/project` 判成盘符路径，
+  // 在 POSIX 上又把 `C:\Users` 当成普通名字。先按输入形态选 API。
   const pathApi = isWindowsPathInput(directory) ? path.win32 : path.posix;
+
+  // 不带盘符的绝对输入（`\work`、`/work`）在 Windows 上指向「当前盘符」的根：原样返回给
+  // 文件系统，就由服务器进程的当前盘符决定，启动器在 D 盘、服务器在 C 盘时 `\work` 会
+  // 落到 `C:\work`。这里按启动器 cwd 的盘符补全，与相对输入共用同一个基准。UNC 输入
+  // （`\\server\share`）自带根，不是根相对，仍走下面的绝对分支。
+  if (process.platform === "win32" && /^[\\/](?![\\/])/.test(directory)) {
+    return path.win32.resolve(process.env.OMPDESK_LAUNCH_CWD ?? process.cwd(), directory);
+  }
+
   // 绝对输入自带根，按输入形态规整即可；交给宿主 path 会把别平台的路径拼成盘符路径。
   // `normalize` 会保留结尾分隔符，同一目录就有 `/a/b/` 与 `/a/b` 两种形态；相对输入分支
   // 用宿主 `resolve` 天然去掉它，这里同样剥掉根目录以外的结尾分隔符。只剥所选 API 的
   // 分隔符：POSIX 下反斜杠是合法文件名字符，`/tmp/foo\` 指的是名字以反斜杠结尾的目录，
-  // 跟着一起剥就指到了别的路径。不能直接用 `pathApi.resolve`：
-  // `path.win32.resolve("\\Users\\alex")` 会补上当前盘符（`C:\Users\alex`），把根相对输入
-  // 指到别处。
+  // 跟着一起剥就指到了别的路径。不能直接用 `pathApi.resolve`：UNC 共享根之外，它还会按
+  // 进程自身的盘符状态补全，把没有根的输入指到别处。
   if (pathApi.isAbsolute(directory)) {
     const normalized = pathApi.normalize(directory);
     const root = pathApi.parse(normalized).root;
