@@ -8,13 +8,17 @@ on:
   push:
     branches:
       - main
+  # 合并后重新出包：main 上的 verify 失败导致没产出时，用它补一次。
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# PR 上新推送取消旧运行就够了；main 上每次合并都要出一个安装包，互相取消会让某次
+# 合并没有产物，所以 main 的运行各自成组，不排队也不取消。
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -59,3 +63,111 @@ jobs:
       # 表现成页面 500；冒烟失败时打印编译日志。
       - name: Verify (typecheck, tests, build, dev smoke)
         run: bun run ci
+
+  # 合并不等于发版：这个作业只产出一个能用 `bun add -g` 装上的 tgz，挂到
+  # `build-v<版本>` 的 prerelease；npm 正式发布仍然只由 publish-npm.yml 的 v* 标签触发。
+  #
+  # 版本取 `<package.json 版本>-<run_number>`（例如 1.0.26-118）：run_number 只增不减，
+  # 每次合并都有独立版本，不需要提交版本号，也不会因为两次合并同时构建而撞号。
+  # patch 位不递增，是因为「上一个是 1.0.27，这次就 1.0.28」只能靠扫 build-v* 标签推算，
+  # 而标签要靠构建串行，并发合并时排队超出的那次会被取消并丢掉产物。
+  #
+  # PR 上也跑一遍装包与起服务：打包这条路要在合并前就验证过，只有发布那一步按分支跳过。
+  package:
+    name: Build install tarball
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # 只改 runner 上的 package.json，不提交：git 里的版本号仍由 v* 标签与发版流程把关。
+      # 不走 `npm version`：它要求工作区干净且依赖 git 状态，这里只需要换一个字段。
+      - name: Stamp build version
+        id: version
+        shell: bash
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          base="$(node -p "require('./package.json').version")"
+          export VERSION="$base-$RUN_NUMBER"
+          node -e "const fs=require('node:fs');const p='package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version=process.env.VERSION;fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build package
+        run: bun run build
+
+      - name: Pack tarball
+        run: npm pack --pack-destination dist
+
+      # 用「下载后安装」这条路本身做验证：装进临时项目，起服务并请求首页。
+      # 不检查全局安装目录的布局：入口 shim 与包体位置随平台变化，断言在 Windows 与
+      # Linux 上并不一致，装得上、起得来才是要保证的结果。
+      - name: Verify the tarball installs and serves
+        shell: bash
+        run: |
+          tgz="$PWD/$(ls dist/*.tgz)"
+          mkdir -p .tmp/pack-check/consumer
+          cd .tmp/pack-check/consumer
+          printf '{"name":"pack-check","private":true}\n' > package.json
+          bun add "$tgz"
+          export PI_CODING_AGENT_DIR="$PWD/agent"
+          ./node_modules/.bin/ompdesk --no-open -p 30198 > server.log 2>&1 &
+          pid=$!
+          code=""
+          for _ in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:30198/ || true)"
+            [ "$code" = "200" ] && break
+            sleep 1
+          done
+          kill "$pid" 2>/dev/null || true
+          if [ "$code" != "200" ]; then
+            echo "首页返回 $code"
+            cat server.log
+            exit 1
+          fi
+
+      - name: Publish build release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          tag="build-v$VERSION"
+          asset="ompdesk-$VERSION.tgz"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "$tag 已存在，跳过"
+            exit 0
+          fi
+          printf '%s\n' \
+            "由提交 $SHA 构建，未发布到 npm。" \
+            "" \
+            "需要 Bun 1.3.14 或更新版本。" \
+            "" \
+            '```bash' \
+            "curl -L -o ompdesk.tgz https://github.com/$REPO/releases/download/$tag/$asset" \
+            "bun add -g ./ompdesk.tgz" \
+            '```' > notes.md
+          gh release create "$tag" "dist/$asset" \
+            --prerelease \
+            --target "$SHA" \
+            --title "Build $VERSION" \
+            --notes-file notes.md
