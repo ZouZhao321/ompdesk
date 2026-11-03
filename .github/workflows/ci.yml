@@ -116,7 +116,7 @@ jobs:
         run: bun run build
 
       - name: Pack tarball
-        run: npm pack --pack-destination dist
+        run: mkdir -p dist && npm pack --pack-destination dist
 
       # 用「下载后安装」这条路本身做验证：装进临时项目，起服务并请求首页。
       # 不检查全局安装目录的布局：入口 shim 与包体位置随平台变化，断言在 Windows 与
