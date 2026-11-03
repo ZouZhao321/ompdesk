@@ -12,9 +12,10 @@ import { basename, dirname, join, resolve } from "node:path";
 /**
  * 目录比较键：真实路径优先，缺失的尾段拼回最近的已存在祖先之上，Windows 上再折叠大小写。
  *
- * 折叠只给 Windows：macOS 默认大小写不敏感，但 `realpath` 已经把已存在的路径按磁盘上的
- * 写法归一，大小写变体自己就会撞在一起；再折叠缺失的尾段，则在大小写敏感的卷上把
- * `Agent` 与 `agent` 并成同一个键，包含关系跟着误判。
+ * 折叠只给 Windows：macOS 默认大小写不敏感，已存在的路径由 native `realpath` 按磁盘上的
+ * 写法归一（JS 版 `realpath` 只解析符号链接、保留输入的大小写，同一个目录的大小写变体会
+ * 得到不同的键）；再折叠缺失的尾段，则在大小写敏感的卷上把 `Agent` 与 `agent` 并成同一个
+ * 键，包含关系跟着误判。
  */
 export function comparableDirectory(directory: string): string {
   const real = realPathOfNearestAncestor(resolve(directory));
@@ -32,7 +33,7 @@ function realPathOfNearestAncestor(absolute: string): string {
   let current = absolute;
   for (;;) {
     try {
-      return join(realpathSync(current), ...missing);
+      return join(realpathSync.native(current), ...missing);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
