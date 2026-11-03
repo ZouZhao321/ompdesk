@@ -34,6 +34,12 @@ export interface SeedOptions {
   title?: string;
   /** 消息时间戳，ISO 字符串，默认 `2026-01-01T00:00:00.000Z`。 */
   timestamp?: string;
+  /**
+   * staging 已建好、样本还没开始写时调用，用于并发用例的确定性握手：这一刻锁已
+   * 持有，正好覆盖「后来者若清扫整棵目录就会删掉先行者中间目录」的窗口。钩子
+   * 阻塞时铺设继续持有锁。
+   */
+  onStagingReady?: () => void | Promise<void>;
 }
 
 export interface SeededSession {
@@ -212,6 +218,7 @@ export async function seedSessions(
     await mkdir(stagingDir, { recursive: true });
 
     try {
+      await options.onStagingReady?.();
       const plan = await buildScenario(scenario, { cwd: options.cwd, title, messageTime }, stagingDir);
       const children = await replaceDirectory(stagingDir, scenarioDir, agentDir, () => plan.extend(scenarioDir));
       return [...plan.sessions, ...children].map((session) => ({
