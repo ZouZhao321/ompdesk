@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { promisify } from "util";
+import { createGitEnv } from "./git-env";
 import type {
   SkillInstallInfo,
   SkillUpdateResult,
@@ -123,9 +124,12 @@ async function resolveGitTreeHash(install: SkillInstallInfo): Promise<string> {
   const folder = skillFolder(install.skillPath!);
   const gitDir = await mkdtemp(join(tmpdir(), "ompdesk-skill-check-"));
 
+  // 三次调用都靠 `--git-dir` 锁定刚建的临时仓库：钩子注入的 GIT_DIR、对象目录与
+  // 配置参数会盖过它，让 init/fetch/rev-parse 读到别处仓库，必须在环境里先摘掉。
   try {
     await execFileAsync("git", ["init", "--bare", gitDir], {
       timeout: GIT_CHECK_TIMEOUT_MS,
+      env: createGitEnv(),
     });
     await execFileAsync("git", [
       `--git-dir=${gitDir}`,
@@ -135,12 +139,12 @@ async function resolveGitTreeHash(install: SkillInstallInfo): Promise<string> {
       "--no-tags",
       repository,
       ref,
-    ], { timeout: GIT_CHECK_TIMEOUT_MS });
+    ], { timeout: GIT_CHECK_TIMEOUT_MS, env: createGitEnv() });
     const revision = folder ? `FETCH_HEAD:${folder}` : "FETCH_HEAD^{tree}";
     const { stdout } = await execFileAsync(
       "git",
       [`--git-dir=${gitDir}`, "rev-parse", revision],
-      { timeout: GIT_CHECK_TIMEOUT_MS },
+      { timeout: GIT_CHECK_TIMEOUT_MS, env: createGitEnv() },
     );
     const hash = stdout.trim();
     if (!/^[0-9a-f]{40}$/i.test(hash)) throw new Error("Invalid Git tree hash");

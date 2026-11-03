@@ -3,7 +3,7 @@
 # 三层，越往后越贵，每层拦下一层拦不住的东西：
 # - commit-msg：提交标题格式，毫秒级
 # - pre-commit：类型检查，十秒级
-# - pre-push：与 CI 的 verify job 同一条流水线（类型检查、构建、开发冒烟）
+# - pre-push：与 CI 同一条 `bun run ci`（typecheck → test → build → 开发冒烟）
 #
 # 临时跳过某一步：SKIP=typecheck git commit ...
 default_install_hook_types: [commit-msg, pre-commit, pre-push]
