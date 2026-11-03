@@ -119,6 +119,13 @@ session-archive.ts   归档标记读写
 session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
 session-title.ts     omp 自带标题生成器的薄封装
 telemetry.ts         OTLP 导出：进程内注册一次 provider，每会话给配置，轮末 flush
+transcript-follow.ts 跟随开关的判定：提交与回到底部的处置、跳转停跟随、滚动位置的观测
+transcript-items.ts  把消息数组切成“一轮一项”的扁平条目：锚点、可见过程消息、正式回答与尾部
+transcript-live-tail.ts 把流式消息作为列表末尾的合成项接到条目数组，键与定位和条目同源
+transcript-rail.ts   提问跳转条的几何：落位与隐藏阈值、圆点、当前轮、压缩节距与逐轮步进
+transcript-rail-jump.ts 跳转的待清算目标：列表停稳或兜底到期时按实测高度只重新对齐一次
+transcript-view-state.ts 按会话与轮锚点保存过程组/工具块的展开状态与已取回的延迟内容正文
+transcript-virtual-list.ts 虚拟列表要的条目键与首屏定位，以及跟随输出开关
 skills-service.ts    loadSkills 与会话一致性的封装
 goal-mode.ts         目标模式状态机
 git-changes.ts       工作区改动状态与单文件差异
@@ -169,6 +176,7 @@ PanelViewIcon.tsx   视图标签与入口的图标
 FileViewer.tsx      文件标签页的内容
 TabBar.tsx          右侧面板标签栏（文件浏览器 / Git / 子代理 / 注释互译 / 已打开文件）
 TurnWrittenFiles.tsx 单轮写入文件列表
+TranscriptRail.tsx  对话列右外侧的提问跳转条：圆点、悬停提示、上一条与下一条
 ```
 
 ## hooks/

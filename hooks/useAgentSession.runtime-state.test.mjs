@@ -1,30 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-import ts from "typescript";
-
-const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
-const ast = ts.createSourceFile("useAgentSession.ts", source, ts.ScriptTarget.Latest, true);
-const callbacks = new Map();
-function collect(node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
-    && node.initializer && ts.isCallExpression(node.initializer)
-    && node.initializer.expression.getText(ast) === "useCallback") {
-    callbacks.set(node.name.text, node.initializer.arguments[0].getText(ast));
-  }
-  ts.forEachChild(node, collect);
-}
-collect(ast);
-
-// Execute the production callbacks, stripping only TypeScript syntax. Network,
-// React setters and browser storage are doubles; no copy of the guard logic.
-function callback(name, bindings) {
-  assert.ok(callbacks.has(name), `Missing callback: ${name}`);
-  const { outputText } = ts.transpileModule(`const callback = ${callbacks.get(name)};`, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022 },
-  });
-  return new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(...Object.values(bindings));
-}
+import { callback } from "./useAgentSession.test-support.mjs";
 
 const response = (data) => ({ ok: true, json: async () => data });
 const live = (runtimeId = "runtime:r2") => ({ sessionId: "b", runtimeId, isStreaming: true });
@@ -54,6 +30,14 @@ function harness() {
     agentRunningRef: { current: true },
     bashRunningRef: { current: true },
     modelSwitchPendingRef: { current: false },
+    activeLeafIdRef: { current: null },
+    // 最近一次真的载入成功的叶子：载入失败的退回目标。
+    appliedLeafIdRef: { current: null },
+    // 运行时确认停在上面的叶子：整段载入与成功的导航命令一起写。
+    runtimeLeafIdRef: { current: null },
+    // 在途导航与导航代数：整段载入靠它们判断自己的提交是否已过期。
+    navigatingLeafRef: { current: null },
+    navigationGenerationRef: { current: 0 },
     opts: {},
     onSessionForked: (...args) => effects.push(["identity", ...args]),
     rememberSessionContinuation: (sessionId, runtimeId) => { continuation.current = { sessionId, runtimeId }; },
@@ -80,6 +64,8 @@ function harness() {
   }
   bindings.followSessionIdentity = callback("followSessionIdentity", bindings);
   bindings.followRuntimeState = callback("followRuntimeState", bindings);
+  // 叶子的唯一写入口：状态与去重用的 ref 由它一起写，测试跑的是同一份代码。
+  bindings.applyActiveLeaf = callback("applyActiveLeaf", bindings);
   return { bindings, effects, continuation };
 }
 

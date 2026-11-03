@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -11,6 +12,8 @@ const jiti = createJiti(import.meta.url, {
 const { MessageView } = await jiti.import("./MessageView.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 const { ImagePreviewProvider } = await jiti.import("./ImageZoom.tsx");
+const { transcriptViewState, thinkingPart } = await jiti.import("../lib/transcript-view-state.ts");
+const source = await readFile(new URL("./MessageView.tsx", import.meta.url), "utf8");
 
 function renderMessage(message, { withPreview = false } = {}) {
   const view = React.createElement(MessageView, { message });
@@ -221,6 +224,132 @@ test("renders thinking markdown directly without a collapsible card", () => {
   assert.match(html, /class="markdown-thinking"/);
   assert.match(html, /<strong>Direct thought<\/strong>/);
   assert.doesNotMatch(html, /aria-expanded/);
+});
+
+test("skips the loading state once a deferred thought has been fetched", (t) => {
+  // 单例里写入的正文会跨用例存活，结束时按会话清掉，避免顺序相关。
+  t.after(() => transcriptViewState.forgetSession("session-thinking"));
+  const message = {
+    role: "assistant",
+    provider: "openai",
+    model: "gpt-test",
+    content: [{ type: "thinking", thinking: "", deferred: true }],
+  };
+  const renderThinking = () => renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(MessageView, {
+        message,
+        sessionId: "session-thinking",
+        entryId: "entry-thinking",
+        turnAnchorEntryId: "entry-thinking",
+      }),
+    ),
+  );
+
+  assert.match(renderThinking(), /Loading thinking\.\.\./);
+
+  // 内容取回过之后条目被卸载重建：正文与标记一起在视图状态里，首帧就是正文，
+  // 既不再请求也不回落占位文案。
+  transcriptViewState.markLoaded("session-thinking", "entry-thinking", thinkingPart("entry-thinking", 0), "先看一下这条消息");
+
+  const html = renderThinking();
+  assert.doesNotMatch(html, /Loading thinking/);
+  assert.match(html, /markdown-thinking-body/);
+  assert.match(html, /先看一下这条消息/);
+  assert.doesNotMatch(html, /class="markdown-thinking-status"/);
+  assert.doesNotMatch(html, /class="markdown-thinking-error"/);
+});
+
+test("settles a fetched thought through the view state even after unmounting", () => {
+  // 请求途中条目被虚拟列表卸载时这次挂载不再收正文（cancelled），但正文必须先落进
+  // 视图状态，滚回来重建才不用重新请求。SSR 不跑 effect，这里只锁调用形状；落库与
+  // 「重建不再请求」由 lib/transcript-view-state.test.mjs 的 settleDeferredContent 用例覆盖。
+  const start = source.indexOf("void loadThinkingContent");
+  const handler = source.slice(start, source.indexOf("}, [block.deferred", start));
+  assert.match(handler, /settleDeferredContent\([\s\S]*?cancelled \? null : setContent/);
+  assert.doesNotMatch(handler, /if \(cancelled\) return;/);
+});
+
+test("renders an available thought ahead of loading and error markup", () => {
+  // 正文与思考错误同时在手的那一帧要跑 effect 才可能出现，SSR 走不到；这里锁真实排版：
+  // 正文在，加载态与错误文案的类名都不在。优先级本身由 lib/message-display.test.mjs
+  // 的 thinkingDisplayState 用例覆盖。
+  transcriptViewState.markLoaded(
+    "session-precedence",
+    "entry-precedence",
+    thinkingPart("entry-precedence", 0),
+    "先想一下再回答",
+  );
+
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(MessageView, {
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "gpt-test",
+          content: [{ type: "thinking", thinking: "", deferred: true }],
+        },
+        sessionId: "session-precedence",
+        entryId: "entry-precedence",
+        turnAnchorEntryId: "entry-precedence",
+      }),
+    ),
+  );
+
+  assert.match(html, /先想一下再回答/);
+  assert.doesNotMatch(html, /class="markdown-thinking-status"/);
+  assert.doesNotMatch(html, /class="markdown-thinking-error"/);
+});
+
+test("keeps bash and todo blocks off the expand-state subscription", () => {
+  // 展开状态只在折叠卡片里读：bash 与待办在前面就提前返回，不该订整个视图仓库。
+  assert.equal(source.match(/useTranscriptExpanded\(/g)?.length, 1);
+  const cardIndex = source.indexOf("function ToolCallCard(");
+  assert.ok(cardIndex !== -1, "MessageView must declare ToolCallCard");
+  assert.ok(
+    source.indexOf("useTranscriptExpanded(") > cardIndex,
+    "useTranscriptExpanded must live in ToolCallCard",
+  );
+  // bash 输出预览记忆化，行切分与高亮都收在 useMemo 里，展开别处的块不再重跑。
+  assert.match(source, /const ConsoleOutputPreview = memo\(function ConsoleOutputPreview\(/);
+  assert.match(source, /\{lineElements\}/);
+});
+
+test("reads a deferred thought that was saved without a session id", () => {
+  // 还没落盘的会话没有 sessionId：写入落在空会话桶，读也只按 entryId 定位，
+  // 读写因此落在同一个位置。
+  // 这里只锁首帧：SSR 不跑 effect，effect 里「已有正文就不落错误」的那条分支由
+  // lib/transcript-view-state.test.mjs 的 planDeferredContent 用例覆盖。
+  transcriptViewState.markLoaded(
+    undefined,
+    "entry-unsaved",
+    thinkingPart("entry-unsaved", 0),
+    "尚未落盘的正文",
+  );
+
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(MessageView, {
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "gpt-test",
+          content: [{ type: "thinking", thinking: "", deferred: true }],
+        },
+        entryId: "entry-unsaved",
+      }),
+    ),
+  );
+
+  assert.match(html, /尚未落盘的正文/);
+  assert.doesNotMatch(html, /Loading thinking/);
 });
 
 const userImageMessage = {

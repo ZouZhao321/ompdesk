@@ -160,25 +160,33 @@ body {
   background: var(--text-dim);
 }
 
+/* 转写区隐藏滚动条，与既有观感一致，跳转条因此不需要为滚动条留白。隐藏只写在这里，
+   组件的 className 不再挂 [scrollbar-width:none]：两处来源会互相覆盖，改一处就漏一处。 */
 .chat-session-scroll {
+  scrollbar-width: none;
+}
+
+/* 不认识 scrollbar-width 的旧 Chromium 走这条兜底；两者都命中时标准属性生效，
+   伪元素规则不再参与渲染。 */
+.chat-session-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 跳转条被移动档、窄转写区或单轮条件收起时，位置反馈只剩滚动条：这一档恢复一条
+   细滚动条，避免两种导航方式同时消失。类由 ChatWindow 按跳转条自己报告的可见性挂。 */
+.chat-session-scroll--rail-hidden {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
-  scrollbar-gutter: stable;
 }
-
-.chat-session-scroll::-webkit-scrollbar {
+.chat-session-scroll--rail-hidden::-webkit-scrollbar {
+  display: block;
   width: 8px;
 }
-
-.chat-session-scroll::-webkit-scrollbar-thumb {
+.chat-session-scroll--rail-hidden::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--text-dim) 65%, transparent);
   border: 2px solid transparent;
   background-clip: content-box;
   border-radius: 999px;
-}
-
-.chat-session-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text);
 }
 
 :root {
@@ -1572,6 +1580,202 @@ span.linenumber {
   overflow: hidden;
 }
 
+/*
+ * 转写区的宽度常数集中在这里声明，下面所有位置与阈值都由它们派生：
+ * - 版心 820px 与内边距 16px 由 lib/transcript-rail.ts 的 RAIL_COLUMN_WIDTH_PX /
+ *   RAIL_COLUMN_PADDING_PX 给出，components/ChatWindow.tsx 的行盒读同一组常量；
+ * - 车道 36px、缝隙与最小留白只在这里声明，跳转条宽度也由这里给出。
+ */
+.chat-transcript-region {
+  /* 车道与跳转条都绝对定位：定位祖先由这条规则自己给出，不再隐含依赖行盒上的
+     Tailwind relative——那个类一被删，跳转条就会静默改挂到整列上。 */
+  position: relative;
+  /* 版心与内边距由 ChatWindow 从 lib 常量内联注入，这里不再保留第二份取值。 */
+  --transcript-rail-lane: 36px;
+  /* 跳转条与对话列之间留的缝隙。 */
+  --transcript-rail-gap: 6px;
+  /* 跳转条右边缘的最小留白。转写区隐藏滚动条，跳转条不需要为它让位。 */
+  --transcript-rail-margin: 4px;
+  /* 悬停提示与车道之间的间距。 */
+  --transcript-rail-tip-gap: 8px;
+  /* 跳转条左缘相对转写区中线的偏移：版心一半 + 内边距 + 缝隙。 */
+  --transcript-rail-inset: calc(
+    var(--chat-column-width) / 2 + var(--chat-column-padding) + var(--transcript-rail-gap)
+  );
+  /* 放得下车道的最小转写区宽度：中线到跳转条左缘、车道、右边缘留白两侧对称。 */
+  --transcript-rail-min-region: calc(
+    2 * (var(--transcript-rail-inset) + var(--transcript-rail-lane) + var(--transcript-rail-margin))
+  );
+}
+/* 跳转条车道：铺满转写区，只承载隐藏判定。位置一律按转写区中线算，容器查询的条件
+   里写不了 calc，阈值照 --transcript-rail-min-region 减一写成字面量。 */
+.transcript-rail-lane {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  /* 车道自带 layout containment，是独立的层叠上下文；层级写在车道上，整条
+     跳转条（圆点与提示）才稳定压在滚动容器之上、始终接收指针事件。 */
+  z-index: 30;
+  pointer-events: none;
+  container: transcript-rail-lane / inline-size;
+}
+
+/* 提问跳转条：绝对定位，不参与布局。宽度就是车道宽，左缘钉在对话列右侧的缝隙上，
+   右缘与转写区右边缘至少留 --transcript-rail-margin。 */
+.transcript-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: max(
+    var(--transcript-rail-margin),
+    calc(50% - var(--transcript-rail-inset) - var(--transcript-rail-lane))
+  );
+  width: var(--transcript-rail-lane);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.transcript-rail > * {
+  pointer-events: auto;
+}
+.transcript-rail-dots {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+}
+/* 行高由 lib/transcript-rail.ts 的 railDotPitch 给出：空间足够时以 RAIL_ROW_PX
+   为上限，圆点多到放不下时按数量压缩，所有提问都保留一个可见圆点；这里只画
+   圆点与胶囊，尺寸由 --rail-dot-mark 跟着节距走。 */
+.transcript-rail-dot {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: var(--transcript-rail-lane);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.transcript-rail-dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: 6px;
+}
+.transcript-rail-dot-mark {
+  display: block;
+  width: var(--rail-dot-mark, 6px);
+  height: var(--rail-dot-mark, 6px);
+  border-radius: 999px;
+  background: var(--text-dim);
+  transition: width 0.12s ease, background-color 0.12s ease;
+}
+.transcript-rail-dot:hover .transcript-rail-dot-mark,
+.transcript-rail-dot:focus-visible .transcript-rail-dot-mark {
+  width: min(12px, calc(var(--rail-dot-mark, 6px) * 2));
+  background: var(--accent-hover);
+}
+.transcript-rail-dot[aria-current="true"] .transcript-rail-dot-mark {
+  width: min(12px, calc(var(--rail-dot-mark, 6px) * 2));
+  background: var(--accent);
+}
+/* 圆点的可访问描述：提问开头的文字版，只有屏幕阅读器读得到；
+   悬停提示本身是 aria-hidden 的浮层，读屏无法取用。 */
+.transcript-rail-prompt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.transcript-rail-step {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+/* 命中区：可见高度 20px 不变，上下各扩 2px 补到 24px；扩出的部分落在与圆点列之间
+   的 4px 间隙里，不压住相邻圆点。 */
+.transcript-rail-step::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+}
+.transcript-rail-step:hover:not(:disabled),
+.transcript-rail-step:focus-visible {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+.transcript-rail-step:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* 到头的那一端保持禁用样式：底色与图标颜色固定，不随悬停变成强调色。 */
+.transcript-rail-step:disabled {
+  opacity: 0.35;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: default;
+}
+/* 悬停提示放在圆点列之外，浮层不参与列布局。右偏移就是车道宽加上间距，
+   两个数都从容器变量来，组件不再手算。 */
+.transcript-rail-tip {
+  position: absolute;
+  right: calc(var(--transcript-rail-lane) + var(--transcript-rail-tip-gap));
+  transform: translateY(-50%);
+  width: max-content;
+  max-width: 240px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* 放不下整条车道即藏起来：943 是 --transcript-rail-min-region (944px) 减一，宽度小于
+   最小宽度就收起，避免跳转条压到正文右缘、抢走点击。 */
+@container transcript-rail-lane (max-width: 943px) {
+  .transcript-rail {
+    display: none;
+  }
+}
+/* 不支持内联尺寸容器查询的浏览器读不到上一条隐藏规则，跳转条会一直显示并在窄转写区
+   压住正文右缘。这里按同一选择器整体收起：宁可没有跳转条，也不让它盖住正文。 */
+@supports not (container-type: inline-size) {
+  .transcript-rail {
+    display: none;
+  }
+}
+
 /* Keep the panel border as the idle separator; this element only expands the hit target. */
 .panel-resize-handle {
   position: relative;
@@ -1709,6 +1913,11 @@ span.linenumber {
 @media (max-width: 768px), (pointer: coarse) and (max-width: 1023px) {
   .chat-stats-center {
     display: none !important;
+  }
+  /* 移动档不出跳转条：纯 CSS 隐藏，首帧就生效，不会先画出来再消失。
+     与桌面档的 .transcript-rail 同优先级，靠后面的声明覆盖，不需要 !important。 */
+  .transcript-rail {
+    display: none;
   }
   .sidebar-container {
     position: fixed !important;
