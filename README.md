@@ -86,7 +86,7 @@ The lock is HTTP Basic Auth on every page and API route, with the fixed username
 
 The password is stored as a `scrypt` digest in `~/.omp/agent/ompdesk-auth.json` with mode `0600`. The plaintext is never written anywhere. If it is lost, run `ompdesk --reset-password` on the server, or open `/recover` and enter the one-time code ompdesk prints on its own console.
 
-Basic Auth authenticates but does not encrypt. Do not expose plain HTTP to an internet path: put a TLS reverse proxy or a trusted VPN in front of anything that leaves the machine. Full details, including the recovery limits: [docs/authentication.md](./docs/authentication.md).
+Basic Auth authenticates but does not encrypt. Do not expose plain HTTP to an internet path: put a TLS reverse proxy or a trusted VPN in front of anything that leaves the machine. Full details, including the recovery limits: [docs/authentication.md](./docs/authentication.md). Report vulnerabilities privately through [SECURITY.md](./SECURITY.md), not a public issue.
 
 ## Deployment
 
@@ -276,6 +276,7 @@ Do not run `bun run build` during local development: it writes to `.next/` and i
 
 - [Deployment](./docs/deployment.md) (Chinese): loopback rule, local, Docker, and remote access.
 - [Password access](./docs/authentication.md): storage, recovery, and the threat model.
+- [Security policy](./SECURITY.md): supported versions, reporting, and scope.
 - [Logging](./docs/logging.md): record shape, event names, levels, and what is never logged.
 - [Telemetry](./docs/telemetry.md) (Chinese): OTLP endpoints, signals, flush timing.
 - [Project trust](./docs/project-trust.md): what is gated and why.

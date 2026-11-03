@@ -86,7 +86,7 @@ ompdesk
 
 密码以 `scrypt` 摘要保存在 `~/.omp/agent/ompdesk-auth.json`，文件权限为 `0600`。明文不会写入任何位置。忘记密码时，在服务器上运行 `ompdesk --reset-password`，或者打开 `/recover`，输入 ompdesk 打印在自己终端上的一次性恢复码。
 
-Basic Auth 只做身份校验，不加密传输。不要把明文 HTTP 暴露到不可信网络；离开本机的访问应当经过 TLS 反向代理或可信 VPN。凭据存储、恢复流程与风险边界见 [认证说明](./docs/authentication.md)（英文）。
+Basic Auth 只做身份校验，不加密传输。不要把明文 HTTP 暴露到不可信网络；离开本机的访问应当经过 TLS 反向代理或可信 VPN。凭据存储、恢复流程与风险边界见 [认证说明](./docs/authentication.md)（英文）。漏洞请通过 [SECURITY.md](./SECURITY.md) 私下报告，不要开公开 issue。
 
 ## 部署
 
@@ -276,6 +276,7 @@ bun test
 
 - [部署](./docs/deployment.md)：只绑回环的规则、本机、Docker 与远程访问。
 - [认证](./docs/authentication.md)（英文）：密码存储、恢复流程与风险边界。
+- [安全策略](./SECURITY.md)（英文）：支持范围、报告方式与检查范围。
 - [运行日志](./docs/logging.md)（英文）：记录格式、事件名、等级与不会记录的内容。
 - [遥测](./docs/telemetry.md)：OTLP 端点、信号开关与刷新时机。
 - [项目信任](./docs/project-trust.md)（英文）：哪些资源需要信任，以及原因。
