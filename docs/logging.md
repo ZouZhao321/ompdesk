@@ -234,7 +234,7 @@ port).
 | Area | Actions |
 | --- | --- |
 | Sessions | `session.delete`, `session.rename`, `session.archive` |
-| Worktrees | `worktree.create`, `worktree.remove` |
+| Worktrees | `worktree.create`, `worktree.reuse`, `worktree.remove` |
 | Models | `models.config.write`, `models.role.write` |
 | Plugins | `plugin.install`, `plugin.uninstall`, `plugin.update`, `plugin.enable`, `plugin.disable` |
 | Skills | `skill.install`, `skill.update`, `skill.toggle` |

@@ -1524,7 +1524,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             )}
                                   <PathLabel text={branch.name} style={{ flex: 1 }} />
                                   <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>
-                                    {holderPath ? (isMain ? t("sidebar.main") : t("sidebar.hasCheckout")) : t("sidebar.branchNoCheckout")}
+                                    {holderPath ? (isMain ? t("sidebar.mainCheckout") : t("sidebar.hasCheckout")) : t("sidebar.branchNoCheckout")}
                                   </span>
                           </button>
                                 {holderPath && !isMain && (

@@ -191,7 +191,7 @@ export const zhCNLocale: LocalePlugin = {
         "sidebar.hasCheckout": "有副本",
         "sidebar.branchNoCheckout": "无副本",
         "sidebar.branchNoCheckoutTitle": "分支 {branch} 还没有工作副本，选择后建立",
-    "sidebar.main": "主分支",
+        "sidebar.mainCheckout": "主检出",
     "sidebar.forceRemoveCheckout": "存在未提交的更改。强制移除 checkout？",
     "sidebar.force": "强制移除",
     "sidebar.createWorktreeTitle": "为分支创建 worktree checkout",

@@ -191,7 +191,7 @@ export const enLocale: LocalePlugin = {
         "sidebar.hasCheckout": "Checkout",
         "sidebar.branchNoCheckout": "No checkout",
         "sidebar.branchNoCheckoutTitle": "Branch {branch} has no checkout yet; selecting it creates one",
-    "sidebar.main": "main",
+        "sidebar.mainCheckout": "Main checkout",
     "sidebar.forceRemoveCheckout": "Uncommitted changes. Force remove checkout?",
     "sidebar.force": "Force",
     "sidebar.createWorktreeTitle": "Create a worktree checkout for a branch",

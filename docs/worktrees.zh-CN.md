@@ -14,9 +14,14 @@ ompdesk 会把同一个 Git 项目的 main checkout 和 linked worktree 放在�
 
 如果你在仓库子目录里，先从项目选择器打开仓库根目录，再管理 worktree。
 
-## 切换 Worktree 会影响什么
+## 切换分支会影响什么
 
-worktree 切换器决定 ompdesk 接下来使用哪个 checkout。
+worktree 切换器列出的是仓库的本地分支，不是 checkout 目录。每一行标出这条分支是否已有副本：
+
+- 已有副本：选中后直接切到那个 checkout，不新建目录。
+- 没有副本：选中后先在 `<repo>-worktrees/<branch>` 建一份，再切过去。
+
+一条分支同一时刻只能被一个 checkout 占用，所以列表按分支而不是按目录组织。
 
 它会影响：
 
@@ -48,11 +53,13 @@ ompdesk 会把 checkout 放在：
 /Users/alex/Documents/Workspace/ompdesk-worktrees/codex-worktree-help
 ```
 
-如果这个 branch 已存在，ompdesk 会为它添加 worktree。如果 branch 不存在，ompdesk 会从当前 `HEAD` 创建这个 branch。
+如果这条 branch 已有副本，ompdesk 直接复用。branch 存在但没有副本时补一份；branch 不存在时从当前 `HEAD` 创建。
+
+两条 branch 名压平后可能落到同一个目录名：`feat/a-b` 与 `feat/a/b` 都会变成 `feat-a-b`。后建的一份追加序号后缀（`feat-a-b-2`），不覆盖先建的那份。
 
 ## 删除 Worktree
 
-非 main worktree 右侧有删除按钮。它删除的是这个 checkout 目录。
+每一行分支只要它的副本不是主检出，右侧就有删除按钮；它删除的是那个 checkout 目录。
 
 删除 worktree 不会删除：
 
