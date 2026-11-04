@@ -423,7 +423,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
-  const [homeDir, setHomeDir] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState("");
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
@@ -704,12 +703,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     }
     savePersistedRunningSessionIds(runningSessionIds);
   }, [activityPolled, initialRestoreSettled, runningSessionIds, selectedSessionId]);
-
-  useEffect(() => {
-    fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
-      if (d.home) setHomeDir(d.home);
-    }).catch(() => {});
-  }, []);
 
   const restoredRef = useRef(false);
 
