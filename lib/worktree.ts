@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { existsSync, mkdirSync, realpathSync } from "fs";
-import { basename, dirname, join, resolve } from "path";
+import { basename, dirname, join, normalize, resolve } from "path";
 import { promisify } from "util";
 import { allowFileRoot } from "./allowed-roots";
 import { createGitEnv } from "./git-env";
@@ -32,6 +32,14 @@ export interface WorktreeInfo {
   path: string;
   branch: string | null;
   isMain: boolean;
+}
+
+export interface BranchInfo {
+  name: string;
+  /** Path of the checkout that currently holds this branch, null when none does */
+  worktreePath: string | null;
+  /** True for the branch checked out at the cwd the list was requested for */
+  current: boolean;
 }
 
 declare global {
@@ -130,31 +138,24 @@ async function getRepoRoot(cwd: string): Promise<string> {
   return dirname(commonDir);
 }
 
-export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
-  const out = await git(cwd, ["worktree", "list", "--porcelain"]);
-  const worktrees: WorktreeInfo[] = [];
-  let current: (Partial<WorktreeInfo> & { prunable?: boolean }) | null = null;
+interface RawWorktree {
+  path: string;
+  branch: string | null;
+  prunable: boolean;
+}
 
+function parseWorktreeList(out: string): RawWorktree[] {
+  const parsed: RawWorktree[] = [];
+  let current: RawWorktree | null = null;
   const flush = () => {
-    if (current?.path) {
-      // Prunable worktrees point at missing/broken gitdirs and cannot be
-      // browsed or selected usefully. Also skip vanished paths even if git has
-      // not marked them prunable yet.
-      if (!current.prunable && existsSync(current.path)) {
-        worktrees.push({
-          path: current.path,
-          branch: current.branch ?? null,
-          isMain: worktrees.length === 0,
-        });
-      }
-    }
+    if (current?.path) parsed.push(current);
     current = null;
   };
 
   for (const line of out.split("\n")) {
     if (line.startsWith("worktree ")) {
       flush();
-      current = { path: line.slice("worktree ".length).trim() };
+      current = { path: normalize(line.slice("worktree ".length).trim()), branch: null, prunable: false };
     } else if (line.startsWith("branch ") && current) {
       current.branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "");
     } else if (line.startsWith("prunable") && current) {
@@ -164,11 +165,78 @@ export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
     }
   }
   flush();
-  return worktrees;
+  return parsed;
+}
+
+export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
+  const raw = parseWorktreeList(await git(cwd, ["worktree", "list", "--porcelain"]));
+  const mainPath = raw[0]?.path;
+  // Prunable worktrees point at missing/broken gitdirs and cannot be browsed
+  // or selected usefully. Also skip vanished paths even if git has not marked
+  // them prunable yet.
+  return raw
+    .filter((wt) => !wt.prunable && existsSync(wt.path))
+    .map((wt) => ({ path: wt.path, branch: wt.branch, isMain: wt.path === mainPath }));
+}
+
+export async function listBranches(cwd: string): Promise<BranchInfo[]> {
+  const [refs, worktrees] = await Promise.all([
+    git(cwd, ["for-each-ref", "--format=%(refname:short)%09%(HEAD)", "refs/heads"]),
+    listWorktrees(cwd),
+  ]);
+
+  const holders = new Map<string, string>();
+  for (const wt of worktrees) {
+    if (wt.branch) holders.set(wt.branch, wt.path);
+  }
+
+  const branches: BranchInfo[] = [];
+  for (const line of refs.split("\n")) {
+    const [name, head] = line.trim().split("\t");
+    if (!name) continue;
+    branches.push({ name, worktreePath: holders.get(name) ?? null, current: head === "*" });
+  }
+  branches.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return branches;
 }
 
 function sanitizeBranchForDir(branch: string): string {
   return branch.replace(/[\/\\:*?"<>|\s]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/** First free directory under baseDir: name, then name-2, name-3… */
+function pickFreeDir(baseDir: string, dirName: string): string {
+  let candidate = join(baseDir, dirName);
+  for (let suffix = 2; existsSync(candidate); suffix += 1) {
+    if (suffix > 99) throw new Error(`No free directory name for ${dirName}`);
+    candidate = join(baseDir, `${dirName}-${suffix}`);
+  }
+  return candidate;
+}
+
+/**
+  * Guarantee a checkout for `branch` and report whether one already existed.
+  * The switcher uses this for both paths: an existing checkout is reused
+  * as-is, a missing one is created at the usual location.
+  */
+export async function ensureWorktree(cwd: string, branch: string): Promise<{ path: string; branch: string; reused: boolean }> {
+  const trimmed = branch.trim();
+  if (!trimmed) throw new Error("Branch name is required");
+
+  const repoRoot = await getRepoRoot(cwd);
+  const raw = parseWorktreeList(await git(repoRoot, ["worktree", "list", "--porcelain"]));
+  const usable = raw.filter((wt) => !wt.prunable && existsSync(wt.path));
+  const holder = usable.find((wt) => wt.branch === trimmed);
+  if (holder) return { path: holder.path, branch: trimmed, reused: true };
+
+  // Stale registrations (missing directory, broken gitdir) still make git
+  // refuse the branch. Clear them before creating a new checkout.
+  if (raw.length !== usable.length) {
+    await git(repoRoot, ["worktree", "prune"]).catch(() => { });
+  }
+
+  const created = await addWorktree(repoRoot, trimmed);
+  return { ...created, reused: false };
 }
 
 export async function addWorktree(cwd: string, branch: string): Promise<{ path: string; branch: string }> {
@@ -180,11 +248,8 @@ export async function addWorktree(cwd: string, branch: string): Promise<{ path: 
 
   const repoRoot = await getRepoRoot(cwd);
   const baseDir = `${resolve(repoRoot)}-worktrees`;
-  const worktreePath = join(baseDir, dirName);
-  if (existsSync(worktreePath)) {
-    throw new Error(`Directory already exists: ${worktreePath}`);
-  }
   mkdirSync(baseDir, { recursive: true });
+  const worktreePath = pickFreeDir(baseDir, dirName);
 
   // Reuse the branch if it already exists, otherwise create it at HEAD.
   let branchExists = false;

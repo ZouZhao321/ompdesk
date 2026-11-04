@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
 import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { existsSync } from "fs";
-import { addWorktree, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
+import { ensureWorktree, listBranches, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
+import type { BranchInfo, WorktreeInfo } from "@/lib/worktree";
 import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
@@ -33,12 +34,15 @@ async function getRouteHandler(req: Request) {
     if (denied) return denied;
 
     const project = await resolveProject(cwd);
-    let worktrees: Awaited<ReturnType<typeof listWorktrees>> = [];
+    let worktrees: WorktreeInfo[] = [];
+    let branches: BranchInfo[] = [];
     let isGit = true;
     try {
       // For a removed-worktree cwd (session of a deleted worktree), fall back
       // to the inferred project root so the switcher still shows the project.
-      worktrees = await listWorktrees(existsSync(cwd) ? cwd : project.projectRoot);
+      const listCwd = existsSync(cwd) ? cwd : project.projectRoot;
+      worktrees = await listWorktrees(listCwd);
+      branches = await listBranches(listCwd);
     } catch {
       isGit = false;
     }
@@ -51,13 +55,16 @@ async function getRouteHandler(req: Request) {
       isGit,
       isTopLevel: project.isTopLevel,
       worktrees,
+      branches,
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
 
-// POST /api/worktrees  body: { cwd, branch }  →  { path, branch }
+// POST /api/worktrees  body: { cwd, branch }  →  { path, branch, reused }
+// Ensures a checkout for the branch: reuses the existing one, creates one
+// otherwise.
 export const POST = withRequestLog("/api/worktrees", async (req: Request) => {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
@@ -88,8 +95,8 @@ export const POST = withRequestLog("/api/worktrees", async (req: Request) => {
       return NextResponse.json({ error: `Directory does not exist: ${body.cwd}` }, { status: 400 });
     }
 
-    const result = await addWorktree(body.cwd, body.branch);
-    auditSuccess("worktree.create", result.path, { cwd: body.cwd, branch: body.branch });
+    const result = await ensureWorktree(body.cwd, body.branch);
+    auditSuccess(result.reused ? "worktree.reuse" : "worktree.create", result.path, { cwd: body.cwd, branch: body.branch });
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
