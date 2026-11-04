@@ -867,14 +867,25 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // the main repo before the refetch lands (keeps AppShell from treating the
   // new cwd as a different project), then switch to it.
   const applyCheckout = useCallback((branchName: string, path: string) => {
-    setWorktreeState((prev) => prev ? {
+    setWorktreeState((prev) => {
+      if (!prev) return prev;
+      const known = prev.branches.some((branch) => branch.name === branchName);
+      const branches = known
+        ? prev.branches.map((branch) => ({
+          ...branch,
+          worktreePath: branch.name === branchName ? path : branch.worktreePath,
+          current: branch.name === branchName,
+        }))
+        : [...prev.branches, { name: branchName, worktreePath: path, current: true }];
+      return {
       ...prev,
       forCwd: path,
-      worktrees: prev.worktrees.some((w) => w.path === path)
+        worktrees: prev.worktrees.some((wt) => wt.path === path)
         ? prev.worktrees
         : [...prev.worktrees, { path, branch: branchName, isMain: false }],
-      branches: prev.branches.map((b) => (b.name === branchName ? { ...b, worktreePath: path } : b)),
-    } : prev);
+        branches,
+      };
+    });
     setSelectedCwd(path);
     setWtRefreshKey((k) => k + 1);
   }, []);
@@ -888,7 +899,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       const res = await fetch("/api/worktrees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: worktreeState.projectRoot, branch }),
+        body: JSON.stringify({ cwd: worktreeState.projectRoot, branch, create: true }),
       });
       const data = await res.json().catch(() => ({})) as { path?: string; error?: string };
       if (!res.ok || data.error || !data.path) {
@@ -1157,6 +1168,37 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const visibleBranches = showWtFilter && wtFilter.trim()
     ? branches.filter((branch) => branch.name.toLowerCase().includes(wtFilter.trim().toLowerCase()))
     : branches;
+  // Checkouts no branch points at (detached HEAD, deleted branch) still need a
+  // row: the editor can open them and they can only be removed from here.
+  const orphanCheckouts = (worktreeState?.worktrees ?? []).filter(
+    (wt) => !branches.some((branch) => branch.worktreePath === wt.path),
+  );
+  const removeCheckoutButton = (path: string) => (
+    <button
+      onClick={() => void handleRemoveWorktree(path, false)}
+      disabled={wtBusy}
+      title={t("sidebar.removeWorktreeTitle", { path })}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: isMobile ? MOBILE_HIT_TARGET_PX : 34,
+        height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
+        padding: 0, marginRight: 4,
+        background: "none", border: "none",
+        color: "var(--text-dim)", cursor: "pointer",
+        borderRadius: 5, flexShrink: 0,
+        transition: "color 0.12s, background 0.12s",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      </svg>
+    </button>
+  );
 
 
   return (
@@ -1470,6 +1512,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             const holderPath = branch.worktreePath;
                             const holder = holderPath ? worktreeState.worktrees.find((w) => w.path === holderPath) : null;
                             const isMain = holder?.isMain === true;
+                            const stateLabel = holderPath
+                              ? (isMain ? t("sidebar.mainCheckout") : t("sidebar.hasCheckout"))
+                              : t("sidebar.branchNoCheckout");
                             if (holderPath && wtConfirmRemove === holderPath) {
                         return (
                                 <div key={holderPath} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "rgba(239,68,68,0.06)" }}>
@@ -1524,38 +1569,46 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             )}
                                   <PathLabel text={branch.name} style={{ flex: 1 }} />
                                   <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>
-                                    {holderPath ? (isMain ? t("sidebar.mainCheckout") : t("sidebar.hasCheckout")) : t("sidebar.branchNoCheckout")}
+                                    {stateLabel}
                                   </span>
                           </button>
-                                {holderPath && !isMain && (
-                            <button
-                                    onClick={() => void handleRemoveWorktree(holderPath!, false)}
-                              disabled={wtBusy}
-                                    title={t("sidebar.removeWorktreeTitle", { path: holderPath! })}
-                              style={{
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                width: isMobile ? MOBILE_HIT_TARGET_PX : 34,
-                                height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
-                                padding: 0, marginRight: 4,
-                                background: "none", border: "none",
-                                color: "var(--text-dim)", cursor: "pointer",
-                                borderRadius: 5, flexShrink: 0,
-                                transition: "color 0.12s, background 0.12s",
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+                                {holderPath && !isMain && removeCheckoutButton(holderPath)}
+                              </div>
+                            );
+                          })}
+                          {orphanCheckouts.map((wt) => (
+                            <div
+                              key={wt.path}
+                              className="wt-row"
+                              style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
                             >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                <path d="M10 11v6M14 11v6" />
-                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                              </svg>
+                            <button
+                                onClick={() => {
+                                  setSelectedCwd(wt.path);
+                                  setWtDropdownOpen(false);
+                                  setWtError(null);
+                                }}
+                              disabled={wtBusy}
+                                title={wt.path}
+                              style={{
+                                  ...projectMenuRowStyle(isMobile),
+                                  flex: 1,
+                                  minWidth: 0,
+                                  gap: 7,
+                                  background: "var(--bg)",
+                                  border: "none",
+                                  color: wt.path === selectedCwd ? "var(--text)" : "var(--text-muted)",
+                                  cursor: "pointer",
+                                  textAlign: "left",
+                                  fontFamily: "var(--font-mono)",
+                              }}
+                            >
+                                <PathLabel text={wt.path} style={{ flex: 1 }} />
+                                <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("sidebar.detachedCheckout")}</span>
                             </button>
-                          )}
+                              {!wt.isMain && removeCheckoutButton(wt.path)}
                         </div>
-                      );
-                    })}
+                          ))}
                           {showWtFilter && visibleBranches.length === 0 && wtFilter.trim() && (
                       <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noMatchingWorktrees")}</div>
                     )}

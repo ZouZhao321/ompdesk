@@ -192,12 +192,12 @@ export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
     .map((wt) => ({ path: wt.path, branch: wt.branch, isMain: wt.path === mainPath }));
 }
 
-export async function listBranches(cwd: string): Promise<BranchInfo[]> {
+export async function listBranches(cwd: string, knownWorktrees?: WorktreeInfo[]): Promise<BranchInfo[]> {
   const [refs, worktrees] = await Promise.all([
     // Full ref names: short names gain a `heads/` prefix whenever a tag of the
     // same name exists, which would render the branch as a different branch.
     git(cwd, ["for-each-ref", "--format=%(refname)%09%(HEAD)", "refs/heads"]),
-    listWorktrees(cwd),
+    knownWorktrees ? Promise.resolve(knownWorktrees) : listWorktrees(cwd),
   ]);
 
   const holders = new Map<string, string>();
@@ -251,6 +251,13 @@ export async function ensureWorktree(cwd: string, branch: string): Promise<{ pat
   if (raw.some((wt) => wt.prunable)) {
     await git(repoRoot, ["worktree", "prune"]);
   }
+
+  // The branch came from a list read moments ago; if it vanished since then,
+  // report it instead of silently creating a fresh branch at HEAD.
+  const branchExists = await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`])
+    .then(() => true)
+    .catch(() => false);
+  if (!branchExists) throw new Error(`Branch no longer exists: ${trimmed}`);
 
   const created = await addWorktree(repoRoot, trimmed);
   return { ...created, reused: false };

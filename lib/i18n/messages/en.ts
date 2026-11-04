@@ -191,6 +191,7 @@ export const enLocale: LocalePlugin = {
         "sidebar.hasCheckout": "Checkout",
         "sidebar.branchNoCheckout": "No checkout",
         "sidebar.branchNoCheckoutTitle": "Branch {branch} has no checkout yet; selecting it creates one",
+        "sidebar.detachedCheckout": "Detached",
         "sidebar.mainCheckout": "Main checkout",
     "sidebar.forceRemoveCheckout": "Uncommitted changes. Force remove checkout?",
     "sidebar.force": "Force",
