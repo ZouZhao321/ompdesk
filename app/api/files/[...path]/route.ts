@@ -605,7 +605,7 @@ async function getRouteHandler(
     // Avoid per-entry stat calls for normal files and directories. Symlinks and
     // filesystems without directory type information use the stat fallback.
     const dirents = fs.readdirSync(filePath, { withFileTypes: true })
-      .filter((d) => !ALWAYS_HIDDEN_NAMES[d.name] && !IGNORED_SUFFIXES.some((s) => d.name.endsWith(s)));
+      .filter((d) => ALWAYS_HIDDEN_NAMES[d.name] !== true && !IGNORED_SUFFIXES.some((s) => d.name.endsWith(s)));
     // null 表示不是 Git 仓库或无法判定，此时退回固定的隐藏名单。
     const ignoredNames = await checkIgnoredEntries(filePath, dirents.map((d) => d.name));
     const visibleDirents = ignoredNames === null

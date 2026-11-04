@@ -34,7 +34,7 @@ auth/providers/route.ts         GET OAuth 提供方列表
 cwd/validate/route.ts           POST 校验/选择 cwd
 cwd/browse/route.ts             GET 目录选择器
 default-cwd/route.ts            POST 创建 ~/omp-cwd-YYYYMMDD
-files/[...path]/route.ts        GET 文件内容 | POST 上传
+files/[...path]/route.ts        GET 列目录（含 ignored 标记）与文件内容 | POST 上传
 file-index/route.ts             GET 文件模糊索引
 comment-entries/route.ts        GET 注释词条提取并附带已保存的译文（git 跟踪优先，只读）
 comment-dictionary/route.ts     PUT 保存人工译文 | DELETE 删除整个字典
@@ -86,6 +86,7 @@ comment-translation-validation.ts 译文逐字片段校验：路径、标识符�
 comment-translation-route.ts 生成接口的请求校验与处理器
 comment-translation-model.ts 生成接口的模型接线：可见模型选择与 completeSimple 调用
 git-env.ts           createGitEnv()：git 子进程环境，剥离钩子注入的仓库定位变量
+git-ignore.ts        checkIgnoredEntries：git check-ignore 批量判定目录项是否被忽略，不可判定返回 null
 git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文件，非仓库返回 null
 request-security.ts  请求来源与主机校验
 source-wrap-preference.ts 源码视图换行开关的共享状态，查看器与预览共用
