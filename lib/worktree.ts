@@ -226,7 +226,10 @@ async function forgetWorktreeRegistration(repoRoot: string, worktreePath: string
       // A relative `gitdir` (worktree.useRelativePaths) resolves against the
       // entry's own directory, not the worktrees root.
       const recorded = resolve(entryDir, readFileSync(join(entryDir, "gitdir"), "utf8").trim());
-      if (directoryKey(dirname(recorded)) === target) {
+      const matches = directoryKey(dirname(recorded)) === target;
+      // The checkout may have reappeared (volume remounted, concurrent add)
+      // between the caller's check and this removal.
+      if (matches && !existsSync(worktreePath)) {
         rmSync(entryDir, { recursive: true, force: true });
     }
     } catch {

@@ -1173,9 +1173,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // Enumeration failed: fall back to the plain checkout list instead of calling
   // every checkout detached.
   const fallbackCheckouts = branchesUnavailable ? checkouts : [];
-  const filterText = wtFilter.trim().toLowerCase();
-  const matchesFilter = (value: string) => !filterText || value.toLowerCase().includes(filterText);
   const showWtFilter = branches.length + orphanCheckouts.length + fallbackCheckouts.length >= 8;
+  // Without the input there is no way to clear a leftover query, so ignore it.
+  const filterText = showWtFilter ? wtFilter.trim().toLowerCase() : "";
+  const matchesFilter = (value: string) => !filterText || value.toLowerCase().includes(filterText);
   const visibleBranches = branches.filter(
     (branch) => matchesFilter(branch.name) || (branch.worktreePath !== null && matchesFilter(branch.worktreePath)),
   );
@@ -1234,7 +1235,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
 
   const renderCheckoutRow = (row: {
     key: string;
-    path: string;
+    /** Checkout path; null for a branch that has none yet */
+    path: string | null;
+    title: string;
     checked: boolean;
     label: string;
     tag?: string;
@@ -1242,7 +1245,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     confirming: boolean;
     onSelect: () => void;
   }) => {
-    if (row.confirming) return removeConfirmBar(row.path);
+    if (row.confirming && row.path) return removeConfirmBar(row.path);
     return (
     <div
         key={row.key}
@@ -1252,7 +1255,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       <button
           onClick={row.onSelect}
         disabled={wtBusy}
-          title={row.path}
+          title={row.title}
         style={{
           ...projectMenuRowStyle(isMobile),
           flex: 1,
@@ -1278,7 +1281,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
             <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{row.tag}</span>
         )}
       </button>
-        {row.removable && removeCheckoutButton(row.path)}
+        {row.removable && row.path && removeCheckoutButton(row.path)}
     </div>
   );
   };
@@ -1601,7 +1604,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             }
                             return renderCheckoutRow({
                               key: branch.name,
-                              path: holderPath ?? t("sidebar.branchNoCheckoutTitle", { branch: branch.name }),
+                              path: holderPath,
+                              title: holderPath ?? t("sidebar.branchNoCheckoutTitle", { branch: branch.name }),
                               checked: branch.current,
                               label: branch.name,
                               tag: stateLabel,
@@ -1613,6 +1617,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                           {visibleOrphans.map((wt) => renderCheckoutRow({
                             key: wt.path,
                             path: wt.path,
+                            title: wt.path,
                             checked: wt.path === selectedCwd,
                             label: wt.path,
                             tag: t("sidebar.detachedCheckout"),
@@ -1628,6 +1633,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                           {visibleFallback.map((wt) => renderCheckoutRow({
                             key: wt.path,
                             path: wt.path,
+                            title: wt.path,
                             checked: wt.path === selectedCwd,
                             label: wt.branch ?? wt.path,
                             removable: !wt.isMain,
