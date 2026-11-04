@@ -297,6 +297,12 @@ export async function ensureWorktree(
     throw new Error(`Checkout registration is broken: ${stale.path}`);
   }
   if (stale) {
+    // Distinguish a deleted checkout from an unmounted volume: when the parent
+    // is gone too, the registration must survive so `git worktree repair` can
+    // restore it once the volume is back.
+    if (!existsSync(dirname(stale.path))) {
+      throw new Error(`Checkout is unreachable: ${stale.path}`);
+    }
     await forgetWorktreeRegistration(repoRoot, stale.path);
   }
 

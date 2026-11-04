@@ -1176,7 +1176,9 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const filterText = wtFilter.trim().toLowerCase();
   const matchesFilter = (value: string) => !filterText || value.toLowerCase().includes(filterText);
   const showWtFilter = branches.length + orphanCheckouts.length + fallbackCheckouts.length >= 8;
-  const visibleBranches = branches.filter((branch) => matchesFilter(branch.name));
+  const visibleBranches = branches.filter(
+    (branch) => matchesFilter(branch.name) || (branch.worktreePath !== null && matchesFilter(branch.worktreePath)),
+  );
   const visibleOrphans = orphanCheckouts.filter((wt) => matchesFilter(wt.path));
   const visibleFallback = fallbackCheckouts.filter((wt) => matchesFilter(wt.branch ?? wt.path));
   const noMatches = visibleBranches.length + visibleOrphans.length + visibleFallback.length === 0;
@@ -1240,7 +1242,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     confirming: boolean;
     onSelect: () => void;
   }) => {
-    if (row.confirming) return removeConfirmBar(row.key);
+    if (row.confirming) return removeConfirmBar(row.path);
     return (
     <div
         key={row.key}
@@ -1593,9 +1595,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             const holderPath = branch.worktreePath;
                             const holder = holderPath ? checkouts.find((wt) => wt.path === holderPath) : null;
                             const isMain = holder?.isMain === true;
-                            const stateLabel = holderPath
-                              ? (isMain ? t("sidebar.mainCheckout") : t("sidebar.hasCheckout"))
-                              : t("sidebar.branchNoCheckout");
+                            let stateLabel = t("sidebar.branchNoCheckout");
+                            if (holderPath) {
+                              stateLabel = isMain ? t("sidebar.mainCheckout") : t("sidebar.hasCheckout");
+                            }
                             return renderCheckoutRow({
                               key: branch.name,
                               path: holderPath ?? t("sidebar.branchNoCheckoutTitle", { branch: branch.name }),

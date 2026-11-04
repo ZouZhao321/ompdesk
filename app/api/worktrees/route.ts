@@ -9,9 +9,11 @@ import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security"
 
 /** Same gate as /api/files: only session cwds / project roots / explicitly
  *  allowed dirs may be inspected or mutated through this endpoint. */
-async function checkCwdAllowed(cwd: string): Promise<NextResponse | null> {
+async function checkCwdAllowed(cwd: string, requireExisting = true): Promise<NextResponse | null> {
   const allowedRoots = await getAllowedFileRoots();
-  if (!isFilePathAllowed(cwd, allowedRoots) || !isExistingFilePathAllowed(cwd, allowedRoots)) {
+  const lexicalAllowed = isFilePathAllowed(cwd, allowedRoots);
+  const realpathAllowed = !requireExisting || isExistingFilePathAllowed(cwd, allowedRoots);
+  if (!lexicalAllowed || !realpathAllowed) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
   return null;
@@ -30,21 +32,15 @@ async function getRouteHandler(req: Request) {
     if (!cwd) {
       return NextResponse.json({ error: "cwd is required" }, { status: 400 });
     }
-    // Authorize lexically before any git call: resolveProject runs git -C cwd
-    // and caches the result, so the allowlist has to run first. The existence
-    // check moves to listCwd, which may be an inferred project root.
-    const allowedRoots = await getAllowedFileRoots();
-    const lexicalAllowed = isFilePathAllowed(cwd, allowedRoots);
-    // Symlinks resolve to their target, so an existing cwd must pass the
-    // realpath check before any git command runs in it.
-    const realpathAllowed = !existsSync(cwd) || isExistingFilePathAllowed(cwd, allowedRoots);
-    if (!lexicalAllowed || !realpathAllowed) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+    // Authorize before any git call: resolveProject runs git -C cwd and caches
+    // the result. An existing cwd also needs the realpath check, since a
+    // symlink inside an allowed root may point outside it.
+    const denied = await checkCwdAllowed(cwd, existsSync(cwd));
+    if (denied) return denied;
     const project = await resolveProject(cwd);
     const listCwd = existsSync(cwd) ? cwd : project.projectRoot;
-    const denied = await checkCwdAllowed(listCwd);
-    if (denied) return denied;
+    const listDenied = await checkCwdAllowed(listCwd);
+    if (listDenied) return listDenied;
 
     let worktrees: WorktreeInfo[] = [];
     let branches: BranchInfo[] | null = [];
