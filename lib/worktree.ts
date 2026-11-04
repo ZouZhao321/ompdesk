@@ -82,6 +82,22 @@ function inferRemovedWorktree(cwd: string): ProjectInfo | null {
   return { projectRoot: repoRoot, branch: basename(cwd), isWorktree: true, isTopLevel: true };
 }
 
+/**
+  * Comparison key for directory paths. git prints forward slashes and the
+  * platform's own casing, so plain string equality calls every Windows
+  * checkout a subdirectory; resolve symlinks and fold case on Windows.
+  */
+function directoryKey(directory: string): string {
+  let real = directory;
+  try {
+    real = realpathSync.native(directory);
+  } catch {
+    // Path may be gone or unreadable; fall back to the literal text.
+  }
+  const normalized = normalize(real);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
 export async function resolveProject(cwd: string): Promise<ProjectInfo> {
   const cache = getProjectCache();
   const cached = cache.get(cwd);
@@ -100,17 +116,12 @@ export async function resolveProject(cwd: string): Promise<ProjectInfo> {
       "--abbrev-ref", "HEAD",
     ]);
     const [commonDir, gitDir, toplevel, ref] = out.split("\n").map((l) => l.trim());
-    // git prints resolved (symlink-free) paths; normalize cwd the same way
-    let realCwd = cwd;
-    try { realCwd = realpathSync(cwd); } catch { /* keep as-is */ }
     // For a linked worktree, --git-dir differs from --git-common-dir.
     // Only collapse *worktree toplevels* into the main repo. A session whose
     // cwd is a subdirectory of a repo keeps its own project identity —
     // grouping subdirs under the repo root would change where new sessions
     // are created for existing users.
-    // git prints its paths with forward slashes; compare in the platform's
-    // native form or every Windows checkout looks like a subdirectory.
-    const isTopLevel = normalize(toplevel) === realCwd;
+    const isTopLevel = directoryKey(toplevel) === directoryKey(cwd);
     const isWorktreeTopLevel = gitDir !== commonDir && isTopLevel;
     info = {
       projectRoot: isWorktreeTopLevel ? dirname(commonDir) : cwd,
@@ -183,7 +194,9 @@ export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
 
 export async function listBranches(cwd: string): Promise<BranchInfo[]> {
   const [refs, worktrees] = await Promise.all([
-    git(cwd, ["for-each-ref", "--format=%(refname:short)%09%(HEAD)", "refs/heads"]),
+    // Full ref names: short names gain a `heads/` prefix whenever a tag of the
+    // same name exists, which would render the branch as a different branch.
+    git(cwd, ["for-each-ref", "--format=%(refname)%09%(HEAD)", "refs/heads"]),
     listWorktrees(cwd),
   ]);
 
@@ -194,8 +207,9 @@ export async function listBranches(cwd: string): Promise<BranchInfo[]> {
 
   const branches: BranchInfo[] = [];
   for (const line of refs.split("\n")) {
-    const [name, head] = line.trim().split("\t");
-    if (!name) continue;
+    const [fullName, head] = line.trim().split("\t");
+    if (!fullName?.startsWith("refs/heads/")) continue;
+    const name = fullName.slice("refs/heads/".length);
     branches.push({ name, worktreePath: holders.get(name) ?? null, current: head === "*" });
   }
   branches.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
@@ -231,10 +245,11 @@ export async function ensureWorktree(cwd: string, branch: string): Promise<{ pat
   const holder = usable.find((wt) => wt.branch === trimmed);
   if (holder) return { path: holder.path, branch: trimmed, reused: true };
 
-  // Stale registrations (missing directory, broken gitdir) still make git
-  // refuse the branch. Clear them before creating a new checkout.
-  if (raw.length !== usable.length) {
-    await git(repoRoot, ["worktree", "prune"]).catch(() => { });
+  // Only entries git itself flagged prunable may be cleared. A checkout that
+  // is merely unreachable right now (permissions, unmounted drive) still owns
+  // its branch; pruning it would let a second checkout appear.
+  if (raw.some((wt) => wt.prunable)) {
+    await git(repoRoot, ["worktree", "prune"]);
   }
 
   const created = await addWorktree(repoRoot, trimmed);
