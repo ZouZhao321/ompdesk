@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
-import { existsSync, mkdirSync, realpathSync } from "fs";
-import { basename, dirname, join, resolve } from "path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from "fs";
+import { basename, dirname, join, normalize, resolve } from "path";
 import { promisify } from "util";
 import { allowFileRoot } from "./allowed-roots";
 import { createGitEnv } from "./git-env";
@@ -32,6 +32,14 @@ export interface WorktreeInfo {
   path: string;
   branch: string | null;
   isMain: boolean;
+}
+
+export interface BranchInfo {
+  name: string;
+  /** Path of the checkout that currently holds this branch, null when none does */
+  worktreePath: string | null;
+  /** True for the branch checked out at the cwd the list was requested for */
+  current: boolean;
 }
 
 declare global {
@@ -74,6 +82,35 @@ function inferRemovedWorktree(cwd: string): ProjectInfo | null {
   return { projectRoot: repoRoot, branch: basename(cwd), isWorktree: true, isTopLevel: true };
 }
 
+/**
+  * Comparison key for directory paths. git prints forward slashes and the
+  * platform's own casing, so plain string equality calls every Windows
+  * checkout a subdirectory; resolve symlinks and fold case on Windows.
+  */
+function directoryKey(directory: string): string {
+  let real = directory;
+  try {
+    real = realpathSync.native(directory);
+  } catch {
+    // Path may be gone or unreadable; fall back to the literal text.
+  }
+  const normalized = normalize(real);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+/**
+  * Same-directory test that tolerates one side being gone: the resolved key
+  * differs from the literal key when only one path still exists, so compare
+  * both forms before declaring a mismatch.
+  */
+function sameDirectory(a: string, b: string): boolean {
+  const literal = (value: string) => {
+    const normalized = normalize(resolve(value));
+    return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  };
+  return literal(a) === literal(b) || directoryKey(a) === directoryKey(b);
+}
+
 export async function resolveProject(cwd: string): Promise<ProjectInfo> {
   const cache = getProjectCache();
   const cached = cache.get(cwd);
@@ -92,15 +129,12 @@ export async function resolveProject(cwd: string): Promise<ProjectInfo> {
       "--abbrev-ref", "HEAD",
     ]);
     const [commonDir, gitDir, toplevel, ref] = out.split("\n").map((l) => l.trim());
-    // git prints resolved (symlink-free) paths; normalize cwd the same way
-    let realCwd = cwd;
-    try { realCwd = realpathSync(cwd); } catch { /* keep as-is */ }
     // For a linked worktree, --git-dir differs from --git-common-dir.
     // Only collapse *worktree toplevels* into the main repo. A session whose
     // cwd is a subdirectory of a repo keeps its own project identity —
     // grouping subdirs under the repo root would change where new sessions
     // are created for existing users.
-    const isTopLevel = toplevel === realCwd;
+    const isTopLevel = directoryKey(toplevel) === directoryKey(cwd);
     const isWorktreeTopLevel = gitDir !== commonDir && isTopLevel;
     info = {
       projectRoot: isWorktreeTopLevel ? dirname(commonDir) : cwd,
@@ -130,70 +164,219 @@ async function getRepoRoot(cwd: string): Promise<string> {
   return dirname(commonDir);
 }
 
-export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
-  const out = await git(cwd, ["worktree", "list", "--porcelain"]);
-  const worktrees: WorktreeInfo[] = [];
-  let current: (Partial<WorktreeInfo> & { prunable?: boolean }) | null = null;
+interface RawWorktree {
+  path: string;
+  branch: string | null;
+  prunable: boolean;
+  locked: boolean;
+}
 
+function parseWorktreeList(out: string): RawWorktree[] {
+  const parsed: RawWorktree[] = [];
+  let current: RawWorktree | null = null;
   const flush = () => {
-    if (current?.path) {
-      // Prunable worktrees point at missing/broken gitdirs and cannot be
-      // browsed or selected usefully. Also skip vanished paths even if git has
-      // not marked them prunable yet.
-      if (!current.prunable && existsSync(current.path)) {
-        worktrees.push({
-          path: current.path,
-          branch: current.branch ?? null,
-          isMain: worktrees.length === 0,
-        });
-      }
-    }
+    if (current?.path) parsed.push(current);
     current = null;
   };
 
   for (const line of out.split("\n")) {
     if (line.startsWith("worktree ")) {
       flush();
-      current = { path: line.slice("worktree ".length).trim() };
+      current = { path: normalize(line.slice("worktree ".length).trim()), branch: null, prunable: false, locked: false };
     } else if (line.startsWith("branch ") && current) {
       current.branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "");
     } else if (line.startsWith("prunable") && current) {
       current.prunable = true;
+    } else if (line.startsWith("locked") && current) {
+      current.locked = true;
     } else if (line.trim() === "") {
       flush();
     }
   }
   flush();
-  return worktrees;
+  return parsed;
+}
+
+/** A checkout is usable only when git has not flagged it and its path is reachable. */
+function isUsableWorktree(wt: RawWorktree): boolean {
+  return !wt.prunable && existsSync(wt.path);
+}
+
+/**
+  * Drop one stale registration. `git worktree prune` clears every stale entry in
+  * the repository, including checkouts on an unmounted drive that still matter;
+  * this removes only the administration directory whose `gitdir` points here.
+  */
+async function forgetWorktreeRegistration(repoRoot: string, worktreePath: string): Promise<void> {
+  const commonDir = await git(repoRoot, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  const adminRoot = join(normalize(commonDir), "worktrees");
+  if (!existsSync(adminRoot)) return;
+
+  const target = directoryKey(worktreePath);
+  let entries: string[];
+  try {
+    entries = readdirSync(adminRoot);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const entryDir = join(adminRoot, entry);
+    try {
+      // A relative `gitdir` (worktree.useRelativePaths) resolves against the
+      // entry's own directory, not the worktrees root.
+      const recorded = resolve(entryDir, readFileSync(join(entryDir, "gitdir"), "utf8").trim());
+      const matches = directoryKey(dirname(recorded)) === target;
+      // The checkout may have reappeared (volume remounted, concurrent add)
+      // between the caller's check and this removal.
+      if (matches && !existsSync(worktreePath)) {
+        rmSync(entryDir, { recursive: true, force: true });
+    }
+    } catch {
+      // Entries vanish or become unreadable under concurrent git operations.
+    }
+  }
+}
+
+export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
+  const raw = parseWorktreeList(await git(cwd, ["worktree", "list", "--porcelain"]));
+  const mainPath = raw[0]?.path;
+  // Prunable worktrees point at missing/broken gitdirs and cannot be browsed
+  // or selected usefully. Also skip vanished paths even if git has not marked
+  // them prunable yet.
+  return raw
+    .filter(isUsableWorktree)
+    .map((wt) => ({ path: wt.path, branch: wt.branch, isMain: wt.path === mainPath }));
+}
+
+export async function listBranches(cwd: string, knownWorktrees?: WorktreeInfo[]): Promise<BranchInfo[]> {
+  const [refs, worktrees] = await Promise.all([
+    // Full ref names: short names gain a `heads/` prefix whenever a tag of the
+    // same name exists, which would render the branch as a different branch.
+    git(cwd, ["for-each-ref", "--format=%(refname)%09%(HEAD)", "refs/heads"]),
+    knownWorktrees ? Promise.resolve(knownWorktrees) : listWorktrees(cwd),
+  ]);
+
+  const holders = new Map<string, string>();
+  for (const wt of worktrees) {
+    if (wt.branch) holders.set(wt.branch, wt.path);
+  }
+
+  const branches: BranchInfo[] = [];
+  for (const line of refs.split("\n")) {
+    const [fullName, head] = line.trim().split("\t");
+    if (!fullName?.startsWith("refs/heads/")) continue;
+    const name = fullName.slice("refs/heads/".length);
+    branches.push({ name, worktreePath: holders.get(name) ?? null, current: head === "*" });
+  }
+  branches.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return branches;
 }
 
 function sanitizeBranchForDir(branch: string): string {
   return branch.replace(/[\/\\:*?"<>|\s]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-export async function addWorktree(cwd: string, branch: string): Promise<{ path: string; branch: string }> {
+/** First free directory under baseDir: name, then name-2, name-3… */
+function pickFreeDir(baseDir: string, dirName: string, reserved: Set<string>): string {
+  let candidate = join(baseDir, dirName);
+  for (let suffix = 2; existsSync(candidate) || reserved.has(directoryKey(candidate)); suffix += 1) {
+    if (suffix > 99) throw new Error(`No free directory name for ${dirName}`);
+    candidate = join(baseDir, `${dirName}-${suffix}`);
+  }
+  return candidate;
+}
+
+/**
+  * Guarantee a checkout for `branch` and report whether one already existed.
+  * The switcher uses this for both paths: an existing checkout is reused
+  * as-is, a missing one is created at the usual location.
+  */
+export async function ensureWorktree(
+  cwd: string,
+  branch: string,
+  options: { createBranch?: boolean } = {},
+): Promise<{ path: string; branch: string; reused: boolean }> {
+  const trimmed = branch.trim();
+  if (!trimmed) throw new Error("Branch name is required");
+
+  const repoRoot = await getRepoRoot(cwd);
+  const raw = parseWorktreeList(await git(repoRoot, ["worktree", "list", "--porcelain"]));
+  const usable = raw.filter(isUsableWorktree);
+  const holder = usable.find((wt) => wt.branch === trimmed);
+  if (holder) {
+    // Another client may have created this checkout since the caller's list;
+    // register it so file access works without a second GET.
+    allowFileRoot(holder.path);
+    invalidateProjectCache();
+    return { path: holder.path, branch: trimmed, reused: true };
+  }
+
+  // Drop only the registration that blocks this branch. `git worktree prune`
+  // would clear every stale entry in the repository, including checkouts on an
+  // unmounted drive that still matter.
+  const stale = raw.find((wt) => wt.branch === trimmed && !isUsableWorktree(wt));
+  if (stale?.locked) {
+    throw new Error(`Checkout is locked: ${stale.path}`);
+  }
+  if (stale && existsSync(stale.path)) {
+    // Registration damaged while the directory still holds uncommitted work;
+    // rebuilding elsewhere would leave two checkouts for one branch.
+    throw new Error(`Checkout registration is broken: ${stale.path}`);
+  }
+  if (stale && !stale.prunable) {
+    // git still considers this registration healthy: the path is merely
+    // unreachable (permissions, offline network share, antivirus lock). Delete
+    // nothing; let the user decide.
+    throw new Error(`Checkout is unreachable: ${stale.path}`);
+  }
+  if (stale) {
+    // Only checkouts this tool creates are rebuilt automatically. Anything
+    // else (an external path, an unmounted /Volumes or /mnt drive) keeps its
+    // registration so `git worktree repair` can restore it.
+    const managedDir = `${resolve(repoRoot)}-worktrees`;
+    if (!sameDirectory(dirname(stale.path), managedDir)) {
+      throw new Error(`Checkout is unreachable: ${stale.path}`);
+    }
+    await forgetWorktreeRegistration(repoRoot, stale.path);
+  }
+
+  // The branch came from a list read moments ago; if it vanished since then,
+  // report it instead of silently creating a fresh branch at HEAD.
+  const branchExists = await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`])
+    .then(() => true)
+    .catch(() => false);
+  if (!branchExists && options.createBranch !== true) {
+    throw new Error(`Branch no longer exists: ${trimmed}`);
+  }
+
+  const created = await addWorktree(repoRoot, trimmed, { repoRoot, branchExists });
+  return { ...created, reused: created.reused ?? false };
+}
+
+export async function addWorktree(
+  cwd: string,
+  branch: string,
+  options: { repoRoot?: string; branchExists?: boolean } = {},
+): Promise<{ path: string; branch: string; reused?: boolean }> {
   const trimmed = branch.trim();
   if (!trimmed) throw new Error("Branch name is required");
 
   const dirName = sanitizeBranchForDir(trimmed);
   if (!dirName) throw new Error(`Invalid branch name: ${branch}`);
 
-  const repoRoot = await getRepoRoot(cwd);
+  const repoRoot = options.repoRoot ?? await getRepoRoot(cwd);
   const baseDir = `${resolve(repoRoot)}-worktrees`;
-  const worktreePath = join(baseDir, dirName);
-  if (existsSync(worktreePath)) {
-    throw new Error(`Directory already exists: ${worktreePath}`);
-  }
   mkdirSync(baseDir, { recursive: true });
+  const reserved = new Set(
+    parseWorktreeList(await git(repoRoot, ["worktree", "list", "--porcelain"])).map((wt) => directoryKey(wt.path)),
+  );
+  const worktreePath = pickFreeDir(baseDir, dirName, reserved);
 
   // Reuse the branch if it already exists, otherwise create it at HEAD.
-  let branchExists = false;
-  try {
-    await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`]);
-    branchExists = true;
-  } catch {
-    branchExists = false;
-  }
+  const branchExists = options.branchExists ?? await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`])
+    .then(() => true)
+    .catch(() => false);
 
   try {
     if (branchExists) {
@@ -202,7 +385,19 @@ export async function addWorktree(cwd: string, branch: string): Promise<{ path: 
       await git(repoRoot, ["worktree", "add", "-b", trimmed, "--", worktreePath]);
     }
   } catch (error) {
-    throw new Error(extractGitError(error));
+    const message = extractGitError(error);
+    // Reuse a checkout that a concurrent request just created; any other
+    // failure (disk full, timeout mid-add) must surface instead of being
+    // masked by a half-built checkout.
+    if (/already checked out|already exists|missing but already registered/i.test(message)) {
+    const raced = (await listWorktrees(repoRoot).catch(() => [])).find((wt) => wt.branch === trimmed);
+    if (raced) {
+      allowFileRoot(raced.path);
+      invalidateProjectCache();
+      return { path: raced.path, branch: trimmed, reused: true };
+    }
+    }
+    throw new Error(message);
   }
 
   allowFileRoot(worktreePath);

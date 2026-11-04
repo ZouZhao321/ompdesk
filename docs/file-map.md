@@ -64,7 +64,7 @@ theme/route.ts                  GET Web 主题调色板
 updates/route.ts                GET/POST ompdesk 更新检查与触发
 web-access/route.ts             GET/PUT 密码锁（设置 -> 访问）
 web-access/recovery/route.ts    POST 恢复码申请与兑换（未认证）
-worktrees/route.ts              GET/POST/DELETE git worktree
+worktrees/route.ts              GET/POST/DELETE git worktree；GET 同时给出本地分支与占用它的副本
 ```
 
 ## lib/
@@ -134,7 +134,7 @@ workspace-memory.ts  标签页续接
 tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
 types.ts             共享 TypeScript 类型
 normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
-worktree.ts          项目与 worktree 解析，以及 git worktree 操作
+worktree.ts          项目解析、本地分支清单、按分支确保工作副本与增删
 ```
 
 ## components/

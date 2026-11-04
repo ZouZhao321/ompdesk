@@ -14,11 +14,20 @@ It is hidden when:
 
 If you are inside a repo subdirectory, open the repository root from the project picker to manage worktrees.
 
-## Switching Worktrees
+## Switching Branches
 
-Use the worktree switcher to choose which checkout ompdesk should use for new work in that project.
+The worktree switcher lists the repository's local branches, not its checkout directories. Each row says whether that branch already has a checkout:
 
-Switching worktrees affects:
+- A branch with a checkout switches to that checkout. Nothing is created.
+- A branch without a checkout creates one under `<repo>-worktrees/<branch>` and switches to it.
+
+Checkouts that no local branch points at (for example a detached HEAD left by another tool) get their own row, labelled `Detached`; that row is the only place they can be removed from.
+
+If the branch list cannot be read, the switcher falls back to listing the checkouts themselves; the remove buttons keep working as in the normal list.
+
+A branch can only be held by one checkout at a time, which is why the list is keyed by branch.
+
+Switching affects:
 
 - New sessions started from the sidebar.
 - The file Explorer.
@@ -48,11 +57,13 @@ and you create branch `codex/worktree-help`, the worktree is created under:
 /Users/alex/Documents/Workspace/ompdesk-worktrees/codex-worktree-help
 ```
 
-If the branch already exists, ompdesk adds a worktree for that branch. If it does not exist, ompdesk creates the branch from the current `HEAD`.
+If the branch already has a checkout, ompdesk reuses it. If the branch exists without a checkout, ompdesk adds one for it. If the branch does not exist, ompdesk creates the branch from the current `HEAD`.
+
+Two branch names can flatten to the same directory name: `feat/a-b` and `feat/a/b` both become `feat-a-b`. The second checkout gets a numeric suffix (`feat-a-b-2`) instead of overwriting the first.
 
 ## Removing a Worktree
 
-Use the remove button next to a non-main worktree to remove that checkout.
+The remove button sits on every row whose checkout is not the main checkout, including `Detached` rows; it deletes that checkout directory.
 
 Removing a worktree does not delete:
 
@@ -81,7 +92,12 @@ Select a Git repository root. Non-Git directories and repo subdirectories show a
 Git allows a branch to be checked out in only one worktree at a time. Switch to the existing worktree for that branch, or remove it first.
 
 **A removed worktree still shows up in Git.**
-Git can keep prunable worktree records after a checkout disappears. ompdesk filters those out of the switcher.
+Git can keep prunable worktree records after a checkout disappears. ompdesk hides those records. Switching to the branch again clears that branch's stale record before creating a fresh checkout, but only when the record points inside `<repo>-worktrees`; records elsewhere are left alone.
+
+**Switching reports that a checkout is locked, broken, or unreachable.**
+- `Checkout is locked` — run `git worktree unlock <path>`, then switch again.
+- `Checkout registration is broken` — the directory still holds work but its `.git` link is damaged. Remove that directory by hand, or rebuild the link with `git worktree repair`.
+- `Checkout is unreachable` — the record points outside `<repo>-worktrees`, either a hand-made checkout or a drive that is not mounted. Restore the drive and switch again; if the checkout is really gone, remove its record deliberately with `git worktree prune`.
 
 **The Explorer shows a different branch than the open chat.**
 The Explorer follows the selected worktree. The chat follows the opened session. Click the session again to move the sidebar back to that session's checkout.
