@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from "fs";
-import { basename, dirname, join, normalize, parse, resolve } from "path";
+import { basename, dirname, join, normalize, resolve } from "path";
 import { promisify } from "util";
 import { allowFileRoot } from "./allowed-roots";
 import { createGitEnv } from "./git-env";
@@ -208,11 +208,13 @@ async function forgetWorktreeRegistration(repoRoot: string, worktreePath: string
   }
 
   for (const entry of entries) {
+    const entryDir = join(adminRoot, entry);
     try {
-      // `gitdir` may be relative when worktree.useRelativePaths is on.
-      const recorded = resolve(adminRoot, readFileSync(join(adminRoot, entry, "gitdir"), "utf8").trim());
+      // A relative `gitdir` (worktree.useRelativePaths) resolves against the
+      // entry's own directory, not the worktrees root.
+      const recorded = resolve(entryDir, readFileSync(join(entryDir, "gitdir"), "utf8").trim());
       if (directoryKey(dirname(recorded)) === target) {
-      rmSync(join(adminRoot, entry), { recursive: true, force: true });
+        rmSync(entryDir, { recursive: true, force: true });
     }
     } catch {
       // Entries vanish or become unreadable under concurrent git operations.
@@ -307,10 +309,11 @@ export async function ensureWorktree(
     throw new Error(`Checkout registration is broken: ${stale.path}`);
   }
   if (stale) {
-    // An unreachable volume root means the checkout is probably on an unmounted
-    // drive: keep the registration so `git worktree repair` can restore it. A
-    // directory deleted along with its parent is simply gone.
-    if (!existsSync(parse(stale.path).root)) {
+    // Only checkouts this tool creates are rebuilt automatically. Anything
+    // else (an external path, an unmounted /Volumes or /mnt drive) keeps its
+    // registration so `git worktree repair` can restore it.
+    const managedDir = directoryKey(`${resolve(repoRoot)}-worktrees`);
+    if (directoryKey(dirname(stale.path)) !== managedDir) {
       throw new Error(`Checkout is unreachable: ${stale.path}`);
     }
     await forgetWorktreeRegistration(repoRoot, stale.path);
