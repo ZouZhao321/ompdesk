@@ -14,7 +14,9 @@
 </p>
 
 <p align="center">
-  Fork of <a href="https://github.com/agegr/pi-web">pi-web</a> by <a href="https://github.com/agegr">@agegr</a>
+  Fork of <a href="https://github.com/agegr/pi-web">pi-web</a> by <a href="https://github.com/agegr">@agegr</a>,
+  built on the <a href="https://github.com/can1357/oh-my-pi">omp (oh-my-pi)</a> SDK.
+  ompdesk develops independently of both projects.
 </p>
 
 ompdesk is the browser workspace for [omp (oh-my-pi)](https://github.com/can1357/oh-my-pi). It reads the sessions the `omp` CLI already writes and runs omp's own SDK in-process against the same `~/.omp/agent` directory. A conversation started in a terminal continues in the browser, and the reverse.
@@ -208,7 +210,7 @@ There is one `Settings`, one `AuthStorage`, and one `ModelRegistry` in the proce
 
 Opening a repository in a browser tab must not execute its code. ompdesk therefore gates a project's `.omp/extensions`, `.omp/hooks`, `.omp/tools`, and `.mcp.json` behind an explicit trust decision. Skills, rules, prompts, and `AGENTS.md` are data folded into the prompt, so they load either way. See [docs/project-trust.md](./docs/project-trust.md).
 
-File browsing is not a general filesystem browser. `/api/files` allows the session working directory, its repository root, `~/omp-cwd-*` directories, and roots added through validated endpoints. The boundary and its rationale: [ADR-0008](./docs/adr/0008-file-access-roots.md).
+File browsing is not a general filesystem browser. `/api/files` allows the session working directory, its repository root, `~/omp-cwd-*` directories, and roots added through validated endpoints.
 
 ### Configuration notes
 
@@ -283,11 +285,10 @@ Do not run `bun run build` during local development: it writes to `.next/` and i
 - [Worktrees](./docs/worktrees.md): switching, creating, and removing checkouts.
 - [Internationalization](./docs/i18n.md): adding languages and UI text.
 - [Release checklist](./docs/release.md): npm and GitHub release flow.
-- [Architecture decisions](./docs/adr/): the invariants behind sessions, branches, the runtime, and the right panel.
 
 ## Contributing
 
-Bug reports and feature requests go through the GitHub issue forms. Every issue gets an answer, but an issue is not a scheduling commitment; accepted work is planned separately and the outcome is reported back on the issue. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and feature requests go through the GitHub issue forms. Every issue gets an answer, but an issue is not a scheduling commitment; accepted work is planned by the maintainers and the outcome is reported back on the issue. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

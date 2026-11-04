@@ -29,3 +29,10 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+
+      - id: no-push-main
+        name: 禁止直接推送 main
+        entry: python scripts/check-push-branch.py
+        language: python
+        pass_filenames: false
+        stages: [pre-push]

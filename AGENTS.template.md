@@ -142,16 +142,8 @@ gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
 ## 会话文件
 
 会话文件在 `~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`，每行一条
-JSON 记录，当前 `version: 3`。记录语义与顺序见 ADR-0004，字段全集以
+JSON 记录，当前 `version: 3`。记录语义与顺序跟随 omp 的 transcript 语义，字段全集以
 `@oh-my-pi/pi-coding-agent` 的 `session-entries.d.ts` 为准。
-
-## 需求与规格
-
-外部诉求（缺陷、功能请求、使用问题）走 GitHub Issues 表单，三种结论都在 issue 回帖；内部
-需求与规格进 Plane，规格写评论区并以 `规格 vN：` 开头。判定一句话：外部用户能不能看到，
-能走 GitHub，不能走 Plane。Plane 坐标、正文模板与校验命令在 `~/.omp/agent/plane.md`，
-两个入口的交接流程见 `docs/agents/issue-tracker.md`。Plane 地址、工作项 id 与内部讨论不写进
-issue、PR、提交与仓库文档，仓库公开时这些内容只留在本机。
 
 ## 文档与决策
 
@@ -164,29 +156,8 @@ issue、PR、提交与仓库文档，仓库公开时这些内容只留在本机�
 说明它约束什么、什么时候读。新增规则、决策或快照时按 `docs/agents-md-method.md`
 的步骤做。
 
-ADR 以文件形式放在 `docs/adr/`，每个文件头部有 `name` 与 `description`。下面按 omp
-加载 skill 的格式列成清单：一行一条，先给路径，冒号后是该条约束与读取时机，与文件
-头部的 `description` 一致。
-
-- `adr/0001-session-wrapper-lifecycle.md`: fork 原地改写 sessionId，返回新 id 前销毁 wrapper；改会话生命周期或 fork 时读。
-- `adr/0002-single-omp-runtime.md`: 进程内只有一个 Settings、AuthStorage、ModelRegistry；改运行时接线或凭据来源时读。
-- `adr/0003-model-roles.md`: 角色清单以 SDK 的 ModelRole 为准，enabledModels 委托 resolveModelScope；改模型选择或角色时读。
-- `adr/0004-session-record-and-context.md`: 记录顺序跟随 omp 的 transcript 语义，entryIds 本地生成；改会话读取或上下文拼接时读。
-- `adr/0005-two-kinds-of-branch.md`: fork 写新文件，parentSession 可写 id 或路径；改分支、侧栏树或删除级联时读。
-- `adr/0006-conversation-map.md`: 地图按轮现算并缓存，子代理会话不入图，切点避开悬空工具调用；改地图时读。
-- `adr/0007-worktree-path.md`: 手建的工作副本在 `.worktrees/`，界面建在同级 `<repo>-worktrees/`；建或删工作副本时读。
-- `adr/0008-file-access-roots.md`: 文件浏览只开放允许根，`/api/files` 的根由三个端点扩充；改文件访问或放行新目录时读。
-- `adr/0009-skills-and-plugins.md`: skills 有五个来源，开关只改一个 frontmatter 键；改插件或 skills 安装时读。
-- `adr/0010-credentials-and-models-yml.md`: 凭据在 `agent.db`，写后必须失效运行时与模型两个缓存；改登录、密钥或 `models.yml` 时读。
-- `adr/0011-password-lock.md`: 密码只存 scrypt 摘要，`proxy.ts` 在 Node 运行时校验；改访问控制或恢复流程时读。
-- `adr/0012-stream-and-running-state.md`: 30 秒宽限与两套集合独立，旧 run id 的迟到事件要丢弃；改流式、轮询或运行状态时读。
-- `adr/0013-project-trust.md`: 未信任项目过滤项目内扩展与工具并禁用 MCP，skills 与 rules 始终加载；改信任开关时读。
-- `adr/0014-theme-and-css.md`: 主题来自 omp，`globals.css` 只是首屏回退；改配色、字体或主题同步时读。
-- `adr/0015-session-status-markers.md`: 标记分动态与静态，静态按未读归属；改侧栏标记、未读或运行结束时读。
-- `adr/0016-mobile-layout-single-source.md`: 移动档只有一条媒体查询，粗指针不看高度；改断点或手机命中区时读。
-- `adr/0017-image-zoom.md`: 缩放与预览共用同一相机模型，适配不放大、锚点取旧中点、失败不留白；改图片查看或预览入口时读。
-- `adr/0018-right-panel-tabs.md`: 右侧面板只有一个标签页面、默认空；标签按 id 常驻，只有当前标签且面板打开时才保留文件监听与子代理补拉；改右侧面板、标签或面板开关时读。
-- `adr/0019-transcript-virtual-list.md`: 转写由虚拟列表按轮渲染，条目模型与视图状态分离，提问跳转条占对话列右侧车道并按容器宽度隐藏；改转写渲染、滚动定位或跳转条时读。
+架构决策记录留在维护者本机，不随仓库发布；仓库内只保留 `docs/agents-md-method.md`
+描述的写法与 `docs/file-map.md` 的文件职责表。
 
 `docs/file-map.md` 按目录列出每个文件的职责（路径加一句话），用于确认某个文件
 属于哪一块；文件是否存在以 `git ls-files` 为准。

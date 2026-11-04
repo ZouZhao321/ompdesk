@@ -14,7 +14,9 @@
 </p>
 
 <p align="center">
-  基于 <a href="https://github.com/agegr/pi-web">pi-web</a>（作者 <a href="https://github.com/agegr">@agegr</a>）修改
+  Fork 自 <a href="https://github.com/agegr/pi-web">pi-web</a>（作者 <a href="https://github.com/agegr">@agegr</a>），
+  基于 <a href="https://github.com/can1357/oh-my-pi">omp（oh-my-pi）</a> 的 SDK。
+  ompdesk 与这两个项目独立发展。
 </p>
 
 ompdesk 是 [omp（oh-my-pi）](https://github.com/can1357/oh-my-pi) 的浏览器工作台。它读取 `omp` 命令行工具已经写好的会话，在同一个进程里运行 omp 自己的 SDK（开发工具包），并使用同一个 `~/.omp/agent` 目录。终端里开始的会话可以在浏览器里继续，反过来也一样。
@@ -208,7 +210,7 @@ flowchart LR
 
 在浏览器里打开一个仓库，不应当自动执行它的代码。因此 ompdesk 把项目的 `.omp/extensions`、`.omp/hooks`、`.omp/tools` 与 `.mcp.json` 放在显式信任决定之后。skills、rules、提示词与 `AGENTS.md` 属于提示内容，无论是否信任都会加载。详见 [项目信任](./docs/project-trust.md)（英文）。
 
-文件浏览不是通用的文件系统浏览器。`/api/files` 只开放会话工作目录、它所属仓库的根目录、`~/omp-cwd-*`，以及经过校验的接口显式加入的根目录。边界与原因见 [ADR-0008](./docs/adr/0008-file-access-roots.md)（中文）。
+文件浏览不是通用的文件系统浏览器。`/api/files` 只开放会话工作目录、它所属仓库的根目录、`~/omp-cwd-*`，以及经过校验的接口显式加入的根目录。
 
 ### 配置说明
 
@@ -283,11 +285,10 @@ bun test
 - [Git 工作副本](./docs/worktrees.md)（英文）：切换、创建与删除。
 - [国际化](./docs/i18n.md)（英文）：新增语言与界面文案。
 - [发布检查表](./docs/release.md)（英文）：npm 与 GitHub 发布流程。
-- [架构决策](./docs/adr/)：会话、分支、运行时与右侧面板长期成立的规则。
 
 ## 参与贡献
 
-缺陷报告与功能请求请使用 GitHub 的 issue 表单。每个 issue 都会得到答复，但提交 issue 不等于排期承诺；被接受的工作会另行规划，完成后在 issue 里说明结果。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+缺陷报告与功能请求请使用 GitHub 的 issue 表单。每个 issue 都会得到答复，但提交 issue 不等于排期承诺；被接受的工作由维护者规划，完成后在 issue 里说明结果。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证
 

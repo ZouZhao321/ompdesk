@@ -8,10 +8,9 @@ Use the GitHub issue forms — [Bug report](.github/ISSUE_TEMPLATE/bug_report.ym
 An issue is a request, not a scheduling commitment. Every issue gets one of three answers:
 accepted, declined, or needs more information.
 
-Requests the maintainers accept are tracked in a private planner. The specification for an
-accepted change is written there, not in the issue. When the work ships, the result is posted
-back on the issue and the issue is closed. Keep internal planning out of issues and pull
-requests; it is not part of this repository.
+Requests the maintainers accept are planned by the maintainers. When the work ships, the
+result is posted back on the issue and the issue is closed. Keep planning discussion out of
+issues and pull requests.
 
 ## Pull requests
 
