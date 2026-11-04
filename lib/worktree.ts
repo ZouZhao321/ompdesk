@@ -324,6 +324,12 @@ export async function ensureWorktree(
     // rebuilding elsewhere would leave two checkouts for one branch.
     throw new Error(`Checkout registration is broken: ${stale.path}`);
   }
+  if (stale && !stale.prunable) {
+    // git still considers this registration healthy: the path is merely
+    // unreachable (permissions, offline network share, antivirus lock). Delete
+    // nothing; let the user decide.
+    throw new Error(`Checkout is unreachable: ${stale.path}`);
+  }
   if (stale) {
     // Only checkouts this tool creates are rebuilt automatically. Anything
     // else (an external path, an unmounted /Volumes or /mnt drive) keeps its
@@ -379,15 +385,19 @@ export async function addWorktree(
       await git(repoRoot, ["worktree", "add", "-b", trimmed, "--", worktreePath]);
     }
   } catch (error) {
-    // A concurrent request may have created the checkout between the list read
-    // and this call; reuse it instead of surfacing a raw git error.
+    const message = extractGitError(error);
+    // Reuse a checkout that a concurrent request just created; any other
+    // failure (disk full, timeout mid-add) must surface instead of being
+    // masked by a half-built checkout.
+    if (/already checked out|already exists|missing but already registered/i.test(message)) {
     const raced = (await listWorktrees(repoRoot).catch(() => [])).find((wt) => wt.branch === trimmed);
     if (raced) {
       allowFileRoot(raced.path);
       invalidateProjectCache();
       return { path: raced.path, branch: trimmed, reused: true };
     }
-    throw new Error(extractGitError(error));
+    }
+    throw new Error(message);
   }
 
   allowFileRoot(worktreePath);

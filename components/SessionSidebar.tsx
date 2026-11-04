@@ -889,6 +889,17 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     setWtRefreshKey((k) => k + 1);
   }, []);
 
+  // One teardown for every successful switch or create: a leftover filter or a
+  // pending force-remove prompt must not outlive the panel.
+  const closeWtPanel = useCallback(() => {
+    setWtDropdownOpen(false);
+    setWtNewOpen(false);
+    setWtNewBranch("");
+    setWtError(null);
+    setWtFilter("");
+    setWtConfirmRemove(null);
+  }, []);
+
   const handleCreateWorktree = useCallback(async () => {
     const branch = wtNewBranch.trim();
     if (!branch || wtBusy || !worktreeState) return;
@@ -905,16 +916,14 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         setWtError(data.error ?? `HTTP ${res.status}`);
         return;
       }
-      setWtNewOpen(false);
-      setWtNewBranch("");
-      setWtDropdownOpen(false);
+      closeWtPanel();
       applyCheckout(branch, data.path);
     } catch (e) {
       setWtError(e instanceof Error ? e.message : String(e));
     } finally {
       setWtBusy(false);
     }
-  }, [wtNewBranch, wtBusy, worktreeState, applyCheckout]);
+  }, [wtNewBranch, wtBusy, worktreeState, applyCheckout, closeWtPanel]);
 
   // Selecting a branch: reuse its checkout when one exists, otherwise create
   // one through the same endpoint and switch to the result.
@@ -922,9 +931,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     if (!worktreeState || wtBusy) return;
     if (branch.worktreePath) {
       setSelectedCwd(branch.worktreePath);
-      setWtDropdownOpen(false);
-      setWtError(null);
-      setWtFilter("");
+      closeWtPanel();
       return;
     }
     setWtBusy(true);
@@ -942,13 +949,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       }
       const path = data.path;
       applyCheckout(branch.name, path);
-      setWtDropdownOpen(false);
+      closeWtPanel();
     } catch (e) {
       setWtError(e instanceof Error ? e.message : String(e));
     } finally {
       setWtBusy(false);
     }
-  }, [worktreeState, wtBusy, applyCheckout]);
+  }, [worktreeState, wtBusy, applyCheckout, closeWtPanel]);
 
   const handleRemoveWorktree = useCallback(async (path: string, force: boolean) => {
     if (!worktreeState || wtBusy) return;
@@ -1524,7 +1531,10 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                         <>
                           <button
                             type="button"
-                            onClick={() => setWtDropdownOpen((open) => !open)}
+                        onClick={() => {
+                          if (wtDropdownOpen) closeWtPanel();
+                          else setWtDropdownOpen(true);
+                        }}
                         title={t("sidebar.switchBranch")}
                         aria-label={t("sidebar.switchBranch")}
                             aria-expanded={wtDropdownOpen}
