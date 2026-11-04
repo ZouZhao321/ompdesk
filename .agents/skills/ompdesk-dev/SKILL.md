@@ -1,54 +1,108 @@
 ---
 name: ompdesk-dev
-description: 在本仓库（ompdesk）里开发的入口——代码在哪、改哪类代码要动哪几处、跑什么命令、验证到哪一层、提交与 PR 怎么走。只要任务发生在这个仓库内（改界面、改 API、改会话读取、改模型与凭据、改启动期代码、排障），先读这里再动手；即使只是一句“修个 bug”“加个接口”“页面白屏”，也先按这里的路线定位文件与验证方式，不要从零翻仓库。
+description: 在本仓库（ompdesk）里开发的入口——改哪一块、动手前怎么找到当前实现、改完哪条检查会报错。任务发生在这个仓库内（改界面、改 API、改会话读取、改模型与凭据、改启动期代码、排障）就先读这里；即使只说“修个 bug”“加个接口”“页面白屏”，也先按这里的路线定位与验证，不要从零翻仓库。
 ---
 
 # ompdesk 开发路线
 
-仓库根用 `git rev-parse --show-toplevel` 确认。完整规范在 `AGENTS.md`，这里只给**路线**：改什么、看哪里、
-怎么证明没坏。两处冲突时以 `AGENTS.md` 为准。
+仓库根用 `git rev-parse --show-toplevel` 确认。完整规范在 `AGENTS.md`，两处冲突以 `AGENTS.md` 为准。
+
+本文件不写当前实现叫什么，每条不变量只给三段：
+
+- **行为**：这类改动必须成立的事实。
+- **定位**：在当前代码里怎么找到承载它的实现，命令可以直接执行。
+- **判警**：破坏它时哪条检查会失败；没有自动检查的，写清只能靠哪一步人工核对。
+
+文件里出现的标识符，动手前先 `git grep -n "<名字>"` 核验。搜不到就当它已经改名，按「定位」重新找，
+不要照着旧名字写代码。
 
 ## 代码地图
 
-| 位置 | 职责 | 改它时通常还要看 |
+| 位置 | 做什么 | 改它时通常还要看 |
 |---|---|---|
-| `app/api/**/route.ts` | HTTP 入口，多数包在 `withRequestLog` 里 | `lib/rpc-manager.ts`、对应 `*.test.mjs` |
-| `lib/rpc-manager.ts` | AgentSession 生命周期、注册表、启动锁 | `lib/omp-runtime.ts` |
-| `lib/session-reader.ts` | 读 `.jsonl`、会话列表、上下文重建 | `lib/normalize.ts` |
-| `lib/omp-runtime.ts` | 全局 Settings / AuthStorage / ModelRegistry | 凭据与 `models.yml` 的写入方 |
-| `components/` | 界面；`AppShell` 负责布局与标签页 | `app/globals.css`、`hooks/` |
-| `hooks/` | 流式、SSE、视口、主题等客户端状态 | 对应 `components/` 使用方 |
-| `proxy.ts` | Next 的请求前校验：主机允许列表、密码锁 | `bin/web-auth-store.js` |
-| `instrumentation.ts` | 进程启动引导：日志、HTTP dispatcher | 只能走运行时导入，见下 |
-| `next.config.ts` | distDir 覆盖、SDK 外部化 | `scripts/smoke-dev.mjs` |
-| `bin/` | 启动器与密码存储（CommonJS，npm 包里只有它和 `.next`） | `proxy.ts` |
-| `app/globals.css` | 两套主题与手机档媒体查询 | `lib/mobile-layout.ts` |
+| `app/api/**/route.ts` | HTTP 入口，统一请求包装 | `lib/rpc-manager.ts`、同目录 `*.test.mjs` |
+| `lib/rpc-manager.ts` | 会话进程的生命周期、注册表、启动互斥 | `lib/omp-runtime.ts` |
+| `lib/session-reader.ts` | 解析 `.jsonl`、会话列表与缓存、上下文重建 | `lib/normalize.ts` |
+| `lib/omp-runtime.ts` | 全局设置、认证存储、模型表的单例 | 凭据与 `models.yml` 的写入方 |
+| `lib/mobile-layout.ts` | 移动档媒体查询与最小命中区常量 | `app/globals.css`、`hooks/useIsMobile.ts` |
+| `components/` | 界面；`AppShell` 负责布局与右侧面板标签 | `app/globals.css`、`hooks/` |
+| `hooks/` | 流式、SSE、视口、主题等客户端状态 | 对应的 `components/` 使用方 |
+| `proxy.ts` | 请求前校验：主机允许列表、密码锁 | `bin/web-auth-store.js` |
+| `instrumentation.ts` | 进程启动引导：日志、HTTP dispatcher | 只能走运行时导入，见不变量 4 |
+| `next.config.ts` | 产物目录覆盖、SDK 外部化 | `scripts/smoke-dev.mjs` |
+| `bin/` | 启动器与密码存储（CommonJS，npm 包里只有它与 `.next`） | `proxy.ts` |
+| `app/globals.css` | 两套主题与移动档媒体查询 | `lib/mobile-layout.ts` |
 
-## 按任务走
+## 不变量
 
-**加或改 API**：在 `app/api/` 找对应路由，读写逻辑优先复用 `lib/` 里已有函数。会话相关的写入走
-`invalidateSessionListCache()`。测试与被测代码同目录，命名 `*.test.mjs`。
+### 1. 写会话数据后，会话列表缓存必须失效
 
-两个清点测试会拦住不合规的新路由：`lib/api-route-inventory-read.test.mjs` 要求非 SSE 的 GET 以
-`withRequestLog("<由目录推导的模板>", …)` 开头，SSE 路由要进文件里的 `SSE_ROUTES` 名单；
-`lib/api-route-inventory-write.test.mjs` 要求 POST/PUT/PATCH/DELETE 同样包装，并维护
-`MIN_WRITE_HANDLERS` 下限。路由内部统一前置：拿不准来源时先 `isApiRequestAllowed`（失败 403），
-写请求再查 `hasJsonContentType`（失败 415）。`proxy.ts` 的 matcher 已覆盖 `/api/:path*`，
-新路由自动继承主机与密码锁校验，不需要改它。
+- 行为：新建、重命名、归档、删除、fork 这类写会话文件的路径，都要让会话列表缓存失效。否则侧边栏
+  读到旧列表，页面不报错。
+- 定位：`git grep -n "invalidate" -- lib/session-reader.ts` 找到缓存失效入口；现有调用点用
+  `git grep -rn "invalidateSessionListCache" -- app` 参照。
+- 判警：没有自动检查。验证阶梯第 5 步核对副作用：新建会话后侧边栏立刻出现新行。
 
-**改界面**：组件在 `components/`，共享状态在 `hooks/`。手机档是一个独立分支：断点定义在
-`lib/mobile-layout.ts`（`isMobileLayout()`、`MOBILE_HIT_TARGET_PX = 44`），CSS 里必须同步。
-改完必须按下面的验证阶梯跑到浏览器那一层。
+### 2. 凭据、模型表与角色的写入要同时失效运行时与模型缓存
 
-**改模型或凭据**：所有写入都要同时调用 `invalidateOmpRuntime()` 与 `invalidateModelsCache()`，否则
-会话仍用旧注册表。凭据在 `~/.omp/agent/agent.db`，不经过 `auth.json`。
+- 行为：写入后两个缓存都失效。只失效一个的表现是设置页已经更新、会话仍用旧模型。运行时是进程内
+  单例，不要为单个请求新建。
+- 定位：`git grep -rn "invalidate" -- lib/omp-runtime.ts`；调用点用
+  `git grep -rn "invalidateOmpRuntime\|invalidateModelsCache" -- app`。
+- 判警：没有自动检查。改完登录一次或改一个密钥，立刻请求模型列表必须看到新模型，再发一轮消息确认
+  会话侧同步。
 
-**改会话读取**：记录顺序跟 omp 的实时聊天记录（`{ transcript: true, collapseCompactedHistory: true }`），
-摘要出现在 compaction 的时间位置，不在开头。工具调用字段差异由 `lib/normalize.ts` 统一。
+### 3. 每个 API 路由都过统一请求包装，并在内部做前置校验
 
-**改启动期代码**（`instrumentation.ts`、`next.config.ts`、`proxy.ts`）：生产构建通过不代表开发模式能起来。
-本地加载服务端模块必须用 `importRuntimeModule()` 加运行时 URL，静态可解析的说明符会被 webpack 拖进
-edge 与浏览器产物。
+- 行为：非 SSE 的 GET 与全部写请求都把处理函数交给统一包装导出，模板串必须与所在目录推导出的路径一致
+  （`export const POST = withRequestLog("/api/x", handler)`）。路由内部先校验来源（不允许返回 403），
+  写请求再校验内容类型（不是 JSON 返回 415）。新增 `/api/**` 自动继承主机允许列表与密码锁，不需要
+  改 `proxy.ts`。
+- 定位：包装函数用 `git grep -n "export function withRequestLog" -- lib` 找；SSE 路由名单在
+  `git grep -n "SSE_ROUTES" -- lib/api-route-inventory-read.test.mjs`；写请求数量下限在同一目录的
+  write 清点测试里。
+- 判警：`lib/api-route-inventory-read.test.mjs` 与 `lib/api-route-inventory-write.test.mjs`，
+  不合规时 `bun test` 直接失败。
+
+### 4. 启动期代码只用运行时导入
+
+- 行为：`instrumentation.ts`、`next.config.ts`、`proxy.ts` 里加载本地服务端模块必须走运行时导入。
+  静态说明符会被 webpack 带进 edge 与浏览器产物；生产构建通过不代表开发模式能起来。文件 URL 里的
+  反斜杠要换成正斜杠，`file://C:\...` 会被当成主机名。
+- 定位：`git grep -n "importRuntimeModule" -- instrumentation.ts lib`。
+- 判警：`bun run typecheck` 与 `bun run build` 都可能通过，必须跑 `bun run smoke:dev`。日志里出现
+  `Module build failed`、`UnhandledSchemeError`、`Failed to compile` 即失败。
+
+### 5. 移动档判定只有一个来源
+
+- 行为：判定条件是「宽度 ≤ 768px，或 `pointer: coarse` 且宽度 ≤ 1023px」，不看视口高度（软键盘会改
+  高度）。界面与 CSS 取同一个常量，改一处就分叉。
+- 定位：`git grep -rn "MOBILE_LAYOUT_QUERY" -- lib components hooks`。
+- 判警：`lib/mobile-layout.test.mjs` 断言 CSS 与常量逐字一致；`components/MobilePwaLayout.test.mjs`
+  断言移动档 CSS 不自带面板头高度。
+
+### 6. 文件浏览默认拒绝允许根之外的路径
+
+- 行为：只放行会话 cwd、其项目根、`~/omp-cwd-*` 与显式放开的目录，其余路径拒绝。根外路径返回 403
+  属预期，不是缺陷。
+- 定位：`git grep -rn "getAllowedFileRoots" -- lib`；显式放开走
+  `git grep -rn "allowFileRoot" -- app lib`。
+- 判警：`lib/file-access.test.mjs`。
+
+### 7. 会话浏览只读文件，发消息才建立会话
+
+- 行为：列表与转写只解析 `.jsonl`，浏览时不构造会话对象；发消息时才在进程内建立。记录顺序跟随 omp
+  的实时记录语义（`{ transcript: true, collapseCompactedHistory: true }`），摘要出现在压缩发生的
+  位置而非开头；工具调用字段差异由统一归一化处理。会话文件头的 `parentSession` 只是显示用元数据，
+  整文件重写是安全的。
+- 定位：`git grep -rn "startRpcSession" -- lib app`。
+- 判警：`lib/session-reader.test.mjs`、`lib/rpc-manager.test.mjs`。
+
+### 8. 真实模型请求默认关闭
+
+- 行为：不设开关时不发真实请求，会产生费用；需要验证真实链路时先得到用户同意。
+- 定位：`git grep -n "OMPDESK_LIVE_SMOKE" -- lib`。
+- 判警：不设开关时该用例跳过而不是失败。
 
 ## 命令
 
@@ -57,32 +111,31 @@ bun install
 bun run dev        # http://127.0.0.1:30141
 bun test           # 用 Bun 跑，不用 node --test
 bun run typecheck
-bun run ci         # 整条链路：typecheck → test → build → smoke:dev
+bun run ci         # typecheck → test → build → smoke:dev
 bun run verify     # 与 ci 同一份定义
 bun run smoke:dev  # 起 dev server，请求 / 与 /api/home，扫描构建失败标记
+bun run scratch <任务名> "<用途>"   # 在 .tmp/ 下建任务目录
 ```
 
 - 开发期间不要执行 `bun run build`：会污染 `.next/` 并打断正在运行的开发服务器。
+- `bun test` 的判据是全套零失败。测试一失败，`ci` 里的 build 与冒烟不会执行。
+- 依赖本机会话库的用例，本机没有会话时改铺 `test-support/session-fixtures.ts` 的确定性样本；只有会话
+  库不可读才跳过。
+- `bun run lint` 有存量 error（React 编译器的 memoization 检查，集中在 `components/` 与 `hooks/`），
+  所以不在 `ci` 里。判据只看改动文件范围，例如 `bunx eslint test-support lib`。
 - 启用了密码锁的机器（`~/.omp/agent/ompdesk-auth.json` 存在）跑冒烟要带
   `OMPDESK_SMOKE_AUTH=用户名:密码`，否则首页固定返回 401，看起来像构建失败。
-- `bun run lint` 有存量 error（React 编译器的 memoization 检查，落在 `components/`
-  与 `hooks/`），所以它不在 `ci` 里：复现用 `bun run lint`，判据只看改动文件范围的
-  eslint 结果，例如 `bunx eslint test-support lib`。
-- `bun test` 的判据是全套零失败，不是「失败集合有没有变化」：`bun run ci` 与
-  `bun run verify` 都在 typecheck 之后跑测试，测试一挂，build 与冒烟不会执行。
-  依赖本机会话库的用例在本机没有会话时改铺 `test-support/session-fixtures.ts` 的
-  确定性样本，只有会话库不可读才跳过。
 
 ## 验证阶梯
 
 按改动风险选最深的一层，前一层不能替代后一层：
 
 1. `bun run typecheck` 与 `bun test`。
-2. `bun run smoke:dev`：证明开发图谱能编译、首页与一个 API 路由返回 200。
-3. 真实浏览器按 `.agents/skills/ompdesk-verify/` 的 `features/` 走一条用户路径，截图与接口状态落到
+2. `bun run smoke:dev`：证明开发图谱能编译，首页与一个 API 路由返回 200。
+3. 真实浏览器按 `.agents/skills/ompdesk-verify/` 的 `features/` 走一条用户路径，截图与接口状态存到
    `.verify/<时间戳>/`。
-4. 涉及手机档时补一次 390×844 复核。
-5. 有副作用的改动核对副作用本身（新建的会话、写入的文件、打开的面板）。
+4. 涉及移动档时补一次 390×844 复核。
+5. 核对副作用本身（新建的会话、写入的文件、打开的标签页）。没有自动检查的不变量到这一步才有结论。
 
 ## 代码质量门禁：OCR 审核
 
@@ -122,12 +175,3 @@ severity、category、问题描述、修改建议；Low 不返回。先用 `ocr 
 - 提交标题 `type(scope): 中文描述`，`type` 取 `feat`/`fix`/`refactor`/`test`/`docs`/`chore`/`perf`。
 - 开发中的 PR 必须同时带草稿状态、`[WIP]` 标题前缀与 `in-progress` 标签；自检与 CI 通过后再撤。
 - 合并用 `--merge` 保留历史；合并需要用户明确同意。
-
-## 坑
-
-- 开发图谱与生产图谱不是同一张：`next build` 绿、`next dev` 500 是真实发生过的事。
-- 服务端本地模块用文件 URL 导入时要把反斜杠换成正斜杠，`file://C:\...` 会被当成主机名。
-- 手机档断点在 TS 与 CSS 两处，改一处就分叉。
-- `/api/files` 只放行会话 cwd、项目根、`~/omp-cwd-*`，默认拒绝其他路径。
-- 手机档的文件面板与侧栏都是全屏覆盖层，验证时先关一个再点另一个。
-- 会话文件头里的 `parentSession` 只是显示用元数据，整文件重写是安全的。
