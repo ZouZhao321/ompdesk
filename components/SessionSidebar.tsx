@@ -1164,18 +1164,22 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     ?? worktreeState?.worktrees.find((worktree) => worktree.isMain);
   const branchesUnavailable = worktreeState !== null && worktreeState.branches === null;
   const branches = worktreeState?.branches ?? [];
-  const showWtFilter = branches.length >= 8;
-  const visibleBranches = showWtFilter && wtFilter.trim()
-    ? branches.filter((branch) => branch.name.toLowerCase().includes(wtFilter.trim().toLowerCase()))
-    : branches;
   // Checkouts no branch points at (detached HEAD, deleted branch) still need a
   // row: the editor can open them and they can only be removed from here.
-  const orphanCheckouts = branchesUnavailable ? [] : (worktreeState?.worktrees ?? []).filter(
-    (wt) => !branches.some((branch) => branch.worktreePath === wt.path),
-  );
+  const checkouts = worktreeState?.worktrees ?? [];
+  const orphanCheckouts = branchesUnavailable
+    ? []
+    : checkouts.filter((wt) => !branches.some((branch) => branch.worktreePath === wt.path));
   // Enumeration failed: fall back to the plain checkout list instead of calling
   // every checkout detached.
-  const fallbackCheckouts = branchesUnavailable ? (worktreeState?.worktrees ?? []) : [];
+  const fallbackCheckouts = branchesUnavailable ? checkouts : [];
+  const filterText = wtFilter.trim().toLowerCase();
+  const matchesFilter = (value: string) => !filterText || value.toLowerCase().includes(filterText);
+  const showWtFilter = branches.length + orphanCheckouts.length + fallbackCheckouts.length >= 8;
+  const visibleBranches = branches.filter((branch) => matchesFilter(branch.name));
+  const visibleOrphans = orphanCheckouts.filter((wt) => matchesFilter(wt.path));
+  const visibleFallback = fallbackCheckouts.filter((wt) => matchesFilter(wt.branch ?? wt.path));
+  const noMatches = visibleBranches.length + visibleOrphans.length + visibleFallback.length === 0;
   const removeConfirmBar = (path: string) => (
     <div
       key={path}
@@ -1224,6 +1228,49 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
       </svg>
     </button>
+  );
+
+  const renderCheckoutRow = (wt: WorktreeEntry, options: { label?: string; tag?: string; removable: boolean }) => (
+    <div
+      key={wt.path}
+      className="wt-row"
+      style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
+    >
+      <button
+        onClick={() => {
+          setSelectedCwd(wt.path);
+          setWtDropdownOpen(false);
+          setWtError(null);
+        }}
+        disabled={wtBusy}
+        title={wt.path}
+        style={{
+          ...projectMenuRowStyle(isMobile),
+          flex: 1,
+          minWidth: 0,
+          gap: 7,
+          background: "var(--bg)",
+          border: "none",
+          color: wt.path === selectedCwd ? "var(--text)" : "var(--text-muted)",
+          cursor: "pointer",
+          textAlign: "left",
+          fontFamily: "var(--font-mono)",
+        }}
+      >
+        {wt.path === selectedCwd ? (
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <polyline points="1.5 5 4 7.5 8.5 2.5" />
+          </svg>
+        ) : (
+          <span style={{ width: 10, flexShrink: 0 }} />
+        )}
+        <PathLabel text={options.label ?? wt.branch ?? wt.path} style={{ flex: 1 }} />
+        {options.tag && (
+          <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{options.tag}</span>
+        )}
+      </button>
+      {options.removable && removeCheckoutButton(wt.path)}
+    </div>
   );
 
 
@@ -1581,73 +1628,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                               </div>
                             );
                           })}
-                          {orphanCheckouts.map((wt) => (
-                            wtConfirmRemove === wt.path ? removeConfirmBar(wt.path) : (
-                            <div
-                              key={wt.path}
-                              className="wt-row"
-                              style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
-                            >
-                            <button
-                                onClick={() => {
-                                  setSelectedCwd(wt.path);
-                                  setWtDropdownOpen(false);
-                                  setWtError(null);
-                                }}
-                              disabled={wtBusy}
-                                title={wt.path}
-                              style={{
-                                  ...projectMenuRowStyle(isMobile),
-                                  flex: 1,
-                                  minWidth: 0,
-                                  gap: 7,
-                                  background: "var(--bg)",
-                                  border: "none",
-                                  color: wt.path === selectedCwd ? "var(--text)" : "var(--text-muted)",
-                                  cursor: "pointer",
-                                  textAlign: "left",
-                                  fontFamily: "var(--font-mono)",
-                              }}
-                            >
-                                <PathLabel text={wt.path} style={{ flex: 1 }} />
-                                <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("sidebar.detachedCheckout")}</span>
-                            </button>
-                              {!wt.isMain && removeCheckoutButton(wt.path)}
-                        </div>
-                            )
+                          {visibleOrphans.map((wt) => (
+                            wtConfirmRemove === wt.path
+                              ? removeConfirmBar(wt.path)
+                              : renderCheckoutRow(wt, { tag: t("sidebar.detachedCheckout"), removable: !wt.isMain })
                           ))}
-                          {fallbackCheckouts.map((wt) => (
-                            <div
-                              key={wt.path}
-                              className="wt-row"
-                              style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
-                            >
-                              <button
-                                onClick={() => {
-                                  setSelectedCwd(wt.path);
-                                  setWtDropdownOpen(false);
-                                  setWtError(null);
-                                }}
-                                disabled={wtBusy}
-                                title={wt.path}
-                                style={{
-                                  ...projectMenuRowStyle(isMobile),
-                                  flex: 1,
-                                  minWidth: 0,
-                                  gap: 7,
-                                  background: "var(--bg)",
-                                  border: "none",
-                                  color: wt.path === selectedCwd ? "var(--text)" : "var(--text-muted)",
-                                  cursor: "pointer",
-                                  textAlign: "left",
-                                  fontFamily: "var(--font-mono)",
-                                }}
-                              >
-                                <PathLabel text={wt.branch ?? wt.path} style={{ flex: 1 }} />
-                              </button>
-                            </div>
-                          ))}
-                          {showWtFilter && visibleBranches.length === 0 && wtFilter.trim() && (
+                          {visibleFallback.map((wt) => renderCheckoutRow(wt, { removable: !wt.isMain }))}
+                          {showWtFilter && noMatches && filterText.length > 0 && (
                       <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noMatchingWorktrees")}</div>
                     )}
                   </div>

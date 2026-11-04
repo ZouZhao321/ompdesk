@@ -284,7 +284,7 @@ export async function ensureWorktree(
   // Drop only the registration that blocks this branch. `git worktree prune`
   // would clear every stale entry in the repository, including checkouts on an
   // unmounted drive that still matter.
-  const stale = raw.find((wt) => wt.prunable && wt.branch === trimmed);
+  const stale = raw.find((wt) => wt.branch === trimmed && !isUsableWorktree(wt));
   if (stale) {
     await forgetWorktreeRegistration(repoRoot, stale.path);
   }

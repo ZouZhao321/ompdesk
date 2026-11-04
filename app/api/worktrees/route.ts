@@ -30,9 +30,13 @@ async function getRouteHandler(req: Request) {
     if (!cwd) {
       return NextResponse.json({ error: "cwd is required" }, { status: 400 });
     }
-    // Resolve first: a session whose checkout was deleted still resolves to the
-    // inferred project root, and that root is what the access check and the
-    // listing must use.
+    // Authorize lexically before any git call: resolveProject runs git -C cwd
+    // and caches the result, so the allowlist has to run first. The existence
+    // check moves to listCwd, which may be an inferred project root.
+    const allowedRoots = await getAllowedFileRoots();
+    if (!isFilePathAllowed(cwd, allowedRoots)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
     const project = await resolveProject(cwd);
     const listCwd = existsSync(cwd) ? cwd : project.projectRoot;
     const denied = await checkCwdAllowed(listCwd);
