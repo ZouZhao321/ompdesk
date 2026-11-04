@@ -108,7 +108,9 @@ export async function resolveProject(cwd: string): Promise<ProjectInfo> {
     // cwd is a subdirectory of a repo keeps its own project identity —
     // grouping subdirs under the repo root would change where new sessions
     // are created for existing users.
-    const isTopLevel = toplevel === realCwd;
+    // git prints its paths with forward slashes; compare in the platform's
+    // native form or every Windows checkout looks like a subdirectory.
+    const isTopLevel = normalize(toplevel) === realCwd;
     const isWorktreeTopLevel = gitDir !== commonDir && isTopLevel;
     info = {
       projectRoot: isWorktreeTopLevel ? dirname(commonDir) : cwd,
