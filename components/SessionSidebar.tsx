@@ -1622,6 +1622,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                               setSelectedCwd(wt.path);
                               setWtDropdownOpen(false);
                               setWtError(null);
+                              setWtFilter("");
                             },
                           }))}
                           {visibleFallback.map((wt) => renderCheckoutRow({
@@ -1635,6 +1636,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                               setSelectedCwd(wt.path);
                               setWtDropdownOpen(false);
                               setWtError(null);
+                              setWtFilter("");
                             },
                           }))}
                           {showWtFilter && noMatches && filterText.length > 0 && (

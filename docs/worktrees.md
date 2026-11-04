@@ -23,7 +23,7 @@ The worktree switcher lists the repository's local branches, not its checkout di
 
 Checkouts that no local branch points at (for example a detached HEAD left by another tool) get their own row, labelled `Detached`; that row is the only place they can be removed from.
 
-If the branch list cannot be read, the switcher falls back to listing the checkouts themselves and hides the remove buttons until the list loads again.
+If the branch list cannot be read, the switcher falls back to listing the checkouts themselves; the remove buttons keep working as in the normal list.
 
 A branch can only be held by one checkout at a time, which is why the list is keyed by branch.
 

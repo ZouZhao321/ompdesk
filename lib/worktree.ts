@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from "fs";
-import { basename, dirname, join, normalize, resolve } from "path";
+import { basename, dirname, join, normalize, parse, resolve } from "path";
 import { promisify } from "util";
 import { allowFileRoot } from "./allowed-roots";
 import { createGitEnv } from "./git-env";
@@ -200,12 +200,22 @@ async function forgetWorktreeRegistration(repoRoot: string, worktreePath: string
   if (!existsSync(adminRoot)) return;
 
   const target = directoryKey(worktreePath);
-  for (const entry of readdirSync(adminRoot)) {
-    const gitdirFile = join(adminRoot, entry, "gitdir");
-    if (!existsSync(gitdirFile)) continue;
-    const recorded = readFileSync(gitdirFile, "utf8").trim();
-    if (recorded && directoryKey(dirname(recorded)) === target) {
+  let entries: string[];
+  try {
+    entries = readdirSync(adminRoot);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    try {
+      // `gitdir` may be relative when worktree.useRelativePaths is on.
+      const recorded = resolve(adminRoot, readFileSync(join(adminRoot, entry, "gitdir"), "utf8").trim());
+      if (directoryKey(dirname(recorded)) === target) {
       rmSync(join(adminRoot, entry), { recursive: true, force: true });
+    }
+    } catch {
+      // Entries vanish or become unreadable under concurrent git operations.
     }
   }
 }
@@ -250,9 +260,9 @@ function sanitizeBranchForDir(branch: string): string {
 }
 
 /** First free directory under baseDir: name, then name-2, name-3… */
-function pickFreeDir(baseDir: string, dirName: string): string {
+function pickFreeDir(baseDir: string, dirName: string, reserved: Set<string>): string {
   let candidate = join(baseDir, dirName);
-  for (let suffix = 2; existsSync(candidate); suffix += 1) {
+  for (let suffix = 2; existsSync(candidate) || reserved.has(directoryKey(candidate)); suffix += 1) {
     if (suffix > 99) throw new Error(`No free directory name for ${dirName}`);
     candidate = join(baseDir, `${dirName}-${suffix}`);
   }
@@ -297,10 +307,10 @@ export async function ensureWorktree(
     throw new Error(`Checkout registration is broken: ${stale.path}`);
   }
   if (stale) {
-    // Distinguish a deleted checkout from an unmounted volume: when the parent
-    // is gone too, the registration must survive so `git worktree repair` can
-    // restore it once the volume is back.
-    if (!existsSync(dirname(stale.path))) {
+    // An unreachable volume root means the checkout is probably on an unmounted
+    // drive: keep the registration so `git worktree repair` can restore it. A
+    // directory deleted along with its parent is simply gone.
+    if (!existsSync(parse(stale.path).root)) {
       throw new Error(`Checkout is unreachable: ${stale.path}`);
     }
     await forgetWorktreeRegistration(repoRoot, stale.path);
@@ -333,7 +343,10 @@ export async function addWorktree(
   const repoRoot = options.repoRoot ?? await getRepoRoot(cwd);
   const baseDir = `${resolve(repoRoot)}-worktrees`;
   mkdirSync(baseDir, { recursive: true });
-  const worktreePath = pickFreeDir(baseDir, dirName);
+  const reserved = new Set(
+    parseWorktreeList(await git(repoRoot, ["worktree", "list", "--porcelain"])).map((wt) => directoryKey(wt.path)),
+  );
+  const worktreePath = pickFreeDir(baseDir, dirName, reserved);
 
   // Reuse the branch if it already exists, otherwise create it at HEAD.
   const branchExists = options.branchExists ?? await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`])
