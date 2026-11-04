@@ -1,5 +1,5 @@
 import { execFile } from "child_process";
-import { existsSync, mkdirSync, realpathSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from "fs";
 import { basename, dirname, join, normalize, resolve } from "path";
 import { promisify } from "util";
 import { allowFileRoot } from "./allowed-roots";
@@ -181,6 +181,32 @@ function parseWorktreeList(out: string): RawWorktree[] {
   return parsed;
 }
 
+/** A checkout is usable only when git has not flagged it and its path is reachable. */
+function isUsableWorktree(wt: RawWorktree): boolean {
+  return !wt.prunable && existsSync(wt.path);
+}
+
+/**
+  * Drop one stale registration. `git worktree prune` clears every stale entry in
+  * the repository, including checkouts on an unmounted drive that still matter;
+  * this removes only the administration directory whose `gitdir` points here.
+  */
+async function forgetWorktreeRegistration(repoRoot: string, worktreePath: string): Promise<void> {
+  const commonDir = await git(repoRoot, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  const adminRoot = join(normalize(commonDir), "worktrees");
+  if (!existsSync(adminRoot)) return;
+
+  const target = directoryKey(worktreePath);
+  for (const entry of readdirSync(adminRoot)) {
+    const gitdirFile = join(adminRoot, entry, "gitdir");
+    if (!existsSync(gitdirFile)) continue;
+    const recorded = readFileSync(gitdirFile, "utf8").trim();
+    if (recorded && directoryKey(dirname(recorded)) === target) {
+      rmSync(join(adminRoot, entry), { recursive: true, force: true });
+    }
+  }
+}
+
 export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
   const raw = parseWorktreeList(await git(cwd, ["worktree", "list", "--porcelain"]));
   const mainPath = raw[0]?.path;
@@ -188,7 +214,7 @@ export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
   // or selected usefully. Also skip vanished paths even if git has not marked
   // them prunable yet.
   return raw
-    .filter((wt) => !wt.prunable && existsSync(wt.path))
+    .filter(isUsableWorktree)
     .map((wt) => ({ path: wt.path, branch: wt.branch, isMain: wt.path === mainPath }));
 }
 
@@ -245,7 +271,7 @@ export async function ensureWorktree(
 
   const repoRoot = await getRepoRoot(cwd);
   const raw = parseWorktreeList(await git(repoRoot, ["worktree", "list", "--porcelain"]));
-  const usable = raw.filter((wt) => !wt.prunable && existsSync(wt.path));
+  const usable = raw.filter(isUsableWorktree);
   const holder = usable.find((wt) => wt.branch === trimmed);
   if (holder) {
     // Another client may have created this checkout since the caller's list;
@@ -255,11 +281,12 @@ export async function ensureWorktree(
     return { path: holder.path, branch: trimmed, reused: true };
   }
 
-  // Clear only the registration that blocks this branch. Pruning the whole
-  // repository would drop checkouts on unavailable drives, which git flags
-  // prunable even though their files are still there.
-  if (raw.some((wt) => wt.prunable && wt.branch === trimmed)) {
-    await git(repoRoot, ["worktree", "prune"]);
+  // Drop only the registration that blocks this branch. `git worktree prune`
+  // would clear every stale entry in the repository, including checkouts on an
+  // unmounted drive that still matter.
+  const stale = raw.find((wt) => wt.prunable && wt.branch === trimmed);
+  if (stale) {
+    await forgetWorktreeRegistration(repoRoot, stale.path);
   }
 
   // The branch came from a list read moments ago; if it vanished since then,
@@ -271,30 +298,30 @@ export async function ensureWorktree(
     throw new Error(`Branch no longer exists: ${trimmed}`);
   }
 
-  const created = await addWorktree(repoRoot, trimmed);
+  const created = await addWorktree(repoRoot, trimmed, { repoRoot, branchExists });
   return { ...created, reused: false };
 }
 
-export async function addWorktree(cwd: string, branch: string): Promise<{ path: string; branch: string }> {
+export async function addWorktree(
+  cwd: string,
+  branch: string,
+  options: { repoRoot?: string; branchExists?: boolean } = {},
+): Promise<{ path: string; branch: string }> {
   const trimmed = branch.trim();
   if (!trimmed) throw new Error("Branch name is required");
 
   const dirName = sanitizeBranchForDir(trimmed);
   if (!dirName) throw new Error(`Invalid branch name: ${branch}`);
 
-  const repoRoot = await getRepoRoot(cwd);
+  const repoRoot = options.repoRoot ?? await getRepoRoot(cwd);
   const baseDir = `${resolve(repoRoot)}-worktrees`;
   mkdirSync(baseDir, { recursive: true });
   const worktreePath = pickFreeDir(baseDir, dirName);
 
   // Reuse the branch if it already exists, otherwise create it at HEAD.
-  let branchExists = false;
-  try {
-    await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`]);
-    branchExists = true;
-  } catch {
-    branchExists = false;
-  }
+  const branchExists = options.branchExists ?? await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`])
+    .then(() => true)
+    .catch(() => false);
 
   try {
     if (branchExists) {

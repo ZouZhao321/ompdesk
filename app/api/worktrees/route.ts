@@ -30,16 +30,17 @@ async function getRouteHandler(req: Request) {
     if (!cwd) {
       return NextResponse.json({ error: "cwd is required" }, { status: 400 });
     }
-    const denied = await checkCwdAllowed(cwd);
+    // Resolve first: a session whose checkout was deleted still resolves to the
+    // inferred project root, and that root is what the access check and the
+    // listing must use.
+    const project = await resolveProject(cwd);
+    const listCwd = existsSync(cwd) ? cwd : project.projectRoot;
+    const denied = await checkCwdAllowed(listCwd);
     if (denied) return denied;
 
-    const project = await resolveProject(cwd);
     let worktrees: WorktreeInfo[] = [];
     let branches: BranchInfo[] | null = [];
     let isGit = true;
-    // For a removed-worktree cwd (session of a deleted worktree), fall back
-    // to the inferred project root so the switcher still shows the project.
-    const listCwd = existsSync(cwd) ? cwd : project.projectRoot;
     try {
       worktrees = await listWorktrees(listCwd);
     } catch {

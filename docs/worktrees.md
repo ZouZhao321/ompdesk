@@ -21,6 +21,10 @@ The worktree switcher lists the repository's local branches, not its checkout di
 - A branch with a checkout switches to that checkout. Nothing is created.
 - A branch without a checkout creates one under `<repo>-worktrees/<branch>` and switches to it.
 
+Checkouts that no local branch points at (for example a detached HEAD left by another tool) get their own row, labelled `Detached`; that row is the only place they can be removed from.
+
+If the branch list cannot be read, the switcher falls back to listing the checkouts themselves and hides the remove buttons until the list loads again.
+
 A branch can only be held by one checkout at a time, which is why the list is keyed by branch.
 
 Switching affects:
@@ -59,7 +63,7 @@ Two branch names can flatten to the same directory name: `feat/a-b` and `feat/a/
 
 ## Removing a Worktree
 
-The remove button sits on every branch row whose checkout is not the main checkout; it deletes that checkout directory.
+The remove button sits on every row whose checkout is not the main checkout, including `Detached` rows; it deletes that checkout directory.
 
 Removing a worktree does not delete:
 
@@ -88,7 +92,7 @@ Select a Git repository root. Non-Git directories and repo subdirectories show a
 Git allows a branch to be checked out in only one worktree at a time. Switch to the existing worktree for that branch, or remove it first.
 
 **A removed worktree still shows up in Git.**
-Git can keep prunable worktree records after a checkout disappears. ompdesk filters those out of the switcher.
+Git can keep prunable worktree records after a checkout disappears. ompdesk ignores those records and, when you switch to that branch again, clears only that branch's stale record before creating a fresh checkout. Other checkouts' records are left alone.
 
 **The Explorer shows a different branch than the open chat.**
 The Explorer follows the selected worktree. The chat follows the opened session. Click the session again to move the sidebar back to that session's checkout.

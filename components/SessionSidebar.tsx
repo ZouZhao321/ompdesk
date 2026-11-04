@@ -877,13 +877,12 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
       // fills it in, so only the checkout side is updated here.
       if (!prev.branches) return { ...prev, forCwd: path, worktrees };
       const known = prev.branches.some((branch) => branch.name === branchName);
-      const branches = known
-        ? prev.branches.map((branch) => ({
+      const updated = prev.branches.map((branch) => ({
           ...branch,
           worktreePath: branch.name === branchName ? path : branch.worktreePath,
           current: branch.name === branchName,
-        }))
-        : [...prev.branches, { name: branchName, worktreePath: path, current: true }];
+      }));
+      const branches = known ? updated : [...updated, { name: branchName, worktreePath: path, current: true }];
       return { ...prev, forCwd: path, worktrees, branches };
     });
     setSelectedCwd(path);

@@ -21,6 +21,10 @@ worktree 切换器列出的是仓库的本地分支，不是 checkout 目录。�
 - 已有副本：选中后直接切到那个 checkout，不新建目录。
 - 没有副本：选中后先在 `<repo>-worktrees/<branch>` 建一份，再切过去。
 
+没有本地分支指向的检出（例如其他工具留下的 detached HEAD）单独成一行，标注「游离检出」；只能从这一行把它移除。
+
+分支清单读不出来时，切换器回退成按检出目录列出，并隐藏删除按钮，等清单恢复后再显示。
+
 一条分支同一时刻只能被一个 checkout 占用，所以列表按分支而不是按目录组织。
 
 它会影响：
@@ -59,7 +63,7 @@ ompdesk 会把 checkout 放在：
 
 ## 删除 Worktree
 
-每一行分支只要它的副本不是主检出，右侧就有删除按钮；它删除的是那个 checkout 目录。
+每一行只要它的副本不是主检出，右侧就有删除按钮，游离检出行也有；它删除的是那个 checkout 目录。
 
 删除 worktree 不会删除：
 
@@ -88,7 +92,7 @@ ompdesk 按 project root 分组会话，所以 main checkout 和 linked worktree
 Git 不允许同一个 branch 同时被多个 worktree checkout。你可以切到已有的 worktree，或者先删除那个 checkout。
 
 **Git 里还有已经消失的 worktree 记录怎么办？**
-Git 有时会保留 prunable worktree 记录。ompdesk 会过滤这些记录，不在切换器里显示。
+Git 有时会保留 prunable worktree 记录。ompdesk 不在切换器里显示这些记录；再次切到那条分支时，只清理这条分支的失效登记，再建一份新副本，其他副本的登记不动。
 
 **Explorer 和当前聊天看起来不在同一个分支？**
 Explorer 跟随当前选择的 worktree；聊天跟随打开的会话。重新点击会话，可以把侧边栏切回这个会话所在的 checkout。
