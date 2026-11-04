@@ -235,7 +235,11 @@ function pickFreeDir(baseDir: string, dirName: string): string {
   * The switcher uses this for both paths: an existing checkout is reused
   * as-is, a missing one is created at the usual location.
   */
-export async function ensureWorktree(cwd: string, branch: string): Promise<{ path: string; branch: string; reused: boolean }> {
+export async function ensureWorktree(
+  cwd: string,
+  branch: string,
+  options: { createBranch?: boolean } = {},
+): Promise<{ path: string; branch: string; reused: boolean }> {
   const trimmed = branch.trim();
   if (!trimmed) throw new Error("Branch name is required");
 
@@ -243,12 +247,18 @@ export async function ensureWorktree(cwd: string, branch: string): Promise<{ pat
   const raw = parseWorktreeList(await git(repoRoot, ["worktree", "list", "--porcelain"]));
   const usable = raw.filter((wt) => !wt.prunable && existsSync(wt.path));
   const holder = usable.find((wt) => wt.branch === trimmed);
-  if (holder) return { path: holder.path, branch: trimmed, reused: true };
+  if (holder) {
+    // Another client may have created this checkout since the caller's list;
+    // register it so file access works without a second GET.
+    allowFileRoot(holder.path);
+    invalidateProjectCache();
+    return { path: holder.path, branch: trimmed, reused: true };
+  }
 
-  // Only entries git itself flagged prunable may be cleared. A checkout that
-  // is merely unreachable right now (permissions, unmounted drive) still owns
-  // its branch; pruning it would let a second checkout appear.
-  if (raw.some((wt) => wt.prunable)) {
+  // Clear only the registration that blocks this branch. Pruning the whole
+  // repository would drop checkouts on unavailable drives, which git flags
+  // prunable even though their files are still there.
+  if (raw.some((wt) => wt.prunable && wt.branch === trimmed)) {
     await git(repoRoot, ["worktree", "prune"]);
   }
 
@@ -257,7 +267,9 @@ export async function ensureWorktree(cwd: string, branch: string): Promise<{ pat
   const branchExists = await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`])
     .then(() => true)
     .catch(() => false);
-  if (!branchExists) throw new Error(`Branch no longer exists: ${trimmed}`);
+  if (!branchExists && options.createBranch !== true) {
+    throw new Error(`Branch no longer exists: ${trimmed}`);
+  }
 
   const created = await addWorktree(repoRoot, trimmed);
   return { ...created, reused: false };

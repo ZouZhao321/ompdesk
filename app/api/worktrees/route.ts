@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
 import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { existsSync } from "fs";
-import { addWorktree, ensureWorktree, listBranches, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
+import { ensureWorktree, listBranches, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
 import type { BranchInfo, WorktreeInfo } from "@/lib/worktree";
 import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -35,19 +35,20 @@ async function getRouteHandler(req: Request) {
 
     const project = await resolveProject(cwd);
     let worktrees: WorktreeInfo[] = [];
-    let branches: BranchInfo[] = [];
+    let branches: BranchInfo[] | null = [];
     let isGit = true;
-      // For a removed-worktree cwd (session of a deleted worktree), fall back
-      // to the inferred project root so the switcher still shows the project.
-      const listCwd = existsSync(cwd) ? cwd : project.projectRoot;
+    // For a removed-worktree cwd (session of a deleted worktree), fall back
+    // to the inferred project root so the switcher still shows the project.
+    const listCwd = existsSync(cwd) ? cwd : project.projectRoot;
     try {
       worktrees = await listWorktrees(listCwd);
     } catch {
       isGit = false;
     }
-    // Branch enumeration failing must not discard the checkouts that loaded.
+    // Branch enumeration failing must not discard the checkouts that loaded, but
+    // the UI needs to tell "no branches" from "could not read branches".
     if (isGit) {
-      branches = await listBranches(listCwd, worktrees).catch(() => [] as BranchInfo[]);
+      branches = await listBranches(listCwd, worktrees).catch(() => null);
     }
     // Every listed path is a git-verified worktree of this project; allow the
     // file explorer to browse them even before they have any session (the
@@ -98,9 +99,7 @@ export const POST = withRequestLog("/api/worktrees", async (req: Request) => {
       return NextResponse.json({ error: `Directory does not exist: ${body.cwd}` }, { status: 400 });
     }
 
-    const result = body.create === true
-      ? { ...(await addWorktree(body.cwd, body.branch)), reused: false }
-      : await ensureWorktree(body.cwd, body.branch);
+    const result = await ensureWorktree(body.cwd, body.branch, { createBranch: body.create === true });
     auditSuccess(result.reused ? "worktree.reuse" : "worktree.create", result.path, { cwd: body.cwd, branch: body.branch });
     return NextResponse.json(result);
   } catch (error) {
