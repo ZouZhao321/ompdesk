@@ -155,6 +155,7 @@ interface RawWorktree {
   path: string;
   branch: string | null;
   prunable: boolean;
+  locked: boolean;
 }
 
 function parseWorktreeList(out: string): RawWorktree[] {
@@ -168,11 +169,13 @@ function parseWorktreeList(out: string): RawWorktree[] {
   for (const line of out.split("\n")) {
     if (line.startsWith("worktree ")) {
       flush();
-      current = { path: normalize(line.slice("worktree ".length).trim()), branch: null, prunable: false };
+      current = { path: normalize(line.slice("worktree ".length).trim()), branch: null, prunable: false, locked: false };
     } else if (line.startsWith("branch ") && current) {
       current.branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "");
     } else if (line.startsWith("prunable") && current) {
       current.prunable = true;
+    } else if (line.startsWith("locked") && current) {
+      current.locked = true;
     } else if (line.trim() === "") {
       flush();
     }
@@ -285,6 +288,14 @@ export async function ensureWorktree(
   // would clear every stale entry in the repository, including checkouts on an
   // unmounted drive that still matter.
   const stale = raw.find((wt) => wt.branch === trimmed && !isUsableWorktree(wt));
+  if (stale?.locked) {
+    throw new Error(`Checkout is locked: ${stale.path}`);
+  }
+  if (stale && existsSync(stale.path)) {
+    // Registration damaged while the directory still holds uncommitted work;
+    // rebuilding elsewhere would leave two checkouts for one branch.
+    throw new Error(`Checkout registration is broken: ${stale.path}`);
+  }
   if (stale) {
     await forgetWorktreeRegistration(repoRoot, stale.path);
   }
@@ -299,14 +310,14 @@ export async function ensureWorktree(
   }
 
   const created = await addWorktree(repoRoot, trimmed, { repoRoot, branchExists });
-  return { ...created, reused: false };
+  return { ...created, reused: created.reused ?? false };
 }
 
 export async function addWorktree(
   cwd: string,
   branch: string,
   options: { repoRoot?: string; branchExists?: boolean } = {},
-): Promise<{ path: string; branch: string }> {
+): Promise<{ path: string; branch: string; reused?: boolean }> {
   const trimmed = branch.trim();
   if (!trimmed) throw new Error("Branch name is required");
 
@@ -330,6 +341,14 @@ export async function addWorktree(
       await git(repoRoot, ["worktree", "add", "-b", trimmed, "--", worktreePath]);
     }
   } catch (error) {
+    // A concurrent request may have created the checkout between the list read
+    // and this call; reuse it instead of surfacing a raw git error.
+    const raced = (await listWorktrees(repoRoot).catch(() => [])).find((wt) => wt.branch === trimmed);
+    if (raced) {
+      allowFileRoot(raced.path);
+      invalidateProjectCache();
+      return { path: raced.path, branch: trimmed, reused: true };
+    }
     throw new Error(extractGitError(error));
   }
 

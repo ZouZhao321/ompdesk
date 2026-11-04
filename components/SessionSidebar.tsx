@@ -1230,20 +1230,27 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     </button>
   );
 
-  const renderCheckoutRow = (wt: WorktreeEntry, options: { label?: string; tag?: string; removable: boolean }) => (
+  const renderCheckoutRow = (row: {
+    key: string;
+    path: string;
+    checked: boolean;
+    label: string;
+    tag?: string;
+    removable: boolean;
+    confirming: boolean;
+    onSelect: () => void;
+  }) => {
+    if (row.confirming) return removeConfirmBar(row.key);
+    return (
     <div
-      key={wt.path}
+        key={row.key}
       className="wt-row"
       style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
     >
       <button
-        onClick={() => {
-          setSelectedCwd(wt.path);
-          setWtDropdownOpen(false);
-          setWtError(null);
-        }}
+          onClick={row.onSelect}
         disabled={wtBusy}
-        title={wt.path}
+          title={row.path}
         style={{
           ...projectMenuRowStyle(isMobile),
           flex: 1,
@@ -1251,27 +1258,28 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
           gap: 7,
           background: "var(--bg)",
           border: "none",
-          color: wt.path === selectedCwd ? "var(--text)" : "var(--text-muted)",
+            color: row.checked ? "var(--text)" : "var(--text-muted)",
           cursor: "pointer",
           textAlign: "left",
           fontFamily: "var(--font-mono)",
         }}
       >
-        {wt.path === selectedCwd ? (
+          {row.checked ? (
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <polyline points="1.5 5 4 7.5 8.5 2.5" />
           </svg>
         ) : (
           <span style={{ width: 10, flexShrink: 0 }} />
         )}
-        <PathLabel text={options.label ?? wt.branch ?? wt.path} style={{ flex: 1 }} />
-        {options.tag && (
-          <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{options.tag}</span>
+          <PathLabel text={row.label} style={{ flex: 1 }} />
+          {row.tag && (
+            <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{row.tag}</span>
         )}
       </button>
-      {options.removable && removeCheckoutButton(wt.path)}
+        {row.removable && removeCheckoutButton(row.path)}
     </div>
   );
+  };
 
 
   return (
@@ -1583,57 +1591,49 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                   <div style={{ maxHeight: "min(40vh, 300px)", overflowY: "auto" }}>
                           {visibleBranches.map((branch) => {
                             const holderPath = branch.worktreePath;
-                            const holder = holderPath ? worktreeState.worktrees.find((w) => w.path === holderPath) : null;
+                            const holder = holderPath ? checkouts.find((wt) => wt.path === holderPath) : null;
                             const isMain = holder?.isMain === true;
                             const stateLabel = holderPath
                               ? (isMain ? t("sidebar.mainCheckout") : t("sidebar.hasCheckout"))
                               : t("sidebar.branchNoCheckout");
-                            if (holderPath && wtConfirmRemove === holderPath) return removeConfirmBar(holderPath);
-                      return (
-                        <div
-                                key={branch.name}
-                          className="wt-row"
-                          style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
-                        >
-                          <button
-                                  onClick={() => void handleSwitchBranch(branch)}
-                                  disabled={wtBusy}
-                                  title={holderPath ?? t("sidebar.branchNoCheckoutTitle", { branch: branch.name })}
-                            style={{
-                              ...projectMenuRowStyle(isMobile),
-                              flex: 1,
-                              minWidth: 0,
-                              gap: 7,
-                              background: "var(--bg)",
-                              border: "none",
-                                    color: branch.current ? "var(--text)" : "var(--text-muted)",
-                              cursor: "pointer",
-                              textAlign: "left",
-                              fontFamily: "var(--font-mono)",
-                            }}
-                          >
-                                  {branch.current ? (
-                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                              </svg>
-                            ) : (
-                              <span style={{ width: 10, flexShrink: 0 }} />
-                            )}
-                                  <PathLabel text={branch.name} style={{ flex: 1 }} />
-                                  <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>
-                                    {stateLabel}
-                                  </span>
-                          </button>
-                                {holderPath && !isMain && removeCheckoutButton(holderPath)}
-                              </div>
-                            );
+                            return renderCheckoutRow({
+                              key: branch.name,
+                              path: holderPath ?? t("sidebar.branchNoCheckoutTitle", { branch: branch.name }),
+                              checked: branch.current,
+                              label: branch.name,
+                              tag: stateLabel,
+                              removable: Boolean(holderPath) && !isMain,
+                              confirming: Boolean(holderPath) && wtConfirmRemove === holderPath,
+                              onSelect: () => void handleSwitchBranch(branch),
+                            });
                           })}
-                          {visibleOrphans.map((wt) => (
-                            wtConfirmRemove === wt.path
-                              ? removeConfirmBar(wt.path)
-                              : renderCheckoutRow(wt, { tag: t("sidebar.detachedCheckout"), removable: !wt.isMain })
-                          ))}
-                          {visibleFallback.map((wt) => renderCheckoutRow(wt, { removable: !wt.isMain }))}
+                          {visibleOrphans.map((wt) => renderCheckoutRow({
+                            key: wt.path,
+                            path: wt.path,
+                            checked: wt.path === selectedCwd,
+                            label: wt.path,
+                            tag: t("sidebar.detachedCheckout"),
+                            removable: !wt.isMain,
+                            confirming: wtConfirmRemove === wt.path,
+                            onSelect: () => {
+                              setSelectedCwd(wt.path);
+                              setWtDropdownOpen(false);
+                              setWtError(null);
+                            },
+                          }))}
+                          {visibleFallback.map((wt) => renderCheckoutRow({
+                            key: wt.path,
+                            path: wt.path,
+                            checked: wt.path === selectedCwd,
+                            label: wt.branch ?? wt.path,
+                            removable: !wt.isMain,
+                            confirming: wtConfirmRemove === wt.path,
+                            onSelect: () => {
+                              setSelectedCwd(wt.path);
+                              setWtDropdownOpen(false);
+                              setWtError(null);
+                            },
+                          }))}
                           {showWtFilter && noMatches && filterText.length > 0 && (
                       <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noMatchingWorktrees")}</div>
                     )}

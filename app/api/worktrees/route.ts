@@ -34,7 +34,11 @@ async function getRouteHandler(req: Request) {
     // and caches the result, so the allowlist has to run first. The existence
     // check moves to listCwd, which may be an inferred project root.
     const allowedRoots = await getAllowedFileRoots();
-    if (!isFilePathAllowed(cwd, allowedRoots)) {
+    const lexicalAllowed = isFilePathAllowed(cwd, allowedRoots);
+    // Symlinks resolve to their target, so an existing cwd must pass the
+    // realpath check before any git command runs in it.
+    const realpathAllowed = !existsSync(cwd) || isExistingFilePathAllowed(cwd, allowedRoots);
+    if (!lexicalAllowed || !realpathAllowed) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
     const project = await resolveProject(cwd);
