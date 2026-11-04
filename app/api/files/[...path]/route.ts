@@ -20,6 +20,7 @@ import {
   getImageMime,
 } from "@/lib/file-types";
 import { resolveDirentIsDirectory } from "@/lib/file-dirent";
+import { checkIgnoredEntries } from "@/lib/git-ignore";
 import { isFilePathReferencedBySession } from "@/lib/session-file-references";
 import { isApiRequestAllowed } from "@/lib/request-security";
 import {
@@ -34,6 +35,12 @@ const IGNORED_NAMES = new Set([
   ".turbo", ".cache", "coverage", ".pytest_cache", ".mypy_cache",
   "target", "vendor", ".DS_Store", ".git",
 ]);
+
+/** 无论是否在 Git 仓库里都不显示的名字；其余隐藏由 Git 忽略规则决定。 */
+const ALWAYS_HIDDEN_NAMES: Record<string, true> = {
+  ".git": true,
+  ".DS_Store": true,
+};
 
 const IGNORED_SUFFIXES = [".pyc"];
 
@@ -597,14 +604,25 @@ async function getRouteHandler(
 
     // Avoid per-entry stat calls for normal files and directories. Symlinks and
     // filesystems without directory type information use the stat fallback.
-    const dirents = fs.readdirSync(filePath, { withFileTypes: true });
-    const entries = dirents
-      .filter((d) => !IGNORED_NAMES.has(d.name) && !IGNORED_SUFFIXES.some((s) => d.name.endsWith(s)))
+    const dirents = fs.readdirSync(filePath, { withFileTypes: true })
+      .filter((d) => !ALWAYS_HIDDEN_NAMES[d.name] && !IGNORED_SUFFIXES.some((s) => d.name.endsWith(s)));
+    // null 表示不是 Git 仓库或无法判定，此时退回固定的隐藏名单。
+    const ignoredNames = await checkIgnoredEntries(filePath, dirents.map((d) => d.name));
+    const visibleDirents = ignoredNames === null
+      ? dirents.filter((d) => !IGNORED_NAMES.has(d.name))
+      : dirents;
+    const entries = visibleDirents
       .flatMap((d) => {
         const isDir = resolveDirentIsDirectory(d, path.join(filePath, d.name));
         return isDir === null
           ? []
-          : [{ name: d.name, isDir, size: 0, modified: "" }];
+          : [{
+            name: d.name,
+            isDir,
+            size: 0,
+            modified: "",
+            ignored: ignoredNames?.has(d.name) ?? false,
+          }];
       })
       .sort((a, b) => {
         // Dirs first, then files, both alphabetically
