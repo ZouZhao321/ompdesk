@@ -19,7 +19,11 @@
   ompdesk 与这两个项目独立发展。
 </p>
 
-ompdesk 是 [omp（oh-my-pi）](https://github.com/can1357/oh-my-pi) 的浏览器工作台。它读取 `omp` 命令行工具已经写好的会话，在同一个进程里运行 omp 自己的 SDK（开发工具包），并使用同一个 `~/.omp/agent` 目录。终端里开始的会话可以在浏览器里继续，反过来也一样。
+ompdesk 是 [omp](https://github.com/can1357/oh-my-pi) 的浏览器工作台。omp 是终端里的编码代理，和 Claude Code、Codex、pi 属于同一类工具。适合这样的使用方式：在手机上跟进跑了很久的任务，在浏览器里查看 agent 改过哪些文件和差异，或者不翻终端输出就找回之前的会话。
+
+它是单人、单机的工具，不提供模型、团队账号或托管服务。只在终端工作时，omp 本身已经够用。
+
+它读取 `omp` 命令行工具已经写好的会话，在同一个进程里运行 omp 自己的 SDK（开发工具包），并使用同一个 `~/.omp/agent` 目录。终端里开始的会话可以在浏览器里继续，反过来也一样。
 
 ompdesk 不另外运行一个代理程序，也不复制 omp 的数据：会话、设置、模型角色、凭据、skills、插件、扩展与 MCP（模型上下文协议）配置都沿用 omp 已有的那一份。
 
@@ -140,7 +144,7 @@ tailscale serve --bg --tcp=30141 tcp://localhost:30141
 
 ### 模型与提供方
 
-- 按角色分配模型：`default`、`smol`、`slow`、`plan`、`commit`、`task`、`advisor`、`vision`、`designer`、`tiny`。
+- 按角色分配模型：`default`、`smol`、`slow`、`vision`、`plan`、`commit`、`tiny`、`memory`、`task`、`advisor`。
 - 在聊天栏把会话切换到某个角色，角色会随该轮记录，与终端里的 `/model` 行为一致。
 - 配置提供方、OAuth（第三方授权登录）与 API key；获取上游模型列表；测试提供方或模型；查看 models.dev 的价格数据。
 - 在模型面板里读写 `models.yml`。
@@ -166,13 +170,13 @@ omp 按工作类型分配模型，并没有一个全局模型。ompdesk 展示�
 | `default` | 普通对话轮次 |
 | `smol` | 子代理与后台任务使用的便宜、快速模型 |
 | `slow` | 难题上的深度推理 |
+| `vision` | 带图片的轮次 |
 | `plan` | 计划模式 |
 | `commit` | 提交信息与更新记录 |
+| `tiny` | 分类与路由 |
+| `memory` | 记忆提取与后台记忆维护 |
 | `task` | 子代理默认使用的模型 |
 | `advisor` | 每轮复核的第二个模型 |
-| `vision` | 带图片的轮次 |
-| `designer` | 界面与设计工作 |
-| `tiny` | 分类与路由 |
 
 聊天栏的模型选择器把角色列在普通模型列表之前。选中的角色会记录进会话，因此会话记录与 omp 的重试回退能看到同一份选择。
 
@@ -284,7 +288,7 @@ bun test
 - [项目信任](./docs/project-trust.md)（英文）：哪些资源需要信任，以及原因。
 - [Git 工作副本](./docs/worktrees.md)（英文）：切换、创建与删除。
 - [国际化](./docs/i18n.md)（英文）：新增语言与界面文案。
-- [发布检查表](./docs/release.md)（英文）：npm 与 GitHub 发布流程。
+- [发布检查表](./docs/release.md)：npm 与 GitHub 发布流程。
 
 ## 参与贡献
 
