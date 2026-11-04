@@ -92,7 +92,12 @@ ompdesk 按 project root 分组会话，所以 main checkout 和 linked worktree
 Git 不允许同一个 branch 同时被多个 worktree checkout。你可以切到已有的 worktree，或者先删除那个 checkout。
 
 **Git 里还有已经消失的 worktree 记录怎么办？**
-Git 有时会保留 prunable worktree 记录。ompdesk 不在切换器里显示这些记录；再次切到那条分支时，只清理这条分支的失效登记，再建一份新副本，其他副本的登记不动。
+Git 有时会保留 prunable worktree 记录。ompdesk 不在切换器里显示这些记录；再次切到那条分支时，会先清理这条分支的失效登记再建新副本，但只清理指向 `<repo>-worktrees` 之内的记录，别处的记录保持不动。
+
+**切换时提示副本被锁定、登记损坏或不可达。**
+- `Checkout is locked`：执行 `git worktree unlock <路径>` 后再切换。
+- `Checkout registration is broken`：目录还在、里面也有改动，只是 `.git` 链接损坏。手工移除该目录，或用 `git worktree repair` 重建链接。
+- `Checkout is unreachable`：记录指向 `<repo>-worktrees` 之外，要么是手工建的副本，要么是盘没挂载。恢复挂载后重试；确实不要了，再手动执行 `git worktree prune`。
 
 **Explorer 和当前聊天看起来不在同一个分支？**
 Explorer 跟随当前选择的 worktree；聊天跟随打开的会话。重新点击会话，可以把侧边栏切回这个会话所在的 checkout。

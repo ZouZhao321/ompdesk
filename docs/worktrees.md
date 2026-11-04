@@ -92,7 +92,12 @@ Select a Git repository root. Non-Git directories and repo subdirectories show a
 Git allows a branch to be checked out in only one worktree at a time. Switch to the existing worktree for that branch, or remove it first.
 
 **A removed worktree still shows up in Git.**
-Git can keep prunable worktree records after a checkout disappears. ompdesk ignores those records and, when you switch to that branch again, clears only that branch's stale record before creating a fresh checkout. Other checkouts' records are left alone.
+Git can keep prunable worktree records after a checkout disappears. ompdesk hides those records. Switching to the branch again clears that branch's stale record before creating a fresh checkout, but only when the record points inside `<repo>-worktrees`; records elsewhere are left alone.
+
+**Switching reports that a checkout is locked, broken, or unreachable.**
+- `Checkout is locked` — run `git worktree unlock <path>`, then switch again.
+- `Checkout registration is broken` — the directory still holds work but its `.git` link is damaged. Remove that directory by hand, or rebuild the link with `git worktree repair`.
+- `Checkout is unreachable` — the record points outside `<repo>-worktrees`, either a hand-made checkout or a drive that is not mounted. Restore the drive and switch again; if the checkout is really gone, remove its record deliberately with `git worktree prune`.
 
 **The Explorer shows a different branch than the open chat.**
 The Explorer follows the selected worktree. The chat follows the opened session. Click the session again to move the sidebar back to that session's checkout.

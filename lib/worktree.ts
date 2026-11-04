@@ -98,6 +98,19 @@ function directoryKey(directory: string): string {
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
+/**
+  * Same-directory test that tolerates one side being gone: the resolved key
+  * differs from the literal key when only one path still exists, so compare
+  * both forms before declaring a mismatch.
+  */
+function sameDirectory(a: string, b: string): boolean {
+  const literal = (value: string) => {
+    const normalized = normalize(resolve(value));
+    return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  };
+  return literal(a) === literal(b) || directoryKey(a) === directoryKey(b);
+}
+
 export async function resolveProject(cwd: string): Promise<ProjectInfo> {
   const cache = getProjectCache();
   const cached = cache.get(cwd);
@@ -312,8 +325,8 @@ export async function ensureWorktree(
     // Only checkouts this tool creates are rebuilt automatically. Anything
     // else (an external path, an unmounted /Volumes or /mnt drive) keeps its
     // registration so `git worktree repair` can restore it.
-    const managedDir = directoryKey(`${resolve(repoRoot)}-worktrees`);
-    if (directoryKey(dirname(stale.path)) !== managedDir) {
+    const managedDir = `${resolve(repoRoot)}-worktrees`;
+    if (!sameDirectory(dirname(stale.path), managedDir)) {
       throw new Error(`Checkout is unreachable: ${stale.path}`);
     }
     await forgetWorktreeRegistration(repoRoot, stale.path);
