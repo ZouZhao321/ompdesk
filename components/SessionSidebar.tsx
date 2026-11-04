@@ -991,13 +991,8 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   const dismissProjectMenu = useCallback(() => {
     setProjectMenuOpen(null);
     setRemoveProjectConfirm(null);
-    setWtDropdownOpen(false);
-    setWtNewOpen(false);
-    setWtNewBranch("");
-    setWtError(null);
-    setWtConfirmRemove(null);
-    setWtFilter("");
-  }, []);
+    closeWtPanel();
+  }, [closeWtPanel]);
 
   // Close the project actions menu on outside click.
   useEffect(() => {
@@ -1635,9 +1630,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             confirming: wtConfirmRemove === wt.path,
                             onSelect: () => {
                               setSelectedCwd(wt.path);
-                              setWtDropdownOpen(false);
-                              setWtError(null);
-                              setWtFilter("");
+                              closeWtPanel();
                             },
                           }))}
                           {visibleFallback.map((wt) => renderCheckoutRow({
@@ -1650,9 +1643,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
                             confirming: wtConfirmRemove === wt.path,
                             onSelect: () => {
                               setSelectedCwd(wt.path);
-                              setWtDropdownOpen(false);
-                              setWtError(null);
-                              setWtFilter("");
+                              closeWtPanel();
                             },
                           }))}
                           {showWtFilter && noMatches && filterText.length > 0 && (

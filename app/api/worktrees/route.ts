@@ -9,10 +9,10 @@ import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security"
 
 /** Same gate as /api/files: only session cwds / project roots / explicitly
  *  allowed dirs may be inspected or mutated through this endpoint. */
-async function checkCwdAllowed(cwd: string, requireExisting = true): Promise<NextResponse | null> {
+async function checkCwdAllowed(cwd: string, requireRealpath = true): Promise<NextResponse | null> {
   const allowedRoots = await getAllowedFileRoots();
   const lexicalAllowed = isFilePathAllowed(cwd, allowedRoots);
-  const realpathAllowed = !requireExisting || isExistingFilePathAllowed(cwd, allowedRoots);
+  const realpathAllowed = !requireRealpath || isExistingFilePathAllowed(cwd, allowedRoots);
   if (!lexicalAllowed || !realpathAllowed) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
@@ -35,12 +35,15 @@ async function getRouteHandler(req: Request) {
     // Authorize before any git call: resolveProject runs git -C cwd and caches
     // the result. An existing cwd also needs the realpath check, since a
     // symlink inside an allowed root may point outside it.
-    const denied = await checkCwdAllowed(cwd, existsSync(cwd));
+    const cwdExists = existsSync(cwd);
+    const denied = await checkCwdAllowed(cwd, cwdExists);
     if (denied) return denied;
     const project = await resolveProject(cwd);
-    const listCwd = existsSync(cwd) ? cwd : project.projectRoot;
+    const listCwd = cwdExists ? cwd : project.projectRoot;
+    if (listCwd !== cwd) {
     const listDenied = await checkCwdAllowed(listCwd);
     if (listDenied) return listDenied;
+    }
 
     let worktrees: WorktreeInfo[] = [];
     let branches: BranchInfo[] | null = [];
