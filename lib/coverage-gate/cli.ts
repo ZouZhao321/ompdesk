@@ -1,15 +1,17 @@
 import { readFile } from "node:fs/promises";
-import path from "node:path";
+import path, { join } from "node:path";
 import {
   generateBaseCoverage,
   readSourcePair,
   type BaseCoverageLoader,
   type SourceReader,
 } from "./base-coverage";
+import { BASELINE_FILE, collectExportUsage, type ExportAnalysis } from "./exports";
 import {
   isManagedSourceFile,
   listChangedFiles,
   listManagedSourceFiles,
+  readFileAtRevision,
   repositoryRoot,
   resolveMergeBase,
   type ChangedFile,
@@ -44,6 +46,10 @@ export interface CoverageGateOptions {
 
 export interface CoverageGateDependencies {
   readText?: (filePath: string) => Promise<string>;
+  /** 读取分叉点版本的文件；文件在该版本不存在时返回 null。 */
+  readBaseText?: (root: string, revision: string, filePath: string) => Promise<string | null>;
+  /** 读取基线文件；不存在时返回 null，解析交给规则。 */
+  readBaseline?: (root: string) => Promise<string | null>;
   git?: GitQueries;
   /** 分叉点基准覆盖率的获取；命令行默认现场生成，测试注入固定样本。 */
   baseCoverage?: BaseCoverageLoader;
@@ -71,19 +77,34 @@ function renderUnavailable(detail: string): string {
   ].join("\n");
 }
 
+function isMissingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+async function readBaselineFile(root: string): Promise<string | null> {
+  try {
+    return await readFile(join(root, BASELINE_FILE), "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return null;
+    throw error;
+  }
+}
+
 /**
  * 编排一次门禁运行：读 lcov、取分叉点与改动清单、现场生成基准覆盖率、聚合、判定、
  * 渲染报告。
  *
- * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出，退出码保持 0：门禁本身
- * 没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之变红。基准运行
- * 失败不在此列，它由规则二报成流水线问题并参与退出码。
+ * 产物缺失、git 读不到分叉点或导出分析读不出源码时把原因写进报告而不是抛出，退出码
+ * 保持 0：门禁本身没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之
+ * 变红。基准运行失败不在此列，它由规则二报成流水线问题并参与退出码。
  */
 export async function runCoverageGate(
   options: CoverageGateOptions,
   dependencies: CoverageGateDependencies = {},
 ): Promise<CoverageGateResult> {
   const readText = dependencies.readText ?? ((filePath: string) => readFile(filePath, "utf8"));
+  const readBaseText = dependencies.readBaseText ?? readFileAtRevision;
+  const readBaseline = dependencies.readBaseline ?? readBaselineFile;
   const git = dependencies.git ?? GIT_QUERIES;
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
 
@@ -127,6 +148,24 @@ export async function runCoverageGate(
 
   const relevantChanges = changedFiles.filter((file) => isManagedSourceFile(file.path));
 
+  let exportUsage: ExportAnalysis;
+  try {
+    exportUsage = await collectExportUsage({
+      changedFiles: relevantChanges,
+      managedFiles,
+      readers: {
+        readWorkspace: (filePath) => readText(join(root, filePath)),
+        readAtMergeBase: (filePath) => readBaseText(root, mergeBase, filePath),
+      },
+      baselineText: await readBaseline(root),
+    });
+  } catch (error) {
+    return {
+      exitCode: 0,
+      report: renderUnavailable(`导出引用分析失败：${errorMessage(error)}。`),
+    };
+  }
+
   // 规则二只判改动过的文件：新增文件走规则一，没有可判的文件时不跑基准，省一次测试运行。
   const deltaFiles = relevantChanges.filter((file) => file.status !== "added");
   let functionDelta: FunctionDeltaData | undefined;
@@ -159,6 +198,7 @@ export async function runCoverageGate(
     totals,
     managedFiles,
     functionDelta,
+    exportUsage,
   });
 
   const report = renderReport({
