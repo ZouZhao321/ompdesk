@@ -4,36 +4,10 @@
 用 `@AGENTS.template.md` 引入本文件，再补充个人习惯；`CLAUDE.md` 同样只想 `AGENTS.md`，
 所以没有个人文件的克隆不会拿到这些规则。
 
-## Git 工作流
+模板只放团队共享的规则；个人工作流（worktree 流程、决策记录与手工验证环境）写在自己的
+`AGENTS.md` 里。两边的写法判据见 `docs/agents-md-method.md`。
 
-每次修改都经过独立 worktree 与 pull request。`main` 只接受合并：禁止在 `main` 上直接提交，禁止直接推送到 `main`。
-
-1. 创建任何东西之前先检测是否已在隔离工作区。比较
-   `git rev-parse --path-format=absolute --git-dir` 与 `--git-common-dir`：
-   路径不同表示当前已在 linked worktree，原地工作并跳过创建。子模块
-   （`git rev-parse --show-superproject-working-tree` 有输出）按普通检出处理。
-2. 在普通检出中确认 `.worktrees/` 已被忽略：`git check-ignore -q .worktrees/`
-   必须退出 `0`。未忽略时先把 `.worktrees/` 写入 `.gitignore` 并提交这次改动。
-3. 在仓库根创建分支与 worktree：
-   `git worktree add .worktrees/<branch> -b <branch> origin/main`。起点固定为
-   `origin/main`，不用本地 `main`：本地 `main` 可能带着未推送到远端的合并，
-   以它为起点会让这些提交一起进入 PR。分支名为 `type/description`，`type` 取
-   `feat`、`fix`、`refactor`、`test`、`docs`、`chore`、`perf`。
-4. 依赖缺失时执行 `bun install`。编辑前在当前 worktree 执行一次 `bun test`，
-   把出现的失败记为既有基线；之后只要求不新增失败。
-5. 所有编辑、提交、推送都在该 worktree 内完成。主检出留在 `main` 分支上，它的
-   工作区状态不参与 worktree 的判定，也不构成阻塞。
-6. 用 `gh pr create` 向 `main` 提 PR。创建 PR 与推送无需询问；合并 PR 需要用户
-   明确授权。
-7. PR 合并且用户同意清理后，才删除 worktree 与分支。
-
-检查范围是本 worktree 的代码。`bun run typecheck`、`bun run lint`、`bun test`、
-合并前的自检与 CI 都以该 worktree 为准，主检出的失败不构成阻塞；失败与本次改动
-无关时，在 PR 描述里写明复现命令。主检出的未提交内容只挡住合并回主检出的这一步：
-`git merge` 拒绝覆盖它，此时先在主检出提交或暂存，或改走 PR 合并。
-
-worktree 之间真正共享的只有 `.git/info/exclude`、`.git/hooks`、`.git/config`、
-stash 记录，以及 `bun run dev` 的 30141 端口与 `~/.omp/agent` 下的会话数据。
+## 提交信息
 
 提交标题遵循 `type(scope): 中文描述`，`type` 取 `feat`、`fix`、`refactor`、`test`、
 `docs`、`chore`、`perf`；描述结尾不加句号，整行不超过 72 字符；`Merge `、`Revert `、
@@ -144,26 +118,6 @@ gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
 会话文件在 `~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`，每行一条
 JSON 记录，当前 `version: 3`。记录语义与顺序跟随 omp 的 transcript 语义，字段全集以
 `@oh-my-pi/pi-coding-agent` 的 `session-entries.d.ts` 为准。
-
-## 文档与决策
-
-本文档每次会话都会加载，一句话也要占上下文。它只写长期成立的规则、命令与结构。
-指针必须自带结论：每行先给必须记住的判断，再去给出处；只有要改那段代码、或要推翻
-结论时才读原文。
-
-索引条目一律写名字、用途与来源三样。只写名字的条目不成立：读者为了判断要不要用，
-就得把目标整个读一遍。ADR 文件头部带 `name` 与 `description` 两个字段，`description`
-说明它约束什么、什么时候读。新增规则、决策或快照时按 `docs/agents-md-method.md`
-的步骤做。
-
-架构决策记录留在维护者本机，不随仓库发布；仓库内只保留 `docs/agents-md-method.md`
-描述的写法与 `docs/file-map.md` 的文件职责表。
-
-`docs/file-map.md` 按目录列出每个文件的职责（路径加一句话），用于确认某个文件
-属于哪一块；文件是否存在以 `git ls-files` 为准。
-
-快照只留索引：规模数字、索引时间、机器路径、具体会话 id、接口方法与字段形状、
-色值都不写进正文。
 
 ## 快照索引
 
