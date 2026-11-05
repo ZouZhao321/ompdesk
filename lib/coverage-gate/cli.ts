@@ -10,7 +10,9 @@ import { BASELINE_FILE, collectExportUsage, type ExportAnalysis } from "./export
 import {
   isManagedSourceFile,
   listChangedFiles,
+  listDeletedFiles,
   listManagedSourceFiles,
+  listTestFiles,
   readFileAtRevision,
   repositoryRoot,
   resolveMergeBase,
@@ -20,6 +22,7 @@ import { aggregateCoverage, indexByPath, parseLcov } from "./lcov";
 import { renderReport } from "./report";
 import { evaluateRules } from "./rules";
 import { buildFunctionDelta, type FunctionDeltaData } from "./rules/rule-function-delta";
+import { collectTestImports } from "./test-imports";
 
 /** git 查询的注入点：命令行用默认实现，测试用固定样本，不读真实仓库状态。 */
 export interface GitQueries {
@@ -27,6 +30,10 @@ export interface GitQueries {
   mergeBase(cwd: string, baseRef: string): Promise<string>;
   changedFiles(cwd: string, mergeBase: string): Promise<ChangedFile[]>;
   managedSourceFiles(cwd: string): Promise<string[]>;
+  /** 测试文件清单；注入的桩没有这一项时被动覆盖检查跳过。 */
+  testFiles?(cwd: string): Promise<string[]>;
+  /** 分叉点以来被删除的受管源文件；桩没有这一项时按没有删除处理。 */
+  deletedFiles?(cwd: string, mergeBase: string): Promise<string[]>;
 }
 
 const GIT_QUERIES: GitQueries = {
@@ -34,6 +41,8 @@ const GIT_QUERIES: GitQueries = {
   mergeBase: resolveMergeBase,
   changedFiles: listChangedFiles,
   managedSourceFiles: listManagedSourceFiles,
+  testFiles: listTestFiles,
+  deletedFiles: listDeletedFiles,
 };
 
 export interface CoverageGateOptions {
@@ -75,6 +84,45 @@ function renderUnavailable(detail: string): string {
     `  ${detail}`,
     "  没有判定结果，退出码为 0。",
   ].join("\n");
+}
+
+/**
+ * 测试文件的导入索引。git 查询的桩没有 `testFiles` 时返回空索引，被动覆盖检查随之跳过。
+ */
+async function collectTestImportIndex(
+  git: GitQueries,
+  root: string,
+  readText: (filePath: string) => Promise<string>,
+): Promise<ReadonlyMap<string, ReadonlySet<string>>> {
+  if (!git.testFiles) return new Map();
+
+  const testFiles = await git.testFiles(root);
+  const sources = new Map<string, string>();
+  await Promise.all(
+    testFiles.map(async (filePath) => {
+      sources.set(filePath, await readText(join(root, filePath)));
+    }),
+  );
+  return collectTestImports(sources);
+}
+
+/**
+ * 分叉点有、本次已删除的受管源文件的正文。改名与拆分的函数名对应要拿它和新增文件比。
+ */
+async function readDeletedSources(
+  deletedFiles: readonly string[],
+  root: string,
+  mergeBase: string,
+  readBaseText: (root: string, revision: string, filePath: string) => Promise<string | null>,
+): Promise<ReadonlyMap<string, string>> {
+  const sources = new Map<string, string>();
+  const texts = await Promise.all(
+    deletedFiles.map(async (filePath) => [filePath, await readBaseText(root, mergeBase, filePath)] as const),
+  );
+  for (const [filePath, text] of texts) {
+    if (text !== null) sources.set(filePath, text);
+  }
+  return sources;
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -129,12 +177,14 @@ export async function runCoverageGate(
   let mergeBase: string;
   let changedFiles: ChangedFile[];
   let managedFiles: string[];
+  let deletedFiles: string[];
   try {
     root = await git.repositoryRoot(options.cwd);
     mergeBase = await git.mergeBase(options.cwd, baseRef);
-    [changedFiles, managedFiles] = await Promise.all([
+    [changedFiles, managedFiles, deletedFiles] = await Promise.all([
       git.changedFiles(root, mergeBase),
       git.managedSourceFiles(root),
+      git.deletedFiles ? git.deletedFiles(root, mergeBase) : Promise.resolve([]),
     ]);
   } catch (error) {
     return {
@@ -166,29 +216,44 @@ export async function runCoverageGate(
     };
   }
 
-  // 规则二只判改动过的文件：新增文件走规则一，没有可判的文件时不跑基准，省一次测试运行。
-  const deltaFiles = relevantChanges.filter((file) => file.status !== "added");
+  let testImports: ReadonlyMap<string, ReadonlySet<string>>;
+  try {
+    testImports = await collectTestImportIndex(git, root, readText);
+  } catch (error) {
+    return {
+      exitCode: 0,
+      report: renderUnavailable(`测试文件导入语句读取失败：${errorMessage(error)}。`),
+    };
+  }
+
+  // 改名、拆分与替换的识别要看两侧函数名：有改动的非新增文件，或有新增文件而又删了文件
+  // （拆分与合一的形状）时才取基准，其余情形省一次测试运行。
+  const hasChanged = relevantChanges.some((file) => file.status !== "added");
+  const hasAdded = relevantChanges.some((file) => file.status === "added");
   let functionDelta: FunctionDeltaData | undefined;
-  if (deltaFiles.length > 0) {
-    const [baseCoverage, pairs] = await Promise.all([
-      (dependencies.baseCoverage ?? generateBaseCoverage)({
-        repositoryRoot: root,
-        mergeBase,
-        scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
-      }),
+  if (hasChanged || (hasAdded && deletedFiles.length > 0)) {
+    const baseCoverage = await (dependencies.baseCoverage ?? generateBaseCoverage)({
+      repositoryRoot: root,
+      mergeBase,
+      scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
+    });
+    const [pairs, deletedSources] = await Promise.all([
       Promise.all(
-        deltaFiles.map(async (file) => {
+        relevantChanges.map(async (file) => {
           const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
           return [file.path, pair] as const;
         }),
       ),
+      readDeletedSources(deletedFiles, root, mergeBase, readBaseText),
     ]);
     functionDelta = buildFunctionDelta({
-      changedFiles: deltaFiles,
+      changedFiles: relevantChanges,
       coverage,
       baseCoverage,
       mergeBase,
       sources: new Map(pairs),
+      managedFiles,
+      deletedSources,
     });
   }
 
@@ -198,6 +263,7 @@ export async function runCoverageGate(
     totals,
     managedFiles,
     functionDelta,
+    testImports,
     exportUsage,
   });
 
