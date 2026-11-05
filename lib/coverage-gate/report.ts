@@ -64,6 +64,7 @@ function renderFunctionDeltaRow(row: FunctionDeltaRow): string {
     );
   }
   if (row.baseSourceMissing) parts.push("分叉点版本读不到");
+  if (row.exemptReason !== undefined) parts.push(`规则二豁免：${row.exemptReason}`);
   return `  ${row.file} · ${parts.join(" · ")}`;
 }
 
@@ -80,6 +81,15 @@ function renderFunctionDelta(data: FunctionDeltaData): string[] {
   );
   for (const row of data.rows) lines.push(renderFunctionDeltaRow(row));
   if (data.rows.length === 0) lines.push("  没有需要比对的改动文件");
+
+  if (data.notes.length > 0) {
+    lines.push("", "规则二失真处理");
+    for (const note of data.notes) {
+      lines.push(`  [${note.label}] ${note.file} · ${note.numbers}`);
+      lines.push(`       原因：${note.reason}`);
+      lines.push(`       处理：${note.fix}`);
+    }
+  }
   return lines;
 }
 

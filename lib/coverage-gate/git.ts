@@ -35,6 +35,13 @@ export function isManagedSourceFile(filePath: string): boolean {
 }
 
 /**
+ * 测试源文件：按命名规则认出的测试文件。被动覆盖的静态检查要读它们的导入语句。
+ */
+export function isTestFileSource(filePath: string): boolean {
+  return TEST_FILE_RE.test(filePath.replace(/\\/g, "/"));
+}
+
+/**
  * 解析 `git diff --name-status -z -M` 的输出，并并入未跟踪文件。
  * `-z` 下记录形如 `M\0path\0` 或 `R100\0old\0new\0`；删除的记录跳过。
  */
@@ -126,6 +133,21 @@ export async function listChangedFiles(
 export async function listManagedSourceFiles(cwd: string): Promise<string[]> {
   const output = await git(cwd, ["ls-files", "-z"]);
   return output.split("\0").filter(isManagedSourceFile).sort();
+}
+
+/** 测试文件清单，来自同一次 `git ls-files`，按路径排序。 */
+export async function listTestFiles(cwd: string): Promise<string[]> {
+  const output = await git(cwd, ["ls-files", "-z"]);
+  return output.split("\0").filter(isTestFileSource).sort();
+}
+
+/**
+ * 分叉点以来被删除的受管源文件。改名不算删除；拆分后旧文件消失时这里会有记录，
+ * 门禁据此判断要不要做结构改造的对应。
+ */
+export async function listDeletedFiles(cwd: string, mergeBase: string): Promise<string[]> {
+  const output = await git(cwd, ["diff", "--name-only", "--diff-filter=D", "-z", mergeBase]);
+  return output.split("\0").filter((path) => path.length > 0 && isManagedSourceFile(path)).sort();
 }
 
 /** 读取某个版本里的文件内容；文件在该版本不存在时返回 null（新增与删除的常规情形）。 */
