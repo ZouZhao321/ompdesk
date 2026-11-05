@@ -20,16 +20,16 @@
 import type { FileCoverage } from "../lcov";
 
 /** 两组函数名的最小重叠比例：交集除以较小的一侧。 */
-export const NAME_SET_OVERLAP_THRESHOLD = 0.35;
+const NAME_SET_OVERLAP_THRESHOLD = 0.35;
 
 /** 名字集合与它所属的文件。 */
-export interface NamedSet {
+interface NamedSet {
   path: string;
   names: ReadonlySet<string>;
 }
 
 /** 一组互相迁移的文件。 */
-export interface NameSetGroup {
+interface NameSetGroup {
   basePaths: string[];
   headPaths: string[];
   /** 基准侧没有落到任何新文件里的名字。 */
@@ -65,7 +65,7 @@ export interface LineFallback {
 }
 
 /** 改名：git 已识别到旧路径。 */
-export interface RenameFact {
+interface RenameFact {
   path: string;
   previousPath: string;
   /** 旧路径在分叉点覆盖率里是否有记录。 */
@@ -73,7 +73,7 @@ export interface RenameFact {
 }
 
 /** 有删除函数的改动文件：两侧的函数名集合。 */
-export interface PersistentFact {
+interface PersistentFact {
   path: string;
   basePath: string;
   baseNames: ReadonlySet<string>;
@@ -81,13 +81,13 @@ export interface PersistentFact {
 }
 
 /** 替换式改动：删了旧函数又加了新函数，净增量为零。 */
-export interface ReplacementFact {
+interface ReplacementFact {
   path: string;
   added: readonly string[];
   removed: readonly string[];
 }
 
-export interface DistortionFacts {
+interface DistortionFacts {
   renames: readonly RenameFact[];
   /** 已从本次工作区消失、但在分叉点覆盖率里有记录的路径及其函数名。 */
   deleted: readonly NamedSet[];
@@ -99,7 +99,7 @@ export interface DistortionFacts {
   coverage: ReadonlyMap<string, FileCoverage>;
 }
 
-export interface DistortionResult {
+interface DistortionResult {
   notes: DistortionNote[];
   /** 规则二免征的文件 → 免征原因。 */
   exemptions: Map<string, string>;
@@ -127,7 +127,7 @@ function unionNames(entries: readonly NamedSet[]): Set<string> {
  * 用函数名集合把两侧文件分组。两侧名字重叠达到阈值的文件连成一组；只有同时含基准侧与
  * 本次侧的分量才成组，输出按基准路径排序，供报告稳定复现。
  */
-export function groupByFunctionNames(
+function groupByFunctionNames(
   base: readonly NamedSet[],
   head: readonly NamedSet[],
 ): NameSetGroup[] {

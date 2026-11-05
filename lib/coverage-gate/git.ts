@@ -37,7 +37,7 @@ export function isManagedSourceFile(filePath: string): boolean {
 /**
  * 测试源文件：按命名规则认出的测试文件。被动覆盖的静态检查要读它们的导入语句。
  */
-export function isTestFileSource(filePath: string): boolean {
+function isTestFileSource(filePath: string): boolean {
   return TEST_FILE_RE.test(filePath.replace(/\\/g, "/"));
 }
 
