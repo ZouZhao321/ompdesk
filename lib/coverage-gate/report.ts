@@ -1,6 +1,7 @@
 import type { ChangedFile, ChangeStatus } from "./git";
 import type { CoverageTotals, FileCoverage } from "./lcov";
 import type { Finding } from "./rules";
+import type { FunctionDeltaData, FunctionDeltaRow } from "./rules/rule-function-delta";
 
 /** 报告需要的全部数据。渲染是纯函数，便于用固定样本断言文本。 */
 export interface ReportInput {
@@ -15,6 +16,8 @@ export interface ReportInput {
   duplicateRecords: number;
   managedFileCount: number;
   missingManagedFiles: readonly string[];
+  /** 规则二的基准侧数据；没有改动文件可判时不提供。 */
+  functionDelta?: FunctionDeltaData;
   findings: readonly Finding[];
 }
 
@@ -46,6 +49,40 @@ function renderChangedFile(file: ChangedFile, coverage: ReadonlyMap<string, File
   return `  ${label}  ${path} · ${detail}${applicability}`;
 }
 
+function renderFunctionDeltaRow(row: FunctionDeltaRow): string {
+  const hitDelta = row.headHit - row.baseHit;
+  const parts = [
+    `改动前 ${row.baseHit}/${row.baseFound}`,
+    `改动后 ${row.headHit}/${row.headFound}`,
+    `新增 ${row.added.length}`,
+    `删除 ${row.removed.length}`,
+    `被调用数 ${hitDelta >= 0 ? "+" : ""}${hitDelta}`,
+  ];
+  if (row.addedReExports.length > 0 || row.removedReExports.length > 0) {
+    parts.push(
+      `重导出 +${row.addedReExports.length}/-${row.removedReExports.length}`,
+    );
+  }
+  if (row.baseSourceMissing) parts.push("分叉点版本读不到");
+  return `  ${row.file} · ${parts.join(" · ")}`;
+}
+
+function renderFunctionDelta(data: FunctionDeltaData): string[] {
+  const lines = [`函数增量（相对分叉点 ${data.mergeBase.slice(0, 7)}）`];
+  if (!data.baseCoverage.ok) {
+    // 基准缺失时两侧数字不可比，只说明原因，不打印半边为 0 的对照。
+    lines.push(`  基准覆盖率不可用（流水线问题）：${data.baseCoverage.detail}`);
+    return lines;
+  }
+
+  lines.push(
+    `  基准覆盖率现场生成，耗时 ${(data.baseCoverage.durationMs / 1000).toFixed(1)} 秒`,
+  );
+  for (const row of data.rows) lines.push(renderFunctionDeltaRow(row));
+  if (data.rows.length === 0) lines.push("  没有需要比对的改动文件");
+  return lines;
+}
+
 function renderFinding(finding: Finding): string[] {
   return [
     `  [${finding.rule}] ${finding.file}`,
@@ -59,13 +96,17 @@ function renderFinding(finding: Finding): string[] {
 export function renderReport(input: ReportInput): string {
   const failed = input.findings.length > 0;
   const lines: string[] = [
-    failed ? "覆盖率门禁（本次有判定未通过）" : "覆盖率门禁（只报告，不阻断合并）",
+    failed ? "覆盖率门禁（本次有判定未通过）" : "覆盖率门禁",
     `基准 ${input.baseRef}，分叉点 ${input.mergeBase.slice(0, 7)}`,
     "",
     `改动文件：${input.changedFiles.length} 个受管源文件`,
   ];
 
   for (const file of input.changedFiles) lines.push(renderChangedFile(file, input.coverage));
+
+  if (input.functionDelta) {
+    lines.push("", ...renderFunctionDelta(input.functionDelta));
+  }
 
   lines.push(
     "",
@@ -92,7 +133,7 @@ export function renderReport(input: ReportInput): string {
     "",
     failed
       ? `本次 ${input.findings.length} 条判定未通过，退出码非零。`
-      : "本步骤只报告，不阻断合并；退出码固定为 0。",
+      : "本次没有判定结果，退出码为 0。",
   );
   return lines.join("\n");
 }

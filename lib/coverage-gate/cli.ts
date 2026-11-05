@@ -1,4 +1,11 @@
 import { readFile } from "node:fs/promises";
+import path from "node:path";
+import {
+  generateBaseCoverage,
+  readSourcePair,
+  type BaseCoverageLoader,
+  type SourceReader,
+} from "./base-coverage";
 import {
   isManagedSourceFile,
   listChangedFiles,
@@ -10,6 +17,7 @@ import {
 import { aggregateCoverage, indexByPath, parseLcov } from "./lcov";
 import { renderReport } from "./report";
 import { evaluateRules } from "./rules";
+import { buildFunctionDelta, type FunctionDeltaData } from "./rules/rule-function-delta";
 
 /** git 查询的注入点：命令行用默认实现，测试用固定样本，不读真实仓库状态。 */
 export interface GitQueries {
@@ -37,6 +45,10 @@ export interface CoverageGateOptions {
 export interface CoverageGateDependencies {
   readText?: (filePath: string) => Promise<string>;
   git?: GitQueries;
+  /** 分叉点基准覆盖率的获取；命令行默认现场生成，测试注入固定样本。 */
+  baseCoverage?: BaseCoverageLoader;
+  /** 改动文件两版正文的读取；命令行默认走 git 与工作区，测试注入固定样本。 */
+  sources?: SourceReader;
 }
 
 export interface CoverageGateResult {
@@ -55,15 +67,17 @@ function renderUnavailable(detail: string): string {
   return [
     "覆盖率门禁未能运行",
     `  ${detail}`,
-    "  本步骤只报告，退出码保持 0。",
+    "  没有判定结果，退出码为 0。",
   ].join("\n");
 }
 
 /**
- * 编排一次门禁运行：读 lcov、取分叉点与改动清单、聚合、渲染报告。
+ * 编排一次门禁运行：读 lcov、取分叉点与改动清单、现场生成基准覆盖率、聚合、判定、
+ * 渲染报告。
  *
  * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出，退出码保持 0：门禁本身
- * 没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之变红。
+ * 没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之变红。基准运行
+ * 失败不在此列，它由规则二报成流水线问题并参与退出码。
  */
 export async function runCoverageGate(
   options: CoverageGateOptions,
@@ -90,11 +104,12 @@ export async function runCoverageGate(
   const coverage = indexByPath(parsed.files);
   const totals = aggregateCoverage(parsed.files);
 
+  let root: string;
   let mergeBase: string;
   let changedFiles: ChangedFile[];
   let managedFiles: string[];
   try {
-    const root = await git.repositoryRoot(options.cwd);
+    root = await git.repositoryRoot(options.cwd);
     mergeBase = await git.mergeBase(options.cwd, baseRef);
     [changedFiles, managedFiles] = await Promise.all([
       git.changedFiles(root, mergeBase),
@@ -111,12 +126,41 @@ export async function runCoverageGate(
   }
 
   const relevantChanges = changedFiles.filter((file) => isManagedSourceFile(file.path));
+
+  // 规则二只判改动过的文件：新增文件走规则一，没有可判的文件时不跑基准，省一次测试运行。
+  const deltaFiles = relevantChanges.filter((file) => file.status !== "added");
+  let functionDelta: FunctionDeltaData | undefined;
+  if (deltaFiles.length > 0) {
+    const [baseCoverage, pairs] = await Promise.all([
+      (dependencies.baseCoverage ?? generateBaseCoverage)({
+        repositoryRoot: root,
+        mergeBase,
+        scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
+      }),
+      Promise.all(
+        deltaFiles.map(async (file) => {
+          const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
+          return [file.path, pair] as const;
+        }),
+      ),
+    ]);
+    functionDelta = buildFunctionDelta({
+      changedFiles: deltaFiles,
+      coverage,
+      baseCoverage,
+      mergeBase,
+      sources: new Map(pairs),
+    });
+  }
+
   const findings = evaluateRules({
     changedFiles: relevantChanges,
     coverage,
     totals,
     managedFiles,
+    functionDelta,
   });
+
   const report = renderReport({
     baseRef,
     mergeBase,
@@ -127,6 +171,7 @@ export async function runCoverageGate(
     duplicateRecords: parsed.duplicates,
     managedFileCount: managedFiles.length,
     missingManagedFiles: managedFiles.filter((file) => !coverage.has(file)),
+    functionDelta,
     findings,
   });
 
