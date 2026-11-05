@@ -130,8 +130,12 @@ function judgeRow(row: FunctionDeltaRow): Finding[] {
       rule: RULE_ID,
       file: row.file,
       numbers: `${contrast(row)}，函数总数减少 ${-foundDelta}`,
-      reason: `函数总数减少，删除的函数与测试不再对应${row.removed.length > 0 ? `：${row.removed.join("、")}` : ""}`,
-      fix: "把删除函数的测试一并移除，或在豁免清单登记本次删除",
+      reason: row.removed.length > 0
+        ? `函数总数减少，删除的函数与测试不再对应：${row.removed.join("、")}`
+        : "函数总数减少，但两版结构里没有删除的函数名，覆盖率计数与结构不一致",
+      fix: row.removed.length > 0
+        ? "把删除函数的测试一并移除，或在豁免清单登记本次删除"
+        : "确认该文件的加载路径是否变化，计数与结构不一致时按流水线问题排查",
     });
   }
 
