@@ -1,6 +1,7 @@
 import type { ChangedFile, ChangeStatus } from "./git";
 import type { CoverageTotals, FileCoverage } from "./lcov";
 import type { Finding } from "./rules";
+import type { FunctionDeltaData, FunctionDeltaRow } from "./rules/rule-function-delta";
 
 /** 报告需要的全部数据。渲染是纯函数，便于用固定样本断言文本。 */
 export interface ReportInput {
@@ -15,6 +16,8 @@ export interface ReportInput {
   duplicateRecords: number;
   managedFileCount: number;
   missingManagedFiles: readonly string[];
+  /** 规则二的基准侧数据；没有改动文件可判时不提供。 */
+  functionDelta?: FunctionDeltaData;
   findings: readonly Finding[];
 }
 
@@ -42,6 +45,37 @@ function renderChangedFile(file: ChangedFile, coverage: ReadonlyMap<string, File
   return `  ${label}  ${path} · ${detail}`;
 }
 
+function renderFunctionDeltaRow(row: FunctionDeltaRow): string {
+  const parts = [
+    `改动前 ${row.baseHit}/${row.baseFound}`,
+    `改动后 ${row.headHit}/${row.headFound}`,
+    `新增 ${row.added.length}`,
+    `删除 ${row.removed.length}`,
+    `被调用数 ${row.headHit - row.baseHit >= 0 ? "+" : ""}${row.headHit - row.baseHit}`,
+  ];
+  if (row.addedReExports.length > 0 || row.removedReExports.length > 0) {
+    parts.push(
+      `重导出 +${row.addedReExports.length}/-${row.removedReExports.length}`,
+    );
+  }
+  if (row.baseSourceMissing) parts.push("分叉点版本读不到");
+  return `  ${row.file} · ${parts.join(" · ")}`;
+}
+
+function renderFunctionDelta(data: FunctionDeltaData): string[] {
+  const lines = [`函数增量（相对分叉点 ${data.mergeBase.slice(0, 7)}）`];
+  if (data.baseCoverage.ok) {
+    lines.push(
+      `  基准覆盖率现场生成，耗时 ${(data.baseCoverage.durationMs / 1000).toFixed(1)} 秒`,
+    );
+  } else {
+    lines.push(`  基准覆盖率不可用（流水线问题）：${data.baseCoverage.detail}`);
+  }
+  for (const row of data.rows) lines.push(renderFunctionDeltaRow(row));
+  if (data.rows.length === 0) lines.push("  没有需要比对的改动文件");
+  return lines;
+}
+
 function renderFinding(finding: Finding): string[] {
   return [
     `  [${finding.rule}] ${finding.file}`,
@@ -54,13 +88,17 @@ function renderFinding(finding: Finding): string[] {
 /** 把一次门禁运行的数据渲染成一段可直接贴进检查日志的文本。 */
 export function renderReport(input: ReportInput): string {
   const lines: string[] = [
-    "覆盖率门禁（只报告，不阻断合并）",
+    "覆盖率门禁",
     `基准 ${input.baseRef}，分叉点 ${input.mergeBase.slice(0, 7)}`,
     "",
     `改动文件：${input.changedFiles.length} 个受管源文件`,
   ];
 
   for (const file of input.changedFiles) lines.push(renderChangedFile(file, input.coverage));
+
+  if (input.functionDelta) {
+    lines.push("", ...renderFunctionDelta(input.functionDelta));
+  }
 
   lines.push(
     "",
@@ -83,6 +121,6 @@ export function renderReport(input: ReportInput): string {
   lines.push("", `规则判定：${input.findings.length} 条`);
   for (const finding of input.findings) lines.push(...renderFinding(finding));
 
-  lines.push("", "本步骤只报告，不阻断合并；退出码固定为 0。");
+  lines.push("", "有规则判定结果时退出码为 1，没有判定结果时为 0。");
   return lines.join("\n");
 }

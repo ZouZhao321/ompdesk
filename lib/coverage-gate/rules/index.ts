@@ -1,5 +1,6 @@
 import type { ChangedFile } from "../git";
 import type { CoverageTotals, FileCoverage } from "../lcov";
+import { functionDeltaRule, type FunctionDeltaData } from "./rule-function-delta";
 
 /**
  * 规则输入：改动清单、覆盖率索引与仓库合计。后续规则只读这份输入，不自己读文件、
@@ -10,6 +11,8 @@ export interface RuleInput {
   coverage: ReadonlyMap<string, FileCoverage>;
   totals: CoverageTotals;
   managedFiles: readonly string[];
+  /** 规则二的基准侧数据：分叉点覆盖率与两版函数结构。未接入时为 undefined。 */
+  functionDelta?: FunctionDeltaData;
 }
 
 /**
@@ -31,10 +34,9 @@ export interface CoverageRule {
 }
 
 /**
- * 规则注册表。本票据只报告数字，不启用任何规则；规则一至三在后续票据里追加到
- * 这份数组，判定顺序即数组顺序。
+ * 规则注册表。判定顺序即数组顺序；规则一至三在各自的票据里追加到这份数组。
  */
-export const RULES: readonly CoverageRule[] = [];
+export const RULES: readonly CoverageRule[] = [functionDeltaRule];
 
 /** 依次执行规则并汇总结果。`rules` 可注入，供测试使用固定样本。 */
 export function evaluateRules(
