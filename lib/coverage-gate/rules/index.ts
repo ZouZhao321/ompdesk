@@ -1,5 +1,6 @@
 import type { ChangedFile } from "../git";
 import type { CoverageTotals, FileCoverage } from "../lcov";
+import { ruleNewFiles } from "./rule-new-files";
 
 /**
  * 规则输入：改动清单、覆盖率索引与仓库合计。后续规则只读这份输入，不自己读文件、
@@ -30,11 +31,8 @@ export interface CoverageRule {
   evaluate(input: RuleInput): Finding[];
 }
 
-/**
- * 规则注册表。本票据只报告数字，不启用任何规则；规则一至三在后续票据里追加到
- * 这份数组，判定顺序即数组顺序。
- */
-export const RULES: readonly CoverageRule[] = [];
+/** 规则注册表：判定顺序即数组顺序。 */
+export const RULES: readonly CoverageRule[] = [ruleNewFiles];
 
 /** 依次执行规则并汇总结果。`rules` 可注入，供测试使用固定样本。 */
 export function evaluateRules(
