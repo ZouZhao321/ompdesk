@@ -1,16 +1,20 @@
+import type { ExportAnalysis } from "../exports";
 import type { ChangedFile } from "../git";
 import type { CoverageTotals, FileCoverage } from "../lcov";
+import { ruleExports } from "./rule-exports";
 import { ruleNewFiles } from "./rule-new-files";
 
 /**
- * 规则输入：改动清单、覆盖率索引与仓库合计。后续规则只读这份输入，不自己读文件、
- * 不自己跑 git，保证同一份产物在本地与持续集成得到相同结论。
+ * 规则输入：改动清单、覆盖率索引、仓库合计与导出引用分析。规则只读这份输入，不自己
+ * 读文件、不自己跑 git，保证同一份产物在本地与持续集成得到相同结论。
  */
 export interface RuleInput {
   changedFiles: readonly ChangedFile[];
   coverage: ReadonlyMap<string, FileCoverage>;
   totals: CoverageTotals;
   managedFiles: readonly string[];
+  /** 规则三的输入：两侧导出对比、生产引用索引与基线条目。 */
+  exportUsage: ExportAnalysis;
 }
 
 /**
@@ -32,7 +36,7 @@ export interface CoverageRule {
 }
 
 /** 规则注册表：判定顺序即数组顺序。 */
-export const RULES: readonly CoverageRule[] = [ruleNewFiles];
+export const RULES: readonly CoverageRule[] = [ruleNewFiles, ruleExports];
 
 /** 依次执行规则并汇总结果。`rules` 可注入，供测试使用固定样本。 */
 export function evaluateRules(
