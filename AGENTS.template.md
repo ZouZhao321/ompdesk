@@ -82,9 +82,6 @@ Node 无法加载。`next.config.ts` 把每个 `@oh-my-pi/*` 请求 externalize 
      PI_CODING_AGENT_DIR="$PWD/.tmp/manual-check/agent" bun run dev
      ```
 
-     要发消息或切模型时，把 `~/.omp/agent/agent.db` 与 `~/.omp/agent/models.yml`
-     复制进该目录，或在该目录内重新登录。
-
 ## 界面改动
 
 界面改动必须附截图，能录视频的再附一段不超过一分钟的短视频，只演示这次的交互。
@@ -124,7 +121,6 @@ JSON 记录，当前 `version: 3`。记录语义与顺序跟随 omp 的 transcri
 - `路由与接口方法`: 查某个网址由哪个文件处理、支持哪些方法；来源 `app/api/` 目录结构，`git ls-files 'app/api/**/route.ts'`
 - `模块与组件职责`: 查某个文件属于哪一块、大致做什么；来源 `docs/file-map.md`，打开该文件
 - `会话文件格式`: 读写 `.jsonl` 时确认字段、顺序与版本；来源 `session-entries.d.ts`（`version: 3`），`grep -n CURRENT_SESSION_VERSION`
-- `代码索引规模`: 判断代码地图是否过期、覆盖多少；来源 `.gitnexus/gitnexus.json` 的 `stats`，读 `stats.nodes` / `stats.edges` / `stats.processes`
 - `模型角色清单`: 新增或改角色时对齐 SDK 定义；来源 SDK 的 `ModelRole` 类型，`grep -n "export type ModelRole"`
 - `主题色值`: 改配色时找变量名与真实取值；来源 `/api/theme` 与 `pi-tui/src/theme/*.json`，请求接口或读主题 JSON
 - `依赖与运行时版本`: 判断 Bun、Node 与 Next 的版本约束；来源 `package.json` 的 `engines` 与 `bun.lock`，读 `package.json`

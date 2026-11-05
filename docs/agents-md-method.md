@@ -42,7 +42,7 @@ omp 加载 skill 时用的是「名字: 描述」的一行一条清单。索引�
 ## 校验
 
 - 写进索引的读取命令必须先跑通：跑不通的命令等于没有索引。
-- 预算：`wc -l -c AGENTS.md` 与 `wc -l -c AGENTS.template.md` 相加。当前 201 行约 11.8KB；明显变大时先怀疑有人把快照放回来了。
+- 预算：`wc -l -c AGENTS.md` 与 `wc -l -c AGENTS.template.md` 相加。当前 203 行约 11.9KB；明显变大时先怀疑有人把快照放回来了。
 
 ## 反面
 
