@@ -17,7 +17,7 @@ import path from "node:path";
 import ts from "typescript";
 
 /** 命名空间导入的通配标记：该模块的任意导出名都算被导入。 */
-export const ANY_IMPORTED_NAME = "*";
+const ANY_IMPORTED_NAME = "*";
 
 const IMPORT_SUFFIXES = [
   "",
