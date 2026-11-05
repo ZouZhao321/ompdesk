@@ -51,9 +51,9 @@ jobs:
       # coverage:gate → build → smoke:dev）；本地 `bun run verify` 与推送前钩子用的是
       # 同一份定义，改流程只改那一处，CI 与本地不会再分叉。
       #
-      # coverage:gate 复用同一条测试命令产出 lcov，再渲染本次改动的覆盖率数字。
-      # 这一步只报告：判定逻辑的退出码固定为 0，结论不改变合并结果；测试失败仍由
-      # 前面的 test 步骤决定。本地单独复现用 `bun run coverage:gate`。
+      # coverage:gate 复用同一条测试命令产出 lcov，再渲染本次改动的覆盖率数字并执行
+      # 覆盖率规则。规则有判定结果时这一步以非零退出码结束，合并检查随之变红；测试
+      # 失败仍由前面的 test 步骤决定。本地单独复现用 `bun run coverage:gate`。
       #
       # eslint 不进这道门禁：全仓 `bun run lint` 现有存量 error（React 编译器的
       # memoization 检查，落在 components/ 与 hooks/），加进来必然红。复现命令

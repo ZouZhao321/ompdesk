@@ -42,7 +42,11 @@ function renderChangedFile(file: ChangedFile, coverage: ReadonlyMap<string, File
   const detail = metrics
     ? `行 ${ratio(metrics.linesHit, metrics.linesFound)} · 函数 ${ratio(metrics.functionsHit, metrics.functionsFound)}`
     : "行 0/0（未加载） · 函数 0/0（未加载）";
-  return `  ${label}  ${path} · ${detail}`;
+  // 纯类型、常量表与样式的新增文件没有函数可调用，规则一不适用，如实标注。
+  const applicability = metrics && file.status === "added" && metrics.functionsFound === 0
+    ? " · 规则一不适用（零函数）"
+    : "";
+  return `  ${label}  ${path} · ${detail}${applicability}`;
 }
 
 function renderFunctionDeltaRow(row: FunctionDeltaRow): string {
@@ -87,8 +91,9 @@ function renderFinding(finding: Finding): string[] {
 
 /** 把一次门禁运行的数据渲染成一段可直接贴进检查日志的文本。 */
 export function renderReport(input: ReportInput): string {
+  const failed = input.findings.length > 0;
   const lines: string[] = [
-    "覆盖率门禁",
+    failed ? "覆盖率门禁（本次有判定未通过）" : "覆盖率门禁",
     `基准 ${input.baseRef}，分叉点 ${input.mergeBase.slice(0, 7)}`,
     "",
     `改动文件：${input.changedFiles.length} 个受管源文件`,
@@ -121,6 +126,11 @@ export function renderReport(input: ReportInput): string {
   lines.push("", `规则判定：${input.findings.length} 条`);
   for (const finding of input.findings) lines.push(...renderFinding(finding));
 
-  lines.push("", "有规则判定结果时退出码为 1，没有判定结果时为 0。");
+  lines.push(
+    "",
+    failed
+      ? `本次 ${input.findings.length} 条判定未通过，退出码非零。`
+      : "本次没有判定结果，退出码为 0。",
+  );
   return lines.join("\n");
 }

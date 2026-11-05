@@ -17,7 +17,7 @@ import type { ChangedFile } from "../git";
 import type { FileCoverage } from "../lcov";
 import type { CoverageRule, Finding, RuleInput } from "./index";
 
-export const RULE_ID = "R2";
+export const RULE_ID = "rule-2";
 
 export interface FunctionDeltaRow {
   /** 改动后的路径。 */
@@ -152,6 +152,9 @@ export const functionDeltaRule: CoverageRule = {
   id: RULE_ID,
   title: "改动文件的函数增量以分叉点为基准",
   evaluate(input: RuleInput): Finding[] {
+    // 只有新增文件时没有可判的改动文件，基准也不必生成，这里直接通过。
+    if (input.changedFiles.every((file) => file.status === "added")) return [];
+
     const data = input.functionDelta;
     if (!data) {
       return [{

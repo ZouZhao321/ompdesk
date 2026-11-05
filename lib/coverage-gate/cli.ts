@@ -52,7 +52,7 @@ export interface CoverageGateDependencies {
 }
 
 export interface CoverageGateResult {
-  /** 有规则判定结果时为 1，没有判定结果时为 0。 */
+  /** 有判定结果时非零，用来让合并检查变红；产物或 git 数据不可用时保持 0。 */
   exitCode: number;
   report: string;
 }
@@ -75,9 +75,9 @@ function renderUnavailable(detail: string): string {
  * 编排一次门禁运行：读 lcov、取分叉点与改动清单、现场生成基准覆盖率、聚合、判定、
  * 渲染报告。
  *
- * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出：日志里要留下可定位的说明，
- * 这种情况下没有判定结果，退出码为 0。基准运行失败不在此列，它由规则二报成流水线问题
- * 并参与退出码。
+ * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出，退出码保持 0：门禁本身
+ * 没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之变红。基准运行
+ * 失败不在此列，它由规则二报成流水线问题并参与退出码。
  */
 export async function runCoverageGate(
   options: CoverageGateOptions,

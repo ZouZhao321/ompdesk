@@ -1,6 +1,7 @@
 import type { ChangedFile } from "../git";
 import type { CoverageTotals, FileCoverage } from "../lcov";
 import { functionDeltaRule, type FunctionDeltaData } from "./rule-function-delta";
+import { ruleNewFiles } from "./rule-new-files";
 
 /**
  * 规则输入：改动清单、覆盖率索引与仓库合计。后续规则只读这份输入，不自己读文件、
@@ -33,10 +34,8 @@ export interface CoverageRule {
   evaluate(input: RuleInput): Finding[];
 }
 
-/**
- * 规则注册表。判定顺序即数组顺序；规则一至三在各自的票据里追加到这份数组。
- */
-export const RULES: readonly CoverageRule[] = [functionDeltaRule];
+/** 规则注册表：判定顺序即数组顺序，规则一在前、规则二在后。 */
+export const RULES: readonly CoverageRule[] = [ruleNewFiles, functionDeltaRule];
 
 /** 依次执行规则并汇总结果。`rules` 可注入，供测试使用固定样本。 */
 export function evaluateRules(
