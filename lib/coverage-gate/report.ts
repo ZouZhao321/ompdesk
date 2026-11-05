@@ -1,3 +1,5 @@
+import type { ExceptionEntry, ExceptionResolution } from "./exceptions";
+import { EXCEPTIONS_FILE } from "./exceptions";
 import type { ChangedFile, ChangeStatus } from "./git";
 import type { CoverageTotals, FileCoverage } from "./lcov";
 import type { Finding } from "./rules";
@@ -18,6 +20,8 @@ export interface ReportInput {
   missingManagedFiles: readonly string[];
   /** 规则二的基准侧数据；没有改动文件可判时不提供。 */
   functionDelta?: FunctionDeltaData;
+  /** 有效豁免已从 `findings` 里剔除，随这里的豁免段一并展示。 */
+  exceptions?: ExceptionResolution;
   findings: readonly Finding[];
 }
 
@@ -92,11 +96,67 @@ function renderFinding(finding: Finding): string[] {
   ];
 }
 
+function renderExceptionEntry(entry: ExceptionEntry, suffix = ""): string[] {
+  return [
+    `    [${entry.rule}] ${entry.file} · 到期 ${entry.expiresOn}${suffix}`,
+    `      理由：${entry.reason}`,
+    `      替代验证：${entry.verification}`,
+  ];
+}
+
+function renderExceptions(resolution: ExceptionResolution): string[] {
+  const lines = [`豁免清单（${EXCEPTIONS_FILE}，复核日期 ${resolution.today}）`];
+  if (!resolution.present) {
+    lines.push("  清单文件不存在，按没有登记处理。");
+    return lines;
+  }
+
+  if (
+    resolution.active.length === 0
+    && resolution.expired.length === 0
+    && resolution.problems.length === 0
+  ) {
+    lines.push("  没有登记豁免。");
+    return lines;
+  }
+
+  if (resolution.active.length > 0) {
+    lines.push(`  生效 ${resolution.active.length} 条（对应判定不阻断）`);
+    for (const entry of resolution.active) {
+      lines.push(...renderExceptionEntry(entry));
+      for (const finding of entry.suppressed) {
+        lines.push(`      放行：${finding.numbers} · ${finding.reason}`);
+      }
+    }
+  }
+
+  if (resolution.expired.length > 0) {
+    lines.push(`  已到期 ${resolution.expired.length} 条（规则重新拦截）`);
+    for (const entry of resolution.expired) {
+      lines.push(...renderExceptionEntry(entry, "（已到期）"));
+    }
+  }
+
+  if (resolution.problems.length > 0) {
+    lines.push(`  校验失败 ${resolution.problems.length} 条（退出码非零）`);
+    for (const problem of resolution.problems) {
+      lines.push(problem.index === 0 ? `    清单整体：${problem.message}` : `    ${problem.message}`);
+    }
+  }
+
+  return lines;
+}
+
 /** 把一次门禁运行的数据渲染成一段可直接贴进检查日志的文本。 */
 export function renderReport(input: ReportInput): string {
   const failed = input.findings.length > 0;
+  const exceptionProblems = input.exceptions?.problems.length ?? 0;
   const lines: string[] = [
-    failed ? "覆盖率门禁（本次有判定未通过）" : "覆盖率门禁",
+    failed
+      ? "覆盖率门禁（本次有判定未通过）"
+      : exceptionProblems > 0
+        ? "覆盖率门禁（豁免清单校验未通过）"
+        : "覆盖率门禁",
     `基准 ${input.baseRef}，分叉点 ${input.mergeBase.slice(0, 7)}`,
     "",
     `改动文件：${input.changedFiles.length} 个受管源文件`,
@@ -129,11 +189,18 @@ export function renderReport(input: ReportInput): string {
   lines.push("", `规则判定：${input.findings.length} 条`);
   for (const finding of input.findings) lines.push(...renderFinding(finding));
 
+  if (input.exceptions) lines.push("", ...renderExceptions(input.exceptions));
+
+  const findings = input.findings.length;
   lines.push(
     "",
-    failed
-      ? `本次 ${input.findings.length} 条判定未通过，退出码非零。`
-      : "本次没有判定结果，退出码为 0。",
+    findings > 0 && exceptionProblems > 0
+      ? `本次 ${findings} 条判定未通过，豁免清单 ${exceptionProblems} 条校验失败，退出码非零。`
+      : findings > 0
+        ? `本次 ${findings} 条判定未通过，退出码非零。`
+        : exceptionProblems > 0
+          ? `豁免清单 ${exceptionProblems} 条校验失败，退出码非零。`
+          : "本次没有判定结果，退出码为 0。",
   );
   return lines.join("\n");
 }
