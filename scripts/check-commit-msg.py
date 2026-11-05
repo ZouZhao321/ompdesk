@@ -70,7 +70,7 @@ def main() -> int:
     if error is None:
         return 0
     print(f"提交标题不合规：{error}", file=sys.stderr)
-    print("格式说明见 AGENTS.md「Git 工作流」一节。", file=sys.stderr)
+    print("格式说明见 AGENTS.md「提交信息」一节。", file=sys.stderr)
     return 1
 
 
