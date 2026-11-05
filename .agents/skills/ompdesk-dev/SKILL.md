@@ -120,6 +120,9 @@ bun run scratch <任务名> "<用途>"   # 在 .tmp/ 下建任务目录
 
 - 开发期间不要执行 `bun run build`：会污染 `.next/` 并打断正在运行的开发服务器。
 - `bun test` 的判据是全套零失败。测试一失败，`ci` 里的 build 与冒烟不会执行。
+- `coverage:gate` 自己跑带插桩的全套测试并产出 `.tmp/coverage-gate/lcov.info`，报告末尾给出三段
+  耗时（本次测试运行、基准运行、分析），合计预算 3 分钟；合并检查把同一份 lcov 作为附件保留 7 天。
+  本地与检查跑的是 `bun run ci` 里同一条 `coverage:gate`，参数不另写一份。
 - 依赖本机会话库的用例，本机没有会话时改铺 `test-support/session-fixtures.ts` 的确定性样本；只有会话
   库不可读才跳过。
 - `bun run lint` 有存量 error（React 编译器的 memoization 检查，集中在 `components/` 与 `hooks/`），
