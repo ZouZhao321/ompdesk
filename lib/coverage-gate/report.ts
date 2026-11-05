@@ -50,12 +50,13 @@ function renderChangedFile(file: ChangedFile, coverage: ReadonlyMap<string, File
 }
 
 function renderFunctionDeltaRow(row: FunctionDeltaRow): string {
+  const hitDelta = row.headHit - row.baseHit;
   const parts = [
     `改动前 ${row.baseHit}/${row.baseFound}`,
     `改动后 ${row.headHit}/${row.headFound}`,
     `新增 ${row.added.length}`,
     `删除 ${row.removed.length}`,
-    `被调用数 ${row.headHit - row.baseHit >= 0 ? "+" : ""}${row.headHit - row.baseHit}`,
+    `被调用数 ${hitDelta >= 0 ? "+" : ""}${hitDelta}`,
   ];
   if (row.addedReExports.length > 0 || row.removedReExports.length > 0) {
     parts.push(
@@ -68,13 +69,15 @@ function renderFunctionDeltaRow(row: FunctionDeltaRow): string {
 
 function renderFunctionDelta(data: FunctionDeltaData): string[] {
   const lines = [`函数增量（相对分叉点 ${data.mergeBase.slice(0, 7)}）`];
-  if (data.baseCoverage.ok) {
-    lines.push(
-      `  基准覆盖率现场生成，耗时 ${(data.baseCoverage.durationMs / 1000).toFixed(1)} 秒`,
-    );
-  } else {
+  if (!data.baseCoverage.ok) {
+    // 基准缺失时两侧数字不可比，只说明原因，不打印半边为 0 的对照。
     lines.push(`  基准覆盖率不可用（流水线问题）：${data.baseCoverage.detail}`);
+    return lines;
   }
+
+  lines.push(
+    `  基准覆盖率现场生成，耗时 ${(data.baseCoverage.durationMs / 1000).toFixed(1)} 秒`,
+  );
   for (const row of data.rows) lines.push(renderFunctionDeltaRow(row));
   if (data.rows.length === 0) lines.push("  没有需要比对的改动文件");
   return lines;
