@@ -17,17 +17,14 @@ import { promisify } from "node:util";
 import { createGitEnv } from "../git-env";
 import { readFileAtRevision, type ChangedFile } from "./git";
 import { indexByPath, parseLcov, type FileCoverage } from "./lcov";
+import { coverageTestArgs, LCOV_FILE_NAME } from "./test-command";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 60_000;
 const BASE_TEST_TIMEOUT_MS = 180_000;
 const MAX_BUFFER = 64 * 1024 * 1024;
-const LCOV_FILE_NAME = "lcov.info";
 
-/** 基准运行用的测试命令与本次覆盖率一致，产物目录由调用方给出。 */
-const BASE_TEST_ARGS = ["test", "--coverage", "--coverage-reporter=lcov"];
-
-export interface BaseCoverageRequest {
+interface BaseCoverageRequest {
   /** 仓库根目录，工作副本登记在它名下；`.tmp` 也在它下面。 */
   repositoryRoot: string;
   /** 分叉点提交。 */
@@ -36,7 +33,7 @@ export interface BaseCoverageRequest {
   scratchRoot: string;
 }
 
-export interface BaseCoverageSuccess {
+interface BaseCoverageSuccess {
   ok: true;
   coverage: ReadonlyMap<string, FileCoverage>;
   /** 基准运行耗时，毫秒；报告里给出，便于核对门禁的时间预算。 */
@@ -45,7 +42,7 @@ export interface BaseCoverageSuccess {
   worktreePath: string;
 }
 
-export interface BaseCoverageFailure {
+interface BaseCoverageFailure {
   ok: false;
   /** 失败原因，直接进报告；不含实现层堆栈。 */
   detail: string;
@@ -115,7 +112,7 @@ export async function generateBaseCoverage(
       await execFileAsync(
         // 门禁本身在 bun 下运行，基准运行直接复用当前进程的可执行文件。
         process.versions.bun ? process.execPath : "bun",
-        [...BASE_TEST_ARGS, `--coverage-dir=${coverageDir}`],
+        coverageTestArgs(coverageDir),
         { cwd: worktreePath, timeout: BASE_TEST_TIMEOUT_MS, maxBuffer: MAX_BUFFER },
       );
     } catch (error) {
