@@ -111,8 +111,9 @@ bun install
 bun run dev        # http://127.0.0.1:30141
 bun test           # 用 Bun 跑，不用 node --test
 bun run typecheck
-bun run ci         # typecheck → test → build → smoke:dev
+bun run ci         # typecheck → test → coverage:gate → build → smoke:dev
 bun run verify     # 与 ci 同一份定义
+bun run coverage:gate  # 覆盖率门禁：本次改动的覆盖率数字与规则判定，有判定结果时退出码非零
 bun run smoke:dev  # 起 dev server，请求 / 与 /api/home，扫描构建失败标记
 bun run scratch <任务名> "<用途>"   # 在 .tmp/ 下建任务目录
 ```
