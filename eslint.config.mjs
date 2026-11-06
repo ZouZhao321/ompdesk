@@ -1,5 +1,6 @@
 import coreWebVitals from "eslint-config-next/core-web-vitals";
 import typescript from "eslint-config-next/typescript";
+import prettier from "eslint-config-prettier";
 
 const eslintConfig = [
   ...coreWebVitals,
@@ -21,6 +22,8 @@ const eslintConfig = [
       "react-hooks/set-state-in-effect": "off",
     },
   },
+  // 关闭与 Prettier 冲突的格式类规则，必须放在最后。
+  prettier,
 ];
 
 export default eslintConfig;
