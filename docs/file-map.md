@@ -136,6 +136,7 @@ types.ts             共享 TypeScript 类型
 normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
 worktree.ts          项目解析、本地分支清单、按分支确保工作副本与增删
 worktree-types.ts    /api/worktrees 的 checkout 与本地分支类型，侧栏与 Git 面板共用
+worktree-switch.ts   分支切换请求的发布与订阅：Git 面板发起，侧栏执行目录解析
 ```
 
 ## components/

@@ -126,7 +126,7 @@ tailscale serve --bg --tcp=30141 tcp://localhost:30141
 - 侧栏直接显示会话状态：运行中、等待回答、未读、已完成、被中断、已取消、失败。页面在后台时，运行结束会触发浏览器通知。
 - 会话可以重命名、归档、恢复与删除；归档只是从列表隐藏，文件仍然保留。
 - fork 出来的会话按树形展示，可以在侧栏里切换分支。
-- 在选中的项目或自定义工作目录里新建会话，也可以从同一位置切换 Git 工作副本。
+- 在选中的项目或自定义工作目录里新建会话，也可以在右侧面板的 Git 标签页切换 Git 工作副本。
 - 界面可以安装为 PWA（可安装到桌面的网页应用），手机档会调整布局与可点区域。
 
 ### 聊天与运行
@@ -223,7 +223,7 @@ flowchart LR
 - **代理**：ompdesk 把标准代理变量交给 Bun。启动器会把回环地址加入 `NO_PROXY`，因此本机提供方（Ollama、LM Studio、llama.cpp）仍然可用；Bun 只在启动时读取一次这些变量。
 - **运行日志**：每个请求、代理运行、工具调用、安全判定与审计动作都写成结构化 JSON，可在 **设置 → 日志** 中读取、搜索与下载。记录格式、等级以及 `OMP_LOG_LEVEL`、`OMPDESK_LOG_STDOUT` 的用法见 [运行日志](./docs/logging.md)（英文）。
 - **遥测**：设置 `OTEL_EXPORTER_OTLP_ENDPOINT` 后，trace、log 与 metric 会按 OTLP（OpenTelemetry 导出协议）`http/protobuf` 导出；没有配置端点时不会加载导出模块。除非设置 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=full`，提示词与回复正文不会导出。支持的变量与按信号开关见 [遥测](./docs/telemetry.md)。
-- **Git 工作副本**：切换器只在 Git 仓库根目录出现；它影响新会话、文件浏览器与文件引用。创建与删除规则见 [工作副本](./docs/worktrees.md)（英文）。
+- **Git 工作副本**：分支切换器在右侧面板的 Git 标签页顶部，只在 Git 仓库根目录出现；它影响新会话、文件浏览器与文件引用。创建与删除规则见 [工作副本](./docs/worktrees.md)（英文）。
 - **两种分支**：**Fork** 创建新的 `.jsonl` 文件；**从此处编辑** 在同一个会话文件里创建另一条分支。
 - **Skills**：安装器执行 `npx skills add ... --agent claude-code`，写入 omp 默认会发现的 `.claude/skills` 目录结构。
 - **界面语言**：目前提供英文与简体中文；初次使用按浏览器语言判断，也可以在顶栏切换，选择保存在 `localStorage`。新增语言见 [国际化](./docs/i18n.md)（英文）。
