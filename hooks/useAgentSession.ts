@@ -2516,14 +2516,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (mountedRef.current && (text || images.length > 0)) {
         const dropped = opts.chatInputRef?.current?.restoreSubmission(text, images.length ? images : undefined) ?? 0;
         if (dropped > 0) {
-          addNotice({ type: "error", message: `Recalled queued messages, but ${dropped} image(s) did not fit in the input box` });
+          addNotice({ type: "error", message: t("chat.recallDropped", { count: dropped }) });
         }
       }
     } catch (e) {
       console.error("Failed to recall queued messages:", e);
       addNotice({ type: "error", message: "Failed to recall queued messages" });
     }
-  }, [opts.chatInputRef, addNotice]);
+  }, [opts.chatInputRef, addNotice, t]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     setThinkingLevel(level);

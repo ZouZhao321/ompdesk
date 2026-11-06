@@ -563,7 +563,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             ...attachedImagesRef.current,
           ].slice(0, MAX_ATTACHED_IMAGES)
         : attachedImagesRef.current;
-      const requestedImageCount = images?.length ? draftImagesToAttachedImages(images).length : 0;
+      const requestedImageCount = images?.filter(isBase64ImageWithinLimits).length ?? 0;
       const restoredImageCount = restoredImages.length - attachedImagesRef.current.length;
       // Session promotion can rekey this composer before React flushes the
       // functional updates below, so update the imperative snapshot first.
@@ -1930,7 +1930,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => sendQueued("steer")}
                   disabled={!canQueueStreamingMessage}
-                  title="Interrupt the current run and inject this message now"
+                  title={t("chat.steerTitle")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
@@ -1955,7 +1955,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => sendQueued("followup")}
                   disabled={!canQueueStreamingMessage}
-                  title="Queue this message after the agent finishes"
+                  title={t("chat.followUpTitle")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
