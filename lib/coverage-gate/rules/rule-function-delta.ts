@@ -17,7 +17,7 @@ import type { ChangedFile } from "../git";
 import type { FileCoverage } from "../lcov";
 import type { CoverageRule, Finding, RuleInput } from "./index";
 
-export const RULE_ID = "rule-2";
+const RULE_ID = "rule-2";
 
 export interface FunctionDeltaRow {
   /** 改动后的路径。 */
@@ -44,7 +44,7 @@ export interface FunctionDeltaData {
   rows: readonly FunctionDeltaRow[];
 }
 
-export interface FunctionDeltaBuildInput {
+interface FunctionDeltaBuildInput {
   changedFiles: readonly ChangedFile[];
   coverage: ReadonlyMap<string, FileCoverage>;
   baseCoverage: BaseCoverageResult;
