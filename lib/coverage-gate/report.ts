@@ -4,9 +4,10 @@ import type { ChangedFile, ChangeStatus } from "./git";
 import type { CoverageTotals, FileCoverage } from "./lcov";
 import type { Finding } from "./rules";
 import type { FunctionDeltaData, FunctionDeltaRow } from "./rules/rule-function-delta";
+import type { TestSummary } from "./test-command";
 
 /** 报告需要的全部数据。渲染是纯函数，便于用固定样本断言文本。 */
-export interface ReportInput {
+interface ReportInput {
   baseRef: string;
   mergeBase: string;
   changedFiles: readonly ChangedFile[];
@@ -24,6 +25,8 @@ export interface ReportInput {
   exceptions?: ExceptionResolution;
   /** 分段耗时；命令行入口实测后传入，纯渲染的测试可以不提供。 */
   timings?: ReportTimings;
+  /** 本次测试运行的用例统计；命令行入口从测试输出取，取不到时不提供。 */
+  testSummary?: TestSummary;
   findings: readonly Finding[];
 }
 
@@ -94,12 +97,18 @@ function renderFunctionDelta(data: FunctionDeltaData): string[] {
   if (!data.baseCoverage.ok) {
     // 基准缺失时两侧数字不可比，只说明原因，不打印半边为 0 的对照。
     lines.push(`  基准覆盖率不可用（流水线问题）：${data.baseCoverage.detail}`);
+    if (data.baseCoverage.cleanupProblem) {
+      lines.push(`  工作副本清理失败：${data.baseCoverage.cleanupProblem}`);
+    }
     return lines;
   }
 
   lines.push(
     `  基准覆盖率现场生成，耗时 ${(data.baseCoverage.durationMs / 1000).toFixed(1)} 秒`,
   );
+  if (data.baseCoverage.cleanupProblem) {
+    lines.push(`  工作副本清理失败（不影响判定结果）：${data.baseCoverage.cleanupProblem}`);
+  }
   for (const row of data.rows) lines.push(renderFunctionDeltaRow(row));
   if (data.rows.length === 0) lines.push("  没有需要比对的改动文件");
 
@@ -125,9 +134,9 @@ function renderFinding(finding: Finding): string[] {
 
 function renderExceptionEntry(entry: ExceptionEntry, suffix = ""): string[] {
   return [
-    `    [${entry.rule}] ${entry.file} · 到期 ${entry.expiresOn}${suffix}`,
+    `    [${entry.rule}] ${entry.path} · 到期 ${entry.expires}${suffix}`,
     `      理由：${entry.reason}`,
-    `      替代验证：${entry.verification}`,
+    `      替代验证：${entry.alternativeVerification}`,
   ];
 }
 
@@ -241,6 +250,16 @@ export function renderReport(input: ReportInput): string {
   const remaining = input.missingManagedFiles.length - examples.length;
   if (remaining > 0) lines.push(`  另有 ${remaining} 个。`);
 
+  lines.push(
+    "",
+    "测试运行",
+    input.testSummary
+      ? `  ${input.testSummary.passed} 个用例通过，${input.testSummary.skipped} 个跳过，`
+        + `${input.testSummary.failed} 个失败`
+      : "  用例统计未取得（报告不是由命令行入口产生，或测试输出格式已变）",
+    "  跳过的用例不计入覆盖率的分子与分母",
+  );
+
   lines.push("", `规则判定：${input.findings.length} 条`);
   for (const finding of input.findings) lines.push(...renderFinding(finding));
 
@@ -257,6 +276,73 @@ export function renderReport(input: ReportInput): string {
         : exceptionProblems > 0
           ? `豁免清单 ${exceptionProblems} 条校验失败，退出码非零。`
           : "本次没有判定结果，退出码为 0。",
+  );
+  return lines.join("\n");
+}
+
+/** 静态引用检查需要的全部数据。它不读覆盖率产物，比覆盖率报告短。 */
+interface ExportReportInput {
+  baseRef: string;
+  mergeBase: string;
+  changedFiles: readonly ChangedFile[];
+  /** 参与引用统计的生产源文件数。 */
+  scannedFiles: number;
+  /** 基线里的存量条目数。 */
+  baselineCount: number;
+  findings: readonly Finding[];
+  exceptions?: ExceptionResolution;
+  /** 分析耗时，毫秒；命令行入口实测后传入。 */
+  analysisMs?: number;
+}
+
+/**
+ * 静态引用检查的报告。它排在测试之前，单独一屏输出：失败时后面的测试根本不会跑，
+ * 所以这里要把判定依据写全，不能只给一行结论。
+ */
+export function renderExportReport(input: ExportReportInput): string {
+  const exceptionProblems = input.exceptions?.problems.length ?? 0;
+  const lines: string[] = [
+    input.findings.length > 0
+      ? "覆盖率门禁·静态引用检查（本次有判定未通过）"
+      : exceptionProblems > 0
+        ? "覆盖率门禁·静态引用检查（豁免清单校验未通过）"
+        : "覆盖率门禁·静态引用检查",
+    `基准 ${input.baseRef}，分叉点 ${input.mergeBase.slice(0, 7)}`,
+    "",
+    `改动文件：${input.changedFiles.length} 个受管源文件`,
+  ];
+
+  for (const file of input.changedFiles) {
+    const label = STATUS_LABELS[file.status];
+    const path = file.previousPath ? `${file.path} ← ${file.previousPath}` : file.path;
+    lines.push(`  ${label}  ${path}`);
+  }
+
+  lines.push(
+    "",
+    "导出引用",
+    `  生产源文件 ${input.scannedFiles} 个（测试文件与 test-support/ 不计入）`,
+    `  分叉点基线条目 ${input.baselineCount} 条（存量无引用导出，规则三不重复拦）`,
+    "",
+    `规则判定：${input.findings.length} 条`,
+  );
+  for (const finding of input.findings) lines.push(...renderFinding(finding));
+
+  if (input.exceptions) lines.push("", ...renderExceptions(input.exceptions));
+  if (input.analysisMs !== undefined) {
+    lines.push("", "耗时", `  静态检查 ${seconds(input.analysisMs)}`);
+  }
+
+  const findings = input.findings.length;
+  lines.push(
+    "",
+    findings > 0 && exceptionProblems > 0
+      ? `本次 ${findings} 条判定未通过，豁免清单 ${exceptionProblems} 条校验失败，退出码非零；未运行测试。`
+      : findings > 0
+        ? `本次 ${findings} 条判定未通过，退出码非零；未运行测试。`
+        : exceptionProblems > 0
+          ? `豁免清单 ${exceptionProblems} 条校验失败，退出码非零；未运行测试。`
+          : "本次没有判定结果，退出码为 0，继续运行测试。",
   );
   return lines.join("\n");
 }

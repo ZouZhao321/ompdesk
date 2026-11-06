@@ -7,7 +7,8 @@
  *
  * 工作副本放在仓库内的 `.tmp/` 下，`node_modules` 由上层目录解析到，不额外安装依赖。
  * 失败时不抛异常，返回带原因的失败结果：基准缺失是流水线问题，规则要把原因报出来，
- * 不能当作通过。
+ * 不能当作通过。清理工作副本失败同样不算失败，只在结果里带一条说明，报告据此标注，
+ * 免得一个删不掉的目录把整次判定吞掉。
  */
 
 import { execFile } from "node:child_process";
@@ -17,7 +18,7 @@ import { promisify } from "node:util";
 import { createGitEnv } from "../git-env";
 import { readFileAtRevision, type ChangedFile } from "./git";
 import { indexByPath, parseLcov, type FileCoverage } from "./lcov";
-import { coverageTestArgs, LCOV_FILE_NAME } from "./test-command";
+import { coverageTestArgs, coverageTestEnv, LCOV_FILE_NAME } from "./test-command";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 60_000;
@@ -38,8 +39,8 @@ interface BaseCoverageSuccess {
   coverage: ReadonlyMap<string, FileCoverage>;
   /** 基准运行耗时，毫秒；报告里给出，便于核对门禁的时间预算。 */
   durationMs: number;
-  /** 基准运行时使用的工作副本，删掉之前写进日志。 */
-  worktreePath: string;
+  /** 工作副本清理失败时的说明；不影响判定结果，报告里注明。 */
+  cleanupProblem?: string;
 }
 
 interface BaseCoverageFailure {
@@ -47,6 +48,7 @@ interface BaseCoverageFailure {
   /** 失败原因，直接进报告；不含实现层堆栈。 */
   detail: string;
   durationMs: number;
+  cleanupProblem?: string;
 }
 
 export type BaseCoverageResult = BaseCoverageSuccess | BaseCoverageFailure;
@@ -80,9 +82,80 @@ async function git(cwd: string, args: string[]): Promise<void> {
   });
 }
 
+async function runBaseCoverage(
+  request: BaseCoverageRequest,
+  worktreePath: string,
+  coverageDir: string,
+  elapsed: () => number,
+): Promise<BaseCoverageResult> {
+  try {
+    await git(request.repositoryRoot, ["worktree", "add", "--detach", worktreePath, request.mergeBase]);
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `无法为分叉点 ${request.mergeBase.slice(0, 7)} 创建工作副本：${errorMessage(error)}`,
+      durationMs: elapsed(),
+    };
+  }
+
+  try {
+    await execFileAsync(
+      // 门禁本身在 bun 下运行，基准运行直接复用当前进程的可执行文件。
+      process.versions.bun ? process.execPath : "bun",
+      coverageTestArgs(coverageDir),
+      {
+        cwd: worktreePath,
+        timeout: BASE_TEST_TIMEOUT_MS,
+        maxBuffer: MAX_BUFFER,
+        env: coverageTestEnv(),
+      },
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `分叉点 ${request.mergeBase.slice(0, 7)} 的测试运行失败：${errorMessage(error)}`,
+      durationMs: elapsed(),
+    };
+  }
+
+  let lcovText: string;
+  try {
+    lcovText = await readFile(path.join(coverageDir, LCOV_FILE_NAME), "utf8");
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `分叉点 ${request.mergeBase.slice(0, 7)} 的覆盖率产物缺失：`
+        + `${path.join(coverageDir, LCOV_FILE_NAME)}（${errorMessage(error)}）`,
+      durationMs: elapsed(),
+    };
+  }
+
+  return {
+    ok: true,
+    coverage: indexByPath(parseLcov(lcovText).files),
+    durationMs: elapsed(),
+  };
+}
+
+/** 删工作副本并清掉 git 里的登记；两件事都失败也不抛，把原因拼成一句说明。 */
+async function removeWorktree(repositoryRoot: string, worktreePath: string): Promise<string | null> {
+  const problems: string[] = [];
+  try {
+    await rm(worktreePath, { recursive: true, force: true });
+  } catch (error) {
+    problems.push(`删除工作副本失败：${errorMessage(error)}`);
+  }
+  try {
+    await git(repositoryRoot, ["worktree", "prune"]);
+  } catch (error) {
+    problems.push(`git worktree prune 失败：${errorMessage(error)}`);
+  }
+  return problems.length === 0 ? null : problems.join("；");
+}
+
 /**
- * 建分叉点工作副本、跑测试、读 lcov。任何一步失败都返回失败结果并说明是哪一步，
- * 工作副本在 `finally` 里删掉，失败时也不留下垃圾。
+ * 建分叉点工作副本、跑测试、读 lcov。任何一步失败都返回失败结果并说明是哪一步；
+ * 工作副本无论成功失败都清掉，清理失败只写进结果，不阻止报告产出。
  */
 export async function generateBaseCoverage(
   request: BaseCoverageRequest,
@@ -95,58 +168,19 @@ export async function generateBaseCoverage(
   const coverageDir = path.join(worktreePath, ".coverage-base");
   const elapsed = (): number => Date.now() - startedAt;
 
-  await mkdir(request.scratchRoot, { recursive: true });
-
   try {
-    try {
-      await git(request.repositoryRoot, ["worktree", "add", "--detach", worktreePath, request.mergeBase]);
-    } catch (error) {
-      return {
-        ok: false,
-        detail: `无法为分叉点 ${request.mergeBase.slice(0, 7)} 创建工作副本：${errorMessage(error)}`,
-        durationMs: elapsed(),
-      };
-    }
-
-    try {
-      await execFileAsync(
-        // 门禁本身在 bun 下运行，基准运行直接复用当前进程的可执行文件。
-        process.versions.bun ? process.execPath : "bun",
-        coverageTestArgs(coverageDir),
-        { cwd: worktreePath, timeout: BASE_TEST_TIMEOUT_MS, maxBuffer: MAX_BUFFER },
-      );
-    } catch (error) {
-      return {
-        ok: false,
-        detail: `分叉点 ${request.mergeBase.slice(0, 7)} 的测试运行失败：${errorMessage(error)}`,
-        durationMs: elapsed(),
-      };
-    }
-
-    let lcovText: string;
-    try {
-      lcovText = await readFile(path.join(coverageDir, LCOV_FILE_NAME), "utf8");
-    } catch (error) {
-      return {
-        ok: false,
-        detail: `分叉点 ${request.mergeBase.slice(0, 7)} 的覆盖率产物缺失：`
-          + `${path.join(coverageDir, LCOV_FILE_NAME)}（${errorMessage(error)}）`,
-        durationMs: elapsed(),
-      };
-    }
-
-    const parsed = parseLcov(lcovText);
+    await mkdir(request.scratchRoot, { recursive: true });
+  } catch (error) {
     return {
-      ok: true,
-      coverage: indexByPath(parsed.files),
+      ok: false,
+      detail: `无法创建基准运行的临时目录 ${request.scratchRoot}：${errorMessage(error)}`,
       durationMs: elapsed(),
-      worktreePath,
     };
-  } finally {
-    // 工作副本按路径删除后再 prune，删不掉的残留登记由 prune 清掉。
-    await rm(worktreePath, { recursive: true, force: true });
-    await git(request.repositoryRoot, ["worktree", "prune"]);
   }
+
+  const result = await runBaseCoverage(request, worktreePath, coverageDir, elapsed);
+  const cleanupProblem = await removeWorktree(request.repositoryRoot, worktreePath);
+  return cleanupProblem === null ? result : { ...result, cleanupProblem };
 }
 
 async function readWorkingTreeFile(absolutePath: string): Promise<string | null> {

@@ -5,7 +5,8 @@
  * 加一个没测的函数后仍是 6 个，数字上毫无变化。所以两侧都要有数字：基准取分叉点的现场
  * 运行结果，本次取当前 lcov；结构差集由两版文件的语法树给出。
  *
- * 通过条件：`本次FNH - 基准FNH >= 新增函数数` 且 `本次FNF >= 基准FNF`。
+ * 通过条件：`本次FNH - 基准FNH >= 新增函数数` 且 `本次FNF >= 基准FNF`。两条都无条件比较：
+ * 没有新增函数时，被调用数同样不得减少。
  *
  * 常规重构会让这套计数读出错误结论，失真处理见 `distortion.ts`：
  *
@@ -262,13 +263,17 @@ function judgeRow(row: FunctionDeltaRow, testImports: RuleInput["testImports"]):
     });
   }
 
-  if (row.added.length > 0 && hitDelta < row.added.length) {
+  if (hitDelta < row.added.length) {
     findings.push({
       rule: RULE_ID,
       file: row.file,
       numbers: `${contrast(row)}，新增 ${row.added.length} 个函数，被调用数增加 ${hitDelta}`,
-      reason: `新增函数的被调用数没有同步增加，需要至少 ${row.added.length} 个，实际 ${hitDelta} 个：${row.added.join("、")}`,
-      fix: "为新增函数补测试，或把未被使用的函数移出本次改动",
+      reason: row.added.length > 0
+        ? `新增函数的被调用数没有同步增加，需要至少 ${row.added.length} 个，实际 ${hitDelta} 个：${row.added.join("、")}`
+        : "本次改动没有新增函数，但函数被调用数相对分叉点减少，减少的调用没有被补回",
+      fix: row.added.length > 0
+        ? "为新增函数补测试，或把未被使用的函数移出本次改动"
+        : "确认改动是否让原有函数不再被测试调用，补回相应测试",
     });
   }
 
@@ -284,7 +289,7 @@ function judgeLineFallback(fallback: LineFallback): Finding | null {
 
   return {
     rule: RULE_ID,
-    file: fallback.files,
+    file: fallback.label,
     numbers: `行 改动前 ${fallback.baseLinesHit}/${fallback.baseLinesFound}，改动后 ${fallback.headLinesHit}/${fallback.headLinesFound}`,
     reason: "函数名集合对应不完整，规则二豁免，退回行覆盖增量判定：新增的行没有被测试覆盖",
     fix: "为拆分或合并后新增的行补测试，或在豁免清单登记替代验证方式",

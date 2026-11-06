@@ -47,39 +47,48 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # 流水线只在 package.json 的 `ci` 脚本里定义一次（typecheck → test →
+      # 流水线只在 package.json 的 `ci` 脚本里定义一次（typecheck → coverage:exports →
       # coverage:gate → build → smoke:dev）；本地 `bun run verify` 与推送前钩子用的是
       # 同一份定义，改流程只改那一处，CI 与本地不会再分叉。`lib/coverage-gate/`
       # 里有一条测试直接读这份工作流与 package.json，锁住「这里只调用一个入口」与
       # 步骤顺序：静态检查排在最前，构建与冒烟排在最后，任一步失败都不再往下跑。
       #
-      # 两次测试运行是刻意的，不合并：
+      # 整套流程只跑两次测试：
       #
-      # - `test` 是「测试是否通过」的判据，不开覆盖率插桩，失败信息与本地 `bun test`
-      #   完全一致；
-      # - `coverage:gate` 跑的是带插桩的全套测试，产物 lcov 与分叉点基准运行必须是同
-      #   一条命令，否则两侧函数计数不可比。
+      # - `coverage:exports` 先做静态引用检查（规则三）。它只读源码，不跑测试；
+      #   失败时后面两次测试都不会发生。
+      # - `coverage:gate` 跑一次带插桩的全套测试产出 lcov，并在门禁内部为分叉点再跑
+      #   一次基准运行；两次用的是同一条测试命令，函数计数才可比。
       #
-      # 合并成一次会让「测试失败」与「覆盖率判定」互相绑架：插桩后的失败信息与本地
-      # 不一致，基准运行也失去了独立可比的对侧命令。所以保留两次，代价是约一次测试
-      # 运行的时间。
+      # 不再单跑一次不插桩的 `bun test`：它会与覆盖率判定用两次不同的运行回答两个相似
+      # 的问题，结论可能互相矛盾，还多花约一次全套测试的时间。本地要单独看测试结论用
+      # `bun run test`。
+      #
+      # 判定前固定环境（`OMPDESK_LIVE_SMOKE=0`、`OMPDESK_LIVE_MODEL=0`），真实模型冒烟
+      # 开关一律关掉；默认跳过的用例不计入覆盖率的分子分母，报告里给出跳过数量。
+      #
+      # 退出码分三档：0 通过；1 有判定未通过（含测试失败）；2 门禁没跑起来（产物缺失、
+      # git 读不到分叉点、源码读不出来）。三者都不会被当成通过。
       #
       # coverage:gate 的三段耗时（本次测试运行、基准运行、分析）由报告自己打印，合计
       # 超过 3 分钟时报告里单独说明超出量。规则有判定结果时这一步以非零退出码结束，
       # 合并检查随之变红；本地单独复现用 `bun run coverage:gate`。
+      #
+      # 平台：判定逻辑与平台无关，同一份 lcov 在 Windows 与 Linux 得到相同结论；持续
+      # 集成（Linux）是权威结论，Windows 专属分支改走豁免清单。见 docs/coverage-gate.md。
       #
       # eslint 不进这道门禁：全仓 `bun run lint` 现有存量 error（React 编译器的
       # memoization 检查，落在 components/ 与 hooks/），加进来必然红。复现命令
       # `bun run lint`；改动本身仍要求范围内的 eslint 无 error，例如
       # `bunx eslint test-support lib`。
       #
-      # 不新增 Windows 作业：路径分隔符、重命名与删除的句柄竞争这些 Windows 专属分支
-      # 在这里没有回归保护，仍需在 Windows 本地手工跑 `bun test` 验证（见 PR 描述）。
+      # 不新增 Windows 作业：Windows 专属分支（路径分隔符、重命名与删除的句柄竞争）
+      # 在这里没有回归保护，需要时在本地跑并附记录。
       #
       # 最后一步会真实启动 dev server 请求首页与一个 API 路由：`bun run build` 只编译
       # 生产图谱，开发图谱里把 node: 内置模块带进 edge 或浏览器产物的错误能绕开它，
       # 表现成页面 500；冒烟失败时打印编译日志。
-      - name: Verify (typecheck, tests, coverage, build, dev smoke)
+      - name: Verify (typecheck, export references, coverage, build, dev smoke)
         run: bun run ci
 
       # 覆盖率产物随构建一起保留，事后可以拿同一份 lcov 复核报告里的数字。路径与

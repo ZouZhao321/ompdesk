@@ -7,11 +7,11 @@
  * {
  *   "exceptions": [
  *     {
- *       "file": "lib/legacy/theme.ts",
+ *       "path": "lib/legacy/theme.ts",
  *       "rule": "rule-1",
  *       "reason": "只做类型声明，测试运行时不会加载",
- *       "verification": "bun run typecheck 覆盖该文件的类型错误",
- *       "expiresOn": "2026-12-31"
+ *       "alternativeVerification": "bun run typecheck 覆盖该文件的类型错误",
+ *       "expires": "2026-12-31"
  *     }
  *   ]
  * }
@@ -19,11 +19,11 @@
  *
  * 五个字段都必填，且都不能是空字符串：
  *
- * - `file`：受管源文件路径，相对仓库根，`/` 分隔；反斜杠与开头的 `./` 会被归一化；
+ * - `path`：受管源文件路径，相对仓库根，`/` 分隔；反斜杠与开头的 `./` 会被归一化；
  * - `rule`：规则编号，取 `RULES` 里的 id；
  * - `reason`：豁免理由；
- * - `verification`：替代验证方式，豁免期间靠什么保证这个文件的质量；
- * - `expiresOn`：到期日 `YYYY-MM-DD`，当天仍然生效，次日起规则重新拦截。
+ * - `alternativeVerification`：替代验证方式，豁免期间靠什么保证这个文件的质量；
+ * - `expires`：到期日 `YYYY-MM-DD`，当天仍然生效，次日起规则重新拦截。
  *
  * 文件不存在等价于没有登记豁免。解析与校验都是纯函数：清单文本与「今天」由调用方
  * 给出，同一份清单在任何机器、任何时间得到相同结论。
@@ -40,14 +40,14 @@ export const EXCEPTIONS_FILE = "coverage-exceptions.json";
 
 interface CoverageException {
   /** 受管源文件路径，相对仓库根，`/` 分隔。 */
-  file: string;
+  path: string;
   /** 规则编号。 */
   rule: string;
   reason: string;
   /** 替代验证方式。 */
-  verification: string;
+  alternativeVerification: string;
   /** 到期日 `YYYY-MM-DD`，当天有效。 */
-  expiresOn: string;
+  expires: string;
 }
 
 /** 带序号的条目；序号从 1 开始，与清单数组的顺序一致，用来定位校验失败。 */
@@ -89,11 +89,11 @@ interface AppliedExceptions {
 
 /** 字段顺序即报告与校验错误的顺序。 */
 const FIELDS = [
-  ["file", "文件"],
+  ["path", "文件"],
   ["rule", "规则编号"],
   ["reason", "理由"],
-  ["verification", "替代验证方式"],
-  ["expiresOn", "到期日"],
+  ["alternativeVerification", "替代验证方式"],
+  ["expires", "到期日"],
 ] as const;
 
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -172,18 +172,18 @@ function readEntry(
 
   if (broken) return null;
 
-  const file = normalizePath(values.get("file") ?? "");
-  if (file.startsWith("/") || /^[A-Za-z]:/.test(file) || file.split("/").includes("..")) {
-    problems.push({ index, message: `第 ${index} 条的 file（文件）必须是相对仓库根的路径：${file}` });
+  const entryPath = normalizePath(values.get("path") ?? "");
+  if (entryPath.startsWith("/") || /^[A-Za-z]:/.test(entryPath) || entryPath.split("/").includes("..")) {
+    problems.push({ index, message: `第 ${index} 条的 path（文件）必须是相对仓库根的路径：${entryPath}` });
     return null;
   }
 
   return {
-    file,
+    path: entryPath,
     rule: values.get("rule") ?? "",
     reason: values.get("reason") ?? "",
-    verification: values.get("verification") ?? "",
-    expiresOn: values.get("expiresOn") ?? "",
+    alternativeVerification: values.get("alternativeVerification") ?? "",
+    expires: values.get("expires") ?? "",
   };
 }
 
@@ -253,22 +253,22 @@ export function resolveExceptions(
       return;
     }
 
-    const expiryDay = dayNumber(entry.expiresOn);
+    const expiryDay = dayNumber(entry.expires);
     if (expiryDay === null) {
       resolution.problems.push({
         index,
-        message: `第 ${index} 条的 expiresOn（到期日）${entry.expiresOn} 不合法，`
+        message: `第 ${index} 条的 expires（到期日）${entry.expires} 不合法，`
           + "需为 YYYY-MM-DD 且是真实日期",
       });
       return;
     }
 
-    const key = exceptionKey(entry.file, entry.rule);
+    const key = exceptionKey(entry.path, entry.rule);
     const firstIndex = firstIndexByKey.get(key);
     if (firstIndex !== undefined) {
       resolution.problems.push({
         index,
-        message: `第 ${index} 条与第 ${firstIndex} 条重复登记 ${entry.file} 的 ${entry.rule}`,
+        message: `第 ${index} 条与第 ${firstIndex} 条重复登记 ${entry.path} 的 ${entry.rule}`,
       });
       return;
     }
@@ -293,7 +293,7 @@ export function applyExceptions(
   resolution: ExceptionResolution,
 ): AppliedExceptions {
   const activeByKey = new Map(
-    resolution.active.map((entry) => [exceptionKey(entry.file, entry.rule), entry] as const),
+    resolution.active.map((entry) => [exceptionKey(entry.path, entry.rule), entry] as const),
   );
   const suppressed = new Map<string, Finding[]>();
   const blocking: Finding[] = [];
@@ -311,7 +311,7 @@ export function applyExceptions(
 
   const active = resolution.active.map((entry) => ({
     ...entry,
-    suppressed: suppressed.get(exceptionKey(entry.file, entry.rule)) ?? [],
+    suppressed: suppressed.get(exceptionKey(entry.path, entry.rule)) ?? [],
   }));
 
   return { blocking, exceptions: { ...resolution, active } };
