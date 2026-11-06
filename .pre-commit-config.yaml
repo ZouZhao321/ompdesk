@@ -2,8 +2,8 @@
 #
 # 三层，越往后越贵，每层拦下一层拦不住的东西：
 # - commit-msg：提交标题格式，毫秒级
-# - pre-commit：类型检查，十秒级
-# - pre-push：与 CI 同一条 `bun run ci`（typecheck → test → build → 开发冒烟）
+# - pre-commit：格式化改动的源码文件，再做类型检查，十秒级
+# - pre-push：与 CI 同一条 `bun run ci`（typecheck → format:check → test → build → 开发冒烟）
 #
 # 临时跳过某一步：SKIP=typecheck git commit ...
 default_install_hook_types: [commit-msg, pre-commit, pre-push]
@@ -15,6 +15,13 @@ repos:
         entry: python scripts/check-commit-msg.py
         language: python
         stages: [commit-msg]
+
+      - id: prettier
+        name: 格式化改动文件
+        entry: bunx prettier --write
+        language: system
+        files: \.(ts|tsx|mjs|css|json)$
+        stages: [pre-commit]
 
       - id: typecheck
         name: 类型检查
