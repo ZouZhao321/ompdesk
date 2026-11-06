@@ -140,6 +140,11 @@ export interface QueuedMessages {
   followUp: string[];
 }
 
+interface QueuedRestoredMessage {
+  text: string;
+  images?: Array<{ type: "image"; data: string; mimeType: string }>;
+}
+
 function normalizeQueuedMessages(q?: { steering?: string[]; followUp?: string[] } | null): QueuedMessages {
   return { steering: q?.steering ?? [], followUp: q?.followUp ?? [] };
 }
@@ -1516,7 +1521,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
-        if (event.isTerminal === true) {
+        // `undefined` means an older projection omitted the flags; only an
+        // explicit false says the agent will resume (retry, compaction, …).
+        const terminalEnd = event.isTerminal !== false && event.yielded !== false;
+        if (terminalEnd) {
           sdkAgentActiveRef.current = false;
           settleUiStage();
           notifyPromptStage(promptRunIdRef.current);
@@ -1765,7 +1773,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -2483,13 +2491,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      const result = await sendAgentCommand<{ steering?: string[]; followUp?: string[] }>(sid, { type: "clear_queue" }, runtimeIdRef);
+      const result = await sendAgentCommand<{ steering?: QueuedRestoredMessage[]; followUp?: QueuedRestoredMessage[] }>(sid, { type: "clear_queue" }, runtimeIdRef);
       // clearQueue also emits an empty queue_update, but that only reaches us
       // while SSE is connected — clear locally so idle recalls update the UI.
       setQueuedMessages({ steering: [], followUp: [] });
-      const texts = [...(result?.steering ?? []), ...(result?.followUp ?? [])];
-      if (mountedRef.current && texts.length > 0) {
-        opts.chatInputRef?.current?.prependText(texts.join("\n\n"));
+      const recalled = [...(result?.steering ?? []), ...(result?.followUp ?? [])];
+      const text = recalled.map((entry) => entry.text).filter((part) => part.trim()).join("\n\n");
+      const images = recalled
+        .flatMap((entry) => entry.images ?? [])
+        .map(({ data, mimeType }) => ({ data, mimeType }));
+      if (mountedRef.current && (text || images.length > 0)) {
+        opts.chatInputRef?.current?.restoreSubmission(text, images.length ? images : undefined);
       }
     } catch (e) {
       console.error("Failed to recall queued messages:", e);

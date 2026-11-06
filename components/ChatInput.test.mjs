@@ -324,3 +324,20 @@ test("queues image attachments while the agent is running", () => {
   assert.doesNotMatch(buttonTag('title="Interrupt the current run and inject this message now"'), /disabled=""/);
   assert.doesNotMatch(buttonTag('title="Queue this message after the agent finishes"'), /disabled=""/);
 });
+
+test("labels an image-only queued message", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(ChatInput, {
+        onSend() {},
+        onAbort() {},
+        isStreaming: false,
+        queuedMessages: { steering: [""], followUp: [] },
+      }),
+    ),
+  );
+
+  assert.match(html, /Image attachment/);
+});

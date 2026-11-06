@@ -1215,11 +1215,13 @@ export class AgentSessionWrapper {
         // Full clear only: omp has no single-item dequeue, and clear+requeue
         // races against the agent loop pulling messages mid-flight.
         const cleared = this.inner.clearQueue();
-        const toText = (message: unknown): string =>
-          typeof message === "string" ? message : String((message as { text?: string })?.text ?? "");
+        const toRestored = (message: { text: string; images?: unknown[] }) => ({
+          text: message.text,
+          ...(message.images?.length ? { images: message.images } : {}),
+        });
         return {
-          steering: cleared.steering.map(toText),
-          followUp: cleared.followUp.map(toText),
+          steering: cleared.steering.map(toRestored),
+          followUp: cleared.followUp.map(toRestored),
         };
       }
 
