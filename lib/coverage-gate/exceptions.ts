@@ -38,7 +38,7 @@ import type { Finding } from "./rules";
 /** 清单文件放在仓库根。 */
 export const EXCEPTIONS_FILE = "coverage-exceptions.json";
 
-export interface CoverageException {
+interface CoverageException {
   /** 受管源文件路径，相对仓库根，`/` 分隔。 */
   file: string;
   /** 规则编号。 */
@@ -55,15 +55,15 @@ export interface ExceptionEntry extends CoverageException {
   index: number;
 }
 
-export interface ActiveException extends ExceptionEntry {
+interface ActiveException extends ExceptionEntry {
   /** 被这条豁免放行的判定；规则本来没拦这个文件时为空。 */
   suppressed: readonly Finding[];
 }
 
 /** 已到期的条目不再放行任何判定，规则按原样拦截。 */
-export type ExpiredException = ExceptionEntry;
+type ExpiredException = ExceptionEntry;
 
-export interface ExceptionProblem {
+interface ExceptionProblem {
   /** 条目序号；整份清单不可解析时为 0。 */
   index: number;
   message: string;
@@ -80,7 +80,7 @@ export interface ExceptionResolution {
   problems: ExceptionProblem[];
 }
 
-export interface AppliedExceptions {
+interface AppliedExceptions {
   /** 去掉有效豁免之后的判定，只有这些参与退出码。 */
   blocking: readonly Finding[];
   /** 带上被放行判定的完整豁免结果，供报告渲染。 */
