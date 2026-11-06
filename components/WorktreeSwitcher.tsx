@@ -25,6 +25,8 @@ interface Props {
   cwd: string | null;
   /** 会话回合结束时递增，触发一次重新读取。 */
   refreshKey?: number;
+  /** 面板是否可见；隐藏时不发起分支枚举。 */
+  active?: boolean;
 }
 
 /** 分行时显示筛选框的最少行数。 */
@@ -34,7 +36,7 @@ const FILTER_THRESHOLD = 8;
  * Git 面板顶部的分支下拉：显示当前分支，展开后列出分支与已有 checkout。
  * 选中分支复用它的 checkout，没有 checkout 时由接口新建一个。
  */
-export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
+export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [state, setState] = useState<SwitcherState | null>(null);
@@ -48,6 +50,11 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
   const [reloadKey, setReloadKey] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const newInputRef = useRef<HTMLInputElement>(null);
+  // 请求返回时可能已经换了目录：用 ref 读取最新值，避免旧闭包把用户拉回旧 checkout。
+  const cwdRef = useRef(cwd);
+  const stateRef = useRef<SwitcherState | null>(null);
+  useEffect(() => { cwdRef.current = cwd; }, [cwd]);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   const closePanel = useCallback(() => {
     setOpen(false);
@@ -59,6 +66,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
   }, []);
 
   useEffect(() => {
+    if (!active) return;
     if (!cwd) {
       setState(null);
       return;
@@ -92,7 +100,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
         if (!cancelled) setState(null);
       });
     return () => { cancelled = true; };
-  }, [cwd, refreshKey, reloadKey]);
+  }, [cwd, refreshKey, reloadKey, active]);
 
   // 目录变了就清空并收起：上一个目录的分支列表既不能显示，也不能被点选。
   useEffect(() => {
@@ -110,13 +118,15 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
   }, [open, closePanel]);
 
   const switchTo = (branch: string | null, path: string) => {
-    if (!state || state.forCwd !== cwd) return;
-    requestWorktreeSwitch({ branch, path, projectRoot: state.projectRoot });
+    const current = stateRef.current;
+    if (!current || current.forCwd !== cwdRef.current) return;
+    requestWorktreeSwitch({ branch, path, projectRoot: current.projectRoot });
     closePanel();
   };
 
   const ensureCheckout = async (branchName: string, create: boolean) => {
     if (!state || state.forCwd !== cwd || busy) return;
+    const originCwd = cwd;
     setBusy(true);
     setError(null);
     try {
@@ -130,6 +140,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
         setError(data.error ?? `HTTP ${response.status}`);
         return;
       }
+      if (cwdRef.current !== originCwd) return;
       switchTo(branchName, data.path);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -155,6 +166,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
 
   const handleRemoveWorktree = async (path: string, force: boolean) => {
     if (!state || state.forCwd !== cwd || busy) return;
+    const originCwd = cwd;
     setBusy(true);
     setError(null);
     try {
@@ -173,7 +185,8 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
         return;
       }
       setConfirmRemove(null);
-      if (cwd === path) {
+      if (cwdRef.current !== originCwd) return;
+      if (originCwd === path) {
         const main = state.worktrees.find((worktree) => worktree.isMain);
         switchTo(main?.branch ?? null, state.projectRoot);
       } else {

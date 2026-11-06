@@ -179,7 +179,7 @@ export function GitChangesPanel({ cwd, onOpenFile, active = true, refreshKey = 0
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
-      <WorktreeSwitcher cwd={cwd} refreshKey={refreshKey} />
+      <WorktreeSwitcher cwd={cwd} refreshKey={refreshKey} active={active} />
       <div style={{
         display: "flex",
         alignItems: "center",
