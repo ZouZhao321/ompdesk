@@ -52,10 +52,6 @@ interface WorktreeState {
   /** The cwd this data was fetched for — guards against stale responses */
   forCwd: string;
   projectRoot: string;
-  isGit: boolean;
-  /** False when forCwd is a repo subdirectory — the switcher is hidden there
-   *  because subdir sessions keep their own project identity */
-  isTopLevel: boolean;
   worktrees: WorktreeEntry[];
 }
 
@@ -688,7 +684,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   }, [selectedCwdProp]);
 
   // Load worktrees for the current effective cwd
-  const [wtRefreshKey, setWtRefreshKey] = useState(0);
   useLayoutEffect(() => {
     if (!selectedCwd) {
       setWorktreeState(null);
@@ -697,7 +692,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
     let cancelled = false;
     fetch(`/api/worktrees?cwd=${encodeURIComponent(selectedCwd)}`)
       .then((r) => r.json())
-      .then((d: { projectRoot?: string; isGit?: boolean; isTopLevel?: boolean; worktrees?: WorktreeEntry[]; error?: string }) => {
+      .then((d: { projectRoot?: string; worktrees?: WorktreeEntry[]; error?: string }) => {
         if (cancelled) return;
         if (d.error || !d.projectRoot) {
           setWorktreeState(null);
@@ -706,8 +701,6 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         setWorktreeState({
           forCwd: selectedCwd,
           projectRoot: d.projectRoot,
-          isGit: d.isGit ?? false,
-          isTopLevel: d.isTopLevel ?? false,
           worktrees: d.worktrees ?? [],
         });
       })
@@ -717,7 +710,7 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
         }
       });
     return () => { cancelled = true; };
-  }, [selectedCwd, wtRefreshKey, refreshKey]);
+  }, [selectedCwd, refreshKey]);
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
@@ -816,14 +809,13 @@ export function SessionSidebar({ selectedSessionId, selectedRuntimeId, optimisti
   // new cwd as a different project), then switch to it.
   const applyCheckout = useCallback((branchName: string | null, path: string, projectRoot: string) => {
     setWorktreeState((prev) => {
-      const base = prev ?? { forCwd: path, projectRoot, isGit: true, isTopLevel: true, worktrees: [] };
+      const base = prev ?? { forCwd: path, projectRoot, worktrees: [] };
       const worktrees = base.worktrees.some((wt) => wt.path === path)
         ? base.worktrees
         : [...base.worktrees, { path, branch: branchName, isMain: false }];
       return { ...base, projectRoot, forCwd: path, worktrees };
     });
     setSelectedCwd(path);
-    setWtRefreshKey((k) => k + 1);
   }, []);
 
 
