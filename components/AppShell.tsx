@@ -35,6 +35,7 @@ import {
   showBrowserNotification,
 } from "@/lib/browser-notifications";
 import { getInitialNavigation } from "@/lib/initial-navigation";
+import { normalizeProjectKey } from "@/lib/project-order";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { clearUnreadSessionIds } from "@/lib/session-unread";
 import { clearLastOpen, getLastOpenSession, setLastOpenSession, getSessionContinuation, clearSessionContinuation, rememberSessionContinuation, restoreSessionContinuation } from "@/lib/workspace-memory";
@@ -630,7 +631,7 @@ export function AppShell() {
     // Worktrees of one repo share a project root. Moving the effective cwd
     // within the same project (e.g. switching worktree, or clicking a session
     // that lives in another worktree) must not close the open session.
-    if (currentProject === newProject) {
+    if (currentProject !== null && normalizeProjectKey(currentProject) === normalizeProjectKey(newProject)) {
       return;
     }
     // Close any session that belongs to a different project — it no longer
