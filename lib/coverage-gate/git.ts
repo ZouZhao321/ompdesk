@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createGitEnv } from "../git-env";
+import { SOURCE_EXTENSIONS } from "./source-scan";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -17,21 +18,31 @@ export interface ChangedFile {
   previousPath?: string;
 }
 
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
-const EXCLUDED_DIRECTORIES = ["test-support/", "scripts/"];
+/** 只作为生产引用来源、不参与覆盖率判定的目录。 */
+const REFERENCE_ONLY_DIRECTORIES = ["scripts/"];
 const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
 /**
- * 受管源文件：参与覆盖率门禁的代码文件。测试文件、`test-support/` 与 `scripts/`
- * 不算；声明文件没有可执行代码，进不了覆盖率产物，也一并排除。
+ * 生产引用来源：仓库里所有不是测试的源码。`scripts/` 与 `bin/` 也在内——它们由命令行按
+ * 路径调用，不产生 `import` 之外的入口，但确实使用了被测模块的导出。
+ *
+ * 测试文件与 `test-support/` 不算生产引用；声明文件没有可执行代码，也排除。
+ */
+export function isReferenceSourceFile(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
+  if (normalized.startsWith("test-support/")) return false;
+  if (TEST_FILE_RE.test(normalized) || normalized.endsWith(".d.ts")) return false;
+  return SOURCE_EXTENSIONS.some((extension) => normalized.endsWith(extension));
+}
+
+/**
+ * 受管源文件：参与覆盖率门禁的代码文件。在引用来源之外再排除 `scripts/`：这些脚本
+ * 不被测试加载，进覆盖率分母只会压低数字。
  */
 export function isManagedSourceFile(filePath: string): boolean {
   const normalized = filePath.replace(/\\/g, "/");
-  if (EXCLUDED_DIRECTORIES.some((directory) => normalized.startsWith(directory))) {
-    return false;
-  }
-  if (TEST_FILE_RE.test(normalized) || normalized.endsWith(".d.ts")) return false;
-  return SOURCE_EXTENSIONS.some((extension) => normalized.endsWith(extension));
+  if (REFERENCE_ONLY_DIRECTORIES.some((directory) => normalized.startsWith(directory))) return false;
+  return isReferenceSourceFile(normalized);
 }
 
 /**
@@ -45,7 +56,7 @@ function isTestFileSource(filePath: string): boolean {
  * 解析 `git diff --name-status -z -M` 的输出，并并入未跟踪文件。
  * `-z` 下记录形如 `M\0path\0` 或 `R100\0old\0new\0`；删除的记录跳过。
  */
-export function parseChangedFiles(
+function parseChangedFiles(
   diffOutput: string,
   untrackedOutput = "",
 ): ChangedFile[] {
@@ -139,6 +150,18 @@ export async function listManagedSourceFiles(cwd: string): Promise<string[]> {
 export async function listTestFiles(cwd: string): Promise<string[]> {
   const output = await git(cwd, ["ls-files", "-z"]);
   return output.split("\0").filter(isTestFileSource).sort();
+}
+
+/** 生产引用来源清单：受管源文件加上 `scripts/` 与 `bin/`，按路径排序。 */
+export async function listReferenceSourceFiles(cwd: string): Promise<string[]> {
+  const output = await git(cwd, ["ls-files", "-z"]);
+  return output.split("\0").filter(isReferenceSourceFile).sort();
+}
+
+/** 某个提交里的全部文件，按路径排序。生成基线时按分叉点的文件清单扫描。 */
+export async function listFilesAtRevision(cwd: string, revision: string): Promise<string[]> {
+  const output = await git(cwd, ["ls-tree", "-r", "--name-only", "-z", revision]);
+  return output.split("\0").filter((filePath) => filePath.length > 0).sort();
 }
 
 /**

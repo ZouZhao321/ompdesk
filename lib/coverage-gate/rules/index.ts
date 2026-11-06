@@ -1,4 +1,4 @@
-import type { ExportAnalysis } from "../exports";
+import type { ExportAnalysis } from "../export-usage";
 import type { ChangedFile } from "../git";
 import type { CoverageTotals, FileCoverage } from "../lcov";
 import { functionDeltaRule, type FunctionDeltaData } from "./rule-function-delta";
@@ -18,8 +18,8 @@ export interface RuleInput {
   functionDelta?: FunctionDeltaData;
   /** 测试文件的导入索引：被导入文件 → 被导入的符号名。未接入时跳过被动覆盖检查。 */
   testImports?: ReadonlyMap<string, ReadonlySet<string>>;
-  /** 规则三的输入：两侧导出对比、生产引用索引与基线条目。 */
-  exportUsage: ExportAnalysis;
+  /** 规则三的输入：两侧导出对比、生产引用索引与基线条目。只有静态引用检查阶段提供。 */
+  exportUsage?: ExportAnalysis;
 }
 
 /**
@@ -42,6 +42,15 @@ export interface CoverageRule {
 
 /** 规则注册表：判定顺序即数组顺序。 */
 export const RULES: readonly CoverageRule[] = [ruleNewFiles, functionDeltaRule, ruleExports];
+
+/**
+ * 覆盖率判定阶段执行的规则：规则一与规则二。规则三只读源码，在测试之前单独跑，
+ * 失败时省下两次测试运行。
+ */
+export const COVERAGE_RULES: readonly CoverageRule[] = [ruleNewFiles, functionDeltaRule];
+
+/** 静态引用检查阶段执行的规则：只有规则三，不需要覆盖率产物。 */
+export const EXPORT_RULES: readonly CoverageRule[] = [ruleExports];
 
 /** 依次执行规则并汇总结果。`rules` 可注入，供测试使用固定样本。 */
 export function evaluateRules(

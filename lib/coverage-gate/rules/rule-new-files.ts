@@ -2,7 +2,7 @@ import type { ChangedFile } from "../git";
 import type { FileCoverage } from "../lcov";
 import type { CoverageRule, Finding, RuleInput } from "./index";
 
-export const RULE_NEW_FILES = "rule-1";
+const RULE_NEW_FILES = "rule-1";
 
 /**
  * 规则一：新增文件里的函数必须全部被调用；改动到的文件必须出现在覆盖率产物里。

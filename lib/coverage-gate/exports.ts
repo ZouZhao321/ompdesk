@@ -1,7 +1,3 @@
-import ts from "typescript";
-
-import type { ChangedFile } from "./git";
-
 /**
  * 导出符号的结构提取与引用索引。
  *
@@ -9,6 +5,10 @@ import type { ChangedFile } from "./git";
  * 文本搜索会把注释、字符串与同名局部变量算成引用。本模块只做纯计算，读文件由调用方
  * 注入，测试用固定样本。
  */
+
+import ts from "typescript";
+
+import { MODULE_SUFFIXES, parseSource } from "./source-scan";
 
 /** 导出种类。仅类型导出会在编译后消失，与运行时导出分开统计。 */
 export type ExportKind = "type" | "runtime";
@@ -57,50 +57,15 @@ interface ModuleScan {
 }
 
 /** 目标文件 → 导出名 → 引用方文件。`*` 表示「引用了该模块的全部导出」。 */
-type ReferenceIndex = ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>;
+export type ReferenceIndex = ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>;
+
+/** 一次批量扫描的结果：引用索引与每个文件的导出清单。 */
+interface ExportScan {
+  references: ReferenceIndex;
+  exportsByFile: ReadonlyMap<string, readonly ExportedSymbol[]>;
+}
 
 const ALL_EXPORTS = "*";
-
-/** 新增导出：相对分叉点版本新出现的符号。 */
-interface AddedExport {
-  file: string;
-  symbol: ExportedSymbol;
-}
-
-export interface ExportAnalysis {
-  added: readonly AddedExport[];
-  references: ReferenceIndex;
-  /** 基线里的存量条目，键由 `baselineKey` 生成。 */
-  baseline: ReadonlySet<string>;
-  /** 引用索引覆盖的受管源文件数。 */
-  scannedFiles: number;
-  /** 基线文件存在但无法解析时的说明；有值时规则把它报成失败。 */
-  baselineError?: string;
-}
-
-/** 基线条目的值。 */
-interface BaselineEntry {
-  path: string;
-  name: string;
-  kind: ExportKind;
-}
-
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
-const RESOLVE_SUFFIXES = ["", ...SOURCE_EXTENSIONS, "/index.ts", "/index.tsx", "/index.js", "/index.jsx"];
-
-const SCRIPT_KIND_BY_EXTENSION: Record<string, ts.ScriptKind> = {
-  ts: ts.ScriptKind.TS,
-  tsx: ts.ScriptKind.TSX,
-  js: ts.ScriptKind.JS,
-  jsx: ts.ScriptKind.JSX,
-  mjs: ts.ScriptKind.JS,
-  cjs: ts.ScriptKind.JS,
-};
-
-function scriptKindOf(filePath: string): ts.ScriptKind {
-  const extension = filePath.slice(filePath.lastIndexOf(".") + 1).toLowerCase();
-  return SCRIPT_KIND_BY_EXTENSION[extension] ?? ts.ScriptKind.TS;
-}
 
 function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
   const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
@@ -297,13 +262,7 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
 
 /** 扫描一个文件：导出、对外引用、转出口。 */
 function scanModule(filePath: string, sourceText: string): ModuleScan {
-  const source = ts.createSourceFile(
-    filePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    false,
-    scriptKindOf(filePath),
-  );
+  const source = parseSource(filePath, sourceText);
   const localKinds = collectLocalKinds(source);
   const { imports, reExports, stars } = collectImports(source);
   return { exports: collectExports(source, localKinds), imports, reExports, stars };
@@ -344,7 +303,7 @@ function resolveModule(fromFile: string, specifier: string, files: ReadonlySet<s
     return null;
   }
   if (!basePath) return null;
-  for (const suffix of RESOLVE_SUFFIXES) {
+  for (const suffix of MODULE_SUFFIXES) {
     const candidate = `${basePath}${suffix}`;
     if (files.has(candidate)) return candidate;
   }
@@ -453,11 +412,17 @@ function buildReferenceIndex(scans: ReadonlyMap<string, ModuleScan>): ReferenceI
   return index;
 }
 
-/** 从源码文本建引用索引。 */
-export function indexReferences(sources: ReadonlyMap<string, string>): ReferenceIndex {
+/**
+ * 扫描一批源码：返回引用索引与每个文件的导出清单。调用方决定扫描范围，测试传固定样本。
+ */
+export function scanSources(sources: ReadonlyMap<string, string>): ExportScan {
   const scans = new Map<string, ModuleScan>();
   for (const [filePath, sourceText] of sources) scans.set(filePath, scanModule(filePath, sourceText));
-  return buildReferenceIndex(scans);
+
+  const exportsByFile = new Map<string, readonly ExportedSymbol[]>();
+  for (const [filePath, scan] of scans) exportsByFile.set(filePath, scan.exports);
+
+  return { references: buildReferenceIndex(scans), exportsByFile };
 }
 
 /** 某个导出在受管源码里的引用方文件，去重后按路径排序。 */
@@ -467,103 +432,4 @@ export function referencesFor(index: ReferenceIndex, file: string, name: string)
   const origins = new Set(byName.get(name) ?? []);
   for (const origin of byName.get(ALL_EXPORTS) ?? []) origins.add(origin);
   return [...origins].sort();
-}
-
-/** 基线文件放在仓库根，记录上线时的存量无引用导出。 */
-export const BASELINE_FILE = "coverage-export-baseline.json";
-
-/** 基线条目的键：路径、导出名与种类，三者共同定位一个存量符号。 */
-export function baselineKey(path: string, name: string, kind: ExportKind): string {
-  return `${path}#${name}#${kind}`;
-}
-
-/** 解析基线文件。结构不合法时抛出，由调用方把原因写进报告。 */
-function parseBaseline(text: string): BaselineEntry[] {
-  const parsed: unknown = JSON.parse(text);
-  if (typeof parsed !== "object" || parsed === null) throw new Error("基线文件不是对象");
-  const symbols = "symbols" in parsed ? parsed.symbols : undefined;
-  if (!Array.isArray(symbols)) throw new Error("基线文件缺少 symbols 数组");
-
-  const entries: BaselineEntry[] = [];
-  for (const raw of symbols) {
-    if (typeof raw !== "object" || raw === null) throw new Error("基线条目不是对象");
-    const path = "path" in raw ? raw.path : undefined;
-    const name = "name" in raw ? raw.name : undefined;
-    const kind = "kind" in raw ? raw.kind : undefined;
-    if (typeof path !== "string" || typeof name !== "string") {
-      throw new Error("基线条目缺少 path 或 name");
-    }
-    if (kind !== "type" && kind !== "runtime") {
-      throw new Error(`基线条目 ${path}#${name} 的 kind 必须是 type 或 runtime`);
-    }
-    entries.push({ path, name, kind });
-  }
-  return entries;
-}
-
-/** 源码读取的注入点：测试传固定样本，生产读工作区与分叉点版本。 */
-interface SourceReaders {
-  readWorkspace(path: string): Promise<string>;
-  readAtMergeBase(path: string): Promise<string | null>;
-}
-
-interface CollectExportUsageOptions {
-  changedFiles: readonly ChangedFile[];
-  managedFiles: readonly string[];
-  readers: SourceReaders;
-  /** 基线文件内容；文件不存在时传 null。 */
-  baselineText: string | null;
-}
-
-/**
- * 采集一次判定所需的全部数据：工作区源码的引用索引、改动文件两侧的导出对比、
- * 基线里的存量条目。
- */
-export async function collectExportUsage(options: CollectExportUsageOptions): Promise<ExportAnalysis> {
-  // 改动清单里的未跟踪新文件不在 `git ls-files` 里，但要一并扫描：本地运行时规则
-  // 与检查里看到同一批文件。
-  const paths = new Set(options.managedFiles);
-  for (const change of options.changedFiles) paths.add(change.path);
-
-  const scans = new Map<string, ModuleScan>();
-  const texts = await Promise.all([...paths].sort().map(async (filePath) => {
-    const text = await options.readers.readWorkspace(filePath);
-    return [filePath, text] as const;
-  }));
-  for (const [filePath, text] of texts) scans.set(filePath, scanModule(filePath, text));
-
-  const baseline = new Set<string>();
-  let baselineError: string | undefined;
-  if (options.baselineText !== null) {
-    try {
-      for (const entry of parseBaseline(options.baselineText)) {
-        baseline.add(baselineKey(entry.path, entry.name, entry.kind));
-      }
-    } catch (error) {
-      baselineError = error instanceof Error ? error.message : String(error);
-    }
-  }
-
-  const added: AddedExport[] = [];
-  for (const change of options.changedFiles) {
-    const headExports = scans.get(change.path)?.exports ?? [];
-    if (headExports.length === 0) continue;
-
-    const basePath = change.previousPath ?? change.path;
-    const baseText = change.status === "added" ? null : await options.readers.readAtMergeBase(basePath);
-    const baseKeys = new Set((baseText === null ? [] : extractExports(basePath, baseText)).map(
-      (symbol) => `${symbol.name}\u0000${symbol.kind}`,
-    ));
-    for (const symbol of headExports) {
-      if (!baseKeys.has(`${symbol.name}\u0000${symbol.kind}`)) added.push({ file: change.path, symbol });
-    }
-  }
-
-  return {
-    added,
-    references: buildReferenceIndex(scans),
-    baseline,
-    scannedFiles: scans.size,
-    ...(baselineError === undefined ? {} : { baselineError }),
-  };
 }

@@ -1,78 +1,11 @@
-import {
-  BASELINE_FILE,
-  baselineKey,
-  referencesFor,
-  type ExportDeclaration,
-  type ExportKind,
-  type ExportedSymbol,
-} from "../exports";
+import { BASELINE_FILE, baselineKey } from "../export-baseline";
+import { referencesFor, type ExportDeclaration, type ExportKind } from "../exports";
+import { isFrameworkExport } from "../framework-exports";
 import type { CoverageRule, Finding, RuleInput } from "./index";
 
-export const RULE_EXPORTS = "rule-3";
+const RULE_EXPORTS = "rule-3";
 
 const RULE_TITLE = "新增导出必须有生产引用";
-
-/** 由框架按文件名或路径调用的导出，不计入判定。 */
-const ROUTE_METHODS: Record<string, true> = {
-  GET: true,
-  POST: true,
-  PATCH: true,
-  DELETE: true,
-  PUT: true,
-  HEAD: true,
-  OPTIONS: true,
-};
-
-/** 路由文件里的段配置，Next.js 直接读取，同样没有 import 语句。 */
-const ROUTE_SEGMENT_CONFIG: Record<string, true> = {
-  dynamic: true,
-  revalidate: true,
-  runtime: true,
-  preferredRegion: true,
-  maxDuration: true,
-  fetchCache: true,
-};
-
-/** `app/` 下的约定文件：默认导出与路由段配置由框架按文件名读取。 */
-const APP_PAGE_FILES: Record<string, true> = {
-  page: true,
-  layout: true,
-  template: true,
-  loading: true,
-  error: true,
-  "not-found": true,
-  "global-error": true,
-};
-
-const APP_PAGE_EXPORTS: Record<string, true> = {
-  default: true,
-  metadata: true,
-  generateMetadata: true,
-  viewport: true,
-  generateViewport: true,
-  generateStaticParams: true,
-  dynamicParams: true,
-  ...ROUTE_SEGMENT_CONFIG,
-};
-
-/** `app/` 下的元数据路由文件，默认导出由框架调用。 */
-const APP_METADATA_FILES: Record<string, true> = {
-  manifest: true,
-  robots: true,
-  sitemap: true,
-  icon: true,
-  "apple-icon": true,
-  "opengraph-image": true,
-  "twitter-image": true,
-};
-
-/** 仓库根的工具配置，默认导出由加载器读取。 */
-const CONFIG_FILES: Record<string, true> = {
-  "next.config": true,
-  "tailwind.config": true,
-  "postcss.config": true,
-  "eslint.config": true,
-};
 
 const KIND_LABELS: Record<ExportKind, string> = {
   runtime: "运行时导出",
@@ -92,41 +25,19 @@ const DECLARATION_LABELS: Record<ExportDeclaration, string> = {
   "re-export": "转出导出",
 };
 
-/** 去掉目录与最后一节扩展名：`app/x/page.tsx` → `page`，`next.config.ts` → `next.config`。 */
-function baseName(file: string): string {
-  return file.slice(file.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
-}
-
-/** 框架按文件名或路径调用、不需要 import 的导出。 */
-export function isFrameworkExport(file: string, symbol: ExportedSymbol): boolean {
-  if (file.startsWith("bin/")) return true;
-
-  const name = baseName(file);
-  if (name === "route") {
-    return ROUTE_METHODS[symbol.name] === true || ROUTE_SEGMENT_CONFIG[symbol.name] === true;
-  }
-  if (name === "instrumentation") return symbol.name === "register" || symbol.name === "onRequestError";
-  if (name === "proxy") {
-    return symbol.name === "default" || symbol.name === "proxy" || symbol.name === "config";
-  }
-  if (file.startsWith("app/")) {
-    if (APP_METADATA_FILES[name] === true && symbol.name === "default") return true;
-    if (APP_PAGE_FILES[name] === true && APP_PAGE_EXPORTS[symbol.name] === true) return true;
-  }
-  if (symbol.name !== "default") return false;
-  return CONFIG_FILES[name] === true;
-}
-
 /**
  * 规则三：新增导出必须在受管源码里有生产引用。
  *
- * 新增的判定是分叉点版本与工作区两侧的导出结构对比，只拦本次新增。上线前的存量
- * 无引用导出记录在仓库根的基线文件里，命中基线的不判失败：改名识别失败的路径只能
+ * 新增的判定是分叉点版本与工作区两侧的导出结构对比，只拦本次新增。分叉点之前就存在
+ * 的无引用导出记录在仓库根的基线文件里，命中基线的不判失败：改名识别失败的路径只能
  * 按新增文件处理，基线让这类重构不至于把存量代码变成新的失败。
  *
  * 框架按文件名或路径调用的导出（路由方法、页面与布局的默认导出、配置文件、命令行
  * 入口）不产生 import 语句，直接跳过。仅类型导出与运行时导出分开统计，输出里带上
  * 符号的名字与声明形式。
+ *
+ * 这条规则不读覆盖率产物，它在测试之前单独跑：`bun run coverage:exports`。静态失败时
+ * 省下两次测试运行。
  */
 export const ruleExports: CoverageRule = {
   id: RULE_EXPORTS,
@@ -134,6 +45,15 @@ export const ruleExports: CoverageRule = {
   evaluate(input: RuleInput): Finding[] {
     const analysis = input.exportUsage;
     const findings: Finding[] = [];
+    if (!analysis) {
+      return [{
+        rule: RULE_EXPORTS,
+        file: "（导出引用分析）",
+        numbers: "没有导出分析数据",
+        reason: "规则三没有拿到导出引用分析，无法判定，属流水线问题",
+        fix: "确认 bun run coverage:exports 接入了导出分析后再重跑",
+      }];
+    }
 
     if (analysis.baselineError) {
       findings.push({

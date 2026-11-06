@@ -16,6 +16,8 @@
 
 import ts from "typescript";
 
+import { parseSource } from "./source-scan";
+
 interface FunctionSurface {
   /** 本文件定义的函数名。 */
   defined: Set<string>;
@@ -28,13 +30,6 @@ interface FunctionSurfaceDiff {
   removed: string[];
   addedReExports: string[];
   removedReExports: string[];
-}
-
-function scriptKindOf(fileName: string): ts.ScriptKind {
-  if (fileName.endsWith(".tsx")) return ts.ScriptKind.TSX;
-  if (fileName.endsWith(".jsx")) return ts.ScriptKind.JSX;
-  if (/\.(mjs|cjs|js)$/.test(fileName)) return ts.ScriptKind.JS;
-  return ts.ScriptKind.TS;
 }
 
 /** 属性名或变量名；计算属性没有稳定的名字，返回 null 交给调用方跳过。 */
@@ -60,13 +55,7 @@ export function collectFunctionSurface(
   sourceText: string,
   fileName: string,
 ): FunctionSurface {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    /* setParentNodes */ true,
-    scriptKindOf(fileName),
-  );
+  const sourceFile = parseSource(fileName, sourceText);
   const surface: FunctionSurface = { defined: new Set(), reExported: new Set() };
 
   const visit = (node: ts.Node): void => {
@@ -128,13 +117,7 @@ export function collectNamedFunctionExports(
   sourceText: string,
   fileName: string,
 ): Record<string, string> {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    /* setParentNodes */ true,
-    scriptKindOf(fileName),
-  );
+  const sourceFile = parseSource(fileName, sourceText);
   const defined = collectFunctionSurface(sourceText, fileName).defined;
   // 导出名来自源码，`constructor`、`__proto__` 这类名字会撞上原型链，用无原型对象。
   const exported: Record<string, string> = Object.create(null);
