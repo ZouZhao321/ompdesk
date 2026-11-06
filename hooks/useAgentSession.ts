@@ -1506,13 +1506,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "start" });
         break;
       case "agent_end":
-        // One logical prompt can emit multiple agent_end events before retrying,
-        // compacting, or continuing messages queued by extension handlers.
-        // Keep the stream open until prompt_done/agent_settled and the idle grace.
+        // A run can end several times before the prompt is really over:
+        // retries, compaction continuations and queued extension messages all
+        // resume with a new agent_start. Only a terminal end means the agent is
+        // idle, so settle on it instead of waiting for the 15s reconcile. That
+        // wait is what leaves the composer stuck in steer/follow-up mode after
+        // the run finished or the operator pressed Stop.
         if (!agentRunningRef.current) break;
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
+        if (event.isTerminal === true) {
+          sdkAgentActiveRef.current = false;
+          settleUiStage();
+          notifyPromptStage(promptRunIdRef.current);
+          if (sessionIdRef.current) scheduleEventStreamClose(sessionIdRef.current);
+        }
         if (sessionIdRef.current) {
           const sid = sessionIdRef.current;
           loadSession(sid);
@@ -1536,21 +1545,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "goal_status":
         setGoalStatus((event.status as GoalStatusInfo | null | undefined) ?? null);
         break;
-      case "agent_settled": {
-        const agentWasActive = sdkAgentActiveRef.current;
-        sdkAgentActiveRef.current = false;
-        if (!agentWasActive || rpcPromptPendingRef.current) break;
-
-        const sid = sessionIdRef.current;
-        const wasRunning = settleUiStage();
-        setIsCompacting(false);
-        if (sid) {
-          void loadSession(sid);
-          scheduleEventStreamClose(sid);
-        }
-        if (wasRunning) onAgentEnd?.(sessionIdRef.current ?? undefined);
-        break;
-      }
       case "prompt_done":
         {
           const runId = promptRunIdRef.current;
@@ -1562,12 +1556,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
           const sid = sessionIdRef.current;
           if (sid) void loadSession(sid);
-          // An extension-injected agent may already have started before the
-          // command's prompt_done. Keep that active stage visible and let its
-          // agent_settled event perform the next completion transition.
           if (!sdkAgentActiveRef.current) {
             settleUiStage();
             if (sid) scheduleEventStreamClose(sid);
+          } else if (sid) {
+            // An extension-injected agent may already have started before the
+            // command's prompt_done, so the UI must stay busy for it. The abort
+            // path emits no agent_end, so ask the server whether anything is
+            // still running instead of trusting the SDK stage.
+            void waitForPromptSettlement(sid, runId);
           }
         }
         break;
@@ -1768,7 +1765,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {

@@ -294,3 +294,33 @@ test("draws the input column from the shared transcript geometry", async () => {
   assert.doesNotMatch(source, /maxWidth: 820\b/);
   assert.doesNotMatch(source, /padding: "0 16px 8px"/);
 });
+
+test("queues image attachments while the agent is running", () => {
+  const draftKey = "streaming-image-queue";
+  setDraft(draftKey, { value: "", images: [{ data: "AQID", mimeType: "image/png" }] });
+
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(ChatInput, {
+        onSend() {},
+        onAbort() {},
+        onSteer() {},
+        onFollowUp() {},
+        isStreaming: true,
+        draftKey,
+      }),
+    ),
+  );
+  clearDraft(draftKey);
+
+  const buttonTag = (title) => {
+    const titleIndex = html.indexOf(title);
+    assert.ok(titleIndex > 0, `missing ${title}`);
+    return html.slice(html.lastIndexOf("<button", titleIndex), html.indexOf(">", titleIndex) + 1);
+  };
+
+  assert.doesNotMatch(buttonTag('title="Interrupt the current run and inject this message now"'), /disabled=""/);
+  assert.doesNotMatch(buttonTag('title="Queue this message after the agent finishes"'), /disabled=""/);
+});
