@@ -11,6 +11,8 @@ import { PathLabel } from "./PathLabel";
 import { projectMenuRowStyle } from "./project-menu-row-style";
 
 interface SwitcherState {
+  /** 这份数据对应的 cwd，用来拒绝上一个目录的迟到响应与旧操作 */
+  forCwd: string;
   projectRoot: string;
   isGit: boolean;
   isTopLevel: boolean;
@@ -78,6 +80,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
           return;
         }
         setState({
+          forCwd: cwd,
           projectRoot: data.projectRoot,
           isGit: data.isGit ?? false,
           isTopLevel: data.isTopLevel ?? false,
@@ -91,8 +94,9 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
     return () => { cancelled = true; };
   }, [cwd, refreshKey, reloadKey]);
 
-  // 目录变了就收起：旧项目的分支列表不该继续显示。
+  // 目录变了就清空并收起：上一个目录的分支列表既不能显示，也不能被点选。
   useEffect(() => {
+    setState(null);
     closePanel();
   }, [cwd, closePanel]);
 
@@ -106,14 +110,13 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
   }, [open, closePanel]);
 
   const switchTo = (branch: string | null, path: string) => {
-    if (!state) return;
+    if (!state || state.forCwd !== cwd) return;
     requestWorktreeSwitch({ branch, path, projectRoot: state.projectRoot });
     closePanel();
-    setReloadKey((key) => key + 1);
   };
 
   const ensureCheckout = async (branchName: string, create: boolean) => {
-    if (!state || busy) return;
+    if (!state || state.forCwd !== cwd || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -151,7 +154,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
   };
 
   const handleRemoveWorktree = async (path: string, force: boolean) => {
-    if (!state || busy) return;
+    if (!state || state.forCwd !== cwd || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -183,7 +186,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0 }: Props) {
     }
   };
 
-  if (!state || !state.isGit || !state.isTopLevel) return null;
+  if (!state || state.forCwd !== cwd || !state.isGit || !state.isTopLevel) return null;
 
   const branches = state.branches ?? [];
   const branchesUnavailable = state.branches === null;
