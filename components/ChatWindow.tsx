@@ -7,7 +7,6 @@ import type {
   BlockingExtensionUiRequest,
   ExtensionUiRequest,
   SessionInfo,
-  SessionTreeNode,
   SubagentSnapshot,
   ToolResultMessage,
   UserMessage,
@@ -65,7 +64,7 @@ interface Props {
   onSessionForked?: (newSessionId: string, runtimeId?: string | null) => void;
   modelsRefreshKey?: number;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
-  onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
+  onBranchDataChange?: (activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSessionStatsChange?: (stats: SessionStatsInfo | null) => void;
   onSessionStatsPanelOpen?: () => void;
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
