@@ -30,7 +30,7 @@ test("explicit context changes invalidate a pending workspace restore", () => {
 test("all active-session transitions share one persistence effect", () => {
   assert.match(
     source,
-    /useEffect\(\(\) => \{\s+if \(!selectedSession\) return;[\s\S]*?setLastOpenSession\(projectKey, selectedSession\.id\);\s+\}, \[selectedSession\]\);/,
+    /useEffect\(\(\) => \{\s+if \(!selectedSession\) return;[\s\S]*?setLastOpenSession\(normalizeProjectKey\(projectKey\), selectedSession\.id\);\s+\}, \[selectedSession\]\);/,
   );
 });
 
