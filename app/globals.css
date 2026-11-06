@@ -42,20 +42,20 @@
   --omp-alert-red: #ff4757;
   --omp-warning-amber: #ffb347;
 
-  --bg: #ffffff;          /* light cardBg */
-  --bg-panel: #f8f8f8;    /* light pageBg */
+  --bg: #ffffff; /* light cardBg */
+  --bg-panel: #f8f8f8; /* light pageBg */
   --bg-hover: #eeeeee;
   --bg-selected: #d0d0e0; /* light selectedBg */
   --border: #d8dbe0;
   --text: #1a1d23;
-  --text-muted: #6c6c6c;  /* light mediumGray */
+  --text-muted: #6c6c6c; /* light mediumGray */
   --text-dim: #949aa4;
-  --accent: #0082b3;      /* titanium deepBlue */
+  --accent: #0082b3; /* titanium deepBlue */
   --accent-hover: #00b4ff;
   --user-bg: #eef2f6;
   --assistant-bg: #ffffff;
   --tool-bg: #f4f6f8;
-  --bg-subtle: rgba(0,0,0,0.035);
+  --bg-subtle: rgba(0, 0, 0, 0.035);
   --success: #1f8b4c;
   --danger: #aa5555;
   --warning: #9a7326;
@@ -63,23 +63,23 @@
 
 html.dark {
   /* titanium */
-  --bg: #151820;          /* brushedTitanium — pageBg */
-  --bg-panel: #0f1216;    /* darkTitanium — cardBg */
-  --bg-hover: #1f252d;    /* borderMuted */
+  --bg: #151820; /* brushedTitanium — pageBg */
+  --bg-panel: #0f1216; /* darkTitanium — cardBg */
+  --bg-hover: #1f252d; /* borderMuted */
   --bg-selected: #1c2b38; /* deepBlue, dimmed to a selection wash */
-  --border: #2a3038;      /* subtleGray */
-  --text: #e8ecf4;        /* brightAluminum */
-  --text-muted: #9ca3b0;  /* dimAluminum */
+  --border: #2a3038; /* subtleGray */
+  --text: #e8ecf4; /* brightAluminum */
+  --text-muted: #9ca3b0; /* dimAluminum */
   --text-dim: #6b7280;
-  --accent: #00b4ff;      /* electricBlue */
+  --accent: #00b4ff; /* electricBlue */
   --accent-hover: #4fcdff;
-  --user-bg: #0f1216;     /* darkTitanium */
+  --user-bg: #0f1216; /* darkTitanium */
   --assistant-bg: #151820;
   --tool-bg: #0f1216;
-  --bg-subtle: rgba(232,236,244,0.05);
-  --success: #00ff88;     /* readoutGreen */
-  --danger: #ff4757;      /* alertRed */
-  --warning: #ffb347;     /* warningAmber */
+  --bg-subtle: rgba(232, 236, 244, 0.05);
+  --success: #00ff88; /* readoutGreen */
+  --danger: #ff4757; /* alertRed */
+  --warning: #ffb347; /* warningAmber */
 }
 
 .catppuccin-file-icon {
@@ -125,7 +125,8 @@ html.dark .catppuccin-file-icon {
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100vh;
   height: 100dvh;
@@ -135,7 +136,7 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   overscroll-behavior: none;
 }
@@ -193,10 +194,13 @@ body {
   /* System monospace stack. ompdesk is a local tool: it must not depend on a
      font CDN at build or at runtime, and the terminal-native faces below are
      already what omp users read code in. CJK fallbacks stay last. */
-  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Noto Sans Mono', 'DejaVu Sans Mono', Consolas, 'Liberation Mono', 'PingFang SC', 'Microsoft YaHei', monospace;
+  --font-mono:
+    ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", "Noto Sans Mono",
+    "DejaVu Sans Mono", Consolas, "Liberation Mono", "PingFang SC", "Microsoft YaHei", monospace;
 }
 
-pre, code {
+pre,
+code {
   font-family: var(--font-mono);
 }
 
@@ -210,9 +214,15 @@ pre, code {
   color: var(--text);
   word-break: break-word;
 }
-.markdown-body p { margin: 0 0 8px; }
-.markdown-body p:last-child { margin-bottom: 0; }
-.update-changelog .markdown-body p { margin-bottom: 6px; }
+.markdown-body p {
+  margin: 0 0 8px;
+}
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+.update-changelog .markdown-body p {
+  margin-bottom: 6px;
+}
 .update-changelog .markdown-body h1,
 .update-changelog .markdown-body h2,
 .update-changelog .markdown-body h3,
@@ -225,27 +235,50 @@ pre, code {
 .update-changelog .markdown-body ol {
   margin: 4px 0 7px;
 }
-.update-changelog .markdown-body li { margin: 2px 0; }
-.markdown-body h1, .markdown-body h2, .markdown-body h3,
-.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+.update-changelog .markdown-body li {
+  margin: 2px 0;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
   font-weight: 600;
   margin: 10px 0 5px;
   color: var(--text);
   line-height: 1.35;
   letter-spacing: 0;
 }
-.markdown-body h1 { font-size: 1.16em; }
-.markdown-body h2 { font-size: 1.08em; }
-.markdown-body h3 { font-size: 0.98em; color: color-mix(in srgb, var(--text) 88%, var(--text-muted)); }
-.markdown-body ul, .markdown-body ol {
+.markdown-body h1 {
+  font-size: 1.16em;
+}
+.markdown-body h2 {
+  font-size: 1.08em;
+}
+.markdown-body h3 {
+  font-size: 0.98em;
+  color: color-mix(in srgb, var(--text) 88%, var(--text-muted));
+}
+.markdown-body ul,
+.markdown-body ol {
   padding-left: 22px;
   margin: 5px 0 8px;
   list-style-position: outside;
 }
-.markdown-body li { margin: 3px 0; padding-left: 2px; }
-.markdown-body ul > li { list-style-type: disc; }
-.markdown-body ol > li { list-style-type: decimal; }
-.markdown-body li > p { margin: 0; }
+.markdown-body li {
+  margin: 3px 0;
+  padding-left: 2px;
+}
+.markdown-body ul > li {
+  list-style-type: disc;
+}
+.markdown-body ol > li {
+  list-style-type: decimal;
+}
+.markdown-body li > p {
+  margin: 0;
+}
 .markdown-body li::marker {
   color: color-mix(in srgb, var(--accent) 72%, var(--text-muted));
   font-weight: 600;
@@ -254,7 +287,9 @@ pre, code {
   color: color-mix(in srgb, var(--text) 88%, var(--accent));
   font-weight: 700;
 }
-.markdown-body em { color: var(--text-muted); }
+.markdown-body em {
+  color: var(--text-muted);
+}
 .markdown-body a {
   color: var(--accent);
   text-decoration: underline;
@@ -262,7 +297,9 @@ pre, code {
   text-underline-offset: 3px;
   text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.markdown-body a:hover { text-decoration-color: var(--accent); }
+.markdown-body a:hover {
+  text-decoration-color: var(--accent);
+}
 .markdown-body img {
   display: block;
   max-width: 100%;
@@ -288,7 +325,9 @@ pre, code {
   position: relative;
   padding-left: 25px;
 }
-.markdown-body .task-list-item::marker { content: ""; }
+.markdown-body .task-list-item::marker {
+  content: "";
+}
 .markdown-body .task-list-item > input[type="checkbox"],
 .markdown-body .task-list-item > p:first-child > input[type="checkbox"]:first-child {
   appearance: none;
@@ -310,7 +349,10 @@ pre, code {
   background: color-mix(in srgb, var(--accent) 10%, var(--bg));
 }
 .markdown-body .task-list-item > input[type="checkbox"]:checked::before,
-.markdown-body .task-list-item > p:first-child > input[type="checkbox"]:first-child:checked::before {
+.markdown-body
+  .task-list-item
+  > p:first-child
+  > input[type="checkbox"]:first-child:checked::before {
   content: "";
   width: 4px;
   height: 8px;
@@ -340,20 +382,25 @@ pre, code {
   min-width: 100%;
   font-size: 13px;
 }
-.markdown-body th, .markdown-body td {
+.markdown-body th,
+.markdown-body td {
   border: 0;
   border-bottom: 1px solid var(--border);
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
 }
-.markdown-body tr:last-child td { border-bottom: 0; }
+.markdown-body tr:last-child td {
+  border-bottom: 0;
+}
 .markdown-body th {
   background: var(--bg-panel);
   color: color-mix(in srgb, var(--text) 88%, var(--text-muted));
   font-weight: 650;
 }
-.markdown-body tbody tr:nth-child(even) td { background: var(--bg-subtle); }
+.markdown-body tbody tr:nth-child(even) td {
+  background: var(--bg-subtle);
+}
 .markdown-body hr {
   border: none;
   height: 1px;
@@ -376,7 +423,9 @@ pre, code {
 .markdown-custom-message {
   line-height: 1.32;
 }
-.markdown-custom-message p { margin: 0; }
+.markdown-custom-message p {
+  margin: 0;
+}
 .markdown-custom-message h1,
 .markdown-custom-message h2,
 .markdown-custom-message h3,
@@ -390,7 +439,9 @@ pre, code {
 .markdown-custom-message ol {
   margin: 2px 0 3px;
 }
-.markdown-custom-message li { margin: 0; }
+.markdown-custom-message li {
+  margin: 0;
+}
 .markdown-custom-message blockquote {
   margin: 3px 0;
   padding: 4px 8px;
@@ -403,7 +454,9 @@ pre, code {
 .markdown-compaction-message {
   line-height: 1.5;
 }
-.markdown-compaction-message p { margin: 0 0 7px; }
+.markdown-compaction-message p {
+  margin: 0 0 7px;
+}
 .markdown-compaction-message h1,
 .markdown-compaction-message h2,
 .markdown-compaction-message h3,
@@ -417,7 +470,9 @@ pre, code {
 .markdown-compaction-message ol {
   margin: 4px 0 8px;
 }
-.markdown-compaction-message li { margin: 2px 0; }
+.markdown-compaction-message li {
+  margin: 2px 0;
+}
 .markdown-compaction-message .markdown-table-wrap,
 .markdown-compaction-message .markdown-code-block {
   margin: 6px 0;
@@ -1011,7 +1066,11 @@ pre, code {
     linear-gradient(45deg, transparent 75%, var(--bg) 75%),
     linear-gradient(-45deg, transparent 75%, var(--bg) 75%);
   background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
 }
 
 .image-zoom-viewport.is-dragging {
@@ -1160,7 +1219,8 @@ pre, code {
   height: 100dvh;
   max-height: none;
   margin: 0;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
   border: 0;
   background: var(--bg);
   color: var(--text);
@@ -1385,10 +1445,18 @@ pre, code {
 }
 
 /* File viewer markdown preview — larger headings */
-.markdown-file-preview h1 { font-size: 1.8em; }
-.markdown-file-preview h2 { font-size: 1.4em; }
-.markdown-file-preview h3 { font-size: 1.15em; }
-.markdown-file-preview p { margin: 0 0 12px; }
+.markdown-file-preview h1 {
+  font-size: 1.8em;
+}
+.markdown-file-preview h2 {
+  font-size: 1.4em;
+}
+.markdown-file-preview h3 {
+  font-size: 1.15em;
+}
+.markdown-file-preview p {
+  margin: 0 0 12px;
+}
 .markdown-file-preview pre {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -1477,38 +1545,76 @@ span.linenumber {
 }
 
 @keyframes drop-zone-in {
-  from { opacity: 0; transform: scale(0.97); }
-  to   { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes drop-icon-float {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-6px); }
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 @keyframes drop-ring-pulse {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50%       { opacity: 1;   transform: scale(1.06); }
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
 }
 
 @keyframes drop-ripple {
-  0%   { transform: scale(0); opacity: 0.6; }
-  100% { transform: scale(1); opacity: 0; }
+  0% {
+    transform: scale(0);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes notice-shelf-in {
@@ -1554,14 +1660,29 @@ span.linenumber {
 }
 
 @keyframes saved-pop {
-  0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
-  40%  { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.25); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55);
+  }
+  40% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.25);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
 }
 
 @keyframes saved-check-draw {
-  from { stroke-dashoffset: 18; opacity: 0; }
-  to   { stroke-dashoffset: 0;  opacity: 1; }
+  from {
+    stroke-dashoffset: 18;
+    opacity: 0;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
 }
 
 /* Chat content is a single column; the right panel is a sibling element outside this layout. */
@@ -1675,7 +1796,9 @@ span.linenumber {
   height: var(--rail-dot-mark, 6px);
   border-radius: 999px;
   background: var(--text-dim);
-  transition: width 0.12s ease, background-color 0.12s ease;
+  transition:
+    width 0.12s ease,
+    background-color 0.12s ease;
 }
 .transcript-rail-dot:hover .transcript-rail-dot-mark,
 .transcript-rail-dot:focus-visible .transcript-rail-dot-mark {
@@ -1815,7 +1938,9 @@ span.linenumber {
   .sidebar-container {
     position: relative;
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition:
+      width 0.2s ease,
+      min-width 0.2s ease;
   }
   .sidebar-container.sidebar-open {
     width: var(--sidebar-width, 260px);
@@ -1841,7 +1966,9 @@ span.linenumber {
 @media (min-width: 960px) {
   .right-panel-container {
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition:
+      width 0.2s ease,
+      min-width 0.2s ease;
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -1928,7 +2055,9 @@ span.linenumber {
     max-width: 85vw;
     height: var(--app-viewport-height, 100dvh);
     overflow: visible;
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    transition:
+      transform 0.25s ease,
+      box-shadow 0.25s ease;
   }
   .sidebar-container.sidebar-open,
   .sidebar-container.sidebar-closed {
@@ -1937,7 +2066,7 @@ span.linenumber {
   }
   .sidebar-container.sidebar-open {
     transform: translateX(0);
-    box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
   }
   .sidebar-container.sidebar-closed {
     transform: translateX(calc(-100% - env(safe-area-inset-left)));

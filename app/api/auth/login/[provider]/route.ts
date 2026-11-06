@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic";
 
 // In-memory registry: loginToken -> resolve/reject for the manualCodeInput promise
 declare global {
-  var __ompLoginCallbacks: Map<string, { resolve: (v: string) => void; reject: (e: Error) => void }> | undefined;
+  var __ompLoginCallbacks:
+    | Map<string, { resolve: (v: string) => void; reject: (e: Error) => void }>
+    | undefined;
 }
 
 function getCallbackRegistry() {
@@ -17,38 +19,38 @@ function getCallbackRegistry() {
 }
 
 // POST /api/auth/login/[provider] — frontend sends redirect URL or auth code
-export const POST = withRequestLog("/api/auth/login/[provider]", async (
-  req: Request,
-  { params }: { params: Promise<{ provider: string }> }
-) => {
-  const { provider } = await params;
-  const { token, code } = (await req.json()) as { token?: string; code?: string };
+export const POST = withRequestLog(
+  "/api/auth/login/[provider]",
+  async (req: Request, { params }: { params: Promise<{ provider: string }> }) => {
+    const { provider } = await params;
+    const { token, code } = (await req.json()) as { token?: string; code?: string };
 
-  if (!token || !code) {
-    return Response.json({ error: "token and code required" }, { status: 400 });
-  }
+    if (!token || !code) {
+      return Response.json({ error: "token and code required" }, { status: 400 });
+    }
 
-  const registry = getCallbackRegistry();
-  const callbacks = registry.get(token);
-  if (!callbacks) {
-    return Response.json({ error: "No pending login for token" }, { status: 404 });
-  }
-  // Verify token belongs to this provider (token format: "<provider>-<ts>-<random>")
-  if (!token.startsWith(`${provider}-`)) {
-    return Response.json({ error: "Token does not match provider" }, { status: 400 });
-  }
+    const registry = getCallbackRegistry();
+    const callbacks = registry.get(token);
+    if (!callbacks) {
+      return Response.json({ error: "No pending login for token" }, { status: 404 });
+    }
+    // Verify token belongs to this provider (token format: "<provider>-<ts>-<random>")
+    if (!token.startsWith(`${provider}-`)) {
+      return Response.json({ error: "Token does not match provider" }, { status: 400 });
+    }
 
-  callbacks.resolve(code);
-  registry.delete(token);
-  return Response.json({ ok: true, provider });
-});
+    callbacks.resolve(code);
+    registry.delete(token);
+    return Response.json({ ok: true, provider });
+  },
+);
 
 // GET /api/auth/login/[provider] — SSE stream for OAuth flow
 export const GET = withRequestLog("/api/auth/login/[provider]", getRouteHandler);
 
 async function getRouteHandler(
   req: Request,
-  { params }: { params: Promise<{ provider: string }> }
+  { params }: { params: Promise<{ provider: string }> },
 ) {
   const { provider } = await params;
 

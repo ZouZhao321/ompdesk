@@ -35,11 +35,16 @@ function probeDirectorySymlinks() {
   const root = mkdtempSync(join(tmpdir(), "ompdesk-link-probe-"));
   try {
     mkdirSync(join(root, "target"));
-    symlinkSync(join(root, "target"), join(root, "link"), process.platform === "win32" ? "junction" : "dir");
+    symlinkSync(
+      join(root, "target"),
+      join(root, "link"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
     return true;
   } catch (error) {
     const code = error?.code;
-    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP") return false;
+    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP")
+      return false;
     throw error;
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -47,7 +52,8 @@ function probeDirectorySymlinks() {
 }
 
 const SYMLINKS_SUPPORTED = probeDirectorySymlinks();
-const SYMLINK_SKIP_REASON = "Creating directory symlinks requires additional privileges on this platform";
+const SYMLINK_SKIP_REASON =
+  "Creating directory symlinks requires additional privileges on this platform";
 
 /**
  * 卷是否大小写不敏感：建一个含大写字母的目录，再看全大写形态是否也指到它。大小写敏感的
@@ -88,13 +94,19 @@ test(
     // 字面路径，包含关系跟着漏判。
     const root = createTempRoot(t);
     const missingTail = join("missing-A", "missing-B");
-    assert.equal(comparableDirectory(join(root, missingTail)), expectedKey(join(root, missingTail)));
+    assert.equal(
+      comparableDirectory(join(root, missingTail)),
+      expectedKey(join(root, missingTail)),
+    );
 
     const target = join(root, "target");
     mkdirSync(target);
     const link = join(root, "link");
     symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
-    assert.equal(comparableDirectory(join(link, missingTail)), expectedKey(join(target, missingTail)));
+    assert.equal(
+      comparableDirectory(join(link, missingTail)),
+      expectedKey(join(target, missingTail)),
+    );
   },
 );
 

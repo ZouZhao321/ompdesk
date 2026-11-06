@@ -188,8 +188,7 @@ export const modelProviders: Record<string, string> = {
   "settings.field.providers.antigravityEndpoint.description":
     "Endpoint routing strategy for google-antigravity providers (chat, search, image, discovery)",
   "settings.field.live.voice.label": "Live Voice",
-  "settings.field.live.voice.description":
-    "Voice used by Codex-backed realtime voice sessions",
+  "settings.field.live.voice.description": "Voice used by Codex-backed realtime voice sessions",
   "settings.field.tts.localVoice.label": "Local TTS Voice",
   "settings.field.tts.localVoice.description":
     "Kokoro voice used by the local TTS backend (American/British, female/male)",

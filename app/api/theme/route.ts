@@ -23,6 +23,9 @@ async function getRouteHandler(req: Request) {
     }
     return NextResponse.json(await getWebThemeConfig(await getSettingsForCwd(cwd)));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
   }
 }

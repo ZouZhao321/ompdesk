@@ -249,7 +249,12 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
     setRowFailures({});
   }, [cwd]);
 
-  const beginEdit = (entry: CommentEntry, targetLanguage: CommentLanguage, key: string, value: string) => {
+  const beginEdit = (
+    entry: CommentEntry,
+    targetLanguage: CommentLanguage,
+    key: string,
+    value: string,
+  ) => {
     setSaveError(null);
     setEditing({ key, entry, targetLanguage, value });
   };
@@ -275,9 +280,11 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const record = (await response.json()) as CommentTranslationRecord;
-      setLoaded((previous) => previous && previous.cwd === cwd
-        ? { ...previous, translations: { ...previous.translations, [record.key]: record } }
-        : previous);
+      setLoaded((previous) =>
+        previous && previous.cwd === cwd
+          ? { ...previous, translations: { ...previous.translations, [record.key]: record } }
+          : previous,
+      );
       setEditing(null);
     } catch {
       setSaveError(t("comments.saveFailed"));
@@ -293,9 +300,9 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
     try {
       const response = await fetch("/api/comment-dictionary", { method: "DELETE" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setLoaded((previous) => previous && previous.cwd === cwd
-        ? { ...previous, translations: {} }
-        : previous);
+      setLoaded((previous) =>
+        previous && previous.cwd === cwd ? { ...previous, translations: {} } : previous,
+      );
       setEditing(null);
     } catch {
       setDeleteFailed(true);
@@ -360,15 +367,18 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
         Object.assign(translations, payload.translations);
         for (const result of payload.results) {
           if (result.status !== "failed") continue;
-          failures[result.key] = result.reason === "no_output" ? "noOutput" : (result.missing ?? []);
+          failures[result.key] =
+            result.reason === "no_output" ? "noOutput" : (result.missing ?? []);
         }
       }
     } catch {
       error = commentTranslationErrorKey(undefined);
     } finally {
-      setLoaded((previous) => previous && previous.cwd === cwd
-        ? { ...previous, translations: { ...previous.translations, ...translations } }
-        : previous);
+      setLoaded((previous) =>
+        previous && previous.cwd === cwd
+          ? { ...previous, translations: { ...previous.translations, ...translations } }
+          : previous,
+      );
       setRowFailures(failures);
       setGenerateError(error);
       setGenerating(false);
@@ -382,9 +392,9 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
   const failed = failedCwd === cwd;
   const translatedCount = current ? Object.keys(current.translations).length : 0;
   const allSelected = Boolean(
-    current
-    && current.entries.length > 0
-    && current.entries.every((entry) => selected.has(rowId(entry))),
+    current &&
+      current.entries.length > 0 &&
+      current.entries.every((entry) => selected.has(rowId(entry))),
   );
 
   // 按文件分组，文件头提供按文件全选。
@@ -397,15 +407,22 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <div style={{ flexShrink: 0, padding: "8px 12px", borderBottom: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "8px 12px",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg-panel)",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, fontSize: 12, color: "var(--text)" }}>
             {current
               ? t("comments.summary", {
-                files: current.files,
-                total: current.entries.length,
-                excluded: current.excluded,
-              })
+                  files: current.files,
+                  total: current.entries.length,
+                  excluded: current.excluded,
+                })
               : t("comments.loading")}
           </div>
           {translatedCount > 0 && (
@@ -423,24 +440,27 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
             </button>
           )}
         </div>
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{t("comments.scope")}</div>
+        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
+          {t("comments.scope")}
+        </div>
         <div style={toolbarRowStyle}>
-          <label style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            color: "var(--text-dim)",
-            minHeight: hitTarget,
-          }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 11,
+              color: "var(--text-dim)",
+              minHeight: hitTarget,
+            }}
+          >
             <input
               type="checkbox"
               checked={allSelected}
               disabled={!current || current.entries.length === 0}
-              onChange={(event) => toggleSelection(
-                current ? current.entries.map(rowId) : [],
-                event.target.checked,
-              )}
+              onChange={(event) =>
+                toggleSelection(current ? current.entries.map(rowId) : [], event.target.checked)
+              }
             />
             {t("comments.selectAll")}
           </label>
@@ -462,7 +482,9 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
           </button>
         </div>
         {deleteFailed && (
-          <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>{t("comments.deleteFailed")}</div>
+          <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>
+            {t("comments.deleteFailed")}
+          </div>
         )}
         {generateError && (
           <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>
@@ -470,178 +492,208 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
           </div>
         )}
       </div>
-      <div style={{
-        flexShrink: 0,
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: 10,
-        padding: "4px 12px",
-        borderBottom: "1px solid var(--border)",
-        background: "var(--bg-panel)",
-        color: "var(--text-dim)",
-        fontSize: 10,
-        fontWeight: 600,
-      }}>
+      <div
+        style={{
+          flexShrink: 0,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+          padding: "4px 12px",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg-panel)",
+          color: "var(--text-dim)",
+          fontSize: 10,
+          fontWeight: 600,
+        }}
+      >
         <span>{t("comments.zhColumn")}</span>
         <span>{t("comments.enColumn")}</span>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        {failed && (
-          <div style={messageStyle}>{t("comments.error")}</div>
-        )}
-        {!failed && !current && loading && (
-          <div style={messageStyle}>{t("comments.loading")}</div>
-        )}
+        {failed && <div style={messageStyle}>{t("comments.error")}</div>}
+        {!failed && !current && loading && <div style={messageStyle}>{t("comments.loading")}</div>}
         {!failed && current && current.entries.length === 0 && (
           <div style={messageStyle}>{t("comments.empty")}</div>
         )}
-        {!failed && current && groups.map((group) => {
-          const groupSelected = group.rows.every((entry) => selected.has(rowId(entry)));
-          return (
-            <div key={group.filePath}>
-              <div style={fileHeaderStyle}>
-                <label style={{ ...checkboxHitBoxStyle, minWidth: hitTarget, minHeight: hitTarget }}>
-                  <input
-                    type="checkbox"
-                    checked={groupSelected}
-                    onChange={(event) => toggleSelection(group.rows.map(rowId), event.target.checked)}
-                    title={t("comments.selectFile")}
-                    aria-label={`${t("comments.selectFile")}: ${group.filePath}`}
-                  />
-                </label>
-                <span>{group.filePath}</span>
-              </div>
-              {group.rows.map((entry) => {
-                const targetLanguage = translationTargetLanguage(entry.language);
-                const key = commentTranslationKey(entry);
-                const record = current.translations[key];
-                const activeEdit = editing && editing.key === key ? editing : null;
-                const originalColumn = <div style={entryTextStyle}>{entry.text}</div>;
-                const translationColumn = (
-                  <div>
-                    {activeEdit ? (
-                      <>
-                        <textarea
-                          autoFocus
-                          value={activeEdit.value}
-                          onChange={(event) => setEditing({ ...activeEdit, value: event.target.value })}
-                          onKeyDown={(event) => {
-                            if (event.key === "Escape") {
-                              event.preventDefault();
-                              setEditing(null);
-                            } else if (event.key === "Enter" && !event.shiftKey) {
-                              event.preventDefault();
-                              void saveTranslation(activeEdit);
+        {!failed &&
+          current &&
+          groups.map((group) => {
+            const groupSelected = group.rows.every((entry) => selected.has(rowId(entry)));
+            return (
+              <div key={group.filePath}>
+                <div style={fileHeaderStyle}>
+                  <label
+                    style={{ ...checkboxHitBoxStyle, minWidth: hitTarget, minHeight: hitTarget }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={groupSelected}
+                      onChange={(event) =>
+                        toggleSelection(group.rows.map(rowId), event.target.checked)
+                      }
+                      title={t("comments.selectFile")}
+                      aria-label={`${t("comments.selectFile")}: ${group.filePath}`}
+                    />
+                  </label>
+                  <span>{group.filePath}</span>
+                </div>
+                {group.rows.map((entry) => {
+                  const targetLanguage = translationTargetLanguage(entry.language);
+                  const key = commentTranslationKey(entry);
+                  const record = current.translations[key];
+                  const activeEdit = editing && editing.key === key ? editing : null;
+                  const originalColumn = <div style={entryTextStyle}>{entry.text}</div>;
+                  const translationColumn = (
+                    <div>
+                      {activeEdit ? (
+                        <>
+                          <textarea
+                            autoFocus
+                            value={activeEdit.value}
+                            onChange={(event) =>
+                              setEditing({ ...activeEdit, value: event.target.value })
                             }
-                          }}
-                          placeholder={t("comments.translationPlaceholder")}
-                          style={{
-                            ...editorStyle,
-                            minHeight: hitTarget ?? 60,
-                          }}
-                        />
-                        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                setEditing(null);
+                              } else if (event.key === "Enter" && !event.shiftKey) {
+                                event.preventDefault();
+                                void saveTranslation(activeEdit);
+                              }
+                            }}
+                            placeholder={t("comments.translationPlaceholder")}
+                            style={{
+                              ...editorStyle,
+                              minHeight: hitTarget ?? 60,
+                            }}
+                          />
+                          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                            <button
+                              type="button"
+                              disabled={savingKey === key}
+                              onClick={() => void saveTranslation(activeEdit)}
+                              style={{
+                                ...actionButtonStyle,
+                                minWidth: hitTarget,
+                                minHeight: hitTarget,
+                              }}
+                            >
+                              {t("comments.save")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditing(null)}
+                              style={{
+                                ...actionButtonStyle,
+                                minWidth: hitTarget,
+                                minHeight: hitTarget,
+                              }}
+                            >
+                              {t("comments.cancel")}
+                            </button>
+                          </div>
+                          {saveError && (
+                            <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>
+                              {saveError}
+                            </div>
+                          )}
+                        </>
+                      ) : record ? (
+                        <>
                           <button
                             type="button"
-                            disabled={savingKey === key}
-                            onClick={() => void saveTranslation(activeEdit)}
+                            title={t("comments.editTranslation")}
+                            onClick={() =>
+                              beginEdit(entry, targetLanguage, key, record.translation)
+                            }
+                            style={{ ...translationButtonStyle, minHeight: hitTarget }}
+                          >
+                            {record.translation}
+                          </button>
+                          <span
                             style={{
-                              ...actionButtonStyle,
-                              minWidth: hitTarget,
-                              minHeight: hitTarget,
+                              ...sourceBadgeStyle,
+                              color:
+                                record.origin === "manual" ? "var(--accent)" : "var(--text-dim)",
                             }}
                           >
-                            {t("comments.save")}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditing(null)}
-                            style={{
-                              ...actionButtonStyle,
-                              minWidth: hitTarget,
-                              minHeight: hitTarget,
-                            }}
-                          >
-                            {t("comments.cancel")}
-                          </button>
-                        </div>
-                        {saveError && (
-                          <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>{saveError}</div>
-                        )}
-                      </>
-                    ) : record ? (
-                      <>
+                            {record.origin === "manual"
+                              ? t("comments.sourceManual")
+                              : t("comments.sourceModel")}
+                          </span>
+                        </>
+                      ) : (
                         <button
                           type="button"
-                          title={t("comments.editTranslation")}
-                          onClick={() => beginEdit(entry, targetLanguage, key, record.translation)}
-                          style={{ ...translationButtonStyle, minHeight: hitTarget }}
+                          onClick={() => beginEdit(entry, targetLanguage, key, "")}
+                          style={{
+                            ...translationButtonStyle,
+                            color: "var(--text-dim)",
+                            minHeight: hitTarget,
+                          }}
                         >
-                          {record.translation}
+                          {t("comments.addTranslation")}
                         </button>
-                        <span style={{
-                          ...sourceBadgeStyle,
-                          color: record.origin === "manual" ? "var(--accent)" : "var(--text-dim)",
-                        }}>
-                          {record.origin === "manual" ? t("comments.sourceManual") : t("comments.sourceModel")}
-                        </span>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => beginEdit(entry, targetLanguage, key, "")}
+                      )}
+                      {rowFailures[key] && (
+                        <div style={failureStyle}>
+                          {rowFailures[key] === "noOutput"
+                            ? t("comments.noOutput")
+                            : t("comments.missingFragments", {
+                                missing: rowFailures[key]
+                                  .map((fragment) => fragment.value)
+                                  .join(", "),
+                              })}
+                        </div>
+                      )}
+                    </div>
+                  );
+
+                  const id = rowId(entry);
+                  return (
+                    <div
+                      key={id}
+                      style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}
+                    >
+                      <div style={rowHeaderStyle}>
+                        <label
+                          style={{
+                            ...checkboxHitBoxStyle,
+                            minWidth: hitTarget,
+                            minHeight: hitTarget,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected.has(id)}
+                            onChange={(event) => toggleSelection([id], event.target.checked)}
+                            aria-label={`${t("comments.selectEntry")}: ${entry.filePath}:${entry.startLine}`}
+                          />
+                        </label>
+                        <span>{t("comments.line", { line: entry.startLine })}</span>
+                      </div>
+                      <div
                         style={{
-                          ...translationButtonStyle,
-                          color: "var(--text-dim)",
-                          minHeight: hitTarget,
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 10,
+                          marginTop: 3,
                         }}
                       >
-                        {t("comments.addTranslation")}
-                      </button>
-                    )}
-                    {rowFailures[key] && (
-                      <div style={failureStyle}>
-                        {rowFailures[key] === "noOutput"
-                          ? t("comments.noOutput")
-                          : t("comments.missingFragments", {
-                            missing: rowFailures[key].map((fragment) => fragment.value).join(", "),
-                          })}
-                      </div>
-                    )}
-                  </div>
-                );
-
-                const id = rowId(entry);
-                return (
-                  <div
-                    key={id}
-                    style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}
-                  >
-                    <div style={rowHeaderStyle}>
-                      <label style={{ ...checkboxHitBoxStyle, minWidth: hitTarget, minHeight: hitTarget }}>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(id)}
-                          onChange={(event) => toggleSelection([id], event.target.checked)}
-                          aria-label={`${t("comments.selectEntry")}: ${entry.filePath}:${entry.startLine}`}
-                        />
-                      </label>
-                      <span>{t("comments.line", { line: entry.startLine })}</span>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 3 }}>
-                      <div style={columnStyle}>
-                        {entry.language === "zh" ? originalColumn : translationColumn}
-                      </div>
-                      <div style={columnStyle}>
-                        {entry.language === "en" ? originalColumn : translationColumn}
+                        <div style={columnStyle}>
+                          {entry.language === "zh" ? originalColumn : translationColumn}
+                        </div>
+                        <div style={columnStyle}>
+                          {entry.language === "en" ? originalColumn : translationColumn}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+                  );
+                })}
+              </div>
+            );
+          })}
       </div>
       {current && (
         <CommentTranslationPreview

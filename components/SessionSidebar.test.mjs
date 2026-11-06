@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { readSource } from "../test-support/source-text";
 
-const source = (await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const source = await readSource(new URL("./SessionSidebar.tsx", import.meta.url));
 
 /**
  * 按锚点切片：两个锚点都必须出现，且结束位置在开始之后。
@@ -60,7 +60,10 @@ test("renders exactly one lifecycle marker slot on a session row", () => {
   assert.equal((sessionItemSource.match(/marker\?\.kind === "awaiting"/g) ?? []).length, 1);
   assert.equal((sessionItemSource.match(/marker\?\.kind === "running"/g) ?? []).length, 1);
   assert.equal((sessionItemSource.match(/marker\?\.kind === "static"/g) ?? []).length, 1);
-  assert.match(sessionItemSource, /marker\?\.kind === "static" && <StaticSessionMarker status=\{marker\.status\} \/>/);
+  assert.match(
+    sessionItemSource,
+    /marker\?\.kind === "static" && <StaticSessionMarker status=\{marker\.status\} \/>/,
+  );
   assert.equal((sessionItemSource.match(/<StaticSessionMarker\b/g) ?? []).length, 1);
   assert.doesNotMatch(sessionItemSource, /UnreadSessionIndicator|#0891b2/);
 });
@@ -83,13 +86,25 @@ test("confirms removal of a workspace with running or waiting sessions", () => {
 });
 
 test("marks activity indicators as images for screen readers", () => {
-  assert.match(indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()"), /role="img"/);
-  assert.match(indicatorSource("function WaitingSessionIndicator()", "function StaticSessionMarker("), /role="img"/);
-  assert.match(indicatorSource("function StaticSessionMarker(", "function SessionItem("), /role="img"/);
+  assert.match(
+    indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()"),
+    /role="img"/,
+  );
+  assert.match(
+    indicatorSource("function WaitingSessionIndicator()", "function StaticSessionMarker("),
+    /role="img"/,
+  );
+  assert.match(
+    indicatorSource("function StaticSessionMarker(", "function SessionItem("),
+    /role="img"/,
+  );
 });
 
 test("spins an accent gap ring while the session is processing", () => {
-  const running = indicatorSource("function RunningSessionIndicator()", "function WaitingSessionIndicator()");
+  const running = indicatorSource(
+    "function RunningSessionIndicator()",
+    "function WaitingSessionIndicator()",
+  );
   assert.match(running, /var\(--accent\)/);
   assert.match(running, /<animateTransform[\s\S]*?type="rotate"/);
   assert.match(running, /<path[\s\S]*?stroke="currentColor"/);
@@ -97,7 +112,10 @@ test("spins an accent gap ring while the session is processing", () => {
 });
 
 test("breathes a complete yellow ring without spinning while the session waits for the user", () => {
-  const waiting = indicatorSource("function WaitingSessionIndicator()", "function StaticSessionMarker(");
+  const waiting = indicatorSource(
+    "function WaitingSessionIndicator()",
+    "function StaticSessionMarker(",
+  );
   assert.match(waiting, /var\(--warning\)/);
   assert.match(waiting, /<circle[\s\S]*?stroke="currentColor"/);
   assert.doesNotMatch(waiting, /fill="currentColor"/);
@@ -114,7 +132,10 @@ test("does not persist an unchanged fallback title ending in whitespace", () => 
 });
 
 test("offers the downstream context-menu hook only on a normal session row", () => {
-  assert.match(sessionItemSource, /const handleContextMenu[\s\S]*?dispatchSessionRowContextMenu\(\{/);
+  assert.match(
+    sessionItemSource,
+    /const handleContextMenu[\s\S]*?dispatchSessionRowContextMenu\(\{/,
+  );
   assert.match(
     sessionItemSource,
     /onContextMenu=\{confirmDelete \|\| renaming \? undefined : handleContextMenu\}/,
@@ -144,7 +165,10 @@ test("renders the static lifecycle marker as an animated-free labelled dot", () 
     "function StaticSessionMarker(",
     "function SessionItem(",
   );
-  assert.match(staticMarkerSource, /function StaticSessionMarker\(\{ status \}: \{ status: StaticMarkerStatus \}\)/);
+  assert.match(
+    staticMarkerSource,
+    /function StaticSessionMarker\(\{ status \}: \{ status: StaticMarkerStatus \}\)/,
+  );
   assert.match(staticMarkerSource, /STATIC_MARKER_APPEARANCE\[status\]/);
   assert.match(staticMarkerSource, /role="img"/);
   assert.match(staticMarkerSource, /title=\{t\(labelKey\)\}/);
@@ -199,14 +223,17 @@ test("恢复出来的会话不留未读标记", () => {
   // 先换算成当前会话 id 再清。
   assert.match(
     restoreEffect,
-    /const target = restoreSessionContinuation\(\s*initialSessionId,\s*allSessions,\s*listedRuntimeIdsRef\.current,\s*\);\s*clearUnreadSessionIds\(\[target\?\.id \?\? initialSessionId\]\);/,
+    /const target = restoreSessionContinuation\(\s*initialSessionId,\s*allSessions,\s*listedRuntimeIdsRef\.current\);\s*clearUnreadSessionIds\(\[target\?\.id \?\? initialSessionId\]\);/,
     "URL 里的会话由父组件打开，按映射后的会话 id 清标记",
   );
 });
 
 test("keeps lifecycle markers out of the archived section", () => {
   assert.ok(archivedSectionSource.length > 0);
-  assert.doesNotMatch(archivedSectionSource, /SessionMarker|UnreadSessionIndicator|resolveSessionMarker/);
+  assert.doesNotMatch(
+    archivedSectionSource,
+    /SessionMarker|UnreadSessionIndicator|resolveSessionMarker/,
+  );
 });
 
 test("reconciles markers and running state when the page becomes visible again", () => {
@@ -215,12 +242,18 @@ test("reconciles markers and running state when the page becomes visible again",
     "const onVisibilityChange = () => {",
     'document.addEventListener("visibilitychange", onVisibilityChange)',
   );
-  assert.match(visibilityHandler, /if \(document\.visibilityState === "visible"\) \{[\s\S]*?void poll\(\);/);
+  assert.match(
+    visibilityHandler,
+    /if \(document\.visibilityState === "visible"\) \{[\s\S]*?void poll\(\);/,
+  );
   // 默认只轻量读取：只有失联过或隐藏期间确有运行在跑，才绕过缓存重扫。
   assert.match(visibilityHandler, /loadSessions\(false, mayHaveFinished\)/);
   assert.doesNotMatch(visibilityHandler, /loadSessions\(false, true\)/);
   assert.match(visibilityHandler, /serverOutageSinceSnapshotRef\.current/);
-  assert.match(visibilityHandler, /previousActivitySnapshotRef\.current\.runningSessionIds\?\.length/);
+  assert.match(
+    visibilityHandler,
+    /previousActivitySnapshotRef\.current\.runningSessionIds\?\.length/,
+  );
 });
 
 test("remembers that the server went away while a session was running", () => {
@@ -231,9 +264,12 @@ test("seeds the marker backlog only after the initial restore picked a session",
   const seedEffect = sliceBetween(
     source,
     "// 首次加载时把浏览器的异常存量加入未读集合",
-    "useEffect(() => {\n    let stopped = false;",
+    "useEffect(() => { let stopped = false;",
   );
-  assert.match(seedEffect, /if \(!initialRestoreSettled\) return;\s*if \(allSessions\.length === 0/);
+  assert.match(
+    seedEffect,
+    /if \(!initialRestoreSettled\) return;\s*if \(allSessions\.length === 0/,
+  );
   assert.match(
     seedEffect,
     /\.filter\(\(id\) => id !== selectedSessionId && id !== launchSessionIdRef\.current\)/,
@@ -253,11 +289,7 @@ test("settles the initial restore when the ready session list is empty", () => {
   assert.match(restoreEffect, /if \(loading\) return;/);
   // 列表就绪且为空：先落定并通知父组件，再退出，否则播种、重启对账与运行集合
   // 持久化会一直等一次不会到来的恢复。
-  const emptyBranch = sliceBetween(
-    restoreEffect,
-    "if (allSessions.length === 0) {",
-    "\n    }",
-  );
+  const emptyBranch = sliceBetween(restoreEffect, "if (allSessions.length === 0) {", "}");
   assert.match(emptyBranch, /setInitialRestoreSettled\(true\);/);
   assert.match(emptyBranch, /onInitialRestoreDone\?\.\(\);/);
   assert.match(emptyBranch, /return;/);
@@ -278,7 +310,10 @@ test("waits for the initial restore before reconciling runs lost across a restar
   );
   // 恢复中的会话还没成为选中会话，对账排在恢复之后才不会把它点亮。
   assert.match(reconcileSource, /if \(!activityPolled \|\| !initialRestoreSettled\) return;/);
-  assert.match(reconcileSource, /lostAcrossRestart\.unreadIds\.filter\(\(id\) => id !== selectedSessionId\)/);
+  assert.match(
+    reconcileSource,
+    /lostAcrossRestart\.unreadIds\.filter\(\(id\) => id !== selectedSessionId\)/,
+  );
 });
 
 test("forces a full session re-read only when the finish produced unread results", () => {
@@ -287,7 +322,10 @@ test("forces a full session re-read only when the finish produced unread results
     "const finished = resolveFinishedRuns({",
     "onBackgroundTaskDone",
   );
-  assert.match(finishedSource, /if \(finished\.unreadIds\.length > 0 \|\| hasUnlistedRunningSession\) \{/);
+  assert.match(
+    finishedSource,
+    /if \(finished\.unreadIds\.length > 0 \|\| hasUnlistedRunningSession\) \{/,
+  );
   assert.doesNotMatch(finishedSource, /finished\.finishedIds\.length > 0/);
 });
 

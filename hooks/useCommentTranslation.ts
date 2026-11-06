@@ -28,7 +28,10 @@ export function useCommentDictionaryVersion(): number {
  * 按字典键取译文。字典版本变化时重新请求，渲染层不必重新加载源码。
  * 只有可见标签（active）才发起请求，遵循右侧面板的活动约定。
  */
-export function useCommentTranslationLookup(keys: readonly string[], active: boolean): Record<string, string> {
+export function useCommentTranslationLookup(
+  keys: readonly string[],
+  active: boolean,
+): Record<string, string> {
   const version = useCommentDictionaryVersion();
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const signature = JSON.stringify(keys);

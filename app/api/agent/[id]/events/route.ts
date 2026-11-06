@@ -30,7 +30,6 @@ export const GET = withRequestLog(
       return new Response("Untrusted API request", { status: 403 });
     }
 
-
     // Fast path: already-running session
     let session = getRpcSession(id);
     if (!session || !session.isAlive()) {
@@ -58,10 +57,12 @@ export const GET = withRequestLog(
             // Send initial connected event
             send({ type: "connected", sessionId: session.sessionId, runtimeId: session.runtimeId });
 
-            registerCleanup(session.onEvent((event) => {
-              const clientEvent = toClientEvent(event);
-              if (clientEvent) send(clientEvent);
-            }));
+            registerCleanup(
+              session.onEvent((event) => {
+                const clientEvent = toClientEvent(event);
+                if (clientEvent) send(clientEvent);
+              }),
+            );
           },
         });
       },

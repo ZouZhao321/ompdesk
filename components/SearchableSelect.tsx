@@ -68,7 +68,9 @@ export function SearchableSelect({
   const filtered = useMemo(() => {
     const needle = normalize(query.trim());
     if (!needle) return options;
-    return options.filter((option) => normalize(`${option.label} ${option.value} ${option.searchText ?? ""}`).includes(needle));
+    return options.filter((option) =>
+      normalize(`${option.label} ${option.value} ${option.searchText ?? ""}`).includes(needle),
+    );
   }, [options, query]);
 
   useEffect(() => {
@@ -90,13 +92,27 @@ export function SearchableSelect({
 
   useEffect(() => {
     if (!open) return;
-    const selectedIndex = filtered.findIndex((option) => option.value === value && !option.disabled);
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : Math.max(0, filtered.findIndex((option) => !option.disabled)));
+    const selectedIndex = filtered.findIndex(
+      (option) => option.value === value && !option.disabled,
+    );
+    setActiveIndex(
+      selectedIndex >= 0
+        ? selectedIndex
+        : Math.max(
+            0,
+            filtered.findIndex((option) => !option.disabled),
+          ),
+    );
   }, [filtered, open, value]);
 
   useEffect(() => {
     if (activeIndex >= filtered.length || filtered[activeIndex]?.disabled) {
-      setActiveIndex(Math.max(0, filtered.findIndex((option) => !option.disabled)));
+      setActiveIndex(
+        Math.max(
+          0,
+          filtered.findIndex((option) => !option.disabled),
+        ),
+      );
     }
   }, [activeIndex, filtered]);
 
@@ -155,7 +171,11 @@ export function SearchableSelect({
   };
 
   return (
-    <div ref={rootRef} className={`${styles.root}${className ? ` ${className}` : ""}`} style={style}>
+    <div
+      ref={rootRef}
+      className={`${styles.root}${className ? ` ${className}` : ""}`}
+      style={style}
+    >
       <button
         type="button"
         className={styles.trigger}
@@ -172,7 +192,9 @@ export function SearchableSelect({
           }
         }}
       >
-        <span className={selected ? styles.value : styles.placeholder}>{selected?.label ?? (value || placeholder)}</span>
+        <span className={selected ? styles.value : styles.placeholder}>
+          {selected?.label ?? (value || placeholder)}
+        </span>
         <svg className={styles.chevron} viewBox="0 0 12 12" aria-hidden="true">
           <path d="m3 4.5 3 3 3-3" />
         </svg>
@@ -181,9 +203,11 @@ export function SearchableSelect({
       {open && (
         <div
           className={styles.popover}
-          style={side === "above"
-            ? { bottom: `calc(100% + ${POPOVER_GAP_PX}px)`, maxHeight }
-            : { top: `calc(100% + ${POPOVER_GAP_PX}px)`, maxHeight }}
+          style={
+            side === "above"
+              ? { bottom: `calc(100% + ${POPOVER_GAP_PX}px)`, maxHeight }
+              : { top: `calc(100% + ${POPOVER_GAP_PX}px)`, maxHeight }
+          }
         >
           <div className={styles.searchWrap}>
             <svg className={styles.searchIcon} viewBox="0 0 16 16" aria-hidden="true">
@@ -199,7 +223,9 @@ export function SearchableSelect({
               role="combobox"
               aria-expanded="true"
               aria-controls={listboxId}
-              aria-activedescendant={filtered[activeIndex] ? `${listboxId}-${activeIndex}` : undefined}
+              aria-activedescendant={
+                filtered[activeIndex] ? `${listboxId}-${activeIndex}` : undefined
+              }
               autoComplete="off"
               spellCheck={false}
               onChange={(event) => {
@@ -216,32 +242,40 @@ export function SearchableSelect({
             aria-label={ariaLabel}
             style={{ maxHeight: Math.max(0, maxHeight - POPOVER_CHROME_PX) }}
           >
-            {filtered.length ? filtered.map((option, index) => (
-              <button
-                ref={(node) => { optionRefs.current[index] = node; }}
-                id={`${listboxId}-${index}`}
-                type="button"
-                role="option"
-                aria-selected={option.value === value}
-                key={option.value}
-                className={styles.option}
-                data-active={index === activeIndex}
-                data-selected={option.value === value}
-                disabled={option.disabled}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => choose(option)}
-              >
-                <span className={styles.optionCopy}>
-                  <span className={styles.optionLabel}>{option.label}</span>
-                  {option.description && <span className={styles.optionDescription}>{option.description}</span>}
-                </span>
-                {option.value === value && (
-                  <svg className={styles.check} viewBox="0 0 12 12" aria-hidden="true">
-                    <path d="m2.3 6.2 2.2 2.2 5.2-5.2" />
-                  </svg>
-                )}
-              </button>
-            )) : <div className={styles.empty}>{noResultsLabel}</div>}
+            {filtered.length ? (
+              filtered.map((option, index) => (
+                <button
+                  ref={(node) => {
+                    optionRefs.current[index] = node;
+                  }}
+                  id={`${listboxId}-${index}`}
+                  type="button"
+                  role="option"
+                  aria-selected={option.value === value}
+                  key={option.value}
+                  className={styles.option}
+                  data-active={index === activeIndex}
+                  data-selected={option.value === value}
+                  disabled={option.disabled}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => choose(option)}
+                >
+                  <span className={styles.optionCopy}>
+                    <span className={styles.optionLabel}>{option.label}</span>
+                    {option.description && (
+                      <span className={styles.optionDescription}>{option.description}</span>
+                    )}
+                  </span>
+                  {option.value === value && (
+                    <svg className={styles.check} viewBox="0 0 12 12" aria-hidden="true">
+                      <path d="m2.3 6.2 2.2 2.2 5.2-5.2" />
+                    </svg>
+                  )}
+                </button>
+              ))
+            ) : (
+              <div className={styles.empty}>{noResultsLabel}</div>
+            )}
           </div>
         </div>
       )}

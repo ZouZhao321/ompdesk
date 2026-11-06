@@ -11,7 +11,8 @@ const jiti = createJiti(import.meta.url, {
 const { ContextUsageMeter } = await jiti.import("./ChatInput.tsx");
 
 const t = (key) => key;
-const render = (usage) => renderToStaticMarkup(React.createElement(ContextUsageMeter, { usage, t }));
+const render = (usage) =>
+  renderToStaticMarkup(React.createElement(ContextUsageMeter, { usage, t }));
 
 const readArcs = (html) => {
   const circles = [...html.matchAll(/<circle[^>]*>/g)].map((m) => m[0]);

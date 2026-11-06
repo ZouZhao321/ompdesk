@@ -237,12 +237,15 @@ export interface ClientLogHandlerOptions {
 
 /** Build the ingestion handler. Exported so tests can inject limits and a clock. */
 export function createClientLogHandler(options: ClientLogHandlerOptions = {}) {
-  const limiter = options.limiter
-    ?? new SlidingWindowLimiter(CLIENT_ERROR_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
-  const addressLimiter = options.addressLimiter
-    ?? new SlidingWindowLimiter(CLIENT_ERROR_ADDRESS_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
-  const globalLimiter = options.globalLimiter
-    ?? new SlidingWindowLimiter(CLIENT_ERROR_GLOBAL_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS, 1);
+  const limiter =
+    options.limiter ??
+    new SlidingWindowLimiter(CLIENT_ERROR_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
+  const addressLimiter =
+    options.addressLimiter ??
+    new SlidingWindowLimiter(CLIENT_ERROR_ADDRESS_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
+  const globalLimiter =
+    options.globalLimiter ??
+    new SlidingWindowLimiter(CLIENT_ERROR_GLOBAL_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS, 1);
   const now = options.now ?? (() => Date.now());
 
   return async function handleClientLog(request: Request): Promise<Response> {
@@ -274,10 +277,7 @@ export function createClientLogHandler(options: ClientLogHandlerOptions = {}) {
       return new Response(null, { status: 204, headers: NO_STORE });
     } catch (error) {
       if (error instanceof ClientLogValidationError) {
-        return Response.json(
-          { error: error.message },
-          { status: error.status, headers: NO_STORE },
-        );
+        return Response.json({ error: error.message }, { status: error.status, headers: NO_STORE });
       }
       throw error;
     }

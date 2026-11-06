@@ -18,11 +18,7 @@ const mermaidSrc = `sequenceDiagram
 
 function renderMermaid(props) {
   return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      null,
-      React.createElement(MermaidBlock, props),
-    ),
+    React.createElement(I18nProvider, null, React.createElement(MermaidBlock, props)),
   );
 }
 
@@ -60,11 +56,7 @@ test("MermaidBlock renders empty graph without error", () => {
 
 function renderCode(props) {
   return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      null,
-      React.createElement(CodeBlock, props),
-    ),
+    React.createElement(I18nProvider, null, React.createElement(CodeBlock, props)),
   );
 }
 

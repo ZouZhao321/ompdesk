@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
+import { readSource } from "../test-support/source-text";
 
 /**
  * 读取真实的 useAgentSession.ts，并按名字取出 useCallback 回调与普通声明。
@@ -8,16 +9,29 @@ import ts from "typescript";
  * 四个 hook 测试文件共用这一份脚手架：回调改名或换写法时只改这里，注入的 bindings
  * 仍由各测试文件自己组织。`callback` 把 ReferenceError 包一层，指明是哪个回调缺了
  * 哪个绑定，不必再从测试栈里反推。
+ *
+ * AST 必须基于原始文本，位置与 `getText` 才与源码对得上；导出的 `source` 是压平空白
+ * 的版本，断言因此只看代码结构，不受缩进、换行与折行位置影响。
  */
-export const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
-export const ast = ts.createSourceFile("useAgentSession.ts", source, ts.ScriptTarget.Latest, true);
+const sourcePath = new URL("./useAgentSession.ts", import.meta.url);
+export const source = await readSource(sourcePath);
+export const ast = ts.createSourceFile(
+  "useAgentSession.ts",
+  await readFile(sourcePath, "utf8"),
+  ts.ScriptTarget.Latest,
+  true,
+);
 export const callbacks = new Map();
 export const declarations = new Map();
 
 function collect(node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
-    && node.initializer && ts.isCallExpression(node.initializer)
-    && node.initializer.expression.getText(ast) === "useCallback") {
+  if (
+    ts.isVariableDeclaration(node) &&
+    ts.isIdentifier(node.name) &&
+    node.initializer &&
+    ts.isCallExpression(node.initializer) &&
+    node.initializer.expression.getText(ast) === "useCallback"
+  ) {
     callbacks.set(node.name.text, node.initializer.arguments[0].getText(ast));
   }
   if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
@@ -40,7 +54,9 @@ export function callback(name, bindings) {
   const { outputText } = ts.transpileModule(`const callback = ${implementation};`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   });
-  const fn = new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(...Object.values(bindings));
+  const fn = new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(
+    ...Object.values(bindings),
+  );
   return (...args) => {
     try {
       return fn(...args);

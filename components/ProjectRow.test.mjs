@@ -78,21 +78,23 @@ function renderRow(overrides = {}, locale) {
 
 /** 按给定路径顺序渲染一组项目行，置顶集合决定图钉标记。 */
 function renderRows(paths, pinned, locale) {
-  const rows = paths.map((path) => React.createElement(ProjectRow, {
-    key: path,
-    project: path,
-    name: projectDisplayName(path),
-    isSelected: false,
-    isCollapsed: false,
-    isPinned: pinned.includes(path),
-    hovered: false,
-    menuOpen: false,
-    onToggleCollapse() {},
-    onSelect() {},
-    onNewSession() {},
-    onToggleMenu() {},
-    onHoverChange() {},
-  }));
+  const rows = paths.map((path) =>
+    React.createElement(ProjectRow, {
+      key: path,
+      project: path,
+      name: projectDisplayName(path),
+      isSelected: false,
+      isCollapsed: false,
+      isPinned: pinned.includes(path),
+      hovered: false,
+      menuOpen: false,
+      onToggleCollapse() {},
+      onSelect() {},
+      onNewSession() {},
+      onToggleMenu() {},
+      onHoverChange() {},
+    }),
+  );
 
   return renderToStaticMarkup(
     React.createElement(
@@ -125,7 +127,10 @@ test("renders accessible labels and counts for running, waiting and unread activ
   const html = renderRow({ activity: { running: 2, waiting: 1, unread: { interrupted: 3 } } });
 
   assert.ok(html.includes('aria-label="Agent running… (2)"'), "expected the running count label");
-  assert.ok(html.includes('aria-label="Waiting for your answer (1)"'), "expected the waiting count label");
+  assert.ok(
+    html.includes('aria-label="Waiting for your answer (1)"'),
+    "expected the waiting count label",
+  );
   assert.ok(html.includes('aria-label="Interrupted (3)"'), "expected the unread count label");
 });
 
@@ -205,7 +210,10 @@ test("new-session button label contains the full project path", () => {
 });
 
 test("actions button mirrors menuOpen through aria-expanded", () => {
-  assert.equal(ariaExpandedOf(buttonTag(renderRow({ menuOpen: false }), "Project actions")), "false");
+  assert.equal(
+    ariaExpandedOf(buttonTag(renderRow({ menuOpen: false }), "Project actions")),
+    "false",
+  );
   assert.equal(ariaExpandedOf(buttonTag(renderRow({ menuOpen: true }), "Project actions")), "true");
 });
 
@@ -235,7 +243,11 @@ test("hides both row actions when the row is neither hovered nor menu-open", () 
   for (const label of [`New session in ${PROJECT_PATH}`, "Project actions"]) {
     const style = stylesOf(buttonTag(html, label));
     assert.equal(style.opacity, "0", `expected "${label}" to be transparent by default`);
-    assert.equal(style["pointer-events"], "none", `expected "${label}" to ignore pointers by default`);
+    assert.equal(
+      style["pointer-events"],
+      "none",
+      `expected "${label}" to ignore pointers by default`,
+    );
   }
 });
 
@@ -257,8 +269,14 @@ test("selected styling differs from unselected styling", () => {
   const unselected = renderRow({ isSelected: false });
 
   assert.notEqual(selected, unselected);
-  assert.ok(selected.includes("var(--bg-hover)"), "expected the selected row to use the hover background token");
-  assert.ok(!unselected.includes("var(--bg-hover)"), "expected the unselected row to stay transparent");
+  assert.ok(
+    selected.includes("var(--bg-hover)"),
+    "expected the selected row to use the hover background token",
+  );
+  assert.ok(
+    !unselected.includes("var(--bg-hover)"),
+    "expected the unselected row to stay transparent",
+  );
 });
 
 test("render does not invoke callbacks or change markup", () => {
@@ -287,7 +305,11 @@ test("renders no pin mark when isPinned is false or absent", () => {
     const html = renderRow(overrides);
 
     assert.ok(!html.includes(PIN_MARK_LABEL), "expected the pin mark label to be absent");
-    assert.deepEqual(roleImgTags(html).filter((tag) => tag.includes("Pin")), [], "expected no pin glyph");
+    assert.deepEqual(
+      roleImgTags(html).filter((tag) => tag.includes("Pin")),
+      [],
+      "expected no pin glyph",
+    );
   }
 });
 
@@ -296,14 +318,21 @@ test("keeps the activity badges alongside the pin mark", () => {
   const pinned = renderRow({ isPinned: true, activity });
   const unpinned = renderRow({ activity });
 
-  assert.equal(roleImgTags(pinned).length, roleImgTags(unpinned).length + 1, "expected the pin mark on top of the badges");
+  assert.equal(
+    roleImgTags(pinned).length,
+    roleImgTags(unpinned).length + 1,
+    "expected the pin mark on top of the badges",
+  );
   assert.equal(
     roleImgTags(pinned).filter((tag) => tag.includes(`aria-label="${PIN_MARK_LABEL}"`)).length,
     1,
     "expected the extra mark to be the pin",
   );
   for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "Interrupted (3)"]) {
-    assert.ok(pinned.includes(`aria-label="${label}"`), `expected the badge labelled "${label}" while pinned`);
+    assert.ok(
+      pinned.includes(`aria-label="${label}"`),
+      `expected the badge labelled "${label}" while pinned`,
+    );
   }
 });
 
@@ -330,8 +359,14 @@ test("renders the localized pin mark label in zh-CN", () => {
 });
 
 test("renders full-width parentheses in the zh-CN activity labels", () => {
-  const html = renderRow({ activity: { running: 2, waiting: 0, unread: { interrupted: 3 } } }, "zh-CN");
+  const html = renderRow(
+    { activity: { running: 2, waiting: 0, unread: { interrupted: 3 } } },
+    "zh-CN",
+  );
 
-  assert.ok(html.includes('aria-label="Agent 运行中…（2）"'), "expected the localized running count label");
+  assert.ok(
+    html.includes('aria-label="Agent 运行中…（2）"'),
+    "expected the localized running count label",
+  );
   assert.ok(html.includes('aria-label="已中断（3）"'), "expected the localized unread count label");
 });

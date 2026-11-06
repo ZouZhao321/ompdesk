@@ -97,8 +97,9 @@ function SourceCodeRenderer({
     const lineNumber = firstLineNumber + lineIndex;
     const children = row.children ?? [];
     const firstChildClasses = children[0]?.properties?.className;
-    const hasLineNumber = Array.isArray(firstChildClasses)
-      && firstChildClasses.includes("react-syntax-highlighter-line-number");
+    const hasLineNumber =
+      Array.isArray(firstChildClasses) &&
+      firstChildClasses.includes("react-syntax-highlighter-line-number");
     const lineNumberNode = hasLineNumber ? children[0] : null;
     const contentNodes = hasLineNumber ? children.slice(1) : children;
     const translation = translations?.get(lineNumber);
@@ -110,12 +111,13 @@ function SourceCodeRenderer({
           data-line-number={lineNumber}
           style={{ display: "flex", minWidth: "100%" }}
         >
-          {lineNumberNode && renderSyntaxNode({
-            node: lineNumberNode,
-            stylesheet,
-            useInlineStyles,
-            key: `source-line-number-${lineNumber}`,
-          })}
+          {lineNumberNode &&
+            renderSyntaxNode({
+              node: lineNumberNode,
+              stylesheet,
+              useInlineStyles,
+              key: `source-line-number-${lineNumber}`,
+            })}
           <span
             className="file-source-line-content"
             style={{
@@ -125,12 +127,14 @@ function SourceCodeRenderer({
               whiteSpace: wrapLines ? "pre-wrap" : "pre",
             }}
           >
-            {contentNodes.map((node, tokenIndex) => renderSyntaxNode({
-              node,
-              stylesheet,
-              useInlineStyles,
-              key: `source-token-${lineNumber}-${tokenIndex}`,
-            }))}
+            {contentNodes.map((node, tokenIndex) =>
+              renderSyntaxNode({
+                node,
+                stylesheet,
+                useInlineStyles,
+                key: `source-token-${lineNumber}-${tokenIndex}`,
+              }),
+            )}
           </span>
         </span>
         {translation !== undefined && (

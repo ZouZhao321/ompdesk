@@ -70,10 +70,14 @@ export function settleTelemetryInit(
   timeoutMs: number,
   onTimeout: () => void,
 ): Promise<boolean> {
-  return withTimeout(init.then(() => isActive()), timeoutMs, () => {
-    onTimeout();
-    return false;
-  });
+  return withTimeout(
+    init.then(() => isActive()),
+    timeoutMs,
+    () => {
+      onTimeout();
+      return false;
+    },
+  );
 }
 
 /**
@@ -115,7 +119,10 @@ export async function flushSessionTelemetry(timeoutMs?: number): Promise<void> {
     const flushing = flushTelemetryExport();
     await (timeoutMs === undefined ? flushing : withTimeout(flushing, timeoutMs, () => undefined));
   } catch (error) {
-    console.error("[ompdesk] telemetry flush failed:", error instanceof Error ? error.message : error);
+    console.error(
+      "[ompdesk] telemetry flush failed:",
+      error instanceof Error ? error.message : error,
+    );
   }
 }
 

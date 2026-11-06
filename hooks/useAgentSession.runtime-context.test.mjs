@@ -17,14 +17,18 @@ function productionModule(source, bindings, dependencies = {}) {
     return dependencies[name];
   };
   new Function("exports", "require", ...Object.keys(bindings), outputText)(
-    exports, require, ...Object.values(bindings),
+    exports,
+    require,
+    ...Object.values(bindings),
   );
   return exports;
 }
 
 function deferred() {
   let resolve;
-  const promise = new Promise((done) => { resolve = done; });
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -49,11 +53,19 @@ function harness() {
   const effects = [];
   const storage = new Map();
   const memory = productionModule(memorySource, {
-    window: { sessionStorage: {
-      getItem: (key) => storage.get(key) ?? null,
-      setItem: (key, value) => { storage.set(key, value); effects.push(["storage:set", key, value]); },
-      removeItem: (key) => { storage.delete(key); effects.push(["storage:remove", key]); },
-    } },
+    window: {
+      sessionStorage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => {
+          storage.set(key, value);
+          effects.push(["storage:set", key, value]);
+        },
+        removeItem: (key) => {
+          storage.delete(key);
+          effects.push(["storage:remove", key]);
+        },
+      },
+    },
   });
   memory.rememberSessionContinuation("b", "runtime:r1");
   effects.length = 0;
@@ -96,17 +108,20 @@ function harness() {
     navigationGenerationRef: { current: 0 },
     opts: {},
     // 界面文案由组件注入；这里按词条给出英文，回执断言保持可读。
-    t: (key) => ({
-      "chat.branchLoadFailed": "Failed to load the selected branch",
-      "chat.branchSwitchFailed": "Failed to switch branch",
-    })[key] ?? key,
+    t: (key) =>
+      ({
+        "chat.branchLoadFailed": "Failed to load the selected branch",
+        "chat.branchSwitchFailed": "Failed to switch branch",
+      })[key] ?? key,
     addNotice: (notice) => effects.push(["notice", notice]),
     closeEvents: () => effects.push(["closeEvents"]),
     onSessionForked: (...args) => effects.push(["identity", ...args]),
     rememberSessionContinuation: memory.rememberSessionContinuation,
     clearSessionContinuation: memory.clearSessionContinuation,
     console: { error: (...args) => effects.push(["error", ...args]) },
-    fetch: () => { throw new Error("Unexpected request"); },
+    fetch: () => {
+      throw new Error("Unexpected request");
+    },
   };
   for (const field of Object.keys(ui)) {
     bindings[`set${field}`] = (value) => {
@@ -114,9 +129,13 @@ function harness() {
       effects.push([field, ui[field]]);
     };
   }
-  const client = productionModule(clientSource, { fetch: (...args) => bindings.fetch(...args) }, {
-    "./workspace-memory": memory,
-  });
+  const client = productionModule(
+    clientSource,
+    { fetch: (...args) => bindings.fetch(...args) },
+    {
+      "./workspace-memory": memory,
+    },
+  );
   const commands = [];
   bindings.canApplySessionIdentity = client.canApplySessionIdentity;
   bindings.sendAgentCommand = (...args) => {
@@ -178,8 +197,17 @@ for (const [label, identity] of [
       if (url === "/api/agent/b") {
         return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r2" });
       }
-      assert.equal(url, "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=old-leaf");
-      return { ok: true, json: () => { contextRequested.resolve(); return oldContext.promise; } };
+      assert.equal(
+        url,
+        "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=old-leaf",
+      );
+      return {
+        ok: true,
+        json: () => {
+          contextRequested.resolve();
+          return oldContext.promise;
+        },
+      };
     };
 
     // 载入先发：跳转条等载入应用之后才动运行时。
@@ -191,15 +219,30 @@ for (const [label, identity] of [
       { type: "navigate_tree", targetId: "old-leaf" },
       h.bindings.runtimeIdRef,
     );
-    expiredCommand.resolve(response({
-      error: "Runtime session expired", code: "runtime_expired", accepted: false, sessionId: "b",
-    }, 404));
+    expiredCommand.resolve(
+      response(
+        {
+          error: "Runtime session expired",
+          code: "runtime_expired",
+          accepted: false,
+          sessionId: "b",
+        },
+        404,
+      ),
+    );
     await reopening;
     assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
     assert.equal(h.memory.getSessionContinuation("b"), "runtime:r2");
-    assert.equal(h.bindings.contextRequestRef.current, 1, "same-transcript reopening keeps the context request number");
+    assert.equal(
+      h.bindings.contextRequestRef.current,
+      1,
+      "same-transcript reopening keeps the context request number",
+    );
     assert.deepEqual(requests, [
-      { url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=old-leaf", command: null },
+      {
+        url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=old-leaf",
+        command: null,
+      },
       { url: "/api/agent/runtime%3Ar1", command: { type: "navigate_tree", targetId: "old-leaf" } },
       { url: "/api/agent/b", command: { type: "navigate_tree", targetId: "old-leaf" } },
     ]);
@@ -217,12 +260,28 @@ for (const [label, identity] of [
     assert.equal(h.bindings.sessionIdRef.current, "b");
     assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
     assert.equal(h.memory.getSessionContinuation("b"), "runtime:r2");
-    assert.deepEqual([...h.storage], reopened.storage, "a stale context must not touch the stored continuation");
-    assert.deepEqual(h.ui.Messages, reopened.ui.Messages, "a stale context must not replace the transcript");
+    assert.deepEqual(
+      [...h.storage],
+      reopened.storage,
+      "a stale context must not touch the stored continuation",
+    );
+    assert.deepEqual(
+      h.ui.Messages,
+      reopened.ui.Messages,
+      "a stale context must not replace the transcript",
+    );
     assert.equal(h.ui.ActiveLeafId, null);
     assert.equal(h.bindings.activeLeafIdRef.current, null);
-    assert.deepEqual(h.effects, [["ActiveLeafId", null]], "the stale navigation only rolls its own leaf marker back");
-    assert.equal(h.commands.length, commandsBefore, "a stale navigation must not move the runtime leaf");
+    assert.deepEqual(
+      h.effects,
+      [["ActiveLeafId", null]],
+      "the stale navigation only rolls its own leaf marker back",
+    );
+    assert.equal(
+      h.commands.length,
+      commandsBefore,
+      "a stale navigation must not move the runtime leaf",
+    );
   });
 }
 
@@ -236,7 +295,12 @@ test("an owned expired runtime still clears its continuation and applies histori
   assert.deepEqual(h.ui.Messages, historical.context.messages);
   assert.deepEqual(h.ui.EntryIds, historical.context.entryIds);
   assert.deepEqual(h.ui.ContextUsage, historical.contextUsage);
-  assert.ok(h.effects.some(([kind, sessionId, runtimeId]) => kind === "identity" && sessionId === "b" && runtimeId === null));
+  assert.ok(
+    h.effects.some(
+      ([kind, sessionId, runtimeId]) =>
+        kind === "identity" && sessionId === "b" && runtimeId === null,
+    ),
+  );
 });
 
 test("a same-runtime context response still applies its messages, entry IDs and usage", async () => {
@@ -249,7 +313,10 @@ test("a same-runtime context response still applies its messages, entry IDs and 
   assert.deepEqual(h.ui.Messages, current.context.messages);
   assert.deepEqual(h.ui.EntryIds, current.context.entryIds);
   assert.deepEqual(h.ui.ContextUsage, current.contextUsage);
-  assert.equal(h.effects.some(([kind]) => kind === "identity" || kind === "storage:remove"), false);
+  assert.equal(
+    h.effects.some(([kind]) => kind === "identity" || kind === "storage:remove"),
+    false,
+  );
 });
 
 test("treats a finished branch reload as a jump to the bottom", async () => {
@@ -259,8 +326,14 @@ test("treats a finished branch reload as a jump to the bottom", async () => {
   // 切分支/叶是整段替换消息，列表既不重挂也不走追加跟随；重新载入成功就记一张回底
   // 票号。滚动不在这里做：此刻新消息还没提交，量到的是旧列表的高度，落点会停在
   // 旧末端，交给提交后的 effect。
-  assert.deepEqual(h.effects.filter(([kind]) => kind === "follow"), []);
-  assert.deepEqual(h.effects.filter(([kind]) => kind === "followTicket"), [["followTicket", 1]]);
+  assert.deepEqual(
+    h.effects.filter(([kind]) => kind === "follow"),
+    [],
+  );
+  assert.deepEqual(
+    h.effects.filter(([kind]) => kind === "followTicket"),
+    [["followTicket", 1]],
+  );
 });
 
 test("clicking the already active leaf neither reloads nor pulls the view to the end", async () => {
@@ -269,7 +342,9 @@ test("clicking the already active leaf neither reloads nor pulls the view to the
   // 一次整段载入同时写下高亮与运行时确认值；只有两者都指向这一叶才跳过重载。
   h.bindings.runtimeLeafIdRef.current = "current-leaf";
   const before = snapshot(h);
-  h.bindings.fetch = () => { throw new Error("the active leaf must not be reloaded"); };
+  h.bindings.fetch = () => {
+    throw new Error("the active leaf must not be reloaded");
+  };
 
   await h.bindings.handleLeafChange("current-leaf");
 
@@ -297,7 +372,10 @@ test("switching to another leaf reloads it and requests the follow after commit"
   assert.equal(h.bindings.activeLeafIdRef.current, "other-leaf");
   assert.equal(h.ui.ActiveLeafId, "other-leaf");
   assert.deepEqual(h.ui.Messages, [{ role: "user", content: "other branch" }]);
-  assert.deepEqual(h.effects.filter(([kind]) => kind === "followTicket"), [["followTicket", 1]]);
+  assert.deepEqual(
+    h.effects.filter(([kind]) => kind === "followTicket"),
+    [["followTicket", 1]],
+  );
   assert.equal(h.commands.length, 1);
 });
 
@@ -319,7 +397,13 @@ test("a newer context request owns the UI even when the runtime stays the same",
   const latest = context("latest branch");
   h.bindings.fetch = async (url) => {
     if (url.endsWith("leafId=old-leaf")) {
-      return { ok: true, json: () => { requested.resolve(); return older.promise; } };
+      return {
+        ok: true,
+        json: () => {
+          requested.resolve();
+          return older.promise;
+        },
+      };
     }
     assert.ok(url.endsWith("leafId=latest-leaf"));
     return response(latest);
@@ -347,7 +431,11 @@ for (const [superseded, outcome] of [
     const older = deferred();
     const requested = deferred();
     h.bindings.fetch = async () => ({
-      ok: true, json: () => { requested.resolve(); return older.promise; },
+      ok: true,
+      json: () => {
+        requested.resolve();
+        return older.promise;
+      },
     });
     const loading = h.bindings.loadContext("b", "old-leaf");
     await requested.promise;
@@ -364,12 +452,13 @@ for (const [superseded, outcome] of [
 
 test("a fresh load records the leaf it landed on, so clicking that leaf changes nothing", async () => {
   const h = harness();
-  h.bindings.fetch = async () => response({
-    sessionId: "b",
-    runtimeId: "runtime:r1",
-    leafId: "current-leaf",
-    context: { messages: [{ role: "user", content: "loaded" }], entryIds: ["loaded-entry"] },
-  });
+  h.bindings.fetch = async () =>
+    response({
+      sessionId: "b",
+      runtimeId: "runtime:r1",
+      leafId: "current-leaf",
+      context: { messages: [{ role: "user", content: "loaded" }], entryIds: ["loaded-entry"] },
+    });
 
   await h.bindings.loadSession("b", true);
 
@@ -379,7 +468,9 @@ test("a fresh load records the leaf it landed on, so clicking that leaf changes 
   assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
   assert.equal(h.bindings.runtimeLeafIdRef.current, "current-leaf");
   h.effects.length = 0;
-  h.bindings.fetch = () => { throw new Error("the loaded leaf must not be reloaded"); };
+  h.bindings.fetch = () => {
+    throw new Error("the loaded leaf must not be reloaded");
+  };
 
   await h.bindings.handleLeafChange(h.ui.ActiveLeafId);
 
@@ -440,12 +531,17 @@ test("a branch that lands first is not pulled back by an older session load", as
   await Promise.all(h.commands);
 
   // 慢一步的持久化视图随后到达：叶子与正文都归那次导航，不许把它们拉回旧值。
-  historyBody.resolve(response({
-    sessionId: "b",
-    runtimeId: "runtime:r1",
-    leafId: "persisted-leaf",
-    context: { messages: [{ role: "user", content: "persisted" }], entryIds: ["persisted-entry"] },
-  }));
+  historyBody.resolve(
+    response({
+      sessionId: "b",
+      runtimeId: "runtime:r1",
+      leafId: "persisted-leaf",
+      context: {
+        messages: [{ role: "user", content: "persisted" }],
+        entryIds: ["persisted-entry"],
+      },
+    }),
+  );
   assert.equal(await loading, null);
   // 让位的那次载入会重发一次：等重发落地后，最终仍停在导航的目标分支上。
   await new Promise((resolve) => setImmediate(resolve));
@@ -551,7 +647,10 @@ test("every refresh swallowed by the same navigation is replayed exactly once", 
     runtimeId: "runtime:r1",
     leafId: "target-leaf",
     context: {
-      messages: [{ role: "user", content: "target" }, { role: "assistant", content: "compacted" }],
+      messages: [
+        { role: "user", content: "target" },
+        { role: "assistant", content: "compacted" },
+      ],
       entryIds: ["target-entry", "compacted-entry"],
     },
   });
@@ -574,7 +673,8 @@ test("a deferred reload is replayed with its agent state read", async () => {
   h.bindings.fetch = async (url, options) => {
     if (String(url).startsWith("/api/agent/")) {
       // 命令带 init，运行态读没有：只统计后者。
-      if (options) return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+      if (options)
+        return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
       stateRequests.push(String(url));
       return { ok: true, json: async () => ({ running: false }) };
     }
@@ -697,9 +797,10 @@ test("a failed branch click puts the leaf state and the dedupe marker back toget
 
   // 退回之后这条分支还能再点一次，去重判据不会把重试吞掉。
   h.effects.length = 0;
-  h.bindings.fetch = async (url) => (String(url).startsWith("/api/agent/")
-    ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
-    : response(context("recovered branch")));
+  h.bindings.fetch = async (url) =>
+    String(url).startsWith("/api/agent/")
+      ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
+      : response(context("recovered branch"));
   await h.bindings.handleLeafChange("broken-leaf");
   await Promise.all(h.commands);
 
@@ -739,9 +840,10 @@ test("a failed branch click with nothing loaded rolls back to no leaf, not the o
   assert.deepEqual(h.commands, []);
 
   // 退回 null 之后同一条分支还能再点一次。
-  h.bindings.fetch = async (url) => (String(url).startsWith("/api/agent/")
-    ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
-    : response(context("recovered branch")));
+  h.bindings.fetch = async (url) =>
+    String(url).startsWith("/api/agent/")
+      ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
+      : response(context("recovered branch"));
   await h.bindings.handleLeafChange("broken-leaf");
   await Promise.all(h.commands);
 
@@ -779,7 +881,10 @@ test("an entry navigation moves the runtime leaf only after the branch is applie
   // 先载入、应用成功后才发命令：载入失败就不发，运行时不会停在没载入的分支上，
   // 也就不需要「先发后补反向命令」。
   assert.deepEqual(requests, [
-    { url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=target-leaf", command: null },
+    {
+      url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=target-leaf",
+      command: null,
+    },
     { url: "/api/agent/runtime%3Ar1", command: { type: "navigate_tree", targetId: "target-leaf" } },
   ]);
   assert.equal(h.bindings.activeLeafIdRef.current, "target-leaf");
@@ -875,7 +980,10 @@ test("sends the branch command to the session id the load migrated to", async ()
   assert.equal(h.bindings.sessionIdRef.current, "c");
   assert.equal(h.bindings.runtimeIdRef.current, null);
   assert.deepEqual(requests, [
-    { url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=target-leaf", command: null },
+    {
+      url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=target-leaf",
+      command: null,
+    },
     { url: "/api/agent/c", command: { type: "navigate_tree", targetId: "target-leaf" } },
   ]);
 });
@@ -883,7 +991,8 @@ test("sends the branch command to the session id the load migrated to", async ()
 test("a failed branch command leaves a notice instead of failing silently", async () => {
   const h = harness();
   h.bindings.fetch = async (url) => {
-    if (String(url).startsWith("/api/agent/")) return response({ error: "target branch is gone" }, 500);
+    if (String(url).startsWith("/api/agent/"))
+      return response({ error: "target branch is gone" }, 500);
     return response(context("target branch"));
   };
 
@@ -894,9 +1003,10 @@ test("a failed branch command leaves a notice instead of failing silently", asyn
   // 载入成功、运行时那半失败：界面已经换到新分支，失败必须有回执，不能静默。回执只
   // 说明失败这件事，命令的原始异常留在日志里。
   assert.deepEqual(h.ui.Messages, [{ role: "user", content: "target branch" }]);
-  assert.deepEqual(h.effects.filter(([kind]) => kind === "notice"), [
-    ["notice", { type: "error", message: "Failed to switch branch" }],
-  ]);
+  assert.deepEqual(
+    h.effects.filter(([kind]) => kind === "notice"),
+    [["notice", { type: "error", message: "Failed to switch branch" }]],
+  );
 });
 
 test("a failed branch command leaves the same leaf retryable", async () => {
@@ -961,22 +1071,26 @@ test("a failed branch load reports once and never reloads the branch", async () 
   assert.equal(h.ui.ActiveLeafId, "current-leaf");
   assert.equal(h.bindings.activeLeafIdRef.current, "current-leaf");
   assert.deepEqual(h.commands, []);
-  assert.deepEqual(h.effects.filter(([kind]) => kind === "notice"), [
-    ["notice", { type: "error", message: "Failed to load the selected branch" }],
-  ]);
+  assert.deepEqual(
+    h.effects.filter(([kind]) => kind === "notice"),
+    [["notice", { type: "error", message: "Failed to load the selected branch" }]],
+  );
 });
 
 test("clicking the leaf the runtime already confirmed changes nothing", async () => {
   const h = harness();
-  h.bindings.fetch = async (url) => (String(url).startsWith("/api/agent/")
-    ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
-    : response(context("target branch")));
+  h.bindings.fetch = async (url) =>
+    String(url).startsWith("/api/agent/")
+      ? response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" })
+      : response(context("target branch"));
 
   await h.bindings.handleLeafChange("target-leaf");
   assert.equal(h.bindings.runtimeLeafIdRef.current, "target-leaf");
   h.effects.length = 0;
   const commandsBefore = h.commands.length;
-  h.bindings.fetch = () => { throw new Error("the confirmed leaf must not be reloaded"); };
+  h.bindings.fetch = () => {
+    throw new Error("the confirmed leaf must not be reloaded");
+  };
 
   await h.bindings.handleLeafChange("target-leaf");
 

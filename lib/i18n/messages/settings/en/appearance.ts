@@ -11,7 +11,8 @@ export const appearance: Record<string, string> = {
   "settings.field.theme.light.label": "Light Theme",
   "settings.field.theme.light.description": "Theme used when the terminal has a light background",
   "settings.field.symbolPreset.label": "Symbol Preset",
-  "settings.field.symbolPreset.description": "Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
+  "settings.field.symbolPreset.description":
+    "Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
   "settings.field.colorBlindMode.label": "Color-Blind Mode",
   "settings.field.colorBlindMode.description": "Use blue instead of green for diff additions",
 
@@ -38,7 +39,8 @@ export const appearance: Record<string, string> = {
   "settings.field.statusLine.compactThinkingLevel.description":
     "Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix; in Tern's composer, as the model chip's icon instead of a separate chip (click the icon to cycle it).",
   "settings.field.statusLine.showHookStatus.label": "Show Hook Status",
-  "settings.field.statusLine.showHookStatus.description": "Display hook status messages below the status line",
+  "settings.field.statusLine.showHookStatus.description":
+    "Display hook status messages below the status line",
 
   "settings.field.terminal.showImages.label": "Show Inline Images",
   "settings.field.terminal.showImages.description": "Render images inline in the terminal",
@@ -46,7 +48,8 @@ export const appearance: Record<string, string> = {
   "settings.field.images.autoResize.description":
     "Resize large images to 2000x2000 max for better model compatibility",
   "settings.field.images.blockImages.label": "Block Images",
-  "settings.field.images.blockImages.description": "Prevent images from being sent to LLM providers",
+  "settings.field.images.blockImages.description":
+    "Prevent images from being sent to LLM providers",
 
   "settings.field.tui.resizeScrollback.label": "Resize Scrollback",
   "settings.field.tui.resizeScrollback.description":
@@ -61,7 +64,8 @@ export const appearance: Record<string, string> = {
   "settings.field.tui.textSizing.description":
     "Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.",
   "settings.field.tui.renderMermaid.label": "Render Mermaid Diagrams",
-  "settings.field.tui.renderMermaid.description": "Render Mermaid fenced code blocks as ASCII diagrams",
+  "settings.field.tui.renderMermaid.description":
+    "Render Mermaid fenced code blocks as ASCII diagrams",
   "settings.field.tui.renderSvg.label": "Render SVG Figures",
   "settings.field.tui.renderSvg.description":
     "Invite the agent to draw diagrams and charts as SVG, rendered inline as images on terminals that show graphics",
@@ -104,7 +108,8 @@ export const appearance: Record<string, string> = {
   "settings.field.display.hideToolActivity.description":
     "Hide model-initiated tool calls and results from the transcript",
   "settings.field.display.showTokenUsage.label": "Show Token Usage",
-  "settings.field.display.showTokenUsage.description": "Show per-turn token usage on assistant messages",
+  "settings.field.display.showTokenUsage.description":
+    "Show per-turn token usage on assistant messages",
   "settings.field.display.showTurnTime.label": "Show Turn Time",
   "settings.field.display.showTurnTime.description":
     "Show the total prompt-to-yield time (including tool calls) on assistant message usage rows",

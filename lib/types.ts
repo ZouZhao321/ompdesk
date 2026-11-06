@@ -107,7 +107,12 @@ export interface BashExecutionMessage {
   timestamp?: number;
 }
 
-export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage | CustomMessage | BashExecutionMessage;
+export type AgentMessage =
+  | UserMessage
+  | AssistantMessage
+  | ToolResultMessage
+  | CustomMessage
+  | BashExecutionMessage;
 export interface ExtensionAskDialogOption {
   label: string;
   description?: string;
@@ -189,7 +194,6 @@ export interface SubagentSnapshot {
   progress?: SubagentProgress;
   parentToolCallId?: string;
 }
-
 
 export type ExtensionUiRequest =
   | {

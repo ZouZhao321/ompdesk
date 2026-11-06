@@ -8,9 +8,18 @@ import type { AgentMessage as OmpAgentMessage } from "@oh-my-pi/pi-agent-core";
 import { calculatePromptTokens, hasContextTokenUsage } from "@oh-my-pi/pi-agent-core/compaction";
 import { closeSync, existsSync, openSync, readSync } from "fs";
 import { normalize as normalizePath } from "path";
-import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext } from "./types";
+import type {
+  AgentMessage,
+  SessionEntry,
+  SessionHeader,
+  SessionInfo,
+  SessionContext,
+} from "./types";
 import type { ContextUsage } from "./omp-types";
-import type { SessionEntry as OmpSessionEntry, SessionInfo as OmpSessionInfo } from "@oh-my-pi/pi-coding-agent";
+import type {
+  SessionEntry as OmpSessionEntry,
+  SessionInfo as OmpSessionInfo,
+} from "@oh-my-pi/pi-coding-agent";
 import { getOmpRuntime } from "./omp-runtime";
 import { normalizeToolCalls } from "./normalize";
 import { sessionPathKey } from "./session-path";
@@ -21,9 +30,11 @@ export { getAgentDir };
 export async function attachSessionProjectInfo(sessions: SessionInfo[]): Promise<SessionInfo[]> {
   const uniqueCwds = [...new Set(sessions.map((s) => s.cwd).filter(Boolean))];
   const projectByCwd = new Map<string, ProjectInfo>();
-  await Promise.all(uniqueCwds.map(async (cwd) => {
-    projectByCwd.set(cwd, await resolveProject(cwd));
-  }));
+  await Promise.all(
+    uniqueCwds.map(async (cwd) => {
+      projectByCwd.set(cwd, await resolveProject(cwd));
+    }),
+  );
 
   return sessions.map((session) => {
     const project = session.cwd ? projectByCwd.get(session.cwd) : undefined;
@@ -67,8 +78,8 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       messageCount: s.messageCount,
       firstMessage: s.firstMessage || "(no messages)",
       parentSessionId: s.parentSessionPath
-        ? pathToId.get(sessionPathKey(s.parentSessionPath))
-          ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
+        ? (pathToId.get(sessionPathKey(s.parentSessionPath)) ??
+          (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined))
         : undefined,
       transient: false,
       ...(s.status ? { status: s.status } : {}),
@@ -83,13 +94,19 @@ export async function listAllSessions(options: { force?: boolean } = {}): Promis
 
   // Return cached result if still fresh (avoids re-scanning session files
   // and re-spawning git processes on every page load).
-  if (globalThis.__ompSessionListCache && Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS) {
+  if (
+    globalThis.__ompSessionListCache &&
+    Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS
+  ) {
     return globalThis.__ompSessionListCache.data;
   }
 
   // Coalescing dedup: concurrent callers share the same in-flight promise
   // only while it belongs to the current cache generation.
-  if (globalThis.__ompSessionListPromise && globalThis.__ompSessionListPromiseGeneration === generation) {
+  if (
+    globalThis.__ompSessionListPromise &&
+    globalThis.__ompSessionListPromiseGeneration === generation
+  ) {
     return globalThis.__ompSessionListPromise;
   }
 
@@ -175,7 +192,11 @@ export function cacheSessionPath(sessionId: string, filePath: string): void {
   const previousPathKey = previousPath ? sessionPathKey(previousPath) : undefined;
   const previousSessionId = reverseCache.get(pathKey);
   const previousOwnerPath = previousSessionId ? pathCache.get(previousSessionId) : undefined;
-  if (previousPathKey && previousPathKey !== pathKey && reverseCache.get(previousPathKey) === sessionId) {
+  if (
+    previousPathKey &&
+    previousPathKey !== pathKey &&
+    reverseCache.get(previousPathKey) === sessionId
+  ) {
     reverseCache.delete(previousPathKey);
   }
   if (
@@ -307,7 +328,9 @@ function collectDisplayEntries(
 }
 
 /** `models.default` as the UI's `{ provider, modelId }` pair. */
-function parseDefaultModel(models: Record<string, string>): { provider: string; modelId: string } | null {
+function parseDefaultModel(
+  models: Record<string, string>,
+): { provider: string; modelId: string } | null {
   const selector = models.default;
   if (!selector) return null;
   const slash = selector.indexOf("/");
@@ -394,7 +417,11 @@ export async function getHistoricalContextUsage(
   } catch {
     return undefined;
   }
-  if (typeof contextWindowValue !== "number" || !Number.isFinite(contextWindowValue) || contextWindowValue <= 0) {
+  if (
+    typeof contextWindowValue !== "number" ||
+    !Number.isFinite(contextWindowValue) ||
+    contextWindowValue <= 0
+  ) {
     return undefined;
   }
   const contextWindow = contextWindowValue;
@@ -415,10 +442,10 @@ export async function getHistoricalContextUsage(
     const assistant = entry.message as unknown as HistoricalAssistantMessage;
     const snapshot = readContextSnapshot(assistant);
     if (
-      assistant.stopReason === "aborted"
-      || assistant.stopReason === "error"
-      || !assistant.usage
-      || (!snapshot && !hasContextTokenUsage(assistant.usage))
+      assistant.stopReason === "aborted" ||
+      assistant.stopReason === "error" ||
+      !assistant.usage ||
+      (!snapshot && !hasContextTokenUsage(assistant.usage))
     ) {
       continue;
     }
@@ -429,9 +456,10 @@ export async function getHistoricalContextUsage(
 
   const snapshot = readContextSnapshot(anchor);
   const snapshotPromptTokens = snapshot?.promptTokens;
-  const promptTokens = typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
-    ? snapshotPromptTokens
-    : calculatePromptTokens(anchor.usage);
+  const promptTokens =
+    typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
+      ? snapshotPromptTokens
+      : calculatePromptTokens(anchor.usage);
 
   if (!Number.isFinite(promptTokens) || promptTokens < 0) return undefined;
 
@@ -440,11 +468,8 @@ export async function getHistoricalContextUsage(
   for (let index = activeMessages.length - 1; index >= 0; index -= 1) {
     const message = activeMessages[index];
     if (
-      message === anchor
-      || (
-        message.role === "assistant"
-        && message.timestamp === anchor.timestamp
-      )
+      message === anchor ||
+      (message.role === "assistant" && message.timestamp === anchor.timestamp)
     ) {
       anchorIndex = index;
       break;
@@ -483,14 +508,18 @@ function base64ImageInfo(block: unknown): { bytes: number; mime?: string } | nul
   if (typeof block.data === "string") {
     data = block.data;
     mime = typeof block.mimeType === "string" ? block.mimeType : undefined;
-  } else if (isRecord(block.source) && block.source.type === "base64" && typeof block.source.data === "string") {
+  } else if (
+    isRecord(block.source) &&
+    block.source.type === "base64" &&
+    typeof block.source.data === "string"
+  ) {
     data = block.source.data;
     mime = typeof block.source.media_type === "string" ? block.source.media_type : undefined;
   }
   if (!data) return null;
 
   const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-  return { bytes: Math.max(0, Math.floor(data.length * 3 / 4) - padding), mime };
+  return { bytes: Math.max(0, Math.floor((data.length * 3) / 4) - padding), mime };
 }
 
 function omitToolResultBase64Images(message: AgentMessage): AgentMessage {
@@ -536,11 +565,11 @@ function entryToUiMessage(
       if (!options.deferThinking || message.role !== "assistant") return message;
       return {
         ...message,
-        content: message.content.map((block) => (
+        content: message.content.map((block) =>
           block.type === "thinking" && block.thinking.trim() !== ""
             ? { ...block, thinking: "", deferred: true }
-            : block
-        )),
+            : block,
+        ),
       };
     }
     case "compaction":

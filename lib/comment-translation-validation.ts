@@ -28,7 +28,8 @@ const TOKEN_SPLIT_RE = /[\s,;:!?。，、；：！？"'“”‘’()\[\]{}<>]+/
 const PATH_RE = /\/?[A-Za-z0-9_.@~-]+(?:\/[A-Za-z0-9_.@~-]+)+/gu;
 
 /** 文件名与扩展名；扩展名至少两个字符，避免把 e.g 一类缩写当成路径。 */
-const FILE_NAME_RE = /(?<![A-Za-z0-9_@.-])(?:[A-Za-z0-9_@-]+\.)+[A-Za-z][A-Za-z0-9]{1,7}(?![A-Za-z0-9_])/gu;
+const FILE_NAME_RE =
+  /(?<![A-Za-z0-9_@.-])(?:[A-Za-z0-9_@-]+\.)+[A-Za-z][A-Za-z0-9]{1,7}(?![A-Za-z0-9_])/gu;
 
 const PLAIN_IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
 const FLAG_RE = /^--[A-Za-z][A-Za-z0-9_-]*$/u;
@@ -70,10 +71,9 @@ function bracketFragments(text: string): string[] {
  */
 function isCodeIdentifier(value: string): boolean {
   if (value.length < 2 || !PLAIN_IDENTIFIER_RE.test(value)) return false;
-  return /[A-Z]/.test(value.slice(1))
-    || value.includes("_")
-    || /\d/.test(value)
-    || value.startsWith("$");
+  return (
+    /[A-Z]/.test(value.slice(1)) || value.includes("_") || /\d/.test(value) || value.startsWith("$")
+  );
 }
 
 /** 原文中必须逐字保留的片段，按出现顺序去重。 */
@@ -92,7 +92,9 @@ export function protectedFragments(original: string): ProtectedFragment[] {
 
   for (const match of original.matchAll(PATH_RE)) push("path", match[0].replace(/[.,;:]+$/u, ""));
   // 路径里已经含有的文件名不再单独要求一次。
-  const paths = fragments.filter((fragment) => fragment.kind === "path").map((fragment) => fragment.value);
+  const paths = fragments
+    .filter((fragment) => fragment.kind === "path")
+    .map((fragment) => fragment.value);
   for (const match of original.matchAll(FILE_NAME_RE)) {
     const value = match[0].replace(/[.,;:]+$/u, "");
     if (paths.some((path) => path !== value && path.endsWith(value))) continue;

@@ -1,0 +1,15 @@
+# 只格式化源码与配置，不碰构建产物、分支副本与临时目录。
+# .gitignore 里已有这些条目，这里再写一份，避免换用 --ignore-path 或换目录执行时把它们扫进来。
+node_modules
+.next
+.next-smoke
+.worktrees
+.tmp
+.backups
+.verify
+.ocr
+out
+build
+bun.lock
+next-env.d.ts
+*.tsbuildinfo

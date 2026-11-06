@@ -102,7 +102,8 @@ export function normalizeCustomPanelLines(lines: string[]): string[] {
     }
 
     const rightBorderIndex = lastNonSpaceVisibleCharIndex(line);
-    const rightBorder = rightBorderIndex >= 0 ? visibleCharPositions(line)[rightBorderIndex]?.char : undefined;
+    const rightBorder =
+      rightBorderIndex >= 0 ? visibleCharPositions(line)[rightBorderIndex]?.char : undefined;
     if (rightBorder === "│" || rightBorder === "┃") {
       line = removeVisibleCharAt(line, rightBorderIndex);
     }
@@ -111,7 +112,8 @@ export function normalizeCustomPanelLines(lines: string[]): string[] {
   }
 
   while (normalized.length > 0 && stripAnsi(normalized[0]).trim() === "") normalized.shift();
-  while (normalized.length > 0 && stripAnsi(normalized[normalized.length - 1]).trim() === "") normalized.pop();
+  while (normalized.length > 0 && stripAnsi(normalized[normalized.length - 1]).trim() === "")
+    normalized.pop();
   return normalized.length ? normalized : lines;
 }
 
@@ -123,7 +125,7 @@ export function ansi256Color(index: number): string | undefined {
     const r = Math.floor(n / 36);
     const g = Math.floor((n % 36) / 6);
     const b = n % 6;
-    const scale = (v: number) => v === 0 ? 0 : 55 + v * 40;
+    const scale = (v: number) => (v === 0 ? 0 : 55 + v * 40);
     return `rgb(${scale(r)}, ${scale(g)}, ${scale(b)})`;
   }
   if (index >= 232 && index <= 255) {
@@ -196,9 +198,7 @@ export function parseAnsiLine(line: string): AnsiSegment[] {
     if (match.index > lastIndex) {
       segments.push({ text: line.slice(lastIndex, match.index), style });
     }
-    const codes = match[1]
-      ? match[1].split(";").map((part) => Number(part || "0"))
-      : [0];
+    const codes = match[1] ? match[1].split(";").map((part) => Number(part || "0")) : [0];
     style = applyAnsiCodes(style, codes);
     lastIndex = match.index + match[0].length;
   }

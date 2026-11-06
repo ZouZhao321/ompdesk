@@ -54,12 +54,13 @@ function optionsFor(path: SettingPath, runtimeThemes: string[]): SettingsOption[
 function serializableValue(value: unknown): SettingsValue {
   if (value === undefined) return null;
   if (
-    value === null
-    || typeof value === "boolean"
-    || typeof value === "string"
-    || typeof value === "number"
-    || Array.isArray(value)
-  ) return value as SettingsValue;
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    Array.isArray(value)
+  )
+    return value as SettingsValue;
   return value as Record<string, number>;
 }
 
@@ -75,29 +76,42 @@ function validateSettingValue(path: SettingPath, value: unknown): SettingsValue 
   if (schemaType === "string") {
     if (typeof value !== "string") throw new Error("Expected text");
     const allowed = optionsFor(path, []);
-    if (ui.options !== "runtime" && allowed?.length && !allowed.some((option) => option.value === value)) {
+    if (
+      ui.options !== "runtime" &&
+      allowed?.length &&
+      !allowed.some((option) => option.value === value)
+    ) {
       throw new Error("Invalid option");
     }
     return value;
   }
   if (schemaType === "enum") {
-    if (typeof value !== "string" || !getEnumValues(path)?.includes(value)) throw new Error("Invalid option");
+    if (typeof value !== "string" || !getEnumValues(path)?.includes(value))
+      throw new Error("Invalid option");
     return value;
   }
   if (schemaType === "number") {
-    if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("Expected a finite number");
-    const allowed = Array.isArray(ui.options) ? ui.options.map((option) => Number(option.value)) : [];
+    if (typeof value !== "number" || !Number.isFinite(value))
+      throw new Error("Expected a finite number");
+    const allowed = Array.isArray(ui.options)
+      ? ui.options.map((option) => Number(option.value))
+      : [];
     if (allowed.length && !allowed.includes(value)) throw new Error("Invalid option");
     return value;
   }
   if (schemaType === "array") {
-    if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) throw new Error("Expected a string list");
-    const allowed = Array.isArray(ui.options) ? new Set(ui.options.map((option) => option.value)) : null;
-    if (!allowed || value.some((item) => !allowed.has(item))) throw new Error("Invalid list option");
+    if (!Array.isArray(value) || value.some((item) => typeof item !== "string"))
+      throw new Error("Expected a string list");
+    const allowed = Array.isArray(ui.options)
+      ? new Set(ui.options.map((option) => option.value))
+      : null;
+    if (!allowed || value.some((item) => !allowed.has(item)))
+      throw new Error("Invalid list option");
     return [...new Set(value)] as string[];
   }
   if (schemaType === "record" && path === "providers.maxInFlightRequests") {
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected provider limits");
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error("Expected provider limits");
     const result: Record<string, number> = {};
     for (const [provider, limit] of Object.entries(value)) {
       if (!provider.trim() || typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) {
@@ -147,7 +161,11 @@ async function getRouteHandler(req: Request) {
     }
 
     const response: SettingsResponse = {
-      tabs: SETTING_TABS.map((id) => ({ id, label: TAB_METADATA[id].label, groups: [...TAB_GROUPS[id]] })),
+      tabs: SETTING_TABS.map((id) => ({
+        id,
+        label: TAB_METADATA[id].label,
+        groups: [...TAB_GROUPS[id]],
+      })),
       fields,
       availableThemes,
       theme,
@@ -155,14 +173,17 @@ async function getRouteHandler(req: Request) {
     return NextResponse.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: message === "Access denied" ? 403 : 500 });
+    return NextResponse.json(
+      { error: message },
+      { status: message === "Access denied" ? 403 : 500 },
+    );
   }
 }
 
 export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
   let target: string | undefined;
   try {
-    const body = await req.json() as { path?: string; value?: unknown };
+    const body = (await req.json()) as { path?: string; value?: unknown };
     target = typeof body.path === "string" ? body.path : undefined;
     if (!body.path || !findSetting(body.path) || !hasUi(body.path as SettingPath)) {
       auditFailure("settings.write", target, { status: 400, reason: "unknown-setting" });
@@ -171,8 +192,9 @@ export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
     const path = body.path as SettingPath;
     const value = validateSettingValue(path, body.value);
     if (
-      (path === "theme.dark" || path === "theme.light")
-      && (typeof value !== "string" || !(await getAvailableWebThemes()).some(({ name }) => name === value))
+      (path === "theme.dark" || path === "theme.light") &&
+      (typeof value !== "string" ||
+        !(await getAvailableWebThemes()).some(({ name }) => name === value))
     ) {
       throw new Error("Unknown omp theme");
     }
@@ -180,9 +202,15 @@ export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
     setSetting(settings, path, value);
     await settings.flush();
     auditSuccess("settings.write", path);
-    return NextResponse.json({ success: true, value: serializableValue(getSetting(settings, path)) });
+    return NextResponse.json({
+      success: true,
+      value: serializableValue(getSetting(settings, path)),
+    });
   } catch (error) {
     auditFailure("settings.write", target, { status: 400, error });
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 400 },
+    );
   }
 });

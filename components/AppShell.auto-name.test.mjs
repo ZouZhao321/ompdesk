@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import test from "node:test";
+import { readSource } from "../test-support/source-text";
 
-const source = fs.readFileSync(new URL("./AppShell.tsx", import.meta.url), "utf8");
+const source = await readSource(new URL("./AppShell.tsx", import.meta.url));
 
 test("压缩后的会话仍可根据持久化消息数生成标题", () => {
   assert.match(

@@ -151,7 +151,7 @@ export async function refreshOmpTheme(cwd?: string | null): Promise<void> {
   const query = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
   const response = await fetch(`/api/theme${query}`, { cache: "no-store" });
   if (!response.ok) throw new Error(`Theme request failed (${response.status})`);
-  const nextConfig = await response.json() as WebThemeConfig;
+  const nextConfig = (await response.json()) as WebThemeConfig;
   if (requestId !== themeRequestId) return;
   themeConfig = nextConfig;
   try {
@@ -214,10 +214,7 @@ export function useTheme(options?: { cwd?: string | null; syncWithOmp?: boolean 
       .then(() => {
         document.documentElement.animate(
           {
-            clipPath: [
-              `circle(0px at ${x}px ${y}px)`,
-              `circle(${endRadius}px at ${x}px ${y}px)`,
-            ],
+            clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`],
           },
           {
             duration: 450,
