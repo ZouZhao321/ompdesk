@@ -11,7 +11,8 @@ import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { interopDefault: true });
-const { SandboxDirectoryCreateError, createAgentDirSandbox } = await jiti.import("./agent-dir-sandbox.ts");
+const { SandboxDirectoryCreateError, createAgentDirSandbox } =
+  await jiti.import("./agent-dir-sandbox.ts");
 
 /** `createAgentDirSandbox` 只用到 `after`；建目录阶段失败时它不该被调用。 */
 const unusedContext = {
@@ -34,9 +35,10 @@ test("写出沙箱的子目录按代码错误抛出，且不建临时目录", ()
   for (const dir of outsideSandbox) {
     assert.throws(
       () => createAgentDirSandbox(unusedContext, { prefix, dirs: [dir] }),
-      (error) => error instanceof Error
-        && !(error instanceof SandboxDirectoryCreateError)
-        && error.message.includes("沙箱内的相对路径"),
+      (error) =>
+        error instanceof Error &&
+        !(error instanceof SandboxDirectoryCreateError) &&
+        error.message.includes("沙箱内的相对路径"),
       `${dir} 必须被拒绝`,
     );
   }

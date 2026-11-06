@@ -89,7 +89,11 @@ export function panCamera(
   natural: Size,
   viewport: Size,
 ): ZoomCamera {
-  return clampCamera({ scale: camera.scale, x: camera.x + dx, y: camera.y + dy }, natural, viewport);
+  return clampCamera(
+    { scale: camera.scale, x: camera.x + dx, y: camera.y + dy },
+    natural,
+    viewport,
+  );
 }
 
 export interface PinchFrame {

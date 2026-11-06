@@ -16,17 +16,14 @@ export const modelProviders: Record<string, string> = {
   "settings.field.expandThinkingBlocks.description":
     "回合结束时保持已完成的思考块展开，而不是折叠起来",
   "settings.field.proseOnlyThinking.label": "思考仅保留正文",
-  "settings.field.proseOnlyThinking.description":
-    "从思考摘要中省略代码块，并用省略号代替",
+  "settings.field.proseOnlyThinking.description": "从思考摘要中省略代码块，并用省略号代替",
   "settings.field.omitThinking.label": "省略思考摘要",
-  "settings.field.omitThinking.description":
-    "指示上游 Provider 在响应中完全省略思考摘要（若支持）",
+  "settings.field.omitThinking.description": "指示上游 Provider 在响应中完全省略思考摘要（若支持）",
   "settings.field.externalThinking.label": "外部思考",
   "settings.field.externalThinking.description":
     "私有草稿区，不向用户显示。会禁用受支持的 GPT、Claude 和 Gemini 推理",
   "settings.field.model.loopGuard.enabled.label": "循环防护",
-  "settings.field.model.loopGuard.enabled.description":
-    "为模型推理和正文启用自动流循环检测",
+  "settings.field.model.loopGuard.enabled.description": "为模型推理和正文启用自动流循环检测",
   "settings.field.model.loopGuard.checkAssistantContent.label": "循环防护扫描正文",
   "settings.field.model.loopGuard.checkAssistantContent.description":
     "除思考日志外，也对助手的正文消息应用循环防护",
@@ -41,7 +38,8 @@ export const modelProviders: Record<string, string> = {
     "`auto` 分类器可解析的最高力度。`xhigh` 让分类器始终低于最高档，因此只有显式的 `ultrathink` 才会达到 `max`；`max` 则允许分类器判定为例外的回合在支持最高档的模型上使用最高档。",
 
   "settings.field.temperature.label": "温度",
-  "settings.field.temperature.description": "采样温度（0 = 确定性，1 = 有创造性，-1 = Provider 默认值）",
+  "settings.field.temperature.description":
+    "采样温度（0 = 确定性，1 = 有创造性，-1 = Provider 默认值）",
   "settings.field.topP.label": "Top P",
   "settings.field.topP.description": "核采样截断阈值（0-1，-1 = Provider 默认值）",
   "settings.field.topK.label": "Top K",
@@ -53,7 +51,8 @@ export const modelProviders: Record<string, string> = {
   "settings.field.repetitionPenalty.label": "重复惩罚",
   "settings.field.repetitionPenalty.description": "对重复 Token 的惩罚（-1 = Provider 默认值）",
   "settings.field.textVerbosity.label": "文本详细度",
-  "settings.field.textVerbosity.description": "OpenAI Responses 与 Codex 响应的详细度（low、medium 或 high）",
+  "settings.field.textVerbosity.description":
+    "OpenAI Responses 与 Codex 响应的详细度（low、medium 或 high）",
   "settings.field.tier.openai.label": "服务层级 — OpenAI",
   "settings.field.tier.openai.description":
     "OpenAI / OpenAI-Codex 请求，以及经 OpenRouter 路由的 OpenAI 系列模型的处理层级（none = 省略）。以 `service_tier` 发送。",
@@ -147,8 +146,7 @@ export const modelProviders: Record<string, string> = {
   "settings.field.images.urls.enabled.description":
     "通过已配置的后端链发布外发图片，并向支持 URL 拉取的 Provider 发送短 URL，而不是内联 base64。所有后端或某个 Provider 拉取失败时自动回退为内联",
   "settings.field.images.urls.backends.label": "图片 URL 后端",
-  "settings.field.images.urls.backends.description":
-    "为 Provider 访问发布图片时依次尝试的目标",
+  "settings.field.images.urls.backends.description": "为 Provider 访问发布图片时依次尝试的目标",
   "settings.field.images.urls.command.label": "图片上传命令",
   "settings.field.images.urls.command.description":
     "command 后端的 Argv 模板；{file} 是图片路径，{mime}/{ext} 可选。使用 stdout 上打印的最后一个 URL（例如 pasta -b -f {file}）",
@@ -196,8 +194,7 @@ export const modelProviders: Record<string, string> = {
   "settings.field.speech.voice.label": "语音朗读声音",
   "settings.field.speech.voice.description": "朗读助手输出时使用的 Kokoro 声音",
   "settings.field.speech.speed.label": "语音朗读语速",
-  "settings.field.speech.speed.description":
-    "朗读助手输出时的语速。1 = 正常；限制在 0.5–2.5",
+  "settings.field.speech.speed.description": "朗读助手输出时的语速。1 = 正常；限制在 0.5–2.5",
   "settings.field.providers.fetch.label": "抓取 Provider",
   "settings.field.providers.fetch.description": "fetch/read URL 工具的读取器后端优先级",
   "settings.field.codexResets.autoRedeem.label": "Codex 自动兑换已保存的重置",

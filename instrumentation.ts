@@ -16,7 +16,9 @@ type FsModule = { existsSync: typeof ExistsSync };
  * 因此按运行时加载。路径不存在时由调用方处理。
  */
 async function localModuleUrl(relativePath: string): Promise<string> {
-  const { pathToFileURL } = await importRuntimeModule<{ pathToFileURL: typeof PathToFileURL }>("node:url");
+  const { pathToFileURL } = await importRuntimeModule<{ pathToFileURL: typeof PathToFileURL }>(
+    "node:url",
+  );
   return pathToFileURL(`${process.cwd()}/${relativePath}`).href;
 }
 
@@ -27,7 +29,11 @@ async function localModuleExists(relativePath: string): Promise<boolean> {
 }
 
 /** 加载仓库内的本地模块并执行它；入口缺失按预期降级，其余失败保留堆栈。 */
-async function runLocalModule<T>(relativePath: string, label: string, run: (loaded: T) => Promise<void> | void): Promise<void> {
+async function runLocalModule<T>(
+  relativePath: string,
+  label: string,
+  run: (loaded: T) => Promise<void> | void,
+): Promise<void> {
   // 判定入口文件是否存在，不看错误码：模块自身的依赖缺失同样是 `ERR_MODULE_NOT_FOUND`，
   // 那种情况要留下堆栈，不能被当成“没有这份源码”。探测本身失败也走同一条降级。
   try {
@@ -53,11 +59,15 @@ export async function register(): Promise<void> {
   //
   // 这两份源码只存在于仓库检出里：npm 包只分发构建产物，没有 `lib/`。
   // 加载失败降级成“本次没有启动日志 / 没有自定义 dispatcher”，不挡住整个进程。
-  await runLocalModule<LoggingModule>("lib/logging-startup.ts", "启动日志", (module) => module.startLogging());
+  await runLocalModule<LoggingModule>("lib/logging-startup.ts", "启动日志", (module) =>
+    module.startLogging(),
+  );
 
   if (typeof process.versions.bun === "string") return;
 
   // Keep the Node-only undici graph out of Next's browser/edge instrumentation
   // bundles. Node 22 can load this local TypeScript module directly.
-  await runLocalModule<DispatcherModule>("lib/http-dispatcher.ts", "HTTP dispatcher", (module) => module.configureHttpDispatcher());
+  await runLocalModule<DispatcherModule>("lib/http-dispatcher.ts", "HTTP dispatcher", (module) =>
+    module.configureHttpDispatcher(),
+  );
 }

@@ -38,8 +38,10 @@ export function computeSessionTotalActiveMs(entries: readonly TimingEntry[]): nu
 }
 
 function isTimingEntry(type: string): boolean {
-  return type === "message"
-    || type === "compaction"
-    || type === "branch_summary"
-    || type === "custom_message";
+  return (
+    type === "message" ||
+    type === "compaction" ||
+    type === "branch_summary" ||
+    type === "custom_message"
+  );
 }

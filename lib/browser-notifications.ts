@@ -10,7 +10,10 @@ interface ServiceWorkerRegistrationLike {
 }
 
 export interface BrowserNotificationEnvironment {
-  createWindowNotification: (title: string, options?: NotificationOptions) => WindowNotificationLike;
+  createWindowNotification: (
+    title: string,
+    options?: NotificationOptions,
+  ) => WindowNotificationLike;
   getServiceWorkerRegistration: (() => Promise<ServiceWorkerRegistrationLike | undefined>) | null;
 }
 
@@ -60,9 +63,8 @@ export function claimExtensionAttentionNotification(
 function getBrowserEnvironment(): BrowserNotificationEnvironment {
   return {
     createWindowNotification: (title, options) => new Notification(title, options),
-    getServiceWorkerRegistration: "serviceWorker" in navigator
-      ? () => navigator.serviceWorker.getRegistration()
-      : null,
+    getServiceWorkerRegistration:
+      "serviceWorker" in navigator ? () => navigator.serviceWorker.getRegistration() : null,
   };
 }
 

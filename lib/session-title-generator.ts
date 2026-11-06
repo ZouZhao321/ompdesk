@@ -1,10 +1,6 @@
 import { generateSessionTitle as generateOmpSessionTitle } from "@oh-my-pi/pi-coding-agent/utils/title-generator";
 import type { AgentSessionLike } from "./omp-types";
-import {
-  findFirstTitleSource,
-  truncateTitle,
-  type GeneratedSessionTitle,
-} from "./session-title";
+import { findFirstTitleSource, truncateTitle, type GeneratedSessionTitle } from "./session-title";
 
 /**
  * Name a session using omp's own title generator.

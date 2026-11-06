@@ -1,6 +1,9 @@
 import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { resolveModelScope, type ScopedModel } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
+import {
+  resolveModelScope,
+  type ScopedModel,
+} from "@oh-my-pi/pi-coding-agent/config/model-resolver";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 
 /**
@@ -74,10 +77,12 @@ export async function resolveVisibleModels(
   // omp's resolver drops unmatched patterns silently. Re-resolve each pattern on
   // its own so a typo surfaces in the UI instead of quietly shrinking the list.
   const warnings: string[] = [];
-  await Promise.all(cleaned.map(async (pattern) => {
-    const matched = await resolveModelScope([pattern], modelRegistry, undefined, settings);
-    if (matched.length === 0) warnings.push(`No model matches "${pattern}" in enabledModels.`);
-  }));
+  await Promise.all(
+    cleaned.map(async (pattern) => {
+      const matched = await resolveModelScope([pattern], modelRegistry, undefined, settings);
+      if (matched.length === 0) warnings.push(`No model matches "${pattern}" in enabledModels.`);
+    }),
+  );
 
   if (scopedModels.length === 0) {
     return {
@@ -129,16 +134,21 @@ export function selectInitialModelScope(
   }
 
   const requestedScoped = requested
-    ? scope.scopedModels.find((scoped) => scoped.model === requested
-      || matchesModel(scoped.model, { provider: requested.provider, modelId: requested.id }))
+    ? scope.scopedModels.find(
+        (scoped) =>
+          scoped.model === requested ||
+          matchesModel(scoped.model, { provider: requested.provider, modelId: requested.id }),
+      )
     : undefined;
-  const defaultScoped = !requested && defaultRef
-    ? scope.scopedModels.find((scoped) => matchesModel(scoped.model, defaultRef))
-    : undefined;
+  const defaultScoped =
+    !requested && defaultRef
+      ? scope.scopedModels.find((scoped) => matchesModel(scoped.model, defaultRef))
+      : undefined;
   const fallbackScoped = !requested ? (defaultScoped ?? scope.scopedModels[0]) : undefined;
-  const defaultVisible = !requested && !fallbackScoped && defaultRef
-    ? scope.visible.find((model) => matchesModel(model, defaultRef))
-    : undefined;
+  const defaultVisible =
+    !requested && !fallbackScoped && defaultRef
+      ? scope.visible.find((model) => matchesModel(model, defaultRef))
+      : undefined;
   const selectedModel = requested ?? fallbackScoped?.model ?? defaultVisible;
   const scopedSelection = requestedScoped ?? fallbackScoped;
   const thinkingLevel = options.thinkingLevel ?? scopedSelection?.thinkingLevel;

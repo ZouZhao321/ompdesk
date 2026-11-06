@@ -51,7 +51,7 @@ export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
   let disableModelInvocation: unknown;
   let resolvedFilePath: string | undefined;
   try {
-    const body = await req.json() as { filePath?: unknown; disableModelInvocation?: unknown };
+    const body = (await req.json()) as { filePath?: unknown; disableModelInvocation?: unknown };
     filePath = typeof body.filePath === "string" ? body.filePath.trim() : "";
     disableModelInvocation = body.disableModelInvocation;
     if (!filePath) {
@@ -60,7 +60,10 @@ export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
     }
     if (typeof disableModelInvocation !== "boolean") {
       auditFailure("skill.toggle", filePath, { status: 400, reason: "invalid-flag" });
-      return NextResponse.json({ error: "disableModelInvocation must be boolean" }, { status: 400 });
+      return NextResponse.json(
+        { error: "disableModelInvocation must be boolean" },
+        { status: 400 },
+      );
     }
     if (path.basename(filePath).toLowerCase() !== "skill.md") {
       auditFailure("skill.toggle", filePath, { status: 400, reason: "not-skill-md" });
@@ -115,10 +118,15 @@ export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
     }
 
     writeFileSync(resolvedFilePath, updated, "utf8");
-    auditSuccess("skill.toggle", resolvedFilePath, { disabledModelInvocation: disableModelInvocation });
+    auditSuccess("skill.toggle", resolvedFilePath, {
+      disabledModelInvocation: disableModelInvocation,
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
-    auditFailure("skill.toggle", resolvedFilePath ?? (filePath || undefined), { status: 500, error });
+    auditFailure("skill.toggle", resolvedFilePath ?? (filePath || undefined), {
+      status: 500,
+      error,
+    });
     return NextResponse.json({ error: "Unable to update skill metadata" }, { status: 500 });
   }
 });

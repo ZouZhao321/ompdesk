@@ -15,9 +15,20 @@ import { isApiRequestAllowed } from "@/lib/request-security";
 // Same skip lists as /api/files — only used for the non-git readdir fallback.
 // Git-tracked repos rely on .gitignore instead (matches the TUI's fd behavior).
 const IGNORED_NAMES = new Set([
-  "node_modules", ".git", ".next", "dist", "build", "__pycache__",
-  ".turbo", ".cache", "coverage", ".pytest_cache", ".mypy_cache",
-  "target", "vendor", ".DS_Store",
+  "node_modules",
+  ".git",
+  ".next",
+  "dist",
+  "build",
+  "__pycache__",
+  ".turbo",
+  ".cache",
+  "coverage",
+  ".pytest_cache",
+  ".mypy_cache",
+  "target",
+  "vendor",
+  ".DS_Store",
 ]);
 
 const IGNORED_SUFFIXES = [".pyc"];
@@ -70,7 +81,9 @@ async function listWithGit(cwd: string): Promise<FileListing | null> {
 function listWithWalk(cwd: string): FileListing {
   const files: string[] = [];
   // BFS so shallow files win when the cap truncates the listing.
-  const queue: Array<{ abs: string; rel: string; depth: number }> = [{ abs: cwd, rel: "", depth: 0 }];
+  const queue: Array<{ abs: string; rel: string; depth: number }> = [
+    { abs: cwd, rel: "", depth: 0 },
+  ];
   while (queue.length > 0) {
     const { abs, rel, depth } = queue.shift()!;
     let dirents: fs.Dirent[];

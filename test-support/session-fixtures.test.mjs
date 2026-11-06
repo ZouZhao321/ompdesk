@@ -8,17 +8,29 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { interopDefault: true });
-const { seedSessions, resetSessionFixtures, withAgentDirLock } = await jiti.import("./session-fixtures.ts");
-const { createAgentDirSandbox, restoreAgentDir, switchAgentDir } = await jiti.import("./agent-dir-sandbox.ts");
+const { seedSessions, resetSessionFixtures, withAgentDirLock } =
+  await jiti.import("./session-fixtures.ts");
+const { createAgentDirSandbox, restoreAgentDir, switchAgentDir } =
+  await jiti.import("./agent-dir-sandbox.ts");
 const { SessionManager } = await jiti.import("@oh-my-pi/pi-coding-agent");
-const { getAgentDir, getBaseConfigRoot, __resetDirsFromEnvForTests } = await jiti.import("@oh-my-pi/pi-utils/dirs");
+const { getAgentDir, getBaseConfigRoot, __resetDirsFromEnvForTests } =
+  await jiti.import("@oh-my-pi/pi-utils/dirs");
 
 const TITLE_SINGLE_TURN = "伪造会话 single-turn";
 const TITLE_EMPTY = "伪造会话 empty";
@@ -61,11 +73,16 @@ function probeDirectorySymlinks() {
   const root = mkdtempSync(join(tmpdir(), "ompdesk-link-probe-"));
   try {
     mkdirSync(join(root, "target"));
-    symlinkSync(join(root, "target"), join(root, "link"), process.platform === "win32" ? "junction" : "dir");
+    symlinkSync(
+      join(root, "target"),
+      join(root, "link"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
     return true;
   } catch (error) {
     const code = error?.code;
-    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP") return false;
+    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP")
+      return false;
     throw error;
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -73,7 +90,8 @@ function probeDirectorySymlinks() {
 }
 
 const SYMLINKS_SUPPORTED = probeDirectorySymlinks();
-const SYMLINK_SKIP_REASON = "Creating directory symlinks requires additional privileges on this platform";
+const SYMLINK_SKIP_REASON =
+  "Creating directory symlinks requires additional privileges on this platform";
 
 /** 建目录符号链接；链接不可用时用例已在注册时跳过，这里不再兜底。 */
 function linkDirectory(target, link) {
@@ -91,7 +109,9 @@ function listInfoFor(infos, id) {
 }
 
 function hasStagingDirectory(sessionsDir) {
-  return existsSync(sessionsDir) && readdirSync(sessionsDir).some((name) => name.startsWith(".staging-"));
+  return (
+    existsSync(sessionsDir) && readdirSync(sessionsDir).some((name) => name.startsWith(".staging-"))
+  );
 }
 
 function pause(ms) {
@@ -100,15 +120,25 @@ function pause(ms) {
 
 test("single-turn 场景生成后能被 SessionManager.listAll 读回", async (t) => {
   const sandbox = createSandbox(t);
-  const seeded = await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+  const seeded = await seedSessions("single-turn", {
+    agentDir: sandbox.agentDir,
+    cwd: sandbox.cwd,
+  });
 
   assert.equal(seeded.length, 1);
   const [session] = seeded;
   assert.equal(session.cwd, resolve(sandbox.cwd));
   assert.equal(session.title, TITLE_SINGLE_TURN);
-  assert.equal(dirname(session.path), join(resolve(sandbox.agentDir), "sessions", "fixture-single-turn"));
+  assert.equal(
+    dirname(session.path),
+    join(resolve(sandbox.agentDir), "sessions", "fixture-single-turn"),
+  );
   assert.ok(existsSync(session.path), "样本会话文件应落在场景目录里");
-  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "铺样本只动样本目录，不碰 agentDir 顶层");
+  assert.deepEqual(
+    readdirSync(sandbox.agentDir),
+    ["sessions"],
+    "铺样本只动样本目录，不碰 agentDir 顶层",
+  );
 
   sandbox.readFixtures();
 
@@ -219,7 +249,10 @@ test("tools 场景读回思考块、工具调用与结果回填", async (t) => {
 
     assert.equal(thinkingBlocks.length, 2, "每轮助手消息都应带一个思考块");
     assert.equal(toolCalls.length, 2, "两轮各有一个工具调用");
-    assert.deepEqual(toolCalls.map((call) => call.name), ["read", "bash"]);
+    assert.deepEqual(
+      toolCalls.map((call) => call.name),
+      ["read", "bash"],
+    );
     assert.equal(toolResults.length, toolCalls.length, "每个工具调用都应有一条结果回填");
     for (const result of toolResults) {
       const call = toolCalls.find((candidate) => candidate.id === result.toolCallId);
@@ -378,7 +411,9 @@ test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
   assert.equal(longSessions.length, 1);
   assert.equal(emptySessions.length, 1);
   assert.deepEqual(jsonlFiles(join(sessionsDir, "fixture-long")), [basename(longSessions[0].path)]);
-  assert.deepEqual(jsonlFiles(join(sessionsDir, "fixture-empty")), [basename(emptySessions[0].path)]);
+  assert.deepEqual(jsonlFiles(join(sessionsDir, "fixture-empty")), [
+    basename(emptySessions[0].path),
+  ]);
   assert.deepEqual(readdirSync(sessionsDir).sort(), ["fixture-empty", "fixture-long"]);
   assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "并发铺设不得留下中间目录");
 
@@ -462,16 +497,25 @@ test("铺样本前清掉替换阶段残留的 .staging- 与 .backup- 目录", as
 
   // 模拟替换阶段被杀的进程：staging 在 sessions 下，备份在 agentDir 顶层。
   const scenarioDir = join(sessionsDir, "fixture-single-turn");
-  cpSync(scenarioDir, join(sandbox.agentDir, ".backup-fixture-single-turn-killed"), { recursive: true });
+  cpSync(scenarioDir, join(sandbox.agentDir, ".backup-fixture-single-turn-killed"), {
+    recursive: true,
+  });
   mkdirSync(join(sessionsDir, ".staging-killed"), { recursive: true });
 
-  const [reseeding] = await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+  const [reseeding] = await seedSessions("single-turn", {
+    agentDir: sandbox.agentDir,
+    cwd: sandbox.cwd,
+  });
 
   assert.deepEqual(readdirSync(sessionsDir), ["fixture-single-turn"]);
   assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "残留备份不得留在 agentDir 顶层");
   sandbox.readFixtures();
   const infos = await SessionManager.listAll();
-  assert.deepEqual(infos.map((info) => info.id), [reseeding.id], "残留目录不得变成额外会话");
+  assert.deepEqual(
+    infos.map((info) => info.id),
+    [reseeding.id],
+    "残留目录不得变成额外会话",
+  );
 });
 
 test(
@@ -541,19 +585,23 @@ test(
       () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
       /必须位于 agentDir 之内/,
     );
-    await assert.rejects(
-      () => resetSessionFixtures(sandbox.agentDir),
-      /必须位于 agentDir 之内/,
-    );
+    await assert.rejects(() => resetSessionFixtures(sandbox.agentDir), /必须位于 agentDir 之内/);
 
-    assert.deepEqual(readdirSync(outsideSessions), [".staging-killed"], "拒绝时不得在链接目标里新建或删除条目");
+    assert.deepEqual(
+      readdirSync(outsideSessions),
+      [".staging-killed"],
+      "拒绝时不得在链接目标里新建或删除条目",
+    );
     assert.deepEqual(readdirSync(leftover), ["keep.jsonl"], "拒绝时不得删掉链接目标里的残留");
   },
 );
 
 test("会话扫描看不到 agentDir 顶层的替换备份", async (t) => {
   const sandbox = createSandbox(t);
-  const [seeded] = await seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd });
+  const [seeded] = await seedSessions("single-turn", {
+    agentDir: sandbox.agentDir,
+    cwd: sandbox.cwd,
+  });
 
   // 删除最终失败时留下的备份：位于 sessions 之外，里面的 .jsonl 不在扫描范围。
   cpSync(
@@ -564,7 +612,11 @@ test("会话扫描看不到 agentDir 顶层的替换备份", async (t) => {
 
   sandbox.readFixtures();
   const infos = await SessionManager.listAll();
-  assert.deepEqual(infos.map((info) => info.id), [seeded.id], "备份不得变成额外会话");
+  assert.deepEqual(
+    infos.map((info) => info.id),
+    [seeded.id],
+    "备份不得变成额外会话",
+  );
 });
 
 test("新场景同样拒绝带 sessions 以外条目的 agentDir", async (t) => {
@@ -721,12 +773,20 @@ test("缺失的 agentDir 与非样本目录都会被拒绝", async (t) => {
   await assert.rejects(() => seedSessions("empty", { cwd: sandbox.cwd }), /agentDir/);
   await assert.rejects(() => seedSessions("empty", { agentDir: "", cwd: sandbox.cwd }), /agentDir/);
   await assert.rejects(
-    () => seedSessions("empty", { agentDir: sandbox.agentDir, cwd: sandbox.cwd, timestamp: "not-a-date" }),
+    () =>
+      seedSessions("empty", {
+        agentDir: sandbox.agentDir,
+        cwd: sandbox.cwd,
+        timestamp: "not-a-date",
+      }),
     /timestamp/,
   );
 
   writeFileSync(join(sandbox.agentDir, "agent.db"), "");
-  await assert.rejects(() => seedSessions("empty", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }), /agent\.db/);
+  await assert.rejects(
+    () => seedSessions("empty", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
+    /agent\.db/,
+  );
   assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
 });
 
@@ -760,7 +820,11 @@ test("resetSessionFixtures 删除全部场景目录与中间目录，重复调�
   assert.equal(existsSync(join(fixturesDir(sandbox.agentDir), "fixture-single-turn")), false);
   assert.equal(existsSync(join(fixturesDir(sandbox.agentDir), "fixture-empty")), false);
   assert.deepEqual(readdirSync(fixturesDir(sandbox.agentDir)), []);
-  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "复位应清掉 agentDir 顶层的替换备份");
+  assert.deepEqual(
+    readdirSync(sandbox.agentDir),
+    ["sessions"],
+    "复位应清掉 agentDir 顶层的替换备份",
+  );
 
   await resetSessionFixtures(sandbox.agentDir);
   const missing = join(sandbox.root, "missing");
@@ -804,11 +868,7 @@ test("resetSessionFixtures 拒绝真实用户配置根下的 agentDir，符号�
     __resetDirsFromEnvForTests();
     // 写之前先确认配置根确实落在沙箱里：PI_CONFIG_DIR 没生效或跨盘时
     // getBaseConfigRoot() 会指回真实配置根，victim 就写进了用户数据。
-    assert.equal(
-      relative(sandbox.root, getBaseConfigRoot()),
-      "config-root",
-      "配置根应落在沙箱里",
-    );
+    assert.equal(relative(sandbox.root, getBaseConfigRoot()), "config-root", "配置根应落在沙箱里");
     const realAgentDir = join(getBaseConfigRoot(), "agent");
     const victim = join(realAgentDir, "sessions", "fixture-single-turn", "victim.jsonl");
     mkdirSync(dirname(victim), { recursive: true });

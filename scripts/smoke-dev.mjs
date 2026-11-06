@@ -132,7 +132,9 @@ async function stopServer() {
       }
     }
   };
-  const exited = childClosed ? Promise.resolve() : new Promise((resolve) => child.once("close", resolve));
+  const exited = childClosed
+    ? Promise.resolve()
+    : new Promise((resolve) => child.once("close", resolve));
   send("SIGTERM");
   const force = setTimeout(() => send("SIGKILL"), 5_000);
   await Promise.race([exited, Bun.sleep(6_000)]);
@@ -169,7 +171,9 @@ async function waitForPage() {
     const remaining = STARTUP_TIMEOUT_MS - (Date.now() - startedAt);
     if (remaining <= 0) {
       const detail = lastError instanceof Error ? lastError.message : String(lastError ?? "无");
-      throw new Error(`dev server 在 ${STARTUP_TIMEOUT_MS}ms 内没有响应 ${BASE_URL}；最后一次请求失败：${detail}`);
+      throw new Error(
+        `dev server 在 ${STARTUP_TIMEOUT_MS}ms 内没有响应 ${BASE_URL}；最后一次请求失败：${detail}`,
+      );
     }
     try {
       // 单次请求不超过预算，也不超过 30 秒：编译可能持续更久，让循环回到预算检查，
@@ -194,7 +198,9 @@ try {
 
   // 服务可能在首页与 API 之间崩掉；断言前再确认一次它仍然活着。
   if (childExit) {
-    throw new Error(`dev server 在请求过程中退出：code=${childExit.code} signal=${childExit.signal}`);
+    throw new Error(
+      `dev server 在请求过程中退出：code=${childExit.code} signal=${childExit.signal}`,
+    );
   }
 
   const home = await request("/api/home", 120_000);
@@ -203,12 +209,19 @@ try {
   // 崩溃往往发生在最后一个请求之后，给进程一点时间把错误写到日志再判定。
   await Bun.sleep(1_000);
   if (childExit) {
-    throw new Error(`dev server 在请求结束后退出：code=${childExit.code} signal=${childExit.signal}`);
+    throw new Error(
+      `dev server 在请求结束后退出：code=${childExit.code} signal=${childExit.signal}`,
+    );
   }
 
   const logText = output.join("");
   const addressOk = logText.includes(`${HOST}:${PORT}`);
-  assertCheck(failures, "监听地址是本次启动的端口", addressOk, addressOk ? "" : `日志里找不到 ${HOST}:${PORT}`);
+  assertCheck(
+    failures,
+    "监听地址是本次启动的端口",
+    addressOk,
+    addressOk ? "" : `日志里找不到 ${HOST}:${PORT}`,
+  );
   const hits = FAILURE_PATTERNS.filter((pattern) => logText.includes(pattern));
   assertCheck(failures, "构建日志无失败标记", hits.length === 0, hits.join(", "));
 } catch (error) {

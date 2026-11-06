@@ -31,8 +31,9 @@ async function getOmpPackageDir(): Promise<string | null> {
 }
 
 function encodeHeaderValue(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (ch) =>
-    `%${ch.charCodeAt(0).toString(16).toUpperCase()}`
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }
 
@@ -51,9 +52,11 @@ async function getOmpCliPath(): Promise<string | null> {
   }
 
   try {
-    const resolver = (import.meta as ImportMeta & {
-      resolve?: (specifier: string) => string | Promise<string>;
-    }).resolve;
+    const resolver = (
+      import.meta as ImportMeta & {
+        resolve?: (specifier: string) => string | Promise<string>;
+      }
+    ).resolve;
     if (typeof resolver === "function") {
       const indexUrl = await resolver("@oh-my-pi/pi-coding-agent");
       candidates.add(join(dirname(fileURLToPath(indexUrl)), "cli.js"));
@@ -63,14 +66,7 @@ async function getOmpCliPath(): Promise<string | null> {
   }
 
   candidates.add(
-    join(
-      process.cwd(),
-      "node_modules",
-      "@oh-my-pi",
-      "pi-coding-agent",
-      "dist",
-      "cli.js"
-    )
+    join(process.cwd(), "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js"),
   );
 
   for (const candidate of candidates) {
@@ -78,7 +74,6 @@ async function getOmpCliPath(): Promise<string | null> {
   }
   return null;
 }
-
 
 async function exportSession(filePath: string, outputPath: string): Promise<void> {
   const cliPath = await getOmpCliPath();
@@ -99,17 +94,16 @@ async function exportSession(filePath: string, outputPath: string): Promise<void
   const packageDir = await getOmpPackageDir();
   if (!packageDir) throw new Error("pi CLI not found");
 
-  const exporterUrl = pathToFileURL(join(packageDir, "dist", "core", "export-html", "index.js")).href;
+  const exporterUrl = pathToFileURL(
+    join(packageDir, "dist", "core", "export-html", "index.js"),
+  ).href;
   const { exportFromFile } = (await import(exporterUrl)) as ExportHtmlModule;
   await exportFromFile(filePath, outputPath);
 }
 
 export const GET = withRequestLog("/api/sessions/[id]/export", getRouteHandler);
 
-async function getRouteHandler(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function getRouteHandler(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
@@ -118,8 +112,10 @@ async function getRouteHandler(
   const inline = new URL(req.url).searchParams.get("inline") === "1";
 
   try {
-    const canonicalId = getRpcSession(id)?.sessionId ?? getFinalRpcSessionId(id)
-      ?? (id.startsWith("runtime:") ? undefined : id);
+    const canonicalId =
+      getRpcSession(id)?.sessionId ??
+      getFinalRpcSessionId(id) ??
+      (id.startsWith("runtime:") ? undefined : id);
     const filePath = canonicalId ? await resolveSessionPath(canonicalId) : null;
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });

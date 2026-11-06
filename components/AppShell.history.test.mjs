@@ -9,7 +9,9 @@ assert.ok(start >= 0 && end > start, "History callback not found");
 // Execute the production callback with a window double, rather than duplicating
 // its URL selection logic in the test.
 const createHistoryCallback = new Function(
-  "selectedSession", "window", "useCallback",
+  "selectedSession",
+  "window",
+  "useCallback",
   `${source.slice(start, end + "\n  }, [selectedSession]);".length)}\nreturn handleViewFullHistory;`,
 );
 
@@ -37,10 +39,17 @@ for (const { name, selectedSession, expectedId } of [
       (callback) => callback,
     );
     callback();
-    assert.deepEqual(opened, expectedId ? [[
-      `/api/sessions/${encodeURIComponent(expectedId)}/export?inline=1`,
-      "_blank",
-      "noopener,noreferrer",
-    ]] : []);
+    assert.deepEqual(
+      opened,
+      expectedId
+        ? [
+            [
+              `/api/sessions/${encodeURIComponent(expectedId)}/export?inline=1`,
+              "_blank",
+              "noopener,noreferrer",
+            ],
+          ]
+        : [],
+    );
   });
 }

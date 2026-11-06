@@ -187,8 +187,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.task.isolation.apply.description":
     "自动把成功的隔离任务改动应用到父检出；关闭则保留补丁或分支产物",
   "settings.field.task.isolation.merge.label": "隔离合并策略",
-  "settings.field.task.isolation.merge.description":
-    "隔离任务的改动如何整合（应用补丁或合并分支）",
+  "settings.field.task.isolation.merge.description": "隔离任务的改动如何整合（应用补丁或合并分支）",
   "settings.field.task.isolation.commits.label": "隔离提交风格",
   "settings.field.task.isolation.commits.description":
     "嵌套仓库改动的提交信息风格（通用或 AI 生成）",

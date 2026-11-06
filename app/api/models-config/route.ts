@@ -41,7 +41,8 @@ function readModelsConfig(): Record<string, unknown> {
     // `parse` handles JSON too — it is a subset of YAML — so a not-yet-migrated
     // `models.json` still loads.
     const parsed: unknown = parseYaml(readFileSync(path, "utf8"));
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return { providers: {} };
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+      return { providers: {} };
     return parsed as Record<string, unknown>;
   } catch {
     return { providers: {} };
@@ -58,13 +59,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function sanitizeModelsConfig(data: Record<string, unknown>): Record<string, unknown> {
   if (!isRecord(data.providers)) return data;
 
-  const providers = Object.fromEntries(Object.entries(data.providers).map(([providerId, provider]) => {
-    if (!isRecord(provider) || !Array.isArray(provider.models)) return [providerId, provider];
-    const models = provider.models.filter((model) => (
-      !isRecord(model) || typeof model.id !== "string" || model.id.trim().length > 0
-    ));
-    return [providerId, { ...provider, models }];
-  }));
+  const providers = Object.fromEntries(
+    Object.entries(data.providers).map(([providerId, provider]) => {
+      if (!isRecord(provider) || !Array.isArray(provider.models)) return [providerId, provider];
+      const models = provider.models.filter(
+        (model) => !isRecord(model) || typeof model.id !== "string" || model.id.trim().length > 0,
+      );
+      return [providerId, { ...provider, models }];
+    }),
+  );
 
   return { ...data, providers };
 }
@@ -95,15 +98,17 @@ export const PUT = withRequestLog("/api/models-config", async (req: Request) => 
 
   const target = getWritePath();
   try {
-    const body = await req.json() as unknown;
+    const body = (await req.json()) as unknown;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       auditFailure("models.config.write", target, { status: 400, reason: "not-an-object" });
       return NextResponse.json({ error: "models config must be an object" }, { status: 400 });
     }
     const config = body as Record<string, unknown>;
     if (
-      "providers" in config
-      && (typeof config.providers !== "object" || config.providers === null || Array.isArray(config.providers))
+      "providers" in config &&
+      (typeof config.providers !== "object" ||
+        config.providers === null ||
+        Array.isArray(config.providers))
     ) {
       auditFailure("models.config.write", target, { status: 400, reason: "invalid-providers" });
       return NextResponse.json({ error: "providers must be an object" }, { status: 400 });
@@ -113,9 +118,10 @@ export const PUT = withRequestLog("/api/models-config", async (req: Request) => 
     // The registry caches models.yml at construction; drop it so the next
     // request rebuilds against the edited providers.
     invalidateOmpRuntime();
-    const providers = config.providers && typeof config.providers === "object"
-      ? Object.keys(config.providers).length
-      : 0;
+    const providers =
+      config.providers && typeof config.providers === "object"
+        ? Object.keys(config.providers).length
+        : 0;
     auditSuccess("models.config.write", target, { providers });
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -137,12 +137,17 @@ export async function startLogging(options: StartLoggingOptions = {}): Promise<v
     env: options.env,
   });
   try {
-    const authEnabled = options.authEnabled ?? await detectAuthEnabled();
-    logEvent("info", "process", "process.start", buildProcessStartFields({
-      ...options.fields,
-      env: options.env ?? options.fields?.env,
-      authEnabled,
-    }));
+    const authEnabled = options.authEnabled ?? (await detectAuthEnabled());
+    logEvent(
+      "info",
+      "process",
+      "process.start",
+      buildProcessStartFields({
+        ...options.fields,
+        env: options.env ?? options.fields?.env,
+        authEnabled,
+      }),
+    );
   } catch {
     // Startup must proceed even when logging is unavailable.
   }

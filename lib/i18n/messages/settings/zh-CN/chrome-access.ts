@@ -1,11 +1,13 @@
 /** 访问页的简体中文文案。 */
 export const chromeAccess: Record<string, string> = {
   "settings.access.title": "访问",
-  "settings.access.descriptionPrefix": "密码通过 HTTP Basic Auth 保护 Web 界面与所有接口，用户名固定为 ",
+  "settings.access.descriptionPrefix":
+    "密码通过 HTTP Basic Auth 保护 Web 界面与所有接口，用户名固定为 ",
   "settings.access.descriptionMiddle": "。密码以 scrypt 摘要保存在 ",
   "settings.access.descriptionSuffix": "。ompdesk 不保存密码本身，忘记后只能恢复，无法读回。",
   "settings.access.readOnlyPrefix": "只读 · ",
-  "settings.access.readOnlySuffix": " 已设置，会覆盖存储的凭据。取消该环境变量并重启 ompdesk 后，才能在这里管理密码。",
+  "settings.access.readOnlySuffix":
+    " 已设置，会覆盖存储的凭据。取消该环境变量并重启 ompdesk 后，才能在这里管理密码。",
   "settings.access.loading": "正在加载密码访问设置…",
   "settings.access.groupPasswordAccess": "密码访问",
   "settings.access.requirePassword": "需要密码",
@@ -37,8 +39,10 @@ export const chromeAccess: Record<string, string> = {
   "settings.access.basicAuthDetail":
     "密码以可逆编码经过网络传输。在不受信任的网络上使用明文 HTTP 时，密码可能在传输中被读取，因此把 ompdesk 暴露到回环地址之外前，应当放在 HTTPS 或可信 VPN 之后。",
   "settings.access.mismatch": "两次输入的密码不一致。",
-  "settings.access.saved": "密码已保存并开启密码访问。浏览器会在下一个请求中要求用户名「{username}」与这个密码。",
-  "settings.access.enabled": "密码访问已开启。浏览器会在下一个请求中要求用户名「{username}」与密码。",
+  "settings.access.saved":
+    "密码已保存并开启密码访问。浏览器会在下一个请求中要求用户名「{username}」与这个密码。",
+  "settings.access.enabled":
+    "密码访问已开启。浏览器会在下一个请求中要求用户名「{username}」与密码。",
   "settings.access.disabled": "密码访问已关闭。已存储的密码仍然保留，可在这里重新开启。",
   "settings.access.cleared": "已删除存储的密码，密码访问处于关闭状态。",
 };

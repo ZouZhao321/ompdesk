@@ -17,73 +17,88 @@ interface MarkdownBodyProps {
   sessionId?: string | null;
 }
 
-export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, sessionId }: MarkdownBodyProps) {
+export function MarkdownBody({
+  children,
+  className,
+  isStreaming,
+  cwd,
+  onOpenFile,
+  sessionId,
+}: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   // Stable renderer identities keep stateful blocks mounted across message hover updates.
-  const components = useMemo<Components>(() => ({
-    code({ className, children, ...props }) {
-      const lang = className?.replace("language-", "").toLowerCase() ?? "";
-      const raw = String(children);
-      const isBlock = className?.includes("language-") || raw.includes("\n");
-      if (isBlock) {
-        if (lang === "mermaid") {
-          return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
+  const components = useMemo<Components>(
+    () => ({
+      code({ className, children, ...props }) {
+        const lang = className?.replace("language-", "").toLowerCase() ?? "";
+        const raw = String(children);
+        const isBlock = className?.includes("language-") || raw.includes("\n");
+        if (isBlock) {
+          if (lang === "mermaid") {
+            return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
+          }
+          return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isStreaming={isStreaming} />;
         }
-        return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isStreaming={isStreaming} />;
-      }
-      return (
-        <code
-          className="markdown-inline-code"
-          {...props}
-        >
-          {children}
-        </code>
-      );
-    },
-    pre({ children }) {
-      return <>{children}</>;
-    },
-    a({ href, children, ...props }) {
-      // `node` is react-markdown metadata, not a DOM attribute.
-      delete props.node;
-      const filePath = onOpenFile ? resolveLocalFileHref(href, cwd) : null;
-      const openFile = onOpenFile;
-      if (!filePath || !openFile) {
         return (
-          <a href={href} {...props} target="_blank" rel="noopener noreferrer">
+          <code className="markdown-inline-code" {...props}>
+            {children}
+          </code>
+        );
+      },
+      pre({ children }) {
+        return <>{children}</>;
+      },
+      a({ href, children, ...props }) {
+        // `node` is react-markdown metadata, not a DOM attribute.
+        delete props.node;
+        const filePath = onOpenFile ? resolveLocalFileHref(href, cwd) : null;
+        const openFile = onOpenFile;
+        if (!filePath || !openFile) {
+          return (
+            <a href={href} {...props} target="_blank" rel="noopener noreferrer">
+              {children}
+            </a>
+          );
+        }
+
+        const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+          if (event.defaultPrevented || event.button !== 0) return;
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          const target = event.currentTarget.getAttribute("target");
+          if (target && target !== "_self") return;
+          event.preventDefault();
+          openFile(filePath);
+        };
+
+        return (
+          <a href={href} {...props} onClick={handleClick}>
             {children}
           </a>
         );
-      }
-
-      const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-        if (event.defaultPrevented || event.button !== 0) return;
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        const target = event.currentTarget.getAttribute("target");
-        if (target && target !== "_self") return;
-        event.preventDefault();
-        openFile(filePath);
-      };
-
-      return (
-        <a href={href} {...props} onClick={handleClick}>
-          {children}
-        </a>
-      );
-    },
-    img({ src, alt, ...props }) {
-      delete props.node;
-      if (typeof src !== "string") return null;
-      return <MarkdownImage src={src} alt={alt} baseDir={cwd} sourceSessionId={sessionId} imgProps={props} />;
-    },
-    table({ children }) {
-      return (
-        <div className="markdown-table-wrap">
-          <table>{children}</table>
-        </div>
-      );
-    },
-  }), [cwd, isStreaming, onOpenFile, sessionId]);
+      },
+      img({ src, alt, ...props }) {
+        delete props.node;
+        if (typeof src !== "string") return null;
+        return (
+          <MarkdownImage
+            src={src}
+            alt={alt}
+            baseDir={cwd}
+            sourceSessionId={sessionId}
+            imgProps={props}
+          />
+        );
+      },
+      table({ children }) {
+        return (
+          <div className="markdown-table-wrap">
+            <table>{children}</table>
+          </div>
+        );
+      },
+    }),
+    [cwd, isStreaming, onOpenFile, sessionId],
+  );
 
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>

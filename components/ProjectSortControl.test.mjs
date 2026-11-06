@@ -8,7 +8,9 @@ const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
-const { ProjectSortControl, shouldDismissOnBlur, sortMenuKeyAction } = await jiti.import("./ProjectSortControl.tsx");
+const { ProjectSortControl, shouldDismissOnBlur, sortMenuKeyAction } = await jiti.import(
+  "./ProjectSortControl.tsx",
+);
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 const TRIGGER_LABEL = "Sort projects";
@@ -133,14 +135,20 @@ test("keeps the sort options out of the tab order so Tab leaves the control", ()
   const html = renderControl({ open: true });
 
   for (const snippet of menuItemSnippets(html)) {
-    assert.ok(snippet.includes('tabindex="-1"'), `expected a roving-focus menu item, got ${snippet}`);
+    assert.ok(
+      snippet.includes('tabindex="-1"'),
+      `expected a roving-focus menu item, got ${snippet}`,
+    );
   }
 });
 
 test("renders the menu labels in zh-CN", () => {
   const html = renderControl({ open: true, mode: "name" }, "zh-CN");
 
-  assert.ok(triggerTag(html, "项目排序").includes('aria-label="项目排序"'), "expected the localized trigger label");
+  assert.ok(
+    triggerTag(html, "项目排序").includes('aria-label="项目排序"'),
+    "expected the localized trigger label",
+  );
   assert.equal(menuItemSnippets(html).length, 2, "expected one menu item per sort mode");
   assert.equal(ariaCheckedOf(menuItemFor(html, "按最近活动")), "false");
   assert.equal(ariaCheckedOf(menuItemFor(html, "按名称")), "true");
@@ -178,7 +186,11 @@ test("leaves Tab to the browser so focus moves out of the menu instead of closin
 
 test("leaves unrelated keys and an empty menu to the browser", () => {
   for (const key of ["Enter", " ", "a", "PageDown"]) {
-    assert.equal(sortMenuKeyAction(key, 0, 2), null, `expected "${key}" to keep the default behavior`);
+    assert.equal(
+      sortMenuKeyAction(key, 0, 2),
+      null,
+      `expected "${key}" to keep the default behavior`,
+    );
   }
   assert.equal(sortMenuKeyAction("ArrowDown", -1, 0), null);
   assert.equal(sortMenuKeyAction("Escape", -1, 0), null);

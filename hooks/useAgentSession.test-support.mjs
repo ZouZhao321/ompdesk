@@ -15,9 +15,13 @@ export const callbacks = new Map();
 export const declarations = new Map();
 
 function collect(node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
-    && node.initializer && ts.isCallExpression(node.initializer)
-    && node.initializer.expression.getText(ast) === "useCallback") {
+  if (
+    ts.isVariableDeclaration(node) &&
+    ts.isIdentifier(node.name) &&
+    node.initializer &&
+    ts.isCallExpression(node.initializer) &&
+    node.initializer.expression.getText(ast) === "useCallback"
+  ) {
     callbacks.set(node.name.text, node.initializer.arguments[0].getText(ast));
   }
   if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
@@ -40,7 +44,9 @@ export function callback(name, bindings) {
   const { outputText } = ts.transpileModule(`const callback = ${implementation};`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   });
-  const fn = new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(...Object.values(bindings));
+  const fn = new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(
+    ...Object.values(bindings),
+  );
   return (...args) => {
     try {
       return fn(...args);

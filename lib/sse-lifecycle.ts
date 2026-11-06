@@ -39,9 +39,11 @@ interface SseLogFields {
 
 /** Correlation id from the request wrapper, then the proxy header; direct calls get a fresh one. */
 export function resolveSseRequestId(request: Request): string {
-  return getLogContext()?.requestId
-    || request.headers.get(REQUEST_ID_HEADER)?.trim()
-    || globalThis.crypto.randomUUID();
+  return (
+    getLogContext()?.requestId ||
+    request.headers.get(REQUEST_ID_HEADER)?.trim() ||
+    globalThis.crypto.randomUUID()
+  );
 }
 
 function correlationFields(fields: SseLogFields): Record<string, unknown> {
@@ -65,10 +67,7 @@ interface SseLifecycleOptions {
   now?: () => number;
 }
 
-function createSseLifecycle(
-  fields: SseLogFields,
-  options: SseLifecycleOptions = {},
-): SseLifecycle {
+function createSseLifecycle(fields: SseLogFields, options: SseLifecycleOptions = {}): SseLifecycle {
   const now = options.now ?? (() => performance.now());
   const startedAt = now();
   let closed = false;

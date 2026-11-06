@@ -39,7 +39,10 @@ export function orderProjectPaths(
   const ordered = [...projects];
   if (mode === "name") {
     ordered.sort((left, right) => {
-      const byName = projectNameCollator.compare(projectDisplayName(left), projectDisplayName(right));
+      const byName = projectNameCollator.compare(
+        projectDisplayName(left),
+        projectDisplayName(right),
+      );
       if (byName !== 0) return byName;
       // 完整路径按码元比较：collator 会忽略大小写与数字写法，无法决定先后。
       return left < right ? -1 : left > right ? 1 : 0;

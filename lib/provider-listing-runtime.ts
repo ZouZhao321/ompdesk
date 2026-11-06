@@ -33,7 +33,9 @@ export async function collectProviderListingInputs(): Promise<ProviderListingInp
     });
   }
 
-  const descriptorsById = new Map(PROVIDER_DESCRIPTORS.map((descriptor) => [descriptor.providerId, descriptor]));
+  const descriptorsById = new Map(
+    PROVIDER_DESCRIPTORS.map((descriptor) => [descriptor.providerId, descriptor]),
+  );
   const ids = new Set<string>([
     ...modelCounts.keys(),
     ...oauthByProvider.keys(),
@@ -43,7 +45,9 @@ export async function collectProviderListingInputs(): Promise<ProviderListingInp
   const credentialTypes = new Map<string, ProviderCredentialType>();
   for (const id of ids) {
     const stored = authStorage.credentials.list(id);
-    const type: ProviderCredentialType | undefined = stored.some((entry) => entry.credential.type === "oauth")
+    const type: ProviderCredentialType | undefined = stored.some(
+      (entry) => entry.credential.type === "oauth",
+    )
       ? "oauth"
       : stored.length > 0
         ? "api_key"

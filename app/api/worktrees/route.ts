@@ -2,9 +2,20 @@ import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
 import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { existsSync } from "fs";
-import { ensureWorktree, listBranches, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
+import {
+  ensureWorktree,
+  listBranches,
+  listWorktrees,
+  removeWorktree,
+  resolveProject,
+} from "@/lib/worktree";
 import type { BranchInfo, WorktreeInfo } from "@/lib/worktree";
-import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
+import {
+  allowFileRoot,
+  getAllowedFileRoots,
+  isExistingFilePathAllowed,
+  isFilePathAllowed,
+} from "@/lib/file-access";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 /** Same gate as /api/files: only session cwds / project roots / explicitly
@@ -41,8 +52,8 @@ async function getRouteHandler(req: Request) {
     const project = await resolveProject(cwd);
     const listCwd = cwdExists ? cwd : project.projectRoot;
     if (listCwd !== cwd) {
-    const listDenied = await checkCwdAllowed(listCwd);
-    if (listDenied) return listDenied;
+      const listDenied = await checkCwdAllowed(listCwd);
+      if (listDenied) return listDenied;
     }
 
     let worktrees: WorktreeInfo[] = [];
@@ -88,7 +99,7 @@ export const POST = withRequestLog("/api/worktrees", async (req: Request) => {
   let cwd: string | undefined;
   let branch: string | undefined;
   try {
-    const body = await req.json() as { cwd?: string; branch?: string; create?: boolean };
+    const body = (await req.json()) as { cwd?: string; branch?: string; create?: boolean };
     cwd = body.cwd;
     branch = body.branch;
     if (!body.cwd || typeof body.cwd !== "string") {
@@ -107,8 +118,13 @@ export const POST = withRequestLog("/api/worktrees", async (req: Request) => {
       return NextResponse.json({ error: `Directory does not exist: ${body.cwd}` }, { status: 400 });
     }
 
-    const result = await ensureWorktree(body.cwd, body.branch, { createBranch: body.create === true });
-    auditSuccess(result.reused ? "worktree.reuse" : "worktree.create", result.path, { cwd: body.cwd, branch: body.branch });
+    const result = await ensureWorktree(body.cwd, body.branch, {
+      createBranch: body.create === true,
+    });
+    auditSuccess(result.reused ? "worktree.reuse" : "worktree.create", result.path, {
+      cwd: body.cwd,
+      branch: body.branch,
+    });
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -129,7 +145,7 @@ export const DELETE = withRequestLog("/api/worktrees", async (req: Request) => {
   let cwd: string | undefined;
   let worktreePath: string | undefined;
   try {
-    const body = await req.json() as { cwd?: string; path?: string; force?: boolean };
+    const body = (await req.json()) as { cwd?: string; path?: string; force?: boolean };
     cwd = body.cwd;
     worktreePath = body.path;
     if (!body.cwd || typeof body.cwd !== "string") {

@@ -1,7 +1,4 @@
-import {
-  MAX_ATTACHED_IMAGES,
-  isBase64ImageWithinLimits,
-} from "./image-attachments";
+import { MAX_ATTACHED_IMAGES, isBase64ImageWithinLimits } from "./image-attachments";
 
 export interface ChatDraftImage {
   data: string;
@@ -72,12 +69,7 @@ export function restoreDraftSubmission(
   images?: ChatDraftImage[],
 ): ChatDraft {
   const current = getDraft(key) ?? { value: "", images: [] };
-  const restored = mergeRestoredSubmissionDraft(
-    text,
-    images,
-    current.value,
-    current.images,
-  );
+  const restored = mergeRestoredSubmissionDraft(text, images, current.value, current.images);
   setDraft(key, restored);
   return restored;
 }
@@ -90,9 +82,10 @@ export function rekeyDraft(
   if (previousKey === nextKey) return currentDraft ? cloneDraft(currentDraft) : getDraft(nextKey);
 
   const storedPrevious = getDraft(previousKey);
-  const previous = currentDraft && !isEmptyDraft(currentDraft)
-    ? cloneDraft(currentDraft)
-    : (storedPrevious ?? (currentDraft ? cloneDraft(currentDraft) : null));
+  const previous =
+    currentDraft && !isEmptyDraft(currentDraft)
+      ? cloneDraft(currentDraft)
+      : (storedPrevious ?? (currentDraft ? cloneDraft(currentDraft) : null));
   const next = getDraft(nextKey);
   clearDraft(previousKey);
   if (!previous) return next;

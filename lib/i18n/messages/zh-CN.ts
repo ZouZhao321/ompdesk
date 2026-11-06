@@ -110,7 +110,8 @@ export const zhCNLocale: LocalePlugin = {
     "subagents.transcriptUnavailable": "实时记录暂不可用。子代理运行期间将继续重试。",
     "comments.title": "注释互译",
     "comments.summary": "扫描 {files} 个 TS 文件 · 共 {total} 条 · 排除 {excluded} 条",
-    "comments.scope": "识别 .ts 与 .tsx 中的 // 单行与 /* */ 块注释；排除纯符号横幅与单个单词的标题",
+    "comments.scope":
+      "识别 .ts 与 .tsx 中的 // 单行与 /* */ 块注释；排除纯符号横幅与单个单词的标题",
     "comments.loading": "正在扫描注释…",
     "comments.empty": "没有找到注释",
     "comments.error": "注释加载失败",
@@ -126,7 +127,8 @@ export const zhCNLocale: LocalePlugin = {
     "comments.saveFailed": "译文保存失败",
     "comments.emptyTranslation": "译文不能为空",
     "comments.deleteDictionary": "删除字典",
-    "comments.deleteDictionaryConfirm": "确定删除整个注释字典？所有已保存的译文都会丢失，且无法恢复。",
+    "comments.deleteDictionaryConfirm":
+      "确定删除整个注释字典？所有已保存的译文都会丢失，且无法恢复。",
     "comments.deleteFailed": "字典删除失败",
     "comments.translationPrefix": "翻译：",
     "comments.previewTitle": "在代码中的样子",
@@ -155,7 +157,8 @@ export const zhCNLocale: LocalePlugin = {
     "sidebar.pinnedProject": "已置顶",
     "sidebar.removeProject": "从侧边栏移除",
     "sidebar.removeProjectTitle": "从侧边栏移除此项目",
-    "sidebar.removeProjectBusy": "此工作区有 {count} 个会话正在运行或等待回答，移除后它们仍会继续运行。",
+    "sidebar.removeProjectBusy":
+      "此工作区有 {count} 个会话正在运行或等待回答，移除后它们仍会继续运行。",
     "sidebar.removeProjectAnyway": "仍要移除",
     "sidebar.expandProject": "展开项目",
     "sidebar.collapseProject": "收起项目",
@@ -338,7 +341,8 @@ export const zhCNLocale: LocalePlugin = {
     "chat.modelRoles": "角色",
     "chat.allModels": "全部模型",
     "roles.title": "模型角色",
-    "roles.description": "omp 按角色分派任务，而非只用一个当前模型。为每个角色分配模型后，ompdesk 与 omp 命令行都会使用该配置。",
+    "roles.description":
+      "omp 按角色分派任务，而非只用一个当前模型。为每个角色分配模型后，ompdesk 与 omp 命令行都会使用该配置。",
     "roles.scope": "保存到",
     "roles.scopeGlobal": "全局",
     "roles.scopeProject": "当前项目",
@@ -585,7 +589,8 @@ export const zhCNLocale: LocalePlugin = {
     "i18n.packageEnabled": "包已启用。",
     "i18n.sessionReloaded": "会话已重新加载。",
     "i18n.thinking": "思考",
-    "i18n.largeMessageReveal": "消息内容过大（{size}）。点击以纯文本查看 — 已禁用 markdown 渲染以避免页面卡顿。",
+    "i18n.largeMessageReveal":
+      "消息内容过大（{size}）。点击以纯文本查看 — 已禁用 markdown 渲染以避免页面卡顿。",
     "i18n.loadingThinking": "正在加载思考内容...",
     "i18n.copyMessage": "复制消息",
     "i18n.editFromHere": "从此处编辑",

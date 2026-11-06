@@ -86,7 +86,8 @@ function parseInstallCount(installs: string): number {
   if (!match) return 0;
   const value = Number(match[1]);
   if (!Number.isFinite(value)) return 0;
-  const multiplier = match[2] === "B" ? 1_000_000_000 : match[2] === "M" ? 1_000_000 : match[2] === "K" ? 1_000 : 1;
+  const multiplier =
+    match[2] === "B" ? 1_000_000_000 : match[2] === "M" ? 1_000_000 : match[2] === "K" ? 1_000 : 1;
   return value * multiplier;
 }
 
@@ -100,11 +101,17 @@ export const POST = withRequestLog("/api/skills/search", async (req: Request) =>
   }
 
   try {
-    const { query: rawQuery, limit: rawLimit } = await req.json() as { query?: unknown; limit?: unknown };
+    const { query: rawQuery, limit: rawLimit } = (await req.json()) as {
+      query?: unknown;
+      limit?: unknown;
+    };
     const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
     if (!query) return NextResponse.json({ error: "query required" }, { status: 400 });
     if (query.length > MAX_QUERY_LENGTH) {
-      return NextResponse.json({ error: `query must be ${MAX_QUERY_LENGTH} characters or fewer` }, { status: 400 });
+      return NextResponse.json(
+        { error: `query must be ${MAX_QUERY_LENGTH} characters or fewer` },
+        { status: 400 },
+      );
     }
     const limit = parseLimit(rawLimit);
 
@@ -126,8 +133,11 @@ export const POST = withRequestLog("/api/skills/search", async (req: Request) =>
     const raw = redactNpxOutput((err.stdout ?? "") + (err.stderr ?? ""));
     const results = raw ? parseSearchOutput(raw) : [];
     if (results.length > 0) return NextResponse.json({ results });
-    return NextResponse.json({
-      error: redactNpxOutput(err.message ?? "Skill search failed").slice(-500),
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: redactNpxOutput(err.message ?? "Skill search failed").slice(-500),
+      },
+      { status: 500 },
+    );
   }
 });
