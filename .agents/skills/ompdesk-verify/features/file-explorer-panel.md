@@ -6,6 +6,7 @@
 - 页签栏：打开多个文件、切换、关闭
 - EXPLORER 文件树：展开目录、按名称筛选、刷新、上传
 - 变更计数：当前 cwd 的 git 变更文件数
+- Git 标签页：顶部分支下拉，显示当前分支，可切换 checkout 或新建 worktree
 - 手机档：全屏覆盖，关闭按钮在顶栏
 
 ## How to get to it (user POV)
@@ -18,7 +19,8 @@
 2. 没有打开文件时，`.panel-tab-header` 显示项目名或 `files.explorer` 文案。
 3. 在文件树里点一个文件：`.panel-tab-bar` 出现页签，同时内容区渲染文件正文。
 4. 关闭页签，断言回到项目名表头。
-5. 手机档 390×844：面板是全屏覆盖，关闭后 `#file-panel` 带 `right-panel-closed`。
+5. 切到 Git 标签页：`[data-branch-switcher]` 的值是当前分支名。点开它，选另一个分支；`[data-branch-switcher]` 变成选中分支，侧栏仍停在同一个项目下，已打开的会话不消失。
+6. 手机档 390×844：面板是全屏覆盖，关闭后 `#file-panel` 带 `right-panel-closed`。
 
 ## Gotchas
 
