@@ -334,7 +334,7 @@ test("labels an image-only queued message", () => {
         onSend() {},
         onAbort() {},
         isStreaming: false,
-        queuedMessages: { steering: [""], followUp: [] },
+        queuedMessages: { steering: ["[Image]"], followUp: [] },
       }),
     ),
   );

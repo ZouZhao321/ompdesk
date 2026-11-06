@@ -385,9 +385,8 @@ export interface ChatInputHandle {
   focus: () => void;
   insertText: (text: string) => void;
   insertIfEmpty: (content: string) => void;
-  prependText: (text: string) => void;
   addImages: (files: File[]) => void;
-  restoreSubmission: (text: string, images?: Array<{ data: string; mimeType: string }>, targetDraftKey?: string) => void;
+  restoreSubmission: (text: string, images?: Array<{ data: string; mimeType: string }>, targetDraftKey?: string) => number;
   rekeyDraft?: (previousKey: string, nextKey: string) => void;
 }
 
@@ -547,6 +546,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const newSessionModelOverrideRef = useRef<SelectedModel | null>(null);
   const thinkingLevelOverrideRef = useRef<ThinkingLevelOption | null>(null);
   const promptRunIdRef = useRef(0);
+  const promptSettleKeysRef = useRef(new Set<string>());
   const contextUsageRequestIdRef = useRef(0);
   const optimisticUserMessageKeyRef = useRef<string | null>(null);
   const modelSwitchPendingRef = useRef(false);
@@ -1326,33 +1326,42 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, settleUiStage]);
 
   const waitForPromptSettlement = useCallback(async (sid: string, runId?: number) => {
-    await delay(PROMPT_SETTLE_INITIAL_DELAY_MS);
-    const startedAt = Date.now();
+    const settleKey = `${sid}:${runId ?? "auto"}`;
+    if (promptSettleKeysRef.current.has(settleKey)) return;
+    promptSettleKeysRef.current.add(settleKey);
+    try {
+      await delay(PROMPT_SETTLE_INITIAL_DELAY_MS);
+      const startedAt = Date.now();
 
-    while (agentRunningRef.current && Date.now() - startedAt < PROMPT_SETTLE_MAX_MS) {
-      if (!mountedRef.current || sessionIdRef.current !== sid) return;
-      if (runId !== undefined && promptRunIdRef.current !== runId) return;
-      try {
-        const requestedRuntimeId = runtimeIdRef.current;
-        const res = await fetch(`/api/agent/${encodeURIComponent(requestedRuntimeId ?? sid)}`);
-        if (res.ok) {
-          const data = await res.json() as { running?: boolean; state?: AgentStateResponse };
-          if (runId !== undefined && promptRunIdRef.current !== runId) return;
-          const state = data.state;
-          if (followRuntimeState(state, sid, requestedRuntimeId)) {
-            await delay(PROMPT_SETTLE_POLL_MS);
-            continue;
+      while (agentRunningRef.current && Date.now() - startedAt < PROMPT_SETTLE_MAX_MS) {
+        if (!mountedRef.current || sessionIdRef.current !== sid) return;
+        if (runId !== undefined && promptRunIdRef.current !== runId) return;
+        try {
+          const requestedRuntimeId = runtimeIdRef.current;
+          const res = await fetch(`/api/agent/${encodeURIComponent(requestedRuntimeId ?? sid)}`);
+          if (res.ok) {
+            const data = await res.json() as { running?: boolean; state?: AgentStateResponse };
+            if (runId !== undefined && promptRunIdRef.current !== runId) return;
+            const state = data.state;
+            if (followRuntimeState(state, sid, requestedRuntimeId)) {
+              await delay(PROMPT_SETTLE_POLL_MS);
+              continue;
+            }
+            sid = sessionIdRef.current ?? sid;
+            const busy = Boolean(data.running && state
+              && (state.isStreaming || state.isPromptRunning || state.isCompacting || state.isHandoffRunning));
+            if (!busy) {
+              await finishPromptWithoutStream(sid, runId);
+              return;
+            }
           }
-          sid = sessionIdRef.current ?? sid;
-          if (!data.running || !state || (!state.isStreaming && !state.isPromptRunning)) {
-            await finishPromptWithoutStream(sid, runId);
-            return;
-          }
+        } catch {
+          // SSE remains the primary completion path.
         }
-      } catch {
-        // SSE remains the primary completion path.
+        await delay(PROMPT_SETTLE_POLL_MS);
       }
-      await delay(PROMPT_SETTLE_POLL_MS);
+    } finally {
+      promptSettleKeysRef.current.delete(settleKey);
     }
   }, [finishPromptWithoutStream, followRuntimeState]);
 
@@ -1526,8 +1535,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const terminalEnd = event.isTerminal !== false && event.yielded !== false;
         if (terminalEnd) {
           sdkAgentActiveRef.current = false;
-          settleUiStage();
-          notifyPromptStage(promptRunIdRef.current);
+          const wasRunning = settleUiStage();
+          if (wasRunning) {
+            notifiedPromptRunIdRef.current = promptRunIdRef.current;
+            onAgentEnd?.(sessionIdRef.current ?? undefined);
+          }
           if (sessionIdRef.current) scheduleEventStreamClose(sessionIdRef.current);
         }
         if (sessionIdRef.current) {
@@ -1541,6 +1553,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
+              if (d.state?.isCompacting !== undefined) setIsCompacting(d.state.isCompacting);
               if (d.state?.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, d.state?.subagents ?? []));
               if (d.state?.goal !== undefined) setGoalStatus(d.state.goal ?? null);
               // Aborted turns can leave messages queued in pi (delivered with the
@@ -1773,7 +1786,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage, onAgentEnd]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -2501,7 +2514,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         .flatMap((entry) => entry.images ?? [])
         .map(({ data, mimeType }) => ({ data, mimeType }));
       if (mountedRef.current && (text || images.length > 0)) {
-        opts.chatInputRef?.current?.restoreSubmission(text, images.length ? images : undefined);
+        const dropped = opts.chatInputRef?.current?.restoreSubmission(text, images.length ? images : undefined) ?? 0;
+        if (dropped > 0) {
+          addNotice({ type: "error", message: `Recalled queued messages, but ${dropped} image(s) did not fit in the input box` });
+        }
       }
     } catch (e) {
       console.error("Failed to recall queued messages:", e);

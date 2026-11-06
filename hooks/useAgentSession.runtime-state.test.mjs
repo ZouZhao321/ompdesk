@@ -26,6 +26,7 @@ function harness() {
     historyRequestRef: { current: 0 },
     contextUsageRequestIdRef: { current: 0 },
     promptRunIdRef: { current: 1 },
+    promptSettleKeysRef: { current: new Set() },
     bashRecoveryIdRef: { current: 0 },
     agentRunningRef: { current: true },
     bashRunningRef: { current: true },

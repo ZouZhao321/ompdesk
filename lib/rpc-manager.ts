@@ -1215,10 +1215,16 @@ export class AgentSessionWrapper {
         // Full clear only: omp has no single-item dequeue, and clear+requeue
         // races against the agent loop pulling messages mid-flight.
         const cleared = this.inner.clearQueue();
-        const toRestored = (message: { text: string; images?: unknown[] }) => ({
-          text: message.text,
-          ...(message.images?.length ? { images: message.images } : {}),
-        });
+        const toRestored = (message: { text?: string; images?: unknown[] } | string) => {
+          if (typeof message === "string") return { text: message };
+          const images = message.images?.length ? message.images : undefined;
+          const text = message.text ?? "";
+          return {
+            // 纯图片条目的 chip 文本是固定占位，召回时不能写进输入框。
+            text: text === "[Image]" && images ? "" : text,
+            ...(images ? { images } : {}),
+          };
+        };
         return {
           steering: cleared.steering.map(toRestored),
           followUp: cleared.followUp.map(toRestored),
