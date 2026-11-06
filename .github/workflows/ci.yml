@@ -89,6 +89,11 @@ jobs:
       # 生产图谱，开发图谱里把 node: 内置模块带进 edge 或浏览器产物的错误能绕开它，
       # 表现成页面 500；冒烟失败时打印编译日志。
       - name: Verify (typecheck, export references, coverage, build, dev smoke)
+        # 堆叠 PR 的合并目标是上一层分支，覆盖率门禁按同一个合并目标算改动清单：
+        # 只看本 PR 自己的增量，不把上一层引入的文件重复判一遍。推到 main 时 base_ref
+        # 为空，退回 origin/main。
+        env:
+          COVERAGE_GATE_BASE: origin/${{ github.base_ref || 'main' }}
         run: bun run ci
 
       # 覆盖率产物随构建一起保留，事后可以拿同一份 lcov 复核报告里的数字。路径与
