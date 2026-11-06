@@ -679,6 +679,7 @@ export class AgentSessionWrapper {
     invocation: ResolvedSkillInvocation,
     images: Array<{ type: "image"; data: string; mimeType: string }> | undefined,
     streamingBehavior: "steer" | "followUp" | undefined,
+    chipText: string,
   ): Promise<boolean> {
     return (async () => {
       const built = await buildSkillPromptMessage(invocation.skill, invocation.parsed, "user");
@@ -693,7 +694,11 @@ export class AgentSessionWrapper {
           details: built.details,
           attribution: "user",
         },
-        streamingBehavior ? { streamingBehavior } : undefined,
+        {
+          ...(streamingBehavior ? { streamingBehavior } : {}),
+          // The queued chip shows what the operator typed, not the envelope.
+          queueChipText: chipText,
+        },
       );
     })();
   }
@@ -982,7 +987,7 @@ export class AgentSessionWrapper {
         try {
           const skillInvocation = this.resolveSkillInvocation(command.message as string);
           running = skillInvocation
-            ? this.dispatchSkillInvocation(skillInvocation, promptImages, streamingBehavior)
+            ? this.dispatchSkillInvocation(skillInvocation, promptImages, streamingBehavior, command.message as string)
             : this.inner.prompt(command.message as string, {
               ...(promptImages?.length ? { images: promptImages } : {}),
               ...(streamingBehavior ? { streamingBehavior } : {}),
@@ -1132,33 +1137,33 @@ export class AgentSessionWrapper {
           const sessionDir = sessionManager.getSessionDir();
           let newSessionFile: string;
 
-        // The map forks after a whole turn (includeEntry), the chat Fork button
-        // before the selected message (entry.parentId).
-        const cutEntryId = command.includeEntry === true ? entryId : entry.parentId;
-        if (!cutEntryId) {
-          // Fork before the first message: create an empty session linked to this one
-          const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
-          await newManager.newSession({ parentSession: currentSessionFile });
-          await newManager.ensureOnDisk();
-          newSessionFile = newManager.getSessionFile() as string;
-        } else {
-          // Copy the path up to and including the cut entry.
-          const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
-          const forkedPath = sourceManager.createBranchedSession(cutEntryId);
-          if (!forkedPath) throw new Error("Failed to create forked session");
-          newSessionFile = forkedPath;
-        }
+          // The map forks after a whole turn (includeEntry), the chat Fork button
+          // before the selected message (entry.parentId).
+          const cutEntryId = command.includeEntry === true ? entryId : entry.parentId;
+          if (!cutEntryId) {
+            // Fork before the first message: create an empty session linked to this one
+            const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
+            await newManager.newSession({ parentSession: currentSessionFile });
+            await newManager.ensureOnDisk();
+            newSessionFile = newManager.getSessionFile() as string;
+          } else {
+            // Copy the path up to and including the cut entry.
+            const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
+            const forkedPath = sourceManager.createBranchedSession(cutEntryId);
+            if (!forkedPath) throw new Error("Failed to create forked session");
+            newSessionFile = forkedPath;
+          }
 
-        newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
-        cacheSessionPath(newSessionId, newSessionFile);
-        invalidateSessionListCache();
-      } catch (error) {
-        writeAgentRunRecords(this.runLog.command("fork", {
-          ok: false,
-          durationMs: performance.now() - startedAt,
-          error,
-        }));
-        throw error;
+          newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
+          cacheSessionPath(newSessionId, newSessionFile);
+          invalidateSessionListCache();
+        } catch (error) {
+          writeAgentRunRecords(this.runLog.command("fork", {
+            ok: false,
+            durationMs: performance.now() - startedAt,
+            error,
+          }));
+          throw error;
         }
 
         // The fork is committed from here on: its result is recorded before the
@@ -1281,17 +1286,27 @@ export class AgentSessionWrapper {
 
       case "steer": {
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.withRunCommand("steer", () =>
-          this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined)
-        );
+        await this.withRunCommand("steer", async () => {
+          const skillInvocation = this.resolveSkillInvocation(command.message as string);
+          if (skillInvocation) {
+            await this.dispatchSkillInvocation(skillInvocation, steerImages, "steer", command.message as string);
+            return;
+          }
+          await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+        });
         return null;
       }
 
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.withRunCommand("follow_up", () =>
-          this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined)
-        );
+        await this.withRunCommand("follow_up", async () => {
+          const skillInvocation = this.resolveSkillInvocation(command.message as string);
+          if (skillInvocation) {
+            await this.dispatchSkillInvocation(skillInvocation, followImages, "followUp", command.message as string);
+            return;
+          }
+          await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+        });
         return null;
       }
 
@@ -1322,7 +1337,7 @@ export class AgentSessionWrapper {
           output: (text) => {
             output.push(text);
           },
-          refreshCommands: () => {},
+          refreshCommands: () => { },
           reloadPlugins: async () => {
             await this.waitForExtensionsBound();
             this.extensionStatuses.clear();
@@ -1726,7 +1741,7 @@ export class AgentSessionWrapper {
           notifyType: type,
         } as ExtensionUiRequest as AgentEvent);
       },
-      onTerminalInput: () => () => {},
+      onTerminalInput: () => () => { },
       setStatus: (key, text) => {
         if (text === undefined) this.extensionStatuses.delete(key);
         else this.extensionStatuses.set(key, text);
@@ -1738,10 +1753,10 @@ export class AgentSessionWrapper {
           statusText: text,
         } as ExtensionUiRequest as AgentEvent);
       },
-      setWorkingMessage: () => {},
-      setWorkingVisible: () => {},
-      setWorkingIndicator: () => {},
-      setHiddenThinkingLabel: () => {},
+      setWorkingMessage: () => { },
+      setWorkingVisible: () => { },
+      setWorkingIndicator: () => { },
+      setHiddenThinkingLabel: () => { },
       setWidget: (key, content, options) => {
         if (content !== undefined && !Array.isArray(content)) return;
         if (content === undefined) {
@@ -1762,8 +1777,8 @@ export class AgentSessionWrapper {
           widgetPlacement: options?.placement,
         } as ExtensionUiRequest as AgentEvent);
       },
-      setFooter: () => {},
-      setHeader: () => {},
+      setFooter: () => { },
+      setHeader: () => { },
       setTitle: (title) => {
         this.emit({
           type: "extension_ui_request",
@@ -1790,15 +1805,15 @@ export class AgentSessionWrapper {
         } as ExtensionUiRequest as AgentEvent);
       },
       getEditorText: () => "",
-      addAutocompleteProvider: () => {},
-      setEditorComponent: () => {},
+      addAutocompleteProvider: () => { },
+      setEditorComponent: () => { },
       getEditorComponent: () => undefined,
       get theme() { return PLAIN_TEXT_THEME; },
       getAllThemes: () => [],
       getTheme: () => undefined,
       setTheme: () => ({ success: false, error: "Theme switching is not supported in ompdesk extension UI yet" }),
       getToolsExpanded: () => false,
-      setToolsExpanded: () => {},
+      setToolsExpanded: () => { },
     };
   }
 }
