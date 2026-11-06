@@ -14,6 +14,7 @@ import { useDisplaySettings } from "@/hooks/useDisplaySettings";
 import { planDeferredContent, settleDeferredContent, thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
+import { skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import type {
@@ -249,8 +250,12 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     return null;
   }
   if (message.role === "custom") {
-    if ((message as CustomMessage).customType === "compaction") {
+    const customType = (message as CustomMessage).customType;
+    if (customType === "compaction") {
       return <CompactionMessageView message={message as CustomMessage} />;
+    }
+    if (customType === "skill-prompt") {
+      return <SkillPromptMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
     }
     return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
   }
@@ -1851,6 +1856,92 @@ function CompactionFileList({ title, files }: { title: string; files: string[] }
           <li key={file}>{file}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * A user-invoked `/skill:name args` turn. It reads as a user bubble with the
+ * command as its title; the skill envelope stays folded until asked for, so a
+ * long skill body never pushes the conversation down.
+ */
+function SkillPromptMessageView({ message, cwd, onOpenFile, sessionId }: { message: CustomMessage; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string }) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  const command = skillPromptCommandLabel(message.details as SkillPromptDetailsLike | undefined);
+  const body = getMessageText(message.content);
+  const images = getMessageImages(message.content);
+
+  return (
+    <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "85%" }}>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: "var(--user-bg)",
+            border: "1px solid rgba(59,130,246,0.2)",
+            borderRadius: 12,
+            padding: "8px 12px",
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: "var(--text)",
+            wordBreak: "break-word",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <code
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 13,
+                color: "var(--accent)",
+                wordBreak: "break-all",
+              }}
+            >
+              {command}
+            </code>
+            <button
+              onClick={() => setExpanded((value) => !value)}
+              className="message-action-button"
+              style={{
+                marginLeft: "auto",
+                padding: "2px 6px",
+                border: "none",
+                background: "none",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+                fontSize: 11,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {expanded ? t("i18n.collapse") : t("i18n.expand")}
+            </button>
+          </div>
+          {images.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: body || expanded ? 8 : 0 }}>
+              {images.map((img, i) => {
+                const src = imageSource(img);
+                if (!src) return null;
+                return (
+                  <ZoomableImage
+                    key={i}
+                    src={src}
+                    thumbnail
+                    imgStyle={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid rgba(59,130,246,0.15)" }}
+                  />
+                );
+              })}
+            </div>
+          )}
+          {expanded && (
+            <div style={{ marginTop: 8, borderTop: "1px solid rgba(59,130,246,0.2)", paddingTop: 8, maxHeight: USER_BUBBLE_MAX_HEIGHT, overflowY: "auto" }}>
+              {body
+                ? <SafeMarkdownBody className="markdown-user-message" cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId}>{body}</SafeMarkdownBody>
+                : <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.noMessage")}</span>}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
