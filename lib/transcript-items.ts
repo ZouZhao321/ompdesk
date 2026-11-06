@@ -84,7 +84,11 @@ export interface TranscriptItem {
  */
 export function isGroupAnchor(message: AgentMessage): boolean {
   if (message.role === "user") return true;
-  return message.role === "custom" && (message as CustomMessage).customType === "compaction";
+  if (message.role !== "custom") return false;
+  const customType = (message as CustomMessage).customType;
+  // A skill command is a user turn: its body is the prompt, so folding it into
+  // the process group would hide the question that produced the answer.
+  return customType === "compaction" || customType === "skill-prompt";
 }
 
 function hasFinalAssistantAnswer(message: AgentMessage, options: DisplayOptions): boolean {

@@ -1,5 +1,9 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { skillExpansionToCommand } from "@/lib/slash-display";
+import {
+  skillExpansionToCommand,
+  skillPromptCommandLabel,
+  type SkillPromptDetailsLike,
+} from "@/lib/slash-display";
 
 const MAX_TITLE_LENGTH = 80;
 /** 首条消息作为标题时保留的字符数。 */
@@ -57,10 +61,25 @@ function messageText(message: AgentMessage): string {
   return parts.join("\n").trim();
 }
 
+/** `/skill:name args` for a user-invoked skill message, which is a user turn. */
+function skillPromptText(message: AgentMessage): string | undefined {
+  if (message.role !== "custom") return undefined;
+  const custom = message as {
+    customType?: string;
+    details?: SkillPromptDetailsLike;
+  };
+  if (custom.customType !== "skill-prompt") return undefined;
+  return skillPromptCommandLabel(custom.details);
+}
+
 /** First user turn on the session's current branch. */
 export function findFirstUserMessage(messages: readonly AgentMessage[]): string | undefined {
   for (const message of messages) {
-    if (message.role !== "user") continue;
+    if (message.role !== "user") {
+      const skillCommand = skillPromptText(message);
+      if (skillCommand) return skillCommand;
+      continue;
+    }
     const text = messageText(message);
     if (text) return text;
   }

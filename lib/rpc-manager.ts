@@ -2,12 +2,16 @@ import { getSetting } from "@/lib/omp-settings";
 import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import {
   applyResolvedSystemPromptInputs,
+  buildSkillPromptMessage,
   createAgentSession,
   type CreateAgentSessionOptions,
   discoverSessionExtensionPaths,
   getAgentDir,
   initTheme,
+  parseSkillInvocation,
+  type ParsedSkillInvocation,
   SessionManager,
+  SKILL_PROMPT_MESSAGE_TYPE,
   Theme,
 } from "@oh-my-pi/pi-coding-agent";
 import { buildAvailableSlashCommands } from "@oh-my-pi/pi-coding-agent/slash-commands/available-commands";
@@ -28,6 +32,7 @@ import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
+import { skillPromptCommandLabel } from "./slash-display";
 import { untrustedProjectSessionOptions } from "./project-trust";
 import { resolveSessionSystemPrompts } from "./session-system-prompt";
 import { readDefaultModelRole } from "./model-roles";
@@ -210,6 +215,12 @@ function listTools(session: AgentSessionLike): ToolInfo[] {
 }
 
 type AvailableCommandsSession = Parameters<typeof buildAvailableSlashCommands>[0];
+
+/** A `/skill:<name>` command the session can run. */
+type ResolvedSkillInvocation = {
+  skill: AgentSessionLike["skills"][number];
+  parsed: ParsedSkillInvocation;
+};
 
 function appendSlashCommand(
   commands: SlashCommandInfo[],
@@ -646,6 +657,48 @@ export class AgentSessionWrapper {
   }
 
   /**
+   * Recognize a `/skill:<name>` draft this session can run. Hidden skills
+   * (`hide: true`) never block a user who names them; only `disabled`,
+   * unknown names, or `skills.enableSkillCommands: false` fall back to text.
+   */
+  private resolveSkillInvocation(text: string): ResolvedSkillInvocation | undefined {
+    if (this.inner.skillsSettings?.enableSkillCommands === false) return undefined;
+    const parsed = parseSkillInvocation(text);
+    if (!parsed) return undefined;
+    const skill = this.inner.skills.find((candidate) => candidate.name === parsed.name);
+    if (!skill) return undefined;
+    return { skill, parsed };
+  }
+
+  /**
+   * Deliver a skill command through the same custom-message path the SDK's own
+   * clients use: the stored content is the `<skill>` envelope, `details` keep
+   * the command for display, and the model still receives the full body.
+   */
+  private dispatchSkillInvocation(
+    invocation: ResolvedSkillInvocation,
+    images: Array<{ type: "image"; data: string; mimeType: string }> | undefined,
+    streamingBehavior: "steer" | "followUp" | undefined,
+  ): Promise<boolean> {
+    return (async () => {
+      const built = await buildSkillPromptMessage(invocation.skill, invocation.parsed, "user");
+      const content = images?.length
+        ? [{ type: "text" as const, text: built.message }, ...images]
+        : built.message;
+      return this.inner.promptCustomMessage(
+        {
+          customType: SKILL_PROMPT_MESSAGE_TYPE,
+          content,
+          display: true,
+          details: built.details,
+          attribution: "user",
+        },
+        streamingBehavior ? { streamingBehavior } : undefined,
+      );
+    })();
+  }
+
+  /**
    * Send one goal continuation turn. It is a hidden custom message rather than
    * a prompt so it does not appear as something the operator typed, but the
    * browser must still see the session go busy, exactly as for a real prompt.
@@ -927,11 +980,14 @@ export class AgentSessionWrapper {
 
         let running: Promise<boolean>;
         try {
-          running = this.inner.prompt(command.message as string, {
-            ...(promptImages?.length ? { images: promptImages } : {}),
-            ...(streamingBehavior ? { streamingBehavior } : {}),
-            userInitiated: true,
-          });
+          const skillInvocation = this.resolveSkillInvocation(command.message as string);
+          running = skillInvocation
+            ? this.dispatchSkillInvocation(skillInvocation, promptImages, streamingBehavior)
+            : this.inner.prompt(command.message as string, {
+              ...(promptImages?.length ? { images: promptImages } : {}),
+              ...(streamingBehavior ? { streamingBehavior } : {}),
+              userInitiated: true,
+            });
         } catch (error) {
           // The SDK rejected the prompt before returning a promise, so there is
           // no handler below to close the run record it just opened.
@@ -1831,12 +1887,21 @@ export function getRpcSession(sessionId: string): AgentSessionWrapper | undefine
 
 function runtimeMessageText(entry: SessionMessageEntry): string {
   if (entry.message.role === "bashExecution") return "";
+  if (entry.message.role === "custom" && entry.message.customType === "skill-prompt") {
+    return skillPromptCommandLabel(entry.message.details as { name?: string; args?: string; prompt?: string } | undefined);
+  }
   const content = entry.message.content;
   if (typeof content === "string") return content;
   return content
     .map((block) => block.type === "text" ? block.text : "")
     .filter(Boolean)
     .join(" ");
+}
+
+/** A typed prompt or a user-invoked skill command, both operator turns. */
+function isUserTurnEntry(entry: SessionMessageEntry): boolean {
+  if (entry.message.role === "user") return true;
+  return entry.message.role === "custom" && entry.message.customType === "skill-prompt";
 }
 
 function runtimeMessageActivityMs(entry: SessionMessageEntry): number | undefined {
@@ -1862,7 +1927,7 @@ export function getRpcSessionInfos(): SessionInfo[] {
       { type: string; timestamp: string } | SessionMessageEntry
     >;
     const messages = entries.filter((entry): entry is SessionMessageEntry => entry.type === "message");
-    const firstUserMessage = messages.find((entry) => entry.message.role === "user");
+    const firstUserMessage = messages.find((entry) => isUserTurnEntry(entry));
     const sessionFile = manager.getSessionFile() ?? session.sessionFile;
     const persisted = Boolean(sessionFile && existsSync(sessionFile));
 
