@@ -25,12 +25,31 @@ interface EntryViewState {
 export interface TranscriptViewStore {
   subscribe(listener: () => void): () => void;
   /** 读出展开状态；没有用户操作记录时返回 `fallback`。 */
-  isExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): boolean;
-  toggleExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): void;
+  isExpanded(
+    sessionId: string | undefined,
+    anchorEntryId: string | undefined,
+    part: string,
+    fallback: boolean,
+  ): boolean;
+  toggleExpanded(
+    sessionId: string | undefined,
+    anchorEntryId: string | undefined,
+    part: string,
+    fallback: boolean,
+  ): void;
   /** 记下取回的延迟内容；正文本身就是「已加载」的标记，写入通常不通知订阅方。 */
-  markLoaded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, content: string): void;
+  markLoaded(
+    sessionId: string | undefined,
+    anchorEntryId: string | undefined,
+    part: string,
+    content: string,
+  ): void;
   /** 已取回的延迟内容；还没取回时为 null。 */
-  loadedContent(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): string | null;
+  loadedContent(
+    sessionId: string | undefined,
+    anchorEntryId: string | undefined,
+    part: string,
+  ): string | null;
   /** 只留下这个会话的条目；切到别的会话后上一会话的正文与展开状态不再需要。 */
   retainSession(sessionId: string | undefined): void;
   /** 丢掉这个会话的条目：会话被删除后它的正文不该继续占着内存。 */
@@ -44,7 +63,11 @@ const KEY_SEPARATOR = "\u001f";
 export const MAX_VIEW_ENTRIES = 1000;
 
 // 还没落盘的新会话没有 id，统一落到同一个空会话桶里。
-function entryKey(sessionId: string | undefined, anchorEntryId: string | undefined, part: string): string {
+function entryKey(
+  sessionId: string | undefined,
+  anchorEntryId: string | undefined,
+  part: string,
+): string {
   return [sessionId ?? "", anchorEntryId ?? "", part].join(KEY_SEPARATOR);
 }
 

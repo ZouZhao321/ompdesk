@@ -64,7 +64,9 @@ export function readMemorySample(
  * `OMPDESK_MEMORY_SAMPLE_MS` 为 `0` 时关闭采样；空的、非数字、负数与短于
  * `MIN_MEMORY_SAMPLE_INTERVAL_MS` 的值一律按未配置处理，返回默认间隔。
  */
-export function resolveMemorySampleIntervalMs(env: NodeJS.ProcessEnv = process.env): number | undefined {
+export function resolveMemorySampleIntervalMs(
+  env: NodeJS.ProcessEnv = process.env,
+): number | undefined {
   const raw = env[MEMORY_SAMPLE_INTERVAL_ENV]?.trim();
   if (!raw) return DEFAULT_MEMORY_SAMPLE_INTERVAL_MS;
   const value = Number(raw);
@@ -84,7 +86,12 @@ const defaultClock: MemoryMonitorClock = {
   setInterval(callback, intervalMs) {
     const handle: unknown = setInterval(callback, intervalMs);
     // 采样器不应以自身的理由阻止进程退出。Bun 与 Node 的定时器都带 `unref`。
-    if (handle && typeof handle === "object" && "unref" in handle && typeof handle.unref === "function") {
+    if (
+      handle &&
+      typeof handle === "object" &&
+      "unref" in handle &&
+      typeof handle.unref === "function"
+    ) {
       handle.unref();
     }
     return handle;

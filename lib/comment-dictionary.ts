@@ -80,10 +80,10 @@ export function readCommentDictionary(agentDir: string): CommentDictionary {
 
   const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
   if (
-    typeof parsed !== "object"
-    || parsed === null
-    || Array.isArray(parsed)
-    || !("translations" in parsed)
+    typeof parsed !== "object" ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    !("translations" in parsed)
   ) {
     throw new Error(`Invalid comment dictionary: ${file}`);
   }
@@ -101,7 +101,10 @@ export function readCommentDictionary(agentDir: string): CommentDictionary {
 }
 
 /** 保存一条译文。键相同的记录被覆盖，原文按归一化结果存储。 */
-export function saveCommentTranslation(agentDir: string, input: CommentTranslationInput): CommentTranslationRecord {
+export function saveCommentTranslation(
+  agentDir: string,
+  input: CommentTranslationInput,
+): CommentTranslationRecord {
   const original = normalizeCommentText(input.original);
   if (!original) throw new Error("Comment text must not be empty");
   const translation = input.translation.trim();

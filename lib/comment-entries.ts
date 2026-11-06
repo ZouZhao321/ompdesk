@@ -83,9 +83,13 @@ export function extractCommentEntries(files: CommentSourceFile[]): CommentExtrac
 
   for (const file of ordered) {
     for (const comment of mergeLineComments(readComments(file.path, file.content))) {
-      const body = comment.kind === "block"
-        ? comment.body.split("\n").map((line) => line.replace(/^\s*\*+\s?/, "")).join("\n")
-        : comment.body;
+      const body =
+        comment.kind === "block"
+          ? comment.body
+              .split("\n")
+              .map((line) => line.replace(/^\s*\*+\s?/, ""))
+              .join("\n")
+          : comment.body;
       const text = normalizeCommentText(body);
       if (isExcludedComment(text)) {
         excluded++;
@@ -176,7 +180,11 @@ function mergeLineComments(comments: RawComment[]): RawComment[] {
   const merged: RawComment[] = [];
   for (const comment of comments) {
     const last = merged[merged.length - 1];
-    if (comment.kind === "line" && last?.kind === "line" && comment.startLine === last.endLine + 1) {
+    if (
+      comment.kind === "line" &&
+      last?.kind === "line" &&
+      comment.startLine === last.endLine + 1
+    ) {
       last.endLine = comment.endLine;
       last.body += `\n${comment.body}`;
       continue;
@@ -218,4 +226,3 @@ function isExcludedComment(text: string): boolean {
   if (words.length === 0) return true;
   return words.length === 1 && !HAN_RE.test(text);
 }
-

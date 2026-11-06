@@ -9,8 +9,23 @@ const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
-const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, canRestoreUserMessage, filterModelOptions, getUserMessageText, getUserMessageDraftImages } = await jiti.import("./ChatInput.tsx");
-const { clearDraft, getDraft, mergeRestoredSubmissionDraft, mergeRestoredSubmissionText, rekeyDraft, setDraft } = await jiti.import("../lib/draft-store.ts");
+const {
+  ChatInput,
+  ModelErrorBanner,
+  ModelScopeWarningBanner,
+  canRestoreUserMessage,
+  filterModelOptions,
+  getUserMessageText,
+  getUserMessageDraftImages,
+} = await jiti.import("./ChatInput.tsx");
+const {
+  clearDraft,
+  getDraft,
+  mergeRestoredSubmissionDraft,
+  mergeRestoredSubmissionText,
+  rekeyDraft,
+  setDraft,
+} = await jiti.import("../lib/draft-store.ts");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 test("renders the upstream model error", () => {
@@ -38,7 +53,10 @@ test("renders enabledModels scope warnings", () => {
 
   assert.match(html, /Model scope warning/);
   assert.match(html, /ghost-gateway/);
-  assert.equal(renderToStaticMarkup(React.createElement(ModelScopeWarningBanner, { warnings: [] })), "");
+  assert.equal(
+    renderToStaticMarkup(React.createElement(ModelScopeWarningBanner, { warnings: [] })),
+    "",
+  );
 });
 
 test("keeps the model selector visible when a model error leaves no options", () => {
@@ -111,22 +129,16 @@ test("restores text and base64 images when editing a user message", () => {
   };
 
   assert.equal(getUserMessageText(message), "Review this image @src/example.ts ");
-  assert.deepEqual(getUserMessageDraftImages(message), [
-    { data: "AQID", mimeType: "image/png" },
-  ]);
+  assert.deepEqual(getUserMessageDraftImages(message), [{ data: "AQID", mimeType: "image/png" }]);
 });
 
 test("restores legacy flat image entries when editing a user message", () => {
   const message = {
     role: "user",
-    content: [
-      { type: "image", data: "AQID", mimeType: "image/jpeg" },
-    ],
+    content: [{ type: "image", data: "AQID", mimeType: "image/jpeg" }],
   };
 
-  assert.deepEqual(getUserMessageDraftImages(message), [
-    { data: "AQID", mimeType: "image/jpeg" },
-  ]);
+  assert.deepEqual(getUserMessageDraftImages(message), [{ data: "AQID", mimeType: "image/jpeg" }]);
 });
 
 test("does not restore a historical message over a pending image attachment", () => {
@@ -158,24 +170,16 @@ test("restores a cleared submission using the queued React state", () => {
 
 test("keeps a failed first submission recoverable across a composer remount", () => {
   const image = { data: "AQID", mimeType: "image/png" };
-  const restored = mergeRestoredSubmissionDraft(
-    "failed submission",
-    [image],
-    "",
-    [],
-  );
+  const restored = mergeRestoredSubmissionDraft("failed submission", [image], "", []);
 
   assert.deepEqual(restored, {
     value: "failed submission",
     images: [image],
   });
-  assert.deepEqual(
-    mergeRestoredSubmissionDraft("failed submission", [image], "new draft", []),
-    {
-      value: "failed submission\n\nnew draft",
-      images: [image],
-    },
-  );
+  assert.deepEqual(mergeRestoredSubmissionDraft("failed submission", [image], "new draft", []), {
+    value: "failed submission\n\nnew draft",
+    images: [image],
+  });
 });
 
 test("preserves duplicate image attachments when restoring a submission", () => {
@@ -212,10 +216,10 @@ test("rekey keeps a synchronously restored draft when React state is still empty
   clearDraft(sessionKey);
   setDraft(provisionalKey, { value: "restored before state flush", images: [] });
 
-  assert.deepEqual(
-    rekeyDraft(provisionalKey, sessionKey, { value: "", images: [] }),
-    { value: "restored before state flush", images: [] },
-  );
+  assert.deepEqual(rekeyDraft(provisionalKey, sessionKey, { value: "", images: [] }), {
+    value: "restored before state flush",
+    images: [],
+  });
   assert.equal(getDraft(provisionalKey), null);
   assert.deepEqual(getDraft(sessionKey), {
     value: "restored before state flush",
@@ -288,7 +292,10 @@ test("hides the context indicator before usage is available", () => {
 test("draws the input column from the shared transcript geometry", async () => {
   const source = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
   // 输入列与转写行盒共用一组版心常量；外层自带的内边距用同一个数，只加一次。
-  assert.match(source, /import \{ RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX \} from "@\/lib\/transcript-rail";/);
+  assert.match(
+    source,
+    /import \{ RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX \} from "@\/lib\/transcript-rail";/,
+  );
   assert.match(source, /padding: `0 \$\{RAIL_COLUMN_PADDING_PX\}px 8px`/);
   assert.match(source, /maxWidth: RAIL_COLUMN_WIDTH_PX, margin: "0 auto"/);
   assert.doesNotMatch(source, /maxWidth: 820\b/);

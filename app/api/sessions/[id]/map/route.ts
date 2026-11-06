@@ -5,10 +5,7 @@ import { buildSessionMap, readMapTurn } from "@/lib/session-map";
 
 export const GET = withRequestLog(
   "/api/sessions/[id]/map",
-  async (
-    req: Request,
-    { params }: { params: Promise<{ id: string }> },
-  ) => {
+  async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     if (!isApiRequestAllowed(req)) {
       return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
     }

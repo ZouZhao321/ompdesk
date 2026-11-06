@@ -61,7 +61,11 @@ function collectResources(plugin: InstalledPlugin): {
   const features = new Set(effectiveFeatures(plugin));
   const manifest = plugin.manifest;
 
-  const push = (kind: PluginResourceInfo["kind"], relativePath: string, countKey: keyof PluginResourceCounts) => {
+  const push = (
+    kind: PluginResourceInfo["kind"],
+    relativePath: string,
+    countKey: keyof PluginResourceCounts,
+  ) => {
     counts[countKey] += 1;
     resources.push({
       kind,
@@ -175,7 +179,7 @@ export const POST = withRequestLog("/api/plugins", async (req: Request) => {
   let cwd: string | undefined;
   let source: string | undefined;
   try {
-    const body = await req.json() as {
+    const body = (await req.json()) as {
       action?: PluginAction;
       source?: string;
       cwd?: string;
@@ -228,6 +232,9 @@ export const POST = withRequestLog("/api/plugins", async (req: Request) => {
     return NextResponse.json(response);
   } catch (error) {
     if (auditAction) auditFailure(auditAction, source, { status: 500, cwd, error });
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
   }
 });

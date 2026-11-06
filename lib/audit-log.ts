@@ -60,7 +60,9 @@ function sanitizeDetailValue(value: unknown): unknown {
 }
 
 /** Copy only bounded primitives, dropping keys that denote credentials. */
-export function sanitizeAuditDetails(details: Record<string, unknown> | undefined): Record<string, unknown> {
+export function sanitizeAuditDetails(
+  details: Record<string, unknown> | undefined,
+): Record<string, unknown> {
   if (!details || typeof details !== "object") return {};
   const result: Record<string, unknown> = {};
   let copied = 0;

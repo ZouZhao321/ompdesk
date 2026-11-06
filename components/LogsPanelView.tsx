@@ -39,13 +39,14 @@ interface LogEntryRowProps {
  * array every couple of seconds while the existing entries keep their identity;
  * without this every visible row re-renders on each poll.
  */
-const LogEntryRow = memo(function LogEntryRow({ entry, styles, expanded, onToggleEntry }: LogEntryRowProps) {
+const LogEntryRow = memo(function LogEntryRow({
+  entry,
+  styles,
+  expanded,
+  onToggleEntry,
+}: LogEntryRowProps) {
   return (
-    <article
-      className={styles.entry}
-      data-level={entry.level ?? "raw"}
-      data-expanded={expanded}
-    >
+    <article className={styles.entry} data-level={entry.level ?? "raw"} data-expanded={expanded}>
       <button
         type="button"
         className={styles.entrySummary}
@@ -55,7 +56,9 @@ const LogEntryRow = memo(function LogEntryRow({ entry, styles, expanded, onToggl
         <span className={styles.levelBadge} data-level={entry.level ?? "raw"}>
           {entry.level ?? "raw"}
         </span>
-        <span className={styles.entryMessage} title={entry.message}>{entry.message}</span>
+        <span className={styles.entryMessage} title={entry.message}>
+          {entry.message}
+        </span>
         <span className={styles.entryMeta}>
           {entry.subsystem ?? entry.source}
           <span aria-hidden="true"> · </span>
@@ -128,14 +131,18 @@ export function LogsPanelView({
     catchingUp,
   });
   const activeFile = selectedFile ?? file?.name ?? "";
-  const stateText = state.kind === "ready"
-    ? null
-    : {
-        title: t(`settings.logs.state.${state.kind}.title`),
-        detail: state.kind === "error"
-          ? (LOCAL_LOG_ERROR_KEYS[state.detail ?? ""] ? t(LOCAL_LOG_ERROR_KEYS[state.detail ?? ""]) : state.detail ?? "")
-          : t(`settings.logs.state.${state.kind}.detail`),
-      };
+  const stateText =
+    state.kind === "ready"
+      ? null
+      : {
+          title: t(`settings.logs.state.${state.kind}.title`),
+          detail:
+            state.kind === "error"
+              ? LOCAL_LOG_ERROR_KEYS[state.detail ?? ""]
+                ? t(LOCAL_LOG_ERROR_KEYS[state.detail ?? ""])
+                : (state.detail ?? "")
+              : t(`settings.logs.state.${state.kind}.detail`),
+        };
 
   return (
     <div className={styles.panel}>
@@ -164,7 +171,9 @@ export function LogsPanelView({
             onChange={(event) => onLevelChange(event.target.value as LogLevelName | "all")}
           >
             {LOG_LEVEL_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{t(`settings.logs.level.${option.value}`)}</option>
+              <option key={option.value} value={option.value}>
+                {t(`settings.logs.level.${option.value}`)}
+              </option>
             ))}
           </select>
         </label>
@@ -189,7 +198,11 @@ export function LogsPanelView({
             {files.length === 0 && <option value="">{t("settings.logs.noFileYet")}</option>}
             {files.map((item) => (
               <option key={item.name} value={item.name}>
-                {formatFileLabel(item, { current: t("settings.logs.currentFile"), rotation: t("settings.logs.rotation") })} · {formatFileSize(item.size)}
+                {formatFileLabel(item, {
+                  current: t("settings.logs.currentFile"),
+                  rotation: t("settings.logs.rotation"),
+                })}{" "}
+                · {formatFileSize(item.size)}
               </option>
             ))}
           </select>
@@ -224,8 +237,12 @@ export function LogsPanelView({
           <>
             <code className={styles.fileName}>{file.name}</code>
             <span>{formatFileSize(file.size)}</span>
-            <span>{t("settings.logs.lastWrite", { time: formatFileModified(file.modifiedAt) })}</span>
-            {file.current && <span className={styles.currentBadge}>{t("settings.logs.active")}</span>}
+            <span>
+              {t("settings.logs.lastWrite", { time: formatFileModified(file.modifiedAt) })}
+            </span>
+            {file.current && (
+              <span className={styles.currentBadge}>{t("settings.logs.active")}</span>
+            )}
           </>
         ) : (
           <span>{t("settings.logs.noFileSelected")}</span>
@@ -233,7 +250,11 @@ export function LogsPanelView({
         {paused && <span className={styles.pausedBadge}>{t("settings.logs.pollingPaused")}</span>}
       </div>
 
-      {error && entries.length > 0 && <div className={styles.errorBanner} role="alert">{error}</div>}
+      {error && entries.length > 0 && (
+        <div className={styles.errorBanner} role="alert">
+          {error}
+        </div>
+      )}
 
       <div className={styles.list} ref={listRef} data-state={state.kind} onScroll={onListScroll}>
         {stateText ? (

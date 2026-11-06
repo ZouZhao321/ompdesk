@@ -23,9 +23,11 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.grep.enabled.label": "Grep",
   "settings.field.grep.enabled.description": "Enable the grep tool for regex content search",
   "settings.field.astGrep.enabled.label": "AST Grep",
-  "settings.field.astGrep.enabled.description": "Enable the ast_grep tool for structural AST search",
+  "settings.field.astGrep.enabled.description":
+    "Enable the ast_grep tool for structural AST search",
   "settings.field.astEdit.enabled.label": "AST Edit",
-  "settings.field.astEdit.enabled.description": "Enable the ast_edit tool for structural AST rewrites",
+  "settings.field.astEdit.enabled.description":
+    "Enable the ast_edit tool for structural AST rewrites",
   "settings.field.find.enabled.label": "Find (semantic grep)",
   "settings.field.find.enabled.description":
     "Enable the find tool: natural-language search for files and line ranges, judged by the judge model role. Auto enables it only when the judge role resolves to a native TypeSafe jev model",
@@ -61,7 +63,8 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.github.enabled.description":
     "Enable the github tool (op-based dispatch for repository, issue, pull request, diff, search, checkout, push, and Actions watch workflows)",
   "settings.field.web_search.enabled.label": "Web Search",
-  "settings.field.web_search.enabled.description": "Enable the web_search tool for live web results",
+  "settings.field.web_search.enabled.description":
+    "Enable the web_search tool for live web results",
   "settings.field.security.enabled.label": "Security",
   "settings.field.security.enabled.description":
     "Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
@@ -77,7 +80,8 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.todo.reminders.label": "Todo Reminders",
   "settings.field.todo.reminders.description": "Remind the agent to complete todos before stopping",
   "settings.field.todo.remindersMax.label": "Todo Reminder Limit",
-  "settings.field.todo.remindersMax.description": "Maximum number of todo reminders before giving up",
+  "settings.field.todo.remindersMax.description":
+    "Maximum number of todo reminders before giving up",
   "settings.field.todo.eager.label": "Create Todos Automatically",
   "settings.field.todo.eager.description":
     "How strongly to push automatic todo-list creation after the first message",
@@ -169,7 +173,8 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.tools.speculativeExecution.enabled.label": "Experimental Speculative Execution",
   "settings.field.tools.speculativeExecution.enabled.description":
     "Enable the discard-safe first slice: validated local reads through direct read calls and nested eval. Network requests, provider completions, and live filesystem writes are not part of this baseline.",
-  "settings.field.tools.speculativeExecution.maxInFlight.label": "Speculative Execution Concurrency",
+  "settings.field.tools.speculativeExecution.maxInFlight.label":
+    "Speculative Execution Concurrency",
   "settings.field.tools.speculativeExecution.maxInFlight.description":
     "Maximum number of validated local reads allowed to run before normal dispatch.",
   "settings.field.tools.maxTimeout.label": "Max Tool Timeout",

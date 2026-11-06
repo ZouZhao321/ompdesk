@@ -9,7 +9,10 @@ const stylesSource = await readFile(new URL("../app/globals.css", import.meta.ur
 test("renders live and completed subagent groups in the right panel tab", () => {
   assert.match(source, /className="subagent-panel"/);
   assert.match(source, /const running = subagents\.filter\(isSubagentActive\)/);
-  assert.match(source, /const finished = subagents\.filter\(\(subagent\) => !isSubagentActive\(subagent\)\)/);
+  assert.match(
+    source,
+    /const finished = subagents\.filter\(\(subagent\) => !isSubagentActive\(subagent\)\)/,
+  );
   assert.match(source, /t\("subagents\.history"\)/);
   assert.match(shellSource, /activePanelTab\?\.kind === "subagents"/);
   assert.match(shellSource, /MemoSubagentPanel/);
@@ -25,7 +28,10 @@ test("loads a selected subagent transcript while visible and refetches when it e
   assert.match(source, /const wasVisible = prevVisibleRef\.current/);
   assert.match(source, /if \(!wasVisible \|\| !active\) void loadTranscript\(\)/);
   assert.match(source, /const interval = setInterval\(\(\) => void loadTranscript\(\), 1000\)/);
-  assert.match(source, /if \(requestId === requestRef\.current\) \{[\s\S]*?inFlightRef\.current = false/);
+  assert.match(
+    source,
+    /if \(requestId === requestRef\.current\) \{[\s\S]*?inFlightRef\.current = false/,
+  );
   assert.match(source, /prevVisibleRef\.current = false;/);
   assert.match(source, /pendingRef\.current = true;/);
   assert.match(source, /subagents\.transcriptUnavailable/);

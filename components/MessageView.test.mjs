@@ -61,19 +61,26 @@ test("renders shell blocks as themed terminal content", () => {
           role: "assistant",
           provider: "openai",
           model: "gpt-test",
-          content: [{
-            type: "toolCall",
-            toolCallId: "shell-1",
-            toolName: "bash",
-            input: { command: "git status --short" },
-          }],
+          content: [
+            {
+              type: "toolCall",
+              toolCallId: "shell-1",
+              toolName: "bash",
+              input: { command: "git status --short" },
+            },
+          ],
         },
         toolResults: new Map([
-          ["shell-1", {
-            role: "toolResult",
-            toolCallId: "shell-1",
-            content: [{ type: "text", text: "staged 0, unstaged 1\n M components/MessageView.tsx" }],
-          }],
+          [
+            "shell-1",
+            {
+              role: "toolResult",
+              toolCallId: "shell-1",
+              content: [
+                { type: "text", text: "staged 0, unstaged 1\n M components/MessageView.tsx" },
+              ],
+            },
+          ],
         ]),
       }),
     ),
@@ -88,11 +95,41 @@ test("renders shell blocks as themed terminal content", () => {
 
 test("uses i/title in the standard header for grep, read, write, glob, and eval blocks", () => {
   const cases = [
-    ["read", "i", "Verifico bridge startSessionReplay e campionamento", { i: "Verifico bridge startSessionReplay e campionamento", path: "lib/main.dart" }, "lib/main.dart"],
-    ["grep", "i", "Individuo avvio e stop del session replay", { i: "Individuo avvio e stop del session replay", path: "lib/main.dart" }, "lib/main.dart"],
-    ["write", "i", "Individuo simbolo Main dell'app Flutter", { i: "Individuo simbolo Main dell'app Flutter", path: "lib/main.dart" }, "lib/main.dart"],
-    ["glob", "i", "Individuo componenti TypeScript", { i: "Individuo componenti TypeScript", path: "components/**/*.tsx" }, "components/**/*.tsx"],
-    ["eval", "title", "Valuto il risultato del parser", { title: "Valuto il risultato del parser", code: "return 42" }, "return 42"],
+    [
+      "read",
+      "i",
+      "Verifico bridge startSessionReplay e campionamento",
+      { i: "Verifico bridge startSessionReplay e campionamento", path: "lib/main.dart" },
+      "lib/main.dart",
+    ],
+    [
+      "grep",
+      "i",
+      "Individuo avvio e stop del session replay",
+      { i: "Individuo avvio e stop del session replay", path: "lib/main.dart" },
+      "lib/main.dart",
+    ],
+    [
+      "write",
+      "i",
+      "Individuo simbolo Main dell'app Flutter",
+      { i: "Individuo simbolo Main dell'app Flutter", path: "lib/main.dart" },
+      "lib/main.dart",
+    ],
+    [
+      "glob",
+      "i",
+      "Individuo componenti TypeScript",
+      { i: "Individuo componenti TypeScript", path: "components/**/*.tsx" },
+      "components/**/*.tsx",
+    ],
+    [
+      "eval",
+      "title",
+      "Valuto il risultato del parser",
+      { title: "Valuto il risultato del parser", code: "return 42" },
+      "return 42",
+    ],
   ];
 
   for (const [toolName, property, preview, input, fallback] of cases) {
@@ -100,18 +137,23 @@ test("uses i/title in the standard header for grep, read, write, glob, and eval 
       role: "assistant",
       provider: "openai",
       model: "gpt-test",
-      content: [{
-        type: "toolCall",
-        toolCallId: `${toolName}-preview`,
-        toolName,
-        input,
-      }],
+      content: [
+        {
+          type: "toolCall",
+          toolCallId: `${toolName}-preview`,
+          toolName,
+          input,
+        },
+      ],
     });
 
     const renderedPreview = preview.replaceAll("'", "&#x27;");
     const previewPosition = html.indexOf(renderedPreview);
     const toolPosition = html.indexOf(`>${toolName}</span>`);
-    assert.ok(previewPosition > toolPosition, `expected ${property} from ${toolName} in the standard header`);
+    assert.ok(
+      previewPosition > toolPosition,
+      `expected ${property} from ${toolName} in the standard header`,
+    );
     assert.doesNotMatch(html, /class="tool-intent-preview"/);
     assert.ok(!html.includes(fallback), `expected ${toolName} fallback to stay out of the header`);
   }
@@ -134,23 +176,27 @@ test("shows an operation icon beside every standard tool label", () => {
       role: "assistant",
       provider: "openai",
       model: "gpt-test",
-      content: [{
-        type: "toolCall",
-        toolCallId: `${toolName}-icon`,
-        toolName,
-        input: {},
-      }],
+      content: [
+        {
+          type: "toolCall",
+          toolCallId: `${toolName}-icon`,
+          toolName,
+          input: {},
+        },
+      ],
     });
 
     const iconPosition = html.indexOf(`data-tool-icon="${iconKind}"`);
     const iconEnd = html.indexOf(">", iconPosition);
     const toolPosition = html.indexOf(`>${toolName}</span>`);
     assert.ok(iconPosition >= 0, `expected ${iconKind} icon for ${toolName}`);
-    assert.ok(html.slice(iconPosition, iconEnd).includes(`color:${themeColor}`), `expected ${toolName} icon to use ${themeColor}`);
+    assert.ok(
+      html.slice(iconPosition, iconEnd).includes(`color:${themeColor}`),
+      `expected ${toolName} icon to use ${themeColor}`,
+    );
     assert.ok(iconPosition < toolPosition, `expected ${iconKind} icon before ${toolName}`);
   }
 });
-
 
 test("renders every todo task in an integrated checklist", () => {
   const html = renderToStaticMarkup(
@@ -162,35 +208,44 @@ test("renders every todo task in an integrated checklist", () => {
           role: "assistant",
           provider: "openai",
           model: "gpt-test",
-          content: [{
-            type: "toolCall",
-            toolCallId: "todo-1",
-            toolName: "todo",
-            input: {
-              list: [{
-                phase: "Implementation",
-                items: ["First task", "Second task", "Third task", "Fourth task"],
-              }],
+          content: [
+            {
+              type: "toolCall",
+              toolCallId: "todo-1",
+              toolName: "todo",
+              input: {
+                list: [
+                  {
+                    phase: "Implementation",
+                    items: ["First task", "Second task", "Third task", "Fourth task"],
+                  },
+                ],
+              },
             },
-          }],
+          ],
         },
         toolResults: new Map([
-          ["todo-1", {
-            role: "toolResult",
-            toolCallId: "todo-1",
-            details: {
-              phases: [{
-                name: "Implementation",
-                tasks: [
-                  { content: "First task", status: "completed" },
-                  { content: "Second task", status: "completed" },
-                  { content: "Third task", status: "in_progress" },
-                  { content: "Fourth task", status: "pending" },
+          [
+            "todo-1",
+            {
+              role: "toolResult",
+              toolCallId: "todo-1",
+              details: {
+                phases: [
+                  {
+                    name: "Implementation",
+                    tasks: [
+                      { content: "First task", status: "completed" },
+                      { content: "Second task", status: "completed" },
+                      { content: "Third task", status: "in_progress" },
+                      { content: "Fourth task", status: "pending" },
+                    ],
+                  },
                 ],
-              }],
+              },
+              content: [],
             },
-            content: [],
-          }],
+          ],
         ]),
       }),
     ),
@@ -235,24 +290,30 @@ test("skips the loading state once a deferred thought has been fetched", (t) => 
     model: "gpt-test",
     content: [{ type: "thinking", thinking: "", deferred: true }],
   };
-  const renderThinking = () => renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      null,
-      React.createElement(MessageView, {
-        message,
-        sessionId: "session-thinking",
-        entryId: "entry-thinking",
-        turnAnchorEntryId: "entry-thinking",
-      }),
-    ),
-  );
+  const renderThinking = () =>
+    renderToStaticMarkup(
+      React.createElement(
+        I18nProvider,
+        null,
+        React.createElement(MessageView, {
+          message,
+          sessionId: "session-thinking",
+          entryId: "entry-thinking",
+          turnAnchorEntryId: "entry-thinking",
+        }),
+      ),
+    );
 
   assert.match(renderThinking(), /Loading thinking\.\.\./);
 
   // 内容取回过之后条目被卸载重建：正文与标记一起在视图状态里，首帧就是正文，
   // 既不再请求也不回落占位文案。
-  transcriptViewState.markLoaded("session-thinking", "entry-thinking", thinkingPart("entry-thinking", 0), "先看一下这条消息");
+  transcriptViewState.markLoaded(
+    "session-thinking",
+    "entry-thinking",
+    thinkingPart("entry-thinking", 0),
+    "先看一下这条消息",
+  );
 
   const html = renderThinking();
   assert.doesNotMatch(html, /Loading thinking/);

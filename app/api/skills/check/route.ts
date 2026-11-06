@@ -17,7 +17,7 @@ export const POST = withRequestLog("/api/skills/check", async (req: Request) => 
   }
 
   try {
-    const body = await req.json() as {
+    const body = (await req.json()) as {
       cwd?: unknown;
       package?: unknown;
       scope?: unknown;
@@ -30,11 +30,15 @@ export const POST = withRequestLog("/api/skills/check", async (req: Request) => 
     }
 
     const pkg = typeof body.package === "string" ? body.package.trim() : undefined;
-    const scope = body.scope === "global" || body.scope === "project"
-      ? body.scope as SkillInstallScope
-      : undefined;
+    const scope =
+      body.scope === "global" || body.scope === "project"
+        ? (body.scope as SkillInstallScope)
+        : undefined;
     if ((pkg && !scope) || (!pkg && scope)) {
-      return NextResponse.json({ error: "package and scope must be provided together" }, { status: 400 });
+      return NextResponse.json(
+        { error: "package and scope must be provided together" },
+        { status: 400 },
+      );
     }
 
     const { skills } = await loadSkillsWithInstallInfo(cwd);

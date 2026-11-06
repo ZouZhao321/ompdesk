@@ -11,9 +11,7 @@ import { destroyRpcSessionsForCwd, hasBusyRpcSessionForCwd } from "@/lib/rpc-man
 
 export const dynamic = "force-dynamic";
 
-async function validateCwd(value: unknown): Promise<
-  { cwd: string } | { response: NextResponse }
-> {
+async function validateCwd(value: unknown): Promise<{ cwd: string } | { response: NextResponse }> {
   if (typeof value !== "string" || !value.trim()) {
     return { response: NextResponse.json({ error: "cwd required" }, { status: 400 }) };
   }
@@ -45,7 +43,7 @@ async function getRouteHandler(req: Request) {
 export const POST = withRequestLog("/api/project-trust", async (req: Request) => {
   let target: string | undefined;
   try {
-    const body = await req.json() as { cwd?: unknown };
+    const body = (await req.json()) as { cwd?: unknown };
     target = typeof body.cwd === "string" ? body.cwd : undefined;
     const result = await validateCwd(body.cwd);
     if ("response" in result) {
@@ -57,11 +55,17 @@ export const POST = withRequestLog("/api/project-trust", async (req: Request) =>
     const current = getProjectTrustStatus(result.cwd, agentDir);
     if (!current.requiresTrust) {
       auditFailure("project-trust.grant", result.cwd, { status: 409, reason: "nothing-to-trust" });
-      return NextResponse.json({ error: "This project has no resources that require trust" }, { status: 409 });
+      return NextResponse.json(
+        { error: "This project has no resources that require trust" },
+        { status: 409 },
+      );
     }
     if (hasBusyRpcSessionForCwd(result.cwd)) {
       auditFailure("project-trust.grant", result.cwd, { status: 409, reason: "busy-session" });
-      return NextResponse.json({ error: "Wait for the active session to finish before trusting this project" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Wait for the active session to finish before trusting this project" },
+        { status: 409 },
+      );
     }
 
     const status = trustProject(result.cwd, agentDir);
@@ -81,7 +85,7 @@ export const POST = withRequestLog("/api/project-trust", async (req: Request) =>
 export const DELETE = withRequestLog("/api/project-trust", async (req: Request) => {
   let target: string | undefined;
   try {
-    const body = await req.json() as { cwd?: unknown };
+    const body = (await req.json()) as { cwd?: unknown };
     target = typeof body.cwd === "string" ? body.cwd : undefined;
     const result = await validateCwd(body.cwd);
     if ("response" in result) {

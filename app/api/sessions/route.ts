@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
-import {
-  attachSessionProjectInfo,
-  listAllSessions,
-  mergeSessionLists,
-} from "@/lib/session-reader";
+import { attachSessionProjectInfo, listAllSessions, mergeSessionLists } from "@/lib/session-reader";
 import { getRpcSessionInfos, getRpcSessionActivitySnapshot } from "@/lib/rpc-manager";
 import { readArchivedIds } from "@/lib/session-archive";
 
@@ -19,8 +15,9 @@ export const GET = withRequestLog("/api/sessions", async (req: Request) => {
       attachSessionProjectInfo(getRpcSessionInfos()),
     ]);
     const archived = readArchivedIds();
-    const sessions = mergeSessionLists(persistedSessions, runtimeSessions)
-      .filter((s) => (showArchived ? archived.has(s.id) : !archived.has(s.id)));
+    const sessions = mergeSessionLists(persistedSessions, runtimeSessions).filter((s) =>
+      showArchived ? archived.has(s.id) : !archived.has(s.id),
+    );
     return NextResponse.json(
       { sessions, ...getRpcSessionActivitySnapshot() },
       { headers: { "Cache-Control": "no-store" } },

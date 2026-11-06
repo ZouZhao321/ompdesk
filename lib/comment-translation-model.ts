@@ -29,7 +29,9 @@ export async function resolveCommentTranslationModel(): Promise<CommentTranslati
     getSetting<string[]>(settings, "enabledModels"),
     settings,
   );
-  const selection = selectInitialModelScope(scope, { defaultModel: readDefaultModelRole(settings) });
+  const selection = selectInitialModelScope(scope, {
+    defaultModel: readDefaultModelRole(settings),
+  });
   const model = selection.model;
   if (!model) return null;
 
@@ -42,18 +44,23 @@ export async function resolveCommentTranslationModel(): Promise<CommentTranslati
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
       try {
-        const message = await completeSimple(model, {
-          messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
-        }, {
-          apiKey: resolved.apiKey,
-          ...(resolved.headers ? { headers: resolved.headers } : {}),
-          maxTokens: 4_096,
-          cacheRetention: "none",
-          signal: controller.signal,
-        });
+        const message = await completeSimple(
+          model,
+          {
+            messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
+          },
+          {
+            apiKey: resolved.apiKey,
+            ...(resolved.headers ? { headers: resolved.headers } : {}),
+            maxTokens: 4_096,
+            cacheRetention: "none",
+            signal: controller.signal,
+          },
+        );
         if (message.stopReason === "error" || message.stopReason === "aborted") {
           throw new Error(
-            message.errorMessage ?? (controller.signal.aborted ? "Model request timed out" : "Model request failed"),
+            message.errorMessage ??
+              (controller.signal.aborted ? "Model request timed out" : "Model request failed"),
           );
         }
         return assistantText(message);

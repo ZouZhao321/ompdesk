@@ -20,10 +20,12 @@ export function updateHeaderRow(
   id: number,
   changes: Partial<Pick<HeaderRow, "name" | "value">>,
 ): HeaderRow[] {
-  return rows.map((row) => row.id === id ? { ...row, ...changes } : row);
+  return rows.map((row) => (row.id === id ? { ...row, ...changes } : row));
 }
 
-export function serializeHeaderRows(rows: readonly HeaderRow[]): Record<string, string> | undefined {
+export function serializeHeaderRows(
+  rows: readonly HeaderRow[],
+): Record<string, string> | undefined {
   const headers: Record<string, string> = {};
   for (const row of rows) {
     const name = row.name.trim();

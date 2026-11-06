@@ -203,10 +203,13 @@ interface SyncFileWriter {
  * the sink only runs in the Node server, where `getBuiltinModule` exists.
  */
 function resolveStdoutWriter(): SyncFileWriter | undefined {
-  const getBuiltin = (process as NodeJS.Process & { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule;
+  const getBuiltin = (process as NodeJS.Process & { getBuiltinModule?: (id: string) => unknown })
+    .getBuiltinModule;
   if (typeof getBuiltin !== "function") return undefined;
   const fsModule = getBuiltin("node:fs") as Partial<SyncFileWriter> | undefined;
-  return fsModule && typeof fsModule.writeSync === "function" ? fsModule as SyncFileWriter : undefined;
+  return fsModule && typeof fsModule.writeSync === "function"
+    ? (fsModule as SyncFileWriter)
+    : undefined;
 }
 
 const stdoutWriter = resolveStdoutWriter();
@@ -430,11 +433,13 @@ function sanitizeValue(value: unknown, depth: number, seen: WeakSet<object>): un
 }
 
 /** Copy a context record, dropping secrets and applying the size limits. */
-export function sanitizeLogContext(context: Record<string, unknown> | undefined): Record<string, unknown> {
+export function sanitizeLogContext(
+  context: Record<string, unknown> | undefined,
+): Record<string, unknown> {
   if (!context) return {};
   const sanitized = sanitizeValue(context, 0, new WeakSet());
   return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
-    ? sanitized as Record<string, unknown>
+    ? (sanitized as Record<string, unknown>)
     : {};
 }
 
@@ -531,7 +536,8 @@ function write(level: LogLevel, message: string, context: Record<string, unknown
 function startMemorySampling(env: NodeJS.ProcessEnv = process.env): void {
   startMemoryMonitor({
     env,
-    emit: (sample, intervalMs) => logEvent("debug", "process", "process.memory", { intervalMs, ...sample }),
+    emit: (sample, intervalMs) =>
+      logEvent("debug", "process", "process.memory", { intervalMs, ...sample }),
   });
 }
 
