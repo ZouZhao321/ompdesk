@@ -14,6 +14,7 @@ import type { SessionEntry as OmpSessionEntry, SessionInfo as OmpSessionInfo } f
 import { getOmpRuntime } from "./omp-runtime";
 import { normalizeToolCalls } from "./normalize";
 import { sessionPathKey } from "./session-path";
+import { skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
@@ -46,6 +47,30 @@ export function mergeSessionLists(
   return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
 }
 
+/**
+ * `/skill:name args` for a session whose first turn is a user-invoked skill.
+ *
+ * omp's scan reads only `message` entries, so a skill-first session reports
+ * "(no messages)" even though a skill body was sent. The command the user typed
+ * lives in the custom message's details; the envelope must never reach a title.
+ */
+async function readSkillCommandFirstMessage(filePath: string): Promise<string | undefined> {
+  let entries: SessionEntry[];
+  try {
+    entries = await getSessionEntries(filePath);
+  } catch {
+    // One unreadable file must not fail the whole sidebar listing.
+    return undefined;
+  }
+  for (const entry of entries) {
+    if (entry.type === "message") return undefined;
+    if (entry.type === "custom_message" && entry.customType === "skill-prompt") {
+      return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+    }
+  }
+  return undefined;
+}
+
 async function loadAllSessions(): Promise<SessionInfo[]> {
   // Property access (not a bound import) so tests can stub SessionManager.listAll.
   const ompSessions: OmpSessionInfo[] = await SessionManager.listAll();
@@ -55,8 +80,9 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   // stores an absolute path. Both forms must resolve to a parent row.
   const idSet = new Set(ompSessions.map((s) => s.id));
 
-  const sessions = ompSessions.map((s) => {
+  const sessions = await Promise.all(ompSessions.map(async (s) => {
     cacheSessionPath(s.id, s.path);
+    const listedFirstMessage = s.firstMessage || "(no messages)";
     return {
       path: s.path,
       id: s.id,
@@ -65,7 +91,9 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
       modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
       messageCount: s.messageCount,
-      firstMessage: s.firstMessage || "(no messages)",
+      firstMessage: listedFirstMessage === "(no messages)"
+        ? (await readSkillCommandFirstMessage(s.path)) ?? listedFirstMessage
+        : listedFirstMessage,
       parentSessionId: s.parentSessionPath
         ? pathToId.get(sessionPathKey(s.parentSessionPath))
           ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
@@ -73,7 +101,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       transient: false,
       ...(s.status ? { status: s.status } : {}),
     };
-  });
+  }));
   return attachSessionProjectInfo(sessions);
 }
 
