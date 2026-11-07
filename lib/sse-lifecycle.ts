@@ -15,12 +15,7 @@ import { REQUEST_ID_HEADER } from "@/lib/request-headers";
 export const SSE_HEARTBEAT_MS = 30_000;
 
 /** Every way an SSE stream can end. */
-type SseCloseReason =
-  | "cancelled"
-  | "aborted"
-  | "connect_failed"
-  | "controller_closed"
-  | "heartbeat_failed";
+type SseCloseReason = "cancelled" | "aborted" | "connect_failed" | "controller_closed" | "heartbeat_failed";
 
 const CLOSE_LEVEL: Record<SseCloseReason, LogLevel> = {
   cancelled: "info",
@@ -39,9 +34,7 @@ interface SseLogFields {
 
 /** Correlation id from the request wrapper, then the proxy header; direct calls get a fresh one. */
 export function resolveSseRequestId(request: Request): string {
-  return getLogContext()?.requestId
-    || request.headers.get(REQUEST_ID_HEADER)?.trim()
-    || globalThis.crypto.randomUUID();
+  return getLogContext()?.requestId || request.headers.get(REQUEST_ID_HEADER)?.trim() || globalThis.crypto.randomUUID();
 }
 
 function correlationFields(fields: SseLogFields): Record<string, unknown> {
@@ -65,10 +58,7 @@ interface SseLifecycleOptions {
   now?: () => number;
 }
 
-function createSseLifecycle(
-  fields: SseLogFields,
-  options: SseLifecycleOptions = {},
-): SseLifecycle {
+function createSseLifecycle(fields: SseLogFields, options: SseLifecycleOptions = {}): SseLifecycle {
   const now = options.now ?? (() => performance.now());
   const startedAt = now();
   let closed = false;
@@ -109,10 +99,7 @@ export interface SseStreamOptions {
    * `http.stream.open`; the route keeps its existing frame order
    * (connected-first for agent events, subscribe-first for running sessions).
    */
-  connect: (
-    send: (data: unknown) => boolean,
-    registerCleanup: (cleanup: () => void) => void,
-  ) => void;
+  connect: (send: (data: unknown) => boolean, registerCleanup: (cleanup: () => void) => void) => void;
   heartbeatMs?: number;
   now?: () => number;
   /** Starts the heartbeat; returns the function that stops it. Tests pass a manual timer. */

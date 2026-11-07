@@ -72,9 +72,10 @@ export function toGoalStatus(state: GoalModeState | undefined): GoalStatusInfo |
 /** Same lines the TUI prints for `/goal show`. */
 export function formatGoalStatus(status: GoalStatusInfo): string {
   const used = status.tokensUsed.toLocaleString();
-  const budget = status.tokenBudget !== undefined
-    ? `${used} / ${status.tokenBudget.toLocaleString()} (${Math.max(0, status.tokenBudget - status.tokensUsed).toLocaleString()} left)`
-    : `${used} (no budget)`;
+  const budget =
+    status.tokenBudget !== undefined
+      ? `${used} / ${status.tokenBudget.toLocaleString()} (${Math.max(0, status.tokenBudget - status.tokensUsed).toLocaleString()} left)`
+      : `${used} (no budget)`;
   return [
     `Objective: ${status.objective}`,
     `Status: ${status.status}${status.enabled ? "" : " (paused)"}`,
@@ -102,13 +103,13 @@ export function goalFromModeData(data: unknown): Goal | undefined {
   if (!goal || typeof goal !== "object") return undefined;
   const value = goal as Record<string, unknown>;
   if (
-    typeof value.id !== "string"
-    || typeof value.objective !== "string"
-    || typeof value.status !== "string"
-    || typeof value.tokensUsed !== "number"
-    || typeof value.timeUsedSeconds !== "number"
-    || typeof value.createdAt !== "number"
-    || typeof value.updatedAt !== "number"
+    typeof value.id !== "string" ||
+    typeof value.objective !== "string" ||
+    typeof value.status !== "string" ||
+    typeof value.tokensUsed !== "number" ||
+    typeof value.timeUsedSeconds !== "number" ||
+    typeof value.createdAt !== "number" ||
+    typeof value.updatedAt !== "number"
   ) {
     return undefined;
   }
@@ -226,13 +227,20 @@ export class GoalModeController {
 
     const { sub, rest } = parseGoalCommand(args);
     switch (sub) {
-      case "show": return this.#show();
-      case "pause": return await this.#pause();
-      case "resume": return await this.#resume();
-      case "drop": return await this.#drop();
-      case "budget": return await this.#budget(rest);
-      case "set": return await this.#set(rest);
-      default: break;
+      case "show":
+        return this.#show();
+      case "pause":
+        return await this.#pause();
+      case "resume":
+        return await this.#resume();
+      case "drop":
+        return await this.#drop();
+      case "budget":
+        return await this.#budget(rest);
+      case "set":
+        return await this.#set(rest);
+      default:
+        break;
     }
 
     const state = this.#session.getGoalModeState?.();

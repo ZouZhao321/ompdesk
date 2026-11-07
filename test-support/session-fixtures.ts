@@ -26,14 +26,7 @@ import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDir, getBaseConfigRoot, relativePathWithinNormalizedRoot } from "@oh-my-pi/pi-utils/dirs";
 import { comparableDirectory } from "./path-compare";
 
-export type SessionScenario =
-  | "single-turn"
-  | "empty"
-  | "branch"
-  | "subagent"
-  | "tools"
-  | "long"
-  | "skill-command";
+export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent" | "tools" | "long" | "skill-command";
 
 export interface SeedOptions {
   agentDir: string;
@@ -119,10 +112,7 @@ const SINGLE_TURN_USER_TEXT = "伪造会话 single-turn 的用户消息";
 const SINGLE_TURN_ASSISTANT_TEXT = "伪造会话 single-turn 的助手回复";
 const BRANCH_USER_TEXT = "伪造会话 branch 的用户消息";
 const BRANCH_ASSISTANT_TEXT = "伪造会话 branch 的助手回复";
-const BRANCH_FORK_USER_TEXTS = [
-  "伪造会话 branch 的第一条分支消息",
-  "伪造会话 branch 的第二条分支消息",
-];
+const BRANCH_FORK_USER_TEXTS = ["伪造会话 branch 的第一条分支消息", "伪造会话 branch 的第二条分支消息"];
 const SUBAGENT_USER_TEXT = "伪造会话 subagent 的用户消息";
 const SUBAGENT_ASSISTANT_TEXT = "伪造会话 subagent 的助手回复";
 // 子会话标题带 Sub 前缀，侧栏据此折叠子代理会话。
@@ -206,10 +196,7 @@ interface ScenarioPlan {
   extend: (scenarioDir: string) => Promise<BuiltSession[]>;
 }
 
-export async function seedSessions(
-  scenario: SessionScenario,
-  options: SeedOptions,
-): Promise<SeededSession[]> {
+export async function seedSessions(scenario: SessionScenario, options: SeedOptions): Promise<SeededSession[]> {
   const agentDir = resolveFixtureAgentDir(options?.agentDir);
   if (!Object.hasOwn(SCENARIO_TITLES, scenario)) {
     throw new Error(`session-fixtures: 未知场景 ${String(scenario)}`);
@@ -305,9 +292,9 @@ function assertOutsideConfigRoot(agentDir: string): void {
   const configRoot = comparableDirectory(getBaseConfigRoot());
   if (relativePathWithinNormalizedRoot(configRoot, comparableDirectory(agentDir)) !== null) {
     throw new Error(
-      `session-fixtures: agentDir 不能位于真实用户配置根 ${configRoot} 之下（${agentDir}）：`
-        + "真实的 agent 目录可能尚未创建或只含 sessions，条目检查会放行，样本就会写进用户数据。"
-        + '请改用任务临时目录，例如 join(mkdtempSync(join(tmpdir(), "ompdesk-")), "agent")',
+      `session-fixtures: agentDir 不能位于真实用户配置根 ${configRoot} 之下（${agentDir}）：` +
+        "真实的 agent 目录可能尚未创建或只含 sessions，条目检查会放行，样本就会写进用户数据。" +
+        '请改用任务临时目录，例如 join(mkdtempSync(join(tmpdir(), "ompdesk-")), "agent")',
     );
   }
 }
@@ -328,29 +315,29 @@ function assertActiveAgentDirSeparate(agentDir: string): void {
   const target = comparableDirectory(agentDir);
   if (active === target) {
     throw new Error(
-      `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：`
-        + "setSessionName 会把标题写进该目录的 history.db。"
-        + "铺样本前先把活动目录切到目标之外，例如 setAgentDir(runtimeDir) 后再调用 "
-        + "seedSessions(scenario, { agentDir })",
+      `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：` +
+        "setSessionName 会把标题写进该目录的 history.db。" +
+        "铺样本前先把活动目录切到目标之外，例如 setAgentDir(runtimeDir) 后再调用 " +
+        "seedSessions(scenario, { agentDir })",
     );
   }
 
   if (relativePathWithinNormalizedRoot(target, active) !== null) {
     throw new Error(
-      `session-fixtures: 活动 agent 目录位于目标 agentDir 内部（${activeAgentDir} 在 ${agentDir} 之下）：`
-        + "setSessionName 会在样本树里创建 history.db，破坏下一次铺设与复位。"
-        + "铺样本前先把活动目录切到 agentDir 之外，例如 "
-        + 'setAgentDir(join(tmpdir(), "runtime/agent"))',
+      `session-fixtures: 活动 agent 目录位于目标 agentDir 内部（${activeAgentDir} 在 ${agentDir} 之下）：` +
+        "setSessionName 会在样本树里创建 history.db，破坏下一次铺设与复位。" +
+        "铺样本前先把活动目录切到 agentDir 之外，例如 " +
+        'setAgentDir(join(tmpdir(), "runtime/agent"))',
     );
   }
 
   const configRoot = comparableDirectory(getBaseConfigRoot());
   if (relativePathWithinNormalizedRoot(configRoot, active) !== null) {
     throw new Error(
-      `session-fixtures: 活动 agent 目录位于真实用户配置根 ${configRoot} 之下（${activeAgentDir}）：`
-        + "setSessionName 会把标题写进该目录的 history.db。"
-        + "铺样本前先把活动目录切到任务临时目录，例如 "
-        + 'setAgentDir(join(tmpdir(), "runtime/agent"))',
+      `session-fixtures: 活动 agent 目录位于真实用户配置根 ${configRoot} 之下（${activeAgentDir}）：` +
+        "setSessionName 会把标题写进该目录的 history.db。" +
+        "铺样本前先把活动目录切到任务临时目录，例如 " +
+        'setAgentDir(join(tmpdir(), "runtime/agent"))',
     );
   }
 }
@@ -394,9 +381,7 @@ async function readAgentDirEntries(agentDir: string): Promise<string[] | null> {
  * models.yml 的是真实 agent 目录。备份由清扫删除，名字必须是我们生成的形状。
  */
 function assertOnlySessions(entries: readonly string[]): void {
-  const unexpected = entries.filter(
-    (name) => name !== SESSIONS_DIR && !name.startsWith(FIXTURE_BACKUP_PREFIX),
-  );
+  const unexpected = entries.filter((name) => name !== SESSIONS_DIR && !name.startsWith(FIXTURE_BACKUP_PREFIX));
   if (unexpected.length > 0) {
     throw new Error(
       `session-fixtures: agentDir 只能包含 ${SESSIONS_DIR} 与替换备份，实际还有 ${unexpected.join("、")}`,
@@ -414,9 +399,9 @@ function assertSessionsDirInsideAgentDir(agentDir: string): void {
   const sessions = comparableDirectory(join(agentDir, SESSIONS_DIR));
   if (relativePathWithinNormalizedRoot(root, sessions) === null) {
     throw new Error(
-      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 必须位于 agentDir 之内，`
-        + `实际解析到 ${sessions}（agentDir 为 ${root}）：`
-        + "符号链接会让清扫与样本写入落到链接目标。",
+      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 必须位于 agentDir 之内，` +
+        `实际解析到 ${sessions}（agentDir 为 ${root}）：` +
+        "符号链接会让清扫与样本写入落到链接目标。",
     );
   }
 }
@@ -431,8 +416,8 @@ async function assertFixtureSessionsDir(sessionsDir: string): Promise<void> {
     .map((entry) => entry.name);
   if (unexpected.length > 0) {
     throw new Error(
-      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 只允许 ${FIXTURE_PREFIX}* 目录，`
-        + `实际还有 ${unexpected.join("、")}`,
+      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 只允许 ${FIXTURE_PREFIX}* 目录，` +
+        `实际还有 ${unexpected.join("、")}`,
     );
   }
 }
@@ -662,9 +647,7 @@ async function buildSkillCommandScenario(
       options.messageTime,
     );
     // 助手紧接着回复：列表扫描会把这条回复当成首条消息，标题因此仍须取指令。
-    manager.appendMessage(
-      assistantMessage("已经按 demo-skill 的流程处理。", options.messageTime + 1000),
-    );
+    manager.appendMessage(assistantMessage("已经按 demo-skill 的流程处理。", options.messageTime + 1000));
     await manager.setSessionName(options.title, "user");
     await manager.ensureOnDisk();
     await manager.flush();
@@ -704,7 +687,9 @@ async function branchSession(
   options: { title: string | null; messageTime: number; messages: SessionMessage[] },
   sessionDir: string,
 ): Promise<BuiltSession> {
-  const manager = await SessionManager.open(parent.file, sessionDir, undefined, { suppressBreadcrumb: true });
+  const manager = await SessionManager.open(parent.file, sessionDir, undefined, {
+    suppressBreadcrumb: true,
+  });
   try {
     const leafId = manager.getLeafId();
     if (!leafId) {

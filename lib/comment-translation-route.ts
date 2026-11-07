@@ -75,7 +75,10 @@ export function createCommentTranslationHandler(deps: CommentTranslationHandlerD
     const entries = parseRequestEntries(body);
     if (!entries) {
       return NextResponse.json(
-        { code: "invalid_entries", error: `entries must list 1 to ${MAX_COMMENT_TRANSLATION_ENTRIES} comment entries` },
+        {
+          code: "invalid_entries",
+          error: `entries must list 1 to ${MAX_COMMENT_TRANSLATION_ENTRIES} comment entries`,
+        },
         { status: 400 },
       );
     }
@@ -84,10 +87,13 @@ export function createCommentTranslationHandler(deps: CommentTranslationHandlerD
     try {
       model = await deps.resolveModel();
     } catch (error) {
-      return NextResponse.json({
-        code: "model_unavailable",
-        error: error instanceof Error ? error.message : String(error),
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          code: "model_unavailable",
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      );
     }
     if (!model) {
       return NextResponse.json(
@@ -104,10 +110,13 @@ export function createCommentTranslationHandler(deps: CommentTranslationHandlerD
       });
       return NextResponse.json({ model: model.id, ...generation });
     } catch (error) {
-      return NextResponse.json({
-        code: "model_failed",
-        error: error instanceof Error ? error.message : String(error),
-      }, { status: 502 });
+      return NextResponse.json(
+        {
+          code: "model_failed",
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { status: 502 },
+      );
     }
   };
 }

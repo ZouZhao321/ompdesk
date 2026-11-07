@@ -23,18 +23,20 @@ export const POST = withRequestLog("/api/skills/update", async (req: Request) =>
   let pkg = "";
   let skillScope: SkillInstallScope | undefined;
   try {
-    const body = await req.json() as {
+    const body = (await req.json()) as {
       cwd?: unknown;
       package?: unknown;
       scope?: unknown;
     };
     cwd = typeof body.cwd === "string" ? body.cwd.trim() : "";
     pkg = typeof body.package === "string" ? body.package.trim() : "";
-    skillScope = body.scope === "global" || body.scope === "project"
-      ? body.scope as SkillInstallScope
-      : undefined;
+    skillScope = body.scope === "global" || body.scope === "project" ? (body.scope as SkillInstallScope) : undefined;
     if (!cwd || !pkg || !skillScope) {
-      auditFailure("skill.update", pkg || undefined, { status: 400, cwd: cwd || undefined, scope: skillScope });
+      auditFailure("skill.update", pkg || undefined, {
+        status: 400,
+        cwd: cwd || undefined,
+        scope: skillScope,
+      });
       return NextResponse.json({ error: "cwd, package, and scope are required" }, { status: 400 });
     }
     const allowedRoots = await getAllowedFileRoots();
@@ -43,7 +45,12 @@ export const POST = withRequestLog("/api/skills/update", async (req: Request) =>
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
     if (skillScope === "project" && !getProjectTrustStatus(cwd, getAgentDir()).trusted) {
-      auditFailure("skill.update", pkg, { status: 403, cwd, scope: skillScope, reason: "untrusted-project" });
+      auditFailure("skill.update", pkg, {
+        status: 403,
+        cwd,
+        scope: skillScope,
+        reason: "untrusted-project",
+      });
       return NextResponse.json(
         { error: "Project resources must be trusted before updating project skills" },
         { status: 403 },
@@ -51,15 +58,23 @@ export const POST = withRequestLog("/api/skills/update", async (req: Request) =>
     }
 
     const { skills } = await loadSkillsWithInstallInfo(cwd);
-    const skill = skills.find(
-      (item) => item.install?.package === pkg && item.install.scope === skillScope,
-    );
+    const skill = skills.find((item) => item.install?.package === pkg && item.install.scope === skillScope);
     if (!skill?.install) {
-      auditFailure("skill.update", pkg, { status: 404, cwd, scope: skillScope, reason: "not-installed" });
+      auditFailure("skill.update", pkg, {
+        status: 404,
+        cwd,
+        scope: skillScope,
+        reason: "not-installed",
+      });
       return NextResponse.json({ error: "Installed skill not found" }, { status: 404 });
     }
     if (!skill.install.canCheckForUpdates) {
-      auditFailure("skill.update", pkg, { status: 400, cwd, scope: skillScope, reason: "not-updatable" });
+      auditFailure("skill.update", pkg, {
+        status: 400,
+        cwd,
+        scope: skillScope,
+        reason: "not-updatable",
+      });
       return NextResponse.json({ error: "This skill cannot be updated automatically" }, { status: 400 });
     }
 
@@ -88,9 +103,6 @@ export const POST = withRequestLog("/api/skills/update", async (req: Request) =>
       scope: skillScope,
       error: detail.message ?? "update-failed",
     });
-    return NextResponse.json(
-      { error: output || "Skill update failed" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: output || "Skill update failed" }, { status: 500 });
   }
 });

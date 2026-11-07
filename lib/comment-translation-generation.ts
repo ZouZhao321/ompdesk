@@ -5,16 +5,8 @@
  * 提示词交给模型，逐条校验后再写入字典。模型调用通过 `model.complete` 注入，
  * 路由层负责把它接到真实的运行时模型上。
  */
-import {
-  commentEntryKey,
-  normalizeCommentText,
-  type CommentLanguage,
-} from "./comment-entries";
-import {
-  readCommentDictionary,
-  saveCommentTranslation,
-  type CommentTranslationRecord,
-} from "./comment-dictionary";
+import { commentEntryKey, normalizeCommentText, type CommentLanguage } from "./comment-entries";
+import { readCommentDictionary, saveCommentTranslation, type CommentTranslationRecord } from "./comment-dictionary";
 import { validateTranslation, type ProtectedFragment } from "./comment-translation-validation";
 
 /** 勾选条目的最小输入：只有键的原料与语言，不带文件内容。 */
@@ -31,11 +23,11 @@ export type CommentTranslationFailureReason = "no_output" | "missing_fragments";
 export type CommentTranslationEntryResult =
   | { key: string; status: "generated" | "cached"; translation: string }
   | {
-    key: string;
-    status: "failed";
-    reason: CommentTranslationFailureReason;
-    missing: ProtectedFragment[];
-  };
+      key: string;
+      status: "failed";
+      reason: CommentTranslationFailureReason;
+      missing: ProtectedFragment[];
+    };
 
 export interface CommentTranslationGeneration {
   results: CommentTranslationEntryResult[];
@@ -100,7 +92,11 @@ function buildTranslationPrompt(entries: readonly PendingEntry[]): string {
  * 数组时返回 null，由调用方把这一批判为失败而不是写进字典。
  */
 function parseModelTranslations(raw: string): Map<number, string> | null {
-  const fenced = raw.trim().replace(/^```[^\n]*\n?/u, "").replace(/```$/u, "").trim();
+  const fenced = raw
+    .trim()
+    .replace(/^```[^\n]*\n?/u, "")
+    .replace(/```$/u, "")
+    .trim();
   const start = fenced.indexOf("{");
   const end = fenced.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
@@ -175,7 +171,12 @@ export async function generateCommentTranslations(
       for (const [index, item] of chunk.entries()) {
         const translation = parsed?.get(index + 1) ?? "";
         if (!translation) {
-          results.set(item.key, { key: item.key, status: "failed", reason: "no_output", missing: [] });
+          results.set(item.key, {
+            key: item.key,
+            status: "failed",
+            reason: "no_output",
+            missing: [],
+          });
           continue;
         }
         const validation = validateTranslation(item.original, translation);
@@ -198,7 +199,11 @@ export async function generateCommentTranslations(
           ...(options.now ? { now: options.now } : {}),
         });
         translations[record.key] = record;
-        results.set(item.key, { key: record.key, status: "generated", translation: record.translation });
+        results.set(item.key, {
+          key: record.key,
+          status: "generated",
+          translation: record.translation,
+        });
       }
     }
   }

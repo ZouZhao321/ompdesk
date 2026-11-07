@@ -29,7 +29,7 @@ async function getRouteHandler(_req: Request, { params }: Params) {
 export const POST = withRequestLog("/api/auth/api-key/[provider]", async (req: Request, { params }: Params) => {
   const { provider } = await params;
   try {
-    const { apiKey } = await req.json() as { apiKey?: string };
+    const { apiKey } = (await req.json()) as { apiKey?: string };
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       auditFailure("auth.api-key.set", provider, { status: 400, reason: "apiKey-required" });
       return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
@@ -41,7 +41,11 @@ export const POST = withRequestLog("/api/auth/api-key/[provider]", async (req: R
     }
     // omp stores one row per credential in `agent.db`; writing through
     // AuthStorage keeps the CLI and ompdesk on the same store and lock.
-    await authStorage.credentials.set(provider, { type: "api_key", key: apiKey.trim(), source: "login" });
+    await authStorage.credentials.set(provider, {
+      type: "api_key",
+      key: apiKey.trim(),
+      source: "login",
+    });
     invalidateModelsCache();
     auditSuccess("auth.api-key.set", provider);
     return NextResponse.json({ success: true });
@@ -59,10 +63,7 @@ export const DELETE = withRequestLog("/api/auth/api-key/[provider]", async (_req
     const stored = authStorage.credentials.list(provider);
     if (stored.some((entry) => entry.credential.type === "oauth")) {
       auditFailure("auth.api-key.remove", provider, { status: 409, reason: "oauth-credential" });
-      return NextResponse.json(
-        { error: `${provider} is authenticated with OAuth, not an API key` },
-        { status: 409 },
-      );
+      return NextResponse.json({ error: `${provider} is authenticated with OAuth, not an API key` }, { status: 409 });
     }
     await authStorage.credentials.remove(provider);
     invalidateModelsCache();

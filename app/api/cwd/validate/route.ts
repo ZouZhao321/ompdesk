@@ -4,12 +4,11 @@ import { realpathSync, statSync } from "fs";
 import { allowFileRoot } from "@/lib/file-access";
 import { normalizeDirectory } from "@/lib/directory-browser";
 
-
 // POST /api/cwd/validate  body: { cwd: string }
 // Validates a candidate workspace before the UI selects it.
 export const POST = withRequestLog("/api/cwd/validate", async (req: Request) => {
   try {
-    const body = await req.json() as { cwd?: unknown };
+    const body = (await req.json()) as { cwd?: unknown };
     const cwd = typeof body.cwd === "string" ? body.cwd.trim() : "";
 
     if (!cwd) {

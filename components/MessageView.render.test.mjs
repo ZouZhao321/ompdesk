@@ -36,9 +36,7 @@ test("fenced code in an assistant message renders as a code block", () => {
 test("a normalized tool call renders its name and argument", () => {
   const html = renderMessage({
     role: "assistant",
-    content: [
-      { type: "toolCall", toolCallId: "call-1", toolName: "read", input: { path: TOOL_PATH } },
-    ],
+    content: [{ type: "toolCall", toolCallId: "call-1", toolName: "read", input: { path: TOOL_PATH } }],
     model: "mock-model",
     provider: "mock",
   });
@@ -50,23 +48,34 @@ test("a normalized tool call renders its name and argument", () => {
 // toolResults 映射到对应 toolCallId 的 toolCall 下方，因此这里通过第二个参数传入。
 test("tool result body reaches the rendered markup through its tool call", () => {
   const body = "render-fixture 工具结果正文：磁盘剩余 42 GB";
-  const html = renderMessage({
-    role: "assistant",
-    model: "mock-model",
-    provider: "mock",
-    content: [
-      { type: "toolCall", toolCallId: "call-result-1", toolName: "bash", input: { command: "df -h /project" } },
-    ],
-  }, {
-    toolResults: new Map([
-      ["call-result-1", {
-        role: "toolResult",
-        toolCallId: "call-result-1",
-        toolName: "bash",
-        content: [{ type: "text", text: body }],
-      }],
-    ]),
-  });
+  const html = renderMessage(
+    {
+      role: "assistant",
+      model: "mock-model",
+      provider: "mock",
+      content: [
+        {
+          type: "toolCall",
+          toolCallId: "call-result-1",
+          toolName: "bash",
+          input: { command: "df -h /project" },
+        },
+      ],
+    },
+    {
+      toolResults: new Map([
+        [
+          "call-result-1",
+          {
+            role: "toolResult",
+            toolCallId: "call-result-1",
+            toolName: "bash",
+            content: [{ type: "text", text: body }],
+          },
+        ],
+      ]),
+    },
+  );
   assert.ok(visibleText(html).includes(body), "tool result body missing from visible text");
 });
 

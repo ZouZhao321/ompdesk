@@ -64,16 +64,21 @@ test("only the requested entries are translated and unselected manual edits surv
     origin: "manual",
   });
 
-  const response = await handler(request([
-    { original: "把超时设为 30000 毫秒", originalLanguage: "zh", targetLanguage: "en" },
-    { original: "启动前读取 settings.json", originalLanguage: "zh", targetLanguage: "en" },
-  ]));
+  const response = await handler(
+    request([
+      { original: "把超时设为 30000 毫秒", originalLanguage: "zh", targetLanguage: "en" },
+      { original: "启动前读取 settings.json", originalLanguage: "zh", targetLanguage: "en" },
+    ]),
+  );
   assert.equal(response.status, 200);
   const payload = await response.json();
 
   assert.equal(prompts.length, 1);
   assert.equal(prompts[0].includes("人工修改过的注释"), false);
-  assert.deepEqual(payload.results.map((result) => result.status), ["generated", "generated"]);
+  assert.deepEqual(
+    payload.results.map((result) => result.status),
+    ["generated", "generated"],
+  );
 
   const dictionary = readCommentDictionary(agentDir);
   const records = Object.values(dictionary.translations);
@@ -95,9 +100,15 @@ test("a translation that drops a path is reported as failed and not stored", asy
   };
   const { agentDir, handler } = fixture(t, model);
 
-  const response = await handler(request([
-    { original: "先读取 app/api/route.ts 里的配置", originalLanguage: "zh", targetLanguage: "en" },
-  ]));
+  const response = await handler(
+    request([
+      {
+        original: "先读取 app/api/route.ts 里的配置",
+        originalLanguage: "zh",
+        targetLanguage: "en",
+      },
+    ]),
+  );
   assert.equal(response.status, 200);
   const payload = await response.json();
 
@@ -112,9 +123,7 @@ test("unparsable model output fails every entry instead of writing empty text", 
   const model = { id: "fake/model", complete: async () => "Sorry, I cannot help with that." };
   const { agentDir, handler } = fixture(t, model);
 
-  const response = await handler(request([
-    { original: "读取配置文件", originalLanguage: "zh", targetLanguage: "en" },
-  ]));
+  const response = await handler(request([{ original: "读取配置文件", originalLanguage: "zh", targetLanguage: "en" }]));
   const payload = await response.json();
 
   assert.equal(payload.results[0].status, "failed");
@@ -125,9 +134,7 @@ test("unparsable model output fails every entry instead of writing empty text", 
 test("no available model returns an explicit failure and makes no request", async (t) => {
   const { agentDir, handler } = fixture(t, null);
 
-  const response = await handler(request([
-    { original: "读取配置", originalLanguage: "zh", targetLanguage: "en" },
-  ]));
+  const response = await handler(request([{ original: "读取配置", originalLanguage: "zh", targetLanguage: "en" }]));
 
   assert.equal(response.status, 409);
   const payload = await response.json();
@@ -155,9 +162,7 @@ test("a repeated original and target language hits the dictionary without callin
     model: "earlier/model",
   });
 
-  const response = await handler(request([
-    { original: "读取配置", originalLanguage: "zh", targetLanguage: "en" },
-  ]));
+  const response = await handler(request([{ original: "读取配置", originalLanguage: "zh", targetLanguage: "en" }]));
   const payload = await response.json();
 
   assert.equal(payload.results[0].status, "cached");
@@ -173,10 +178,12 @@ test("a page-sized selection is split into several model prompts", async (t) => 
     complete: async (prompt) => {
       prompts.push(prompt);
       const items = JSON.parse(prompt.slice(prompt.indexOf("Items: ") + "Items: ".length));
-      return modelReply(items.map((item) => ({
-        id: item.id,
-        translation: `${item.text.match(/\d+/)[0]} note`,
-      })));
+      return modelReply(
+        items.map((item) => ({
+          id: item.id,
+          translation: `${item.text.match(/\d+/)[0]} note`,
+        })),
+      );
     },
   };
   const { agentDir, handler } = fixture(t, model);
@@ -191,7 +198,10 @@ test("a page-sized selection is split into several model prompts", async (t) => 
 
   assert.equal(prompts.length, 2);
   assert.equal(payload.results.length, 41);
-  assert.equal(payload.results.every((result) => result.status === "generated"), true);
+  assert.equal(
+    payload.results.every((result) => result.status === "generated"),
+    true,
+  );
   assert.equal(Object.keys(readCommentDictionary(agentDir).translations).length, 41);
 });
 
@@ -214,9 +224,9 @@ test("a forced entry regenerates and overwrites the stored translation", async (
     origin: "manual",
   });
 
-  const response = await handler(request([
-    { original: "读取配置", originalLanguage: "zh", targetLanguage: "en", force: true },
-  ]));
+  const response = await handler(
+    request([{ original: "读取配置", originalLanguage: "zh", targetLanguage: "en", force: true }]),
+  );
   const payload = await response.json();
 
   assert.equal(calls, 1);

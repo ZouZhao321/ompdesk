@@ -50,7 +50,14 @@ export function validateLogFileName(name: unknown, pid: number = process.pid): s
   if (typeof name !== "string" || name.length === 0 || name.length > 180) {
     throw new LogQueryError(400, "Invalid log file name");
   }
-  if (name.includes("/") || name.includes("\\") || name.includes("\0") || name === "." || name === ".." || name !== path.basename(name)) {
+  if (
+    name.includes("/") ||
+    name.includes("\\") ||
+    name.includes("\0") ||
+    name === "." ||
+    name === ".." ||
+    name !== path.basename(name)
+  ) {
     throw new LogQueryError(400, "Invalid log file name");
   }
   const match = LOG_FILE_PATTERN.exec(name);
@@ -274,7 +281,16 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
   const files = listLogFiles(directory, pid);
   const name = options.file ?? files[0]?.name ?? null;
   if (!name) {
-    return { pid, files, file: null, entries: [], nextCursor: 0, truncated: false, reset: false, fingerprint: null };
+    return {
+      pid,
+      files,
+      file: null,
+      entries: [],
+      nextCursor: 0,
+      truncated: false,
+      reset: false,
+      fingerprint: null,
+    };
   }
 
   const resolved = resolveLogFile(directory, name, pid);
@@ -288,14 +304,12 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
   // A cursor beyond the current size means the writer restarted or rotated the
   // same basename. A cursor whose fingerprint no longer matches the file means
   // the same thing when the new file has already grown past the old position.
-  const reset = cursor > resolved.size
-    || (cursor > 0
-      && typeof options.fingerprint === "string"
-      && options.fingerprint !== resolved.fingerprint);
+  const reset =
+    cursor > resolved.size ||
+    (cursor > 0 && typeof options.fingerprint === "string" && options.fingerprint !== resolved.fingerprint);
   const requestedStart = reset ? 0 : cursor;
   // Tail-first only applies to a fresh read; a cursor is always a line boundary.
-  const useTail = !reset && cursor === 0 && options.tail === true
-    && resolved.size > MAX_LOG_TAIL_BYTES;
+  const useTail = !reset && cursor === 0 && options.tail === true && resolved.size > MAX_LOG_TAIL_BYTES;
   const start = useTail ? resolved.size - MAX_LOG_TAIL_BYTES : requestedStart;
   const readLength = Math.min(resolved.size - start, MAX_LOG_PAGE_BYTES);
   const fingerprint = resolved.fingerprint;

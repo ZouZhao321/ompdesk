@@ -6,7 +6,9 @@ const response = (data) => ({ ok: true, json: async () => data });
 const live = (runtimeId = "runtime:r2") => ({ sessionId: "b", runtimeId, isStreaming: true });
 const deferred = () => {
   let resolve;
-  const promise = new Promise((done) => { resolve = done; });
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 };
 
@@ -41,7 +43,9 @@ function harness() {
     navigationGenerationRef: { current: 0 },
     opts: {},
     onSessionForked: (...args) => effects.push(["identity", ...args]),
-    rememberSessionContinuation: (sessionId, runtimeId) => { continuation.current = { sessionId, runtimeId }; },
+    rememberSessionContinuation: (sessionId, runtimeId) => {
+      continuation.current = { sessionId, runtimeId };
+    },
     clearSessionContinuation: (_sessionId, runtimeId) => {
       if (continuation.current?.runtimeId === runtimeId) continuation.current = null;
       effects.push(["clear", runtimeId]);
@@ -57,10 +61,29 @@ function harness() {
     PROMPT_SETTLE_MAX_MS: 1000,
     BASH_STATE_RECONCILE_MS: 1,
   };
-  for (const name of ["Loading", "Data", "ActiveLeafId", "Messages", "EntryIds", "Error",
-    "ContextUsage", "CurrentModelOverride", "SystemPrompt", "ThinkingLevel", "EffectiveThinkingLevel",
-    "ExtensionStatuses", "ExtensionWidgets", "QueuedMessages", "Subagents", "IsCompacting",
-    "AgentPhase", "RetryInfo", "GoalStatus", "BashRunning", "PendingBash"]) {
+  for (const name of [
+    "Loading",
+    "Data",
+    "ActiveLeafId",
+    "Messages",
+    "EntryIds",
+    "Error",
+    "ContextUsage",
+    "CurrentModelOverride",
+    "SystemPrompt",
+    "ThinkingLevel",
+    "EffectiveThinkingLevel",
+    "ExtensionStatuses",
+    "ExtensionWidgets",
+    "QueuedMessages",
+    "Subagents",
+    "IsCompacting",
+    "AgentPhase",
+    "RetryInfo",
+    "GoalStatus",
+    "BashRunning",
+    "PendingBash",
+  ]) {
     bindings[`set${name}`] = (...args) => effects.push([name, ...args]);
   }
   bindings.sdkAgentActiveRef = { current: true };
@@ -85,7 +108,10 @@ function installNewRuntime(h) {
 function assertNewRuntime(h) {
   assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
   assert.deepEqual(h.continuation.current, { sessionId: "b", runtimeId: "runtime:r2" });
-  assert.equal(h.effects.some(([kind]) => kind === "clear" || kind === "identity"), false);
+  assert.equal(
+    h.effects.some(([kind]) => kind === "clear" || kind === "identity"),
+    false,
+  );
 }
 
 for (const [label, state] of [
@@ -113,7 +139,14 @@ test("accepts owned expiry, reopening and same-runtime relocation", () => {
 });
 
 test("ignores responses after unmount or another session selection", () => {
-  for (const change of [(b) => { b.mountedRef.current = false; }, (b) => { b.sessionIdRef.current = "other"; }]) {
+  for (const change of [
+    (b) => {
+      b.mountedRef.current = false;
+    },
+    (b) => {
+      b.sessionIdRef.current = "other";
+    },
+  ]) {
     const h = harness();
     change(h.bindings);
     assert.equal(h.bindings.followRuntimeState(live(), "b", "runtime:r1"), true);
@@ -127,10 +160,13 @@ test("mount history loading drops the entire stale state response", async () => 
   const pending = deferred();
   const requested = deferred();
   h.bindings.fetch = async (url) => {
-    if (url.startsWith("/api/sessions/")) return response({
-      sessionId: "b", runtimeId: "runtime:r1", leafId: null,
-      context: { messages: [], entryIds: [], thinkingLevel: "off" },
-    });
+    if (url.startsWith("/api/sessions/"))
+      return response({
+        sessionId: "b",
+        runtimeId: "runtime:r1",
+        leafId: null,
+        context: { messages: [], entryIds: [], thinkingLevel: "off" },
+      });
     assert.equal(url, "/api/agent/runtime%3Ar1");
     requested.resolve();
     return pending.promise;
@@ -141,7 +177,10 @@ test("mount history loading drops the entire stale state response", async () => 
   pending.resolve(response({ running: false, state: { sessionId: "b" } }));
   assert.equal(await loading, null);
   assertNewRuntime(h);
-  assert.deepEqual(h.effects.filter(([name]) => name !== "Loading"), []);
+  assert.deepEqual(
+    h.effects.filter(([name]) => name !== "Loading"),
+    [],
+  );
 });
 
 for (const name of ["reconcileAgentState", "refreshContextUsage", "handleAgentEvent"]) {
@@ -202,7 +241,10 @@ test("grace cleanup retries the current runtime instead of closing from a stale 
     rpcPromptPendingRef: { current: false },
     setAgentRunning: () => {},
     closeEvents: () => h.effects.push(["close"]),
-    setTimeout: (fn) => { timers.push(fn); return timers.length; },
+    setTimeout: (fn) => {
+      timers.push(fn);
+      return timers.length;
+    },
     EVENT_STREAM_IDLE_GRACE_MS: 30_000,
     CONTEXT_USAGE_REFRESH_MS: 1,
     fetch: async (url) => {
@@ -222,7 +264,10 @@ test("grace cleanup retries the current runtime instead of closing from a stale 
   await new Promise((resolve) => setImmediate(resolve));
   assertNewRuntime(h);
   assert.deepEqual(requests, ["/api/agent/runtime%3Ar1", "/api/agent/runtime%3Ar2"]);
-  assert.equal(h.effects.some(([kind]) => kind === "close"), false);
+  assert.equal(
+    h.effects.some(([kind]) => kind === "close"),
+    false,
+  );
   assert.equal(h.bindings.sdkAgentActiveRef.current, true);
   assert.equal(timers.length, 0);
 });
@@ -235,7 +280,10 @@ for (const name of ["waitForPromptSettlement", "waitForBashSettlement"]) {
     const requests = [];
     h.bindings.fetch = async (url) => {
       requests.push(url);
-      if (requests.length === 1) { requested.resolve(); return pending.promise; }
+      if (requests.length === 1) {
+        requested.resolve();
+        return pending.promise;
+      }
       assertNewRuntime(h);
       assert.deepEqual(h.effects, []);
       return response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2" } });
@@ -255,7 +303,10 @@ for (const name of ["waitForPromptSettlement", "waitForBashSettlement"]) {
       const h = harness();
       const pending = deferred();
       const requested = deferred();
-      h.bindings.fetch = async () => { requested.resolve(); return pending.promise; };
+      h.bindings.fetch = async () => {
+        requested.resolve();
+        return pending.promise;
+      };
       const settling = callback(name, h.bindings)("b", 1);
       await requested.promise;
       if (superseded === "unmounted") h.bindings.mountedRef.current = false;

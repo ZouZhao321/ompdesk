@@ -31,7 +31,7 @@ export function AccessConfig() {
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/web-access", { cache: "no-store" });
-      const data = await response.json() as WebAccessStatus & { error?: string };
+      const data = (await response.json()) as WebAccessStatus & { error?: string };
       if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
       setStatus(data);
       setLoadError(null);
@@ -40,7 +40,9 @@ export function AccessConfig() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const send = useCallback(async (action: AccessAction, body: { password?: string } = {}) => {
     setBusy(true);
@@ -52,7 +54,7 @@ export function AccessConfig() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...body }),
       });
-      const data = await response.json() as WebAccessStatus & { error?: string };
+      const data = (await response.json()) as WebAccessStatus & { error?: string };
       if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
       setStatus(data);
       return data;
@@ -80,9 +82,9 @@ export function AccessConfig() {
     if (!status) return;
     const updated = await send(status.enabled ? "disable" : "enable");
     if (!updated) return;
-    setNotice(updated.enabled
-      ? t("settings.access.enabled", { username: updated.username })
-      : t("settings.access.disabled"));
+    setNotice(
+      updated.enabled ? t("settings.access.enabled", { username: updated.username }) : t("settings.access.disabled"),
+    );
   }, [send, status, t]);
 
   const clearPassword = useCallback(async () => {
@@ -113,15 +115,23 @@ export function AccessConfig() {
       <header className={styles.contentHeader}>
         <h2 className={styles.contentTitle}>{t("settings.access.title")}</h2>
         <p className={styles.contentDescription}>
-          {t("settings.access.descriptionPrefix")}<code>{status.username}</code>{t("settings.access.descriptionMiddle")}<code>{status.file}</code>{t("settings.access.descriptionSuffix")}
+          {t("settings.access.descriptionPrefix")}
+          <code>{status.username}</code>
+          {t("settings.access.descriptionMiddle")}
+          <code>{status.file}</code>
+          {t("settings.access.descriptionSuffix")}
         </p>
         {readOnly && (
           <div className={styles.readOnlyNotice}>
-            {t("settings.access.readOnlyPrefix")}<code>OMPDESK_PASSWORD</code>{t("settings.access.readOnlySuffix")}
+            {t("settings.access.readOnlyPrefix")}
+            <code>OMPDESK_PASSWORD</code>
+            {t("settings.access.readOnlySuffix")}
           </div>
         )}
         {notice && (
-          <div className={styles.reloadNotice}><span>{notice}</span></div>
+          <div className={styles.reloadNotice}>
+            <span>{notice}</span>
+          </div>
         )}
       </header>
 
@@ -152,7 +162,9 @@ export function AccessConfig() {
         </section>
 
         <section className={styles.group}>
-          <h3 className={styles.groupTitle}>{status.stored ? t("settings.access.replacePassword") : t("settings.access.setPassword")}</h3>
+          <h3 className={styles.groupTitle}>
+            {status.stored ? t("settings.access.replacePassword") : t("settings.access.setPassword")}
+          </h3>
           <div className={styles.settingRow}>
             <div>
               <div className={styles.settingLabel}>{t("settings.access.newPassword")}</div>
@@ -184,7 +196,9 @@ export function AccessConfig() {
                 value={confirmation}
                 disabled={busy || readOnly}
                 onChange={(event) => setConfirmation(event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter" && canSave) void savePassword(); }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && canSave) void savePassword();
+                }}
               />
             </div>
           </div>
@@ -192,17 +206,29 @@ export function AccessConfig() {
             <div>
               <div className={styles.saveState}>
                 {status.stored && status.updatedAt
-                  ? t("settings.access.lastChanged", { time: new Date(status.updatedAt).toLocaleString(locale) })
+                  ? t("settings.access.lastChanged", {
+                      time: new Date(status.updatedAt).toLocaleString(locale),
+                    })
                   : t("settings.access.noPasswordStored")}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               {status.stored && !readOnly && (
-                <button type="button" className={styles.dangerButton} disabled={busy} onClick={() => void clearPassword()}>
+                <button
+                  type="button"
+                  className={styles.dangerButton}
+                  disabled={busy}
+                  onClick={() => void clearPassword()}
+                >
                   {t("settings.access.removePassword")}
                 </button>
               )}
-              <button type="button" className={styles.primaryButton} disabled={!canSave} onClick={() => void savePassword()}>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                disabled={!canSave}
+                onClick={() => void savePassword()}
+              >
                 {busy ? t("settings.access.saving") : t("settings.access.savePassword")}
               </button>
             </div>
@@ -215,11 +241,17 @@ export function AccessConfig() {
             <div>
               <div className={styles.settingLabel}>{t("settings.access.recovery")}</div>
               <div className={styles.settingDescription}>
-                {t("settings.access.recoveryPrefix")}<code>ompdesk --reset-password</code>{t("settings.access.recoveryMiddle")}<code>/recover</code>{t("settings.access.recoverySuffix")}
+                {t("settings.access.recoveryPrefix")}
+                <code>ompdesk --reset-password</code>
+                {t("settings.access.recoveryMiddle")}
+                <code>/recover</code>
+                {t("settings.access.recoverySuffix")}
               </div>
             </div>
             <div className={styles.settingControl}>
-              <a className={styles.linkButton} href="/recover" target="_blank" rel="noreferrer">{t("settings.access.openRecovery")}</a>
+              <a className={styles.linkButton} href="/recover" target="_blank" rel="noreferrer">
+                {t("settings.access.openRecovery")}
+              </a>
             </div>
           </div>
           <div className={styles.settingRow}>

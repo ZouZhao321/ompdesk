@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * 推送前校验：先确认锁文件一致，再跑与 CI 完全相同的 `bun run ci`
- * （typecheck → test → build → smoke:dev）。流水线只在 package.json 里定义一次，
+ * （format → typecheck → test → build → smoke:dev）。流水线只在 package.json 里定义一次，
  * 这里不再抄一份步骤清单，避免钩子与 CI 分叉。
  *
  * 锁文件用 `bun install --frozen-lockfile --dry-run` 校验：CI 上它会真的安装，

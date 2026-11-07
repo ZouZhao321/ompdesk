@@ -1,0 +1,4 @@
+# git blame 时跳过的一次性排版提交（git config blame.ignoreRevsFile .git-blame-ignore-revs）
+a777d6f07f3ddd8f9bbe0bbef48cb0abfc604368
+c3ceae52ec4905478f93e2eb35071ba9e4f1fd52
+2537e3d839e4ae39bb8999270942c2c1babc2653

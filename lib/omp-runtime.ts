@@ -1,9 +1,4 @@
-import {
-  discoverAuthStorage,
-  getAgentDir,
-  ModelRegistry,
-  Settings,
-} from "@oh-my-pi/pi-coding-agent";
+import { discoverAuthStorage, getAgentDir, ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import type { AuthStorage } from "@oh-my-pi/pi-coding-agent";
 
 /**

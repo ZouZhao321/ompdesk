@@ -42,8 +42,8 @@ function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
   const { values: cliArgs } = parseArgs({
     args,
     options: {
-      port:      { type: "string", short: "p" },
-      hostname:  { type: "string", short: "H" },
+      port: { type: "string", short: "p" },
+      hostname: { type: "string", short: "H" },
       "no-open": { type: "boolean" },
       // Turns the password lock on for this run and every later one, asking for
       // a password on the terminal when none has been set yet.

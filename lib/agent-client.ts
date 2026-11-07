@@ -22,9 +22,11 @@ export class AgentCommandError extends Error {
 }
 
 export function isPromptRejectedError(error: unknown): error is AgentCommandError {
-  return error instanceof AgentCommandError
-    && (error.code === "prompt_rejected" || error.code === "runtime_expired")
-    && error.accepted === false;
+  return (
+    error instanceof AgentCommandError &&
+    (error.code === "prompt_rejected" || error.code === "runtime_expired") &&
+    error.accepted === false
+  );
 }
 
 export interface SessionIdentity {
@@ -38,10 +40,16 @@ export interface RuntimeSessionBinding {
 }
 
 /** Accept a response only while its request still owns the selected identity. */
-export function canApplySessionIdentity(current: SessionIdentity, identity: SessionIdentity, request: SessionIdentity): boolean {
-  return (current.sessionId === identity.sessionId && current.runtimeId === identity.runtimeId)
-    || (current.runtimeId === request.runtimeId
-      && (current.sessionId === request.sessionId || current.sessionId === identity.sessionId));
+export function canApplySessionIdentity(
+  current: SessionIdentity,
+  identity: SessionIdentity,
+  request: SessionIdentity,
+): boolean {
+  return (
+    (current.sessionId === identity.sessionId && current.runtimeId === identity.runtimeId) ||
+    (current.runtimeId === request.runtimeId &&
+      (current.sessionId === request.sessionId || current.sessionId === identity.sessionId))
+  );
 }
 
 export async function sendAgentCommand<T = unknown>(
@@ -67,20 +75,21 @@ export async function sendAgentCommand<T = unknown>(
   };
   if (!res.ok || body.error) {
     // Retry only when the server guarantees that the expired handle executed nothing.
-    if (runtimeId && runtime?.current === runtimeId && res.status === 404
-      && body.code === "runtime_expired" && body.accepted === false && body.sessionId) {
+    if (
+      runtimeId &&
+      runtime?.current === runtimeId &&
+      res.status === 404 &&
+      body.code === "runtime_expired" &&
+      body.accepted === false &&
+      body.sessionId
+    ) {
       if (runtime.onIdentity?.({ sessionId: body.sessionId, runtimeId: null }, request) !== false) {
         runtime.current = null;
         clearSessionContinuation(undefined, runtimeId);
         return sendAgentCommand<T>(body.sessionId, command, runtime);
       }
     }
-    throw new AgentCommandError(
-      body.error ?? `HTTP ${res.status}`,
-      res.status,
-      body.code,
-      body.accepted,
-    );
+    throw new AgentCommandError(body.error ?? `HTTP ${res.status}`, res.status, body.code, body.accepted);
   }
   if (runtime && runtime.current === runtimeId && body.sessionId && body.runtimeId) {
     const identity = { sessionId: body.sessionId, runtimeId: body.runtimeId };
