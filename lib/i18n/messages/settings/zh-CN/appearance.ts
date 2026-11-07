@@ -11,7 +11,8 @@ export const appearance: Record<string, string> = {
   "settings.field.theme.light.label": "浅色主题",
   "settings.field.theme.light.description": "终端使用浅色背景时应用的主题",
   "settings.field.symbolPreset.label": "符号集",
-  "settings.field.symbolPreset.description": "图标与符号使用的字形集（Unicode、Nerd Font 或 ASCII）",
+  "settings.field.symbolPreset.description":
+    "图标与符号使用的字形集（Unicode、Nerd Font 或 ASCII）",
   "settings.field.colorBlindMode.label": "色盲模式",
   "settings.field.colorBlindMode.description": "Diff 新增部分使用蓝色代替绿色",
 
@@ -29,8 +30,7 @@ export const appearance: Record<string, string> = {
   "settings.field.statusLine.contextLine.description":
     "左右片段之间的线段如何反映上下文用量（仅盒式输入框）",
   "settings.field.statusLine.sessionAccent.label": "会话强调色",
-  "settings.field.statusLine.sessionAccent.description":
-    "编辑器边框与状态行间隙使用会话名称的颜色",
+  "settings.field.statusLine.sessionAccent.description": "编辑器边框与状态行间隙使用会话名称的颜色",
   "settings.field.statusLine.transparent.label": "透明状态行",
   "settings.field.statusLine.transparent.description":
     "状态行使用终端默认背景，不再使用主题的 `statusLineBg`。Powerline 端帽会被去掉，因为它们需要对比填充才能与周围终端衔接。",
@@ -120,6 +120,5 @@ export const appearance: Record<string, string> = {
   "settings.field.task.showResolvedModelBadge.description":
     "在任务组件状态行显示每个子 Agent 实际使用的模型 ID",
   "settings.field.title.icons.label": "标题图标",
-  "settings.field.title.icons.description":
-    "新增的生成标题或 /rename 标题前使用的图标与短代码",
+  "settings.field.title.icons.description": "新增的生成标题或 /rename 标题前使用的图标与短代码",
 };

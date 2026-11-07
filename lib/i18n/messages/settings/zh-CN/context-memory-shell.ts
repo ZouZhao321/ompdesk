@@ -29,8 +29,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.eval.py.label": "Python Eval 后端",
   "settings.field.eval.py.description": "允许 eval 工具把 Python 单元格派发给 IPython 内核",
   "settings.field.eval.js.label": "JavaScript Eval 后端",
-  "settings.field.eval.js.description":
-    "允许 eval 工具把 JavaScript 单元格派发给进程内运行时",
+  "settings.field.eval.js.description": "允许 eval 工具把 JavaScript 单元格派发给进程内运行时",
   "settings.field.eval.autoProvision.label": "Eval 环境自动准备",
   "settings.field.eval.autoProvision.description":
     "首次安装时自动创建受管理的 JavaScript eval 包环境",
@@ -63,8 +62,7 @@ export const contextMemoryShell: Record<string, string> = {
     "在支持的情况下使用更大的上下文窗口；可能产生更高计费。关闭则保持默认或标准计费的窗口",
   "settings.field.compaction.enabled.label": "自动压缩",
   "settings.field.compaction.enabled.description": "上下文过大时自动压缩",
-  "settings.field.compaction.experimentalContextManagement.label":
-    "笔记支撑的上下文窗口（实验性）",
+  "settings.field.compaction.experimentalContextManagement.label": "笔记支撑的上下文窗口（实验性）",
   "settings.field.compaction.experimentalContextManagement.description":
     "在不同的上下文窗口之间保留持久笔记和可搜索的原始历史。",
   "settings.field.compaction.midTurnEnabled.label": "轮次中压缩",
@@ -89,11 +87,9 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.compaction.asyncEnabled.description":
     "上下文接近压缩阈值时在后台预先摘要，越过阈值时再把已就绪的结果拼接进来",
   "settings.field.compaction.idleEnabled.label": "空闲压缩",
-  "settings.field.compaction.idleEnabled.description":
-    "空闲且 Token 数超过阈值时压缩上下文",
+  "settings.field.compaction.idleEnabled.description": "空闲且 Token 数超过阈值时压缩上下文",
   "settings.field.compaction.idleThresholdTokens.label": "空闲压缩阈值",
-  "settings.field.compaction.idleThresholdTokens.description":
-    "超过该 Token 数即触发空闲压缩",
+  "settings.field.compaction.idleThresholdTokens.description": "超过该 Token 数即触发空闲压缩",
   "settings.field.compaction.idleTimeoutSeconds.label": "空闲压缩延迟",
   "settings.field.compaction.idleTimeoutSeconds.description": "空闲后等待多少秒再压缩",
   "settings.field.compaction.supersedeReads.label": "替换过期读取",
@@ -125,8 +121,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.ttsr.contextMode.label": "TTSR 上下文模式",
   "settings.field.ttsr.contextMode.description": "TTSR 触发时如何处理已产生的部分输出",
   "settings.field.ttsr.interruptMode.label": "TTSR 打断模式",
-  "settings.field.ttsr.interruptMode.description":
-    "何时在流式过程中打断，何时在完成后注入警告",
+  "settings.field.ttsr.interruptMode.description": "何时在流式过程中打断，何时在完成后注入警告",
   "settings.field.ttsr.repeatMode.label": "TTSR 重复模式",
   "settings.field.ttsr.repeatMode.description":
     "规则如何重复触发：每个会话一次，或在消息间隔后再次触发",
@@ -146,8 +141,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.memory.backend.description":
     "关闭、本地摘要流水线、Mnemopi SQLite、Hindsight 远程记忆，或 Sharpshooter",
   "settings.field.sharpshooter.model.label": "Sharpshooter 模型",
-  "settings.field.sharpshooter.model.description":
-    "用于抽取/整合的模型选择器，留空表示 smol 角色",
+  "settings.field.sharpshooter.model.description": "用于抽取/整合的模型选择器，留空表示 smol 角色",
   "settings.field.autolearn.enabled.label": "自动学习（实验性）",
   "settings.field.autolearn.enabled.description":
     "Agent 停止后提示它将经验教训写入记忆，并创建或增强隔离的托管技能",
@@ -155,8 +149,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.autolearn.autoContinue.description":
     "开启时，停止时自动执行一轮私有捕获（会消耗额外 Token）。关闭时只保留常驻的自动学习指引。",
   "settings.field.mnemopi.dbPath.label": "Mnemopi DB 路径",
-  "settings.field.mnemopi.dbPath.description":
-    "可选，SQLite DB 路径。默认为 Agent 记忆目录。",
+  "settings.field.mnemopi.dbPath.description": "可选，SQLite DB 路径。默认为 Agent 记忆目录。",
   "settings.field.mnemopi.bank.label": "Mnemopi Bank",
   "settings.field.mnemopi.bank.description":
     "可选，共享 bank 的基础名称。按项目模式会据此派生项目本地的 bank。",
@@ -167,11 +160,9 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.mnemopi.embeddingVariant.description":
     "本地 embedding 模型系列。en = 更强的英文模型；multilingual = 跨语言模型。更改后会在下次启动时重建已有的记忆 embedding。",
   "settings.field.mnemopi.autoRecall.label": "Mnemopi 自动召回",
-  "settings.field.mnemopi.autoRecall.description":
-    "在每个会话的首轮召回本地记忆",
+  "settings.field.mnemopi.autoRecall.description": "在每个会话的首轮召回本地记忆",
   "settings.field.mnemopi.autoRetain.label": "Mnemopi 自动保留",
-  "settings.field.mnemopi.autoRetain.description":
-    "将已完成的对话轮次保留到本地 Mnemopi 记忆",
+  "settings.field.mnemopi.autoRetain.description": "将已完成的对话轮次保留到本地 Mnemopi 记忆",
   "settings.field.mnemopi.polyphonicRecall.label": "Mnemopi 复调召回",
   "settings.field.mnemopi.polyphonicRecall.description":
     "将召回与图、事实、向量和时间多种声部融合，使关联记忆无需关键词匹配也能浮现",
@@ -191,8 +182,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.mnemopi.embeddingApiUrl.description":
     "可选，传给 Mnemopi 的 OpenAI 兼容 embedding 端点",
   "settings.field.mnemopi.embeddingApiKey.label": "Mnemopi Embedding API Key",
-  "settings.field.mnemopi.embeddingApiKey.description":
-    "可选，传给 Mnemopi 的 embedding API Key",
+  "settings.field.mnemopi.embeddingApiKey.description": "可选，传给 Mnemopi 的 embedding API Key",
   "settings.field.mnemopi.llmMode.label": "Mnemopi LLM 模式",
   "settings.field.mnemopi.llmMode.description":
     "不使用 LLM、使用在线小模型（/models 中的 TINY 角色，否则为 @smol），或使用远程 OpenAI 兼容端点",
@@ -200,16 +190,13 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.mnemopi.llmBaseUrl.description":
     "可选，Mnemopi 远程模式使用的 OpenAI 兼容 LLM 端点",
   "settings.field.mnemopi.llmApiKey.label": "Mnemopi LLM API Key",
-  "settings.field.mnemopi.llmApiKey.description":
-    "可选，Mnemopi 远程模式使用的 LLM API Key",
+  "settings.field.mnemopi.llmApiKey.description": "可选，Mnemopi 远程模式使用的 LLM API Key",
   "settings.field.mnemopi.llmModel.label": "Mnemopi LLM 模型",
-  "settings.field.mnemopi.llmModel.description":
-    "可选，Mnemopi 远程模式使用的 LLM 模型名称",
+  "settings.field.mnemopi.llmModel.description": "可选，Mnemopi 远程模式使用的 LLM 模型名称",
   "settings.field.hindsight.apiUrl.label": "Hindsight API URL",
   "settings.field.hindsight.apiUrl.description": "Hindsight 服务器 URL（Cloud 或自托管）",
   "settings.field.hindsight.apiToken.label": "Hindsight API Token",
-  "settings.field.hindsight.apiToken.description":
-    "用于需要认证的 Hindsight 服务器的 Bearer Token",
+  "settings.field.hindsight.apiToken.description": "用于需要认证的 Hindsight 服务器的 Bearer Token",
   "settings.field.hindsight.bankId.label": "Hindsight Bank ID",
   "settings.field.hindsight.bankId.description": "记忆 bank 标识（默认：项目名）",
   "settings.field.hindsight.scoping.label": "Hindsight 作用域",
@@ -218,8 +205,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.hindsight.autoRecall.label": "Hindsight 自动召回",
   "settings.field.hindsight.autoRecall.description": "在每个会话的首轮召回记忆",
   "settings.field.hindsight.autoRetain.label": "Hindsight 自动保留",
-  "settings.field.hindsight.autoRetain.description":
-    "每 N 轮以及会话边界保留对话记录",
+  "settings.field.hindsight.autoRetain.description": "每 N 轮以及会话边界保留对话记录",
   "settings.field.hindsight.retainMode.label": "Hindsight 保留模式",
   "settings.field.hindsight.retainMode.description":
     "full-session = 每个会话 upsert 一个文档；last-turn = 分块",

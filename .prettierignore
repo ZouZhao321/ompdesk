@@ -1,0 +1,13 @@
+node_modules
+.next
+.next-smoke
+.worktrees
+.tmp
+.backups
+.verify
+.ocr
+out
+build
+bun.lock
+next-env.d.ts
+*.tsbuildinfo

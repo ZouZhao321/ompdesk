@@ -18,14 +18,20 @@ function parseHex(value: string): Rgb | null {
   const match = /^#([0-9a-f]{6})$/i.exec(value);
   if (!match) return null;
   const hex = match[1];
-  return [Number.parseInt(hex.slice(0, 2), 16), Number.parseInt(hex.slice(2, 4), 16), Number.parseInt(hex.slice(4, 6), 16)];
+  return [
+    Number.parseInt(hex.slice(0, 2), 16),
+    Number.parseInt(hex.slice(2, 4), 16),
+    Number.parseInt(hex.slice(4, 6), 16),
+  ];
 }
 
 function mixHex(from: string, to: string, amount: number): string {
   const fromRgb = parseHex(from);
   const toRgb = parseHex(to);
   if (!fromRgb || !toRgb) return from;
-  const mixed = fromRgb.map((channel, index) => Math.round(channel + (toRgb[index] - channel) * amount));
+  const mixed = fromRgb.map((channel, index) =>
+    Math.round(channel + (toRgb[index] - channel) * amount),
+  );
   return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
@@ -48,11 +54,17 @@ function contrastRatio(foreground: string, background: string): number | null {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function ensureContrast(color: string, target: string, backgrounds: string[], minimum: number): string {
-  const hasContrast = (candidate: string) => backgrounds.every((background) => {
-    const ratio = contrastRatio(candidate, background);
-    return ratio === null || ratio >= minimum;
-  });
+function ensureContrast(
+  color: string,
+  target: string,
+  backgrounds: string[],
+  minimum: number,
+): string {
+  const hasContrast = (candidate: string) =>
+    backgrounds.every((background) => {
+      const ratio = contrastRatio(candidate, background);
+      return ratio === null || ratio >= minimum;
+    });
   if (hasContrast(color)) return color;
   if (!hasContrast(target)) return target;
 
@@ -72,7 +84,11 @@ export async function getWebThemePalette(name: string): Promise<WebThemePalette>
     getThemeExportColors(name),
   ]);
   const colorScheme = isLightTheme(name) ? "light" : "dark";
-  const pageBg = firstColor(exported.pageBg, colors.userMessageBg, colorScheme === "light" ? "#ffffff" : "#111318");
+  const pageBg = firstColor(
+    exported.pageBg,
+    colors.userMessageBg,
+    colorScheme === "light" ? "#ffffff" : "#111318",
+  );
   const panelBg = firstColor(exported.cardBg, colors.statusLineBg, colors.toolPendingBg, pageBg);
   const hoverBg = firstColor(colors.borderMuted, colors.border, panelBg);
   const selectedBg = firstColor(colors.selectedBg, colors.borderAccent, hoverBg);
@@ -124,7 +140,9 @@ export async function getWebThemeConfig(settings: Settings): Promise<WebThemeCon
   };
 }
 
-export async function getAvailableWebThemes(): Promise<Array<{ name: string; colorScheme: "dark" | "light" }>> {
+export async function getAvailableWebThemes(): Promise<
+  Array<{ name: string; colorScheme: "dark" | "light" }>
+> {
   const names = await getAvailableThemes();
   return names.map((name) => ({ name, colorScheme: isLightTheme(name) ? "light" : "dark" }));
 }

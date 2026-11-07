@@ -18,18 +18,22 @@ export const interactionTasks: Record<string, string> = {
   "settings.group.tasks.commands-skills": "Commands & Skills",
 
   "settings.field.steeringMode.label": "Steering Mode",
-  "settings.field.steeringMode.description": "How to process queued messages while agent is working",
+  "settings.field.steeringMode.description":
+    "How to process queued messages while agent is working",
   "settings.field.followUpMode.label": "Follow-Up Mode",
-  "settings.field.followUpMode.description": "How to drain follow-up messages after a turn completes",
+  "settings.field.followUpMode.description":
+    "How to drain follow-up messages after a turn completes",
   "settings.field.interruptMode.label": "Interrupt Mode",
   "settings.field.interruptMode.description": "When steering messages interrupt tool execution",
   "settings.field.tui.vimMode.label": "Vim Editing Mode",
   "settings.field.tui.vimMode.description":
     "Modal prompt editing. Esc leaves Insert mode; Normal mode has hjkl, 0, $, ^, w, b, e, gg, G, counts, x/D/C, dd/yy, p and u; operators take motions or text objects (diw, ca(, dap); v/V start a Visual selection that y copies and d deletes",
   "settings.field.tui.vimModeDisplay.label": "Vim Mode Indicator",
-  "settings.field.tui.vimModeDisplay.description": "How the current Vim mode appears in the status line",
+  "settings.field.tui.vimModeDisplay.description":
+    "How the current Vim mode appears in the status line",
   "settings.field.loop.mode.label": "Loop Mode",
-  "settings.field.loop.mode.description": "What happens between /loop iterations before re-submitting the prompt",
+  "settings.field.loop.mode.description":
+    "What happens between /loop iterations before re-submitting the prompt",
   "settings.field.loop.conditionTimeoutMs.label": "Loop Condition Timeout (ms)",
   "settings.field.loop.conditionTimeoutMs.description":
     "Max wait for a `/loop --while` / `--until` condition command before treating it as broken and stopping the loop. Set to 0 to wait indefinitely",
@@ -48,7 +52,8 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.treeFilterMode.label": "Session Tree Filter",
   "settings.field.treeFilterMode.description": "Default filter mode when opening the session tree",
   "settings.field.autocompleteMaxVisible.label": "Autocomplete Items",
-  "settings.field.autocompleteMaxVisible.description": "Max visible items in autocomplete dropdown (3-20)",
+  "settings.field.autocompleteMaxVisible.description":
+    "Max visible items in autocomplete dropdown (3-20)",
   "settings.field.spelling.typoDetection.label": "Typo Detection (macOS)",
   "settings.field.spelling.typoDetection.description":
     "Mark misspelled prompt words with the active macOS dictionaries",
@@ -88,7 +93,8 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.recap.enabled.description":
     "Generate a brief LLM recap of where things stand after the terminal has been idle",
   "settings.field.recap.idleSeconds.label": "Idle Recap Delay",
-  "settings.field.recap.idleSeconds.description": "Seconds to wait while idle before showing the recap",
+  "settings.field.recap.idleSeconds.description":
+    "Seconds to wait while idle before showing the recap",
 
   "settings.field.stt.enabled.label": "Speech-to-Text",
   "settings.field.stt.enabled.description": "Enable speech-to-text input via microphone",
@@ -220,7 +226,8 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.task.enableEffort.description":
     "Expose the optional effort parameter on task spawns, allowing callers to override each subagent's thinking level",
   "settings.field.task.maxConcurrency.label": "Max Concurrent Tasks",
-  "settings.field.task.maxConcurrency.description": "Maximum number of subagents running concurrently",
+  "settings.field.task.maxConcurrency.description":
+    "Maximum number of subagents running concurrently",
   "settings.field.task.enableLsp.label": "LSP in Subagents",
   "settings.field.task.enableLsp.description":
     "Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.",
@@ -259,7 +266,8 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.plan.autosaveDir.description":
     "Directory for autosaved plans. Supports ~, absolute, and cwd-relative paths. Empty uses <project>/.omp/plans/.",
   "settings.field.goal.enabled.label": "Goal Mode",
-  "settings.field.goal.enabled.description": "Enable per-session goal mode and the hidden goal tool",
+  "settings.field.goal.enabled.description":
+    "Enable per-session goal mode and the hidden goal tool",
   "settings.field.goal.statusInFooter.label": "Goal Status in Footer",
   "settings.field.goal.statusInFooter.description":
     "Show token budget alongside the goal indicator in the status line",
@@ -271,7 +279,8 @@ export const interactionTasks: Record<string, string> = {
     "Refresh generated session titles after todo init replans unless the title was set by the user",
 
   "settings.field.skills.enableSkillCommands.label": "Skill Commands",
-  "settings.field.skills.enableSkillCommands.description": "Register skills as /skill:name commands",
+  "settings.field.skills.enableSkillCommands.description":
+    "Register skills as /skill:name commands",
   "settings.field.commands.enableClaudeUser.label": "Claude User Commands",
   "settings.field.commands.enableClaudeUser.description": "Load commands from ~/.claude/commands/",
   "settings.field.commands.enableClaudeProject.label": "Claude Project Commands",
@@ -280,5 +289,6 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.commands.enableOpencodeUser.description":
     "Load commands from ~/.config/opencode/commands/",
   "settings.field.commands.enableOpencodeProject.label": "OpenCode Project Commands",
-  "settings.field.commands.enableOpencodeProject.description": "Load commands from .opencode/commands/",
+  "settings.field.commands.enableOpencodeProject.description":
+    "Load commands from .opencode/commands/",
 };
