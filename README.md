@@ -31,7 +31,7 @@ Because a browser tab can drive a high-privilege agent, ompdesk binds to the loo
 
 ## Quick Start
 
-ompdesk serves its API on **Bun**: the omp SDK is published as TypeScript sources and imports `bun:` builtins, so Node cannot load it. Install Bun 1.3.14 or newer:
+ompdesk serves its API on **Bun**: the omp SDK is published as TypeScript sources and imports `bun:` builtins, so Node cannot load it. Install Bun 1.4.2 or newer:
 
 ```bash
 curl -fsSL https://bun.sh/install | bash        # macOS / Linux
