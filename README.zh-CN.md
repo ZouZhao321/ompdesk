@@ -31,7 +31,7 @@ ompdesk 不另外运行一个代理程序，也不复制 omp 的数据：会话�
 
 ## 快速开始
 
-ompdesk 的服务端运行在 **Bun** 上。omp 的 SDK 以 TypeScript 源码发布并引用 `bun:` 内置模块，Node 无法加载它。请先安装 Bun 1.3.14 或更新版本：
+ompdesk 的服务端运行在 **Bun** 上。omp 的 SDK 以 TypeScript 源码发布并引用 `bun:` 内置模块，Node 无法加载它。请先安装 Bun 1.4.2 或更新版本：
 
 ```bash
 curl -fsSL https://bun.sh/install | bash        # macOS / Linux

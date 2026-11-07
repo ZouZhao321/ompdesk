@@ -1,0 +1,58 @@
+name: Docker image
+
+# 镜像的运行时阶段只复制 node_modules、.next、public、bin、next.config.ts 与
+# package.json。新增一个运行时需要的目录或文件时，构建仍然能过，容器却起不来；
+# 这里构建后直接启动容器，等镜像自带的 HEALTHCHECK 变成 healthy。
+#
+# package.json 的 `files` 与 npm 包无关，镜像走的是这条独立路径。
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and start the image
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build --tag ompdesk:ci .
+
+      - name: Start container
+        run: docker run --detach --name ompdesk-ci --publish 30197:30141 ompdesk:ci
+
+      - name: Wait for the health check
+        shell: bash
+        run: |
+          for _ in $(seq 1 60); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' ompdesk-ci)"
+            if [ "$status" = "healthy" ]; then
+              echo "容器已通过健康检查"
+              exit 0
+            fi
+            if [ "$status" = "unhealthy" ]; then
+              break
+            fi
+            sleep 2
+          done
+          echo "容器未通过健康检查，状态：$status" >&2
+          docker logs ompdesk-ci >&2
+          exit 1
+
+      - name: Stop container
+        if: always()
+        run: docker rm --force ompdesk-ci
