@@ -3,13 +3,13 @@ import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import {
   applyResolvedSystemPromptInputs,
   buildSkillPromptMessage,
+  type BuiltSkillPromptMessage,
   createAgentSession,
   type CreateAgentSessionOptions,
   discoverSessionExtensionPaths,
   getAgentDir,
   initTheme,
   parseSkillInvocation,
-  type ParsedSkillInvocation,
   SessionManager,
   SKILL_PROMPT_MESSAGE_TYPE,
   Theme,
@@ -216,11 +216,8 @@ function listTools(session: AgentSessionLike): ToolInfo[] {
 
 type AvailableCommandsSession = Parameters<typeof buildAvailableSlashCommands>[0];
 
-/** A `/skill:<name>` command the session can run. */
-type ResolvedSkillInvocation = {
-  skill: AgentSessionLike["skills"][number];
-  parsed: ParsedSkillInvocation;
-};
+/** Why a `/skill:<name>` draft could not be delivered as a skill message. */
+type SkillFallbackReason = "disabled" | "unknown" | "unreadable";
 
 function appendSlashCommand(
   commands: SlashCommandInfo[],
@@ -657,50 +654,62 @@ export class AgentSessionWrapper {
   }
 
   /**
-   * Recognize a `/skill:<name>` draft this session can run. Hidden skills
-   * (`hide: true`) never block a user who names them; only `disabled`,
-   * unknown names, or `skills.enableSkillCommands: false` fall back to text.
+   * Deliver a `/skill:<name>` draft through the same custom-message path the
+   * SDK's own clients use: the stored content is the `<skill>` envelope,
+   * `details` keep the command for display, and the model still receives the
+   * full body. Hidden skills (`hide: true`) never block a user who names them.
+   *
+   * Returns false — after telling the browser why — when the draft cannot
+   * become a skill message; the caller then sends it as ordinary text.
+   * `skills.enableSkillCommands: false`, an unknown name, and an unreadable
+   * skill file all take that path.
    */
-  private resolveSkillInvocation(text: string): ResolvedSkillInvocation | undefined {
-    if (this.inner.skillsSettings?.enableSkillCommands === false) return undefined;
-    const parsed = parseSkillInvocation(text);
-    if (!parsed) return undefined;
-    const skill = this.inner.skills.find((candidate) => candidate.name === parsed.name);
-    if (!skill) return undefined;
-    return { skill, parsed };
-  }
-
-  /**
-   * Deliver a skill command through the same custom-message path the SDK's own
-   * clients use: the stored content is the `<skill>` envelope, `details` keep
-   * the command for display, and the model still receives the full body.
-   */
-  private dispatchSkillInvocation(
-    invocation: ResolvedSkillInvocation,
+  private async tryDeliverSkillCommand(
+    text: string,
     images: Array<{ type: "image"; data: string; mimeType: string }> | undefined,
     streamingBehavior: "steer" | "followUp" | undefined,
-    chipText: string,
   ): Promise<boolean> {
-    return (async () => {
-      const built = await buildSkillPromptMessage(invocation.skill, invocation.parsed, "user");
-      const content = images?.length
-        ? [{ type: "text" as const, text: built.message }, ...images]
-        : built.message;
-      return this.inner.promptCustomMessage(
-        {
-          customType: SKILL_PROMPT_MESSAGE_TYPE,
-          content,
-          display: true,
-          details: built.details,
-          attribution: "user",
-        },
-        {
-          ...(streamingBehavior ? { streamingBehavior } : {}),
-          // The queued chip shows what the operator typed, not the envelope.
-          queueChipText: chipText,
-        },
-      );
-    })();
+    const parsed = parseSkillInvocation(text);
+    if (!parsed) return false;
+    if (this.inner.skillsSettings?.enableSkillCommands === false) {
+      this.announceSkillFallback("disabled", parsed.name);
+      return false;
+    }
+    const skill = this.inner.skills.find((candidate) => candidate.name === parsed.name);
+    if (!skill) {
+      this.announceSkillFallback("unknown", parsed.name);
+      return false;
+    }
+    let built: BuiltSkillPromptMessage;
+    try {
+      built = await buildSkillPromptMessage(skill, parsed, "user");
+    } catch {
+      this.announceSkillFallback("unreadable", skill.name);
+      return false;
+    }
+    const content = images?.length
+      ? [{ type: "text" as const, text: built.message }, ...images]
+      : built.message;
+    await this.inner.promptCustomMessage(
+      {
+        customType: SKILL_PROMPT_MESSAGE_TYPE,
+        content,
+        display: true,
+        details: built.details,
+        attribution: "user",
+      },
+      {
+        ...(streamingBehavior ? { streamingBehavior } : {}),
+        // The queued chip shows what the operator typed, not the envelope.
+        queueChipText: text,
+      },
+    );
+    return true;
+  }
+
+  /** Tell the browser that a skill draft was sent as ordinary text instead. */
+  private announceSkillFallback(reason: SkillFallbackReason, skill: string): void {
+    this.emit({ type: "skill_command_unavailable", reason, skill });
   }
 
   /**
@@ -985,9 +994,13 @@ export class AgentSessionWrapper {
 
         let running: Promise<boolean>;
         try {
-          const skillInvocation = this.resolveSkillInvocation(command.message as string);
-          running = skillInvocation
-            ? this.dispatchSkillInvocation(skillInvocation, promptImages, streamingBehavior, command.message as string)
+          const delivered = await this.tryDeliverSkillCommand(
+            command.message as string,
+            promptImages,
+            streamingBehavior,
+          );
+          running = delivered
+            ? Promise.resolve(true)
             : this.inner.prompt(command.message as string, {
               ...(promptImages?.length ? { images: promptImages } : {}),
               ...(streamingBehavior ? { streamingBehavior } : {}),
@@ -1287,11 +1300,12 @@ export class AgentSessionWrapper {
       case "steer": {
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         await this.withRunCommand("steer", async () => {
-          const skillInvocation = this.resolveSkillInvocation(command.message as string);
-          if (skillInvocation) {
-            await this.dispatchSkillInvocation(skillInvocation, steerImages, "steer", command.message as string);
-            return;
-          }
+          const delivered = await this.tryDeliverSkillCommand(
+            command.message as string,
+            steerImages,
+            "steer",
+          );
+          if (delivered) return;
           await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
         });
         return null;
@@ -1300,11 +1314,12 @@ export class AgentSessionWrapper {
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         await this.withRunCommand("follow_up", async () => {
-          const skillInvocation = this.resolveSkillInvocation(command.message as string);
-          if (skillInvocation) {
-            await this.dispatchSkillInvocation(skillInvocation, followImages, "followUp", command.message as string);
-            return;
-          }
+          const delivered = await this.tryDeliverSkillCommand(
+            command.message as string,
+            followImages,
+            "followUp",
+          );
+          if (delivered) return;
           await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
         });
         return null;
