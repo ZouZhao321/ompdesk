@@ -204,7 +204,10 @@ export interface AgentSessionLike {
   followUp(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
   readonly queuedMessageCount: number;
   getQueuedMessages(): { steering: readonly string[]; followUp: readonly string[] };
-  clearQueue(): { steering: unknown[]; followUp: unknown[] };
+  clearQueue(): {
+    steering: Array<{ text: string; images?: Array<{ type: "image"; data: string; mimeType: string }> }>;
+    followUp: Array<{ text: string; images?: Array<{ type: "image"; data: string; mimeType: string }> }>;
+  };
   getAllToolNames(): string[];
   getToolByName(name: string): { name: string; description?: string } | undefined;
   getActiveToolNames(): string[];

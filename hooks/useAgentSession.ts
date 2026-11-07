@@ -141,6 +141,11 @@ export interface QueuedMessages {
   followUp: string[];
 }
 
+interface QueuedRestoredMessage {
+  text: string;
+  images?: Array<{ type: "image"; data: string; mimeType: string }>;
+}
+
 function normalizeQueuedMessages(q?: { steering?: string[]; followUp?: string[] } | null): QueuedMessages {
   return { steering: q?.steering ?? [], followUp: q?.followUp ?? [] };
 }
@@ -389,9 +394,8 @@ export interface ChatInputHandle {
   focus: () => void;
   insertText: (text: string) => void;
   insertIfEmpty: (content: string) => void;
-  prependText: (text: string) => void;
   addImages: (files: File[]) => void;
-  restoreSubmission: (text: string, images?: Array<{ data: string; mimeType: string }>, targetDraftKey?: string) => void;
+  restoreSubmission: (text: string, images?: Array<{ data: string; mimeType: string }>, targetDraftKey?: string) => number;
   rekeyDraft?: (previousKey: string, nextKey: string) => void;
 }
 
@@ -551,6 +555,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const newSessionModelOverrideRef = useRef<SelectedModel | null>(null);
   const thinkingLevelOverrideRef = useRef<ThinkingLevelOption | null>(null);
   const promptRunIdRef = useRef(0);
+  const promptSettleKeysRef = useRef(new Set<string>());
   const contextUsageRequestIdRef = useRef(0);
   const optimisticUserMessageKeyRef = useRef<string | null>(null);
   const modelSwitchPendingRef = useRef(false);
@@ -1320,43 +1325,50 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sdkAgentActiveRef.current = false;
       optimisticUserMessageKeyRef.current = null;
       const wasRunning = settleUiStage();
-      if (promptWasPending) {
+      if (promptWasPending || (agentWasActive && wasRunning)) {
         notifyPromptStage(runId);
-      } else if (agentWasActive && wasRunning) {
-        onAgentEnd?.(sessionIdRef.current ?? undefined);
       }
       if (sid) scheduleEventStreamClose(sid);
     }
-  }, [loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, settleUiStage]);
+  }, [loadSession, notifyPromptStage, scheduleEventStreamClose, settleUiStage]);
 
   const waitForPromptSettlement = useCallback(async (sid: string, runId?: number) => {
-    await delay(PROMPT_SETTLE_INITIAL_DELAY_MS);
-    const startedAt = Date.now();
+    const settleKey = `${sid}:${runId ?? "auto"}`;
+    if (promptSettleKeysRef.current.has(settleKey)) return;
+    promptSettleKeysRef.current.add(settleKey);
+    try {
+      await delay(PROMPT_SETTLE_INITIAL_DELAY_MS);
+      const startedAt = Date.now();
 
-    while (agentRunningRef.current && Date.now() - startedAt < PROMPT_SETTLE_MAX_MS) {
-      if (!mountedRef.current || sessionIdRef.current !== sid) return;
-      if (runId !== undefined && promptRunIdRef.current !== runId) return;
-      try {
-        const requestedRuntimeId = runtimeIdRef.current;
-        const res = await fetch(`/api/agent/${encodeURIComponent(requestedRuntimeId ?? sid)}`);
-        if (res.ok) {
-          const data = await res.json() as { running?: boolean; state?: AgentStateResponse };
-          if (runId !== undefined && promptRunIdRef.current !== runId) return;
-          const state = data.state;
-          if (followRuntimeState(state, sid, requestedRuntimeId)) {
-            await delay(PROMPT_SETTLE_POLL_MS);
-            continue;
+      while (agentRunningRef.current && Date.now() - startedAt < PROMPT_SETTLE_MAX_MS) {
+        if (!mountedRef.current || sessionIdRef.current !== sid) return;
+        if (runId !== undefined && promptRunIdRef.current !== runId) return;
+        try {
+          const requestedRuntimeId = runtimeIdRef.current;
+          const res = await fetch(`/api/agent/${encodeURIComponent(requestedRuntimeId ?? sid)}`);
+          if (res.ok) {
+            const data = await res.json() as { running?: boolean; state?: AgentStateResponse };
+            if (runId !== undefined && promptRunIdRef.current !== runId) return;
+            const state = data.state;
+            if (followRuntimeState(state, sid, requestedRuntimeId)) {
+              await delay(PROMPT_SETTLE_POLL_MS);
+              continue;
+            }
+            sid = sessionIdRef.current ?? sid;
+            const busy = Boolean(data.running && state
+              && (state.isStreaming || state.isPromptRunning || state.isCompacting || state.isHandoffRunning));
+            if (!busy) {
+              await finishPromptWithoutStream(sid, runId);
+              return;
+            }
           }
-          sid = sessionIdRef.current ?? sid;
-          if (!data.running || !state || (!state.isStreaming && !state.isPromptRunning)) {
-            await finishPromptWithoutStream(sid, runId);
-            return;
-          }
+        } catch {
+          // SSE remains the primary completion path.
         }
-      } catch {
-        // SSE remains the primary completion path.
+        await delay(PROMPT_SETTLE_POLL_MS);
       }
-      await delay(PROMPT_SETTLE_POLL_MS);
+    } finally {
+      promptSettleKeysRef.current.delete(settleKey);
     }
   }, [finishPromptWithoutStream, followRuntimeState]);
 
@@ -1515,13 +1527,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "start" });
         break;
       case "agent_end":
-        // One logical prompt can emit multiple agent_end events before retrying,
-        // compacting, or continuing messages queued by extension handlers.
-        // Keep the stream open until prompt_done/agent_settled and the idle grace.
+        // A run can end several times before the prompt is really over:
+        // retries, compaction continuations and queued extension messages all
+        // resume with a new agent_start. Only a terminal end means the agent is
+        // idle, so settle on it instead of waiting for the 15s reconcile. That
+        // wait is what leaves the composer stuck in steer/follow-up mode after
+        // the run finished or the operator pressed Stop.
         if (!agentRunningRef.current) break;
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
+        // `undefined` means an older projection omitted the flags; only an
+        // explicit false says the agent will resume (retry, compaction, …).
+        const terminalEnd = event.isTerminal !== false && event.yielded !== false;
+        if (terminalEnd) {
+          sdkAgentActiveRef.current = false;
+          settleUiStage();
+          notifyPromptStage(promptRunIdRef.current);
+          if (sessionIdRef.current) scheduleEventStreamClose(sessionIdRef.current);
+        }
         if (sessionIdRef.current) {
           const sid = sessionIdRef.current;
           loadSession(sid);
@@ -1533,6 +1557,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
+              if (d.state?.isCompacting !== undefined) setIsCompacting(d.state.isCompacting);
               if (d.state?.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, d.state?.subagents ?? []));
               if (d.state?.goal !== undefined) setGoalStatus(d.state.goal ?? null);
               // Aborted turns can leave messages queued in pi (delivered with the
@@ -1545,21 +1570,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "goal_status":
         setGoalStatus((event.status as GoalStatusInfo | null | undefined) ?? null);
         break;
-      case "agent_settled": {
-        const agentWasActive = sdkAgentActiveRef.current;
-        sdkAgentActiveRef.current = false;
-        if (!agentWasActive || rpcPromptPendingRef.current) break;
-
-        const sid = sessionIdRef.current;
-        const wasRunning = settleUiStage();
-        setIsCompacting(false);
-        if (sid) {
-          void loadSession(sid);
-          scheduleEventStreamClose(sid);
-        }
-        if (wasRunning) onAgentEnd?.(sessionIdRef.current ?? undefined);
-        break;
-      }
       case "prompt_done":
         {
           const runId = promptRunIdRef.current;
@@ -1571,12 +1581,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
           const sid = sessionIdRef.current;
           if (sid) void loadSession(sid);
-          // An extension-injected agent may already have started before the
-          // command's prompt_done. Keep that active stage visible and let its
-          // agent_settled event perform the next completion transition.
           if (!sdkAgentActiveRef.current) {
             settleUiStage();
             if (sid) scheduleEventStreamClose(sid);
+          } else if (sid) {
+            // An extension-injected agent may already have started before the
+            // command's prompt_done, so the UI must stay busy for it. The abort
+            // path emits no agent_end, so ask the server whether anything is
+            // still running instead of trusting the SDK stage.
+            void waitForPromptSettlement(sid, runId);
           }
         }
         break;
@@ -1808,7 +1821,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage, t]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage, t]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -2526,19 +2539,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      const result = await sendAgentCommand<{ steering?: string[]; followUp?: string[] }>(sid, { type: "clear_queue" }, runtimeIdRef);
+      const result = await sendAgentCommand<{ steering?: QueuedRestoredMessage[]; followUp?: QueuedRestoredMessage[] }>(sid, { type: "clear_queue" }, runtimeIdRef);
       // clearQueue also emits an empty queue_update, but that only reaches us
       // while SSE is connected — clear locally so idle recalls update the UI.
       setQueuedMessages({ steering: [], followUp: [] });
-      const texts = [...(result?.steering ?? []), ...(result?.followUp ?? [])];
-      if (mountedRef.current && texts.length > 0) {
-        opts.chatInputRef?.current?.prependText(texts.join("\n\n"));
+      const recalled = [...(result?.steering ?? []), ...(result?.followUp ?? [])];
+      const text = recalled.map((entry) => entry.text).filter((part) => part.trim()).join("\n\n");
+      const images = recalled
+        .flatMap((entry) => entry.images ?? [])
+        .map(({ data, mimeType }) => ({ data, mimeType }));
+      if (mountedRef.current && (text || images.length > 0)) {
+        const dropped = opts.chatInputRef?.current?.restoreSubmission(text, images.length ? images : undefined) ?? 0;
+        if (dropped > 0) {
+          addNotice({ type: "error", message: t("chat.recallDropped", { count: dropped }) });
+        }
       }
     } catch (e) {
       console.error("Failed to recall queued messages:", e);
       addNotice({ type: "error", message: "Failed to recall queued messages" });
     }
-  }, [opts.chatInputRef, addNotice]);
+  }, [opts.chatInputRef, addNotice, t]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     setThinkingLevel(level);
