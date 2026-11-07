@@ -26,6 +26,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # 格式门禁要与基线分支求合并基点，浅克隆拿不到历史。
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
