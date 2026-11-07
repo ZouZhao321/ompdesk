@@ -55,10 +55,7 @@ export const POST = withRequestLog("/api/project-trust", async (req: Request) =>
     const current = getProjectTrustStatus(result.cwd, agentDir);
     if (!current.requiresTrust) {
       auditFailure("project-trust.grant", result.cwd, { status: 409, reason: "nothing-to-trust" });
-      return NextResponse.json(
-        { error: "This project has no resources that require trust" },
-        { status: 409 },
-      );
+      return NextResponse.json({ error: "This project has no resources that require trust" }, { status: 409 });
     }
     if (hasBusyRpcSessionForCwd(result.cwd)) {
       auditFailure("project-trust.grant", result.cwd, { status: 409, reason: "busy-session" });
@@ -75,10 +72,7 @@ export const POST = withRequestLog("/api/project-trust", async (req: Request) =>
     return NextResponse.json(status);
   } catch (error) {
     auditFailure("project-trust.grant", target, { status: 500, error });
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 });
 
@@ -107,9 +101,6 @@ export const DELETE = withRequestLog("/api/project-trust", async (req: Request) 
     return NextResponse.json(status);
   } catch (error) {
     auditFailure("project-trust.revoke", target, { status: 500, error });
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 });

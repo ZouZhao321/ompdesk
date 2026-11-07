@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  type CSSProperties,
-  type KeyboardEvent,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import styles from "./SearchableSelect.module.css";
 import { usePopupPlacement } from "@/hooks/usePopupPlacement";
 
@@ -92,9 +84,7 @@ export function SearchableSelect({
 
   useEffect(() => {
     if (!open) return;
-    const selectedIndex = filtered.findIndex(
-      (option) => option.value === value && !option.disabled,
-    );
+    const selectedIndex = filtered.findIndex((option) => option.value === value && !option.disabled);
     setActiveIndex(
       selectedIndex >= 0
         ? selectedIndex
@@ -171,11 +161,7 @@ export function SearchableSelect({
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`${styles.root}${className ? ` ${className}` : ""}`}
-      style={style}
-    >
+    <div ref={rootRef} className={`${styles.root}${className ? ` ${className}` : ""}`} style={style}>
       <button
         type="button"
         className={styles.trigger}
@@ -223,9 +209,7 @@ export function SearchableSelect({
               role="combobox"
               aria-expanded="true"
               aria-controls={listboxId}
-              aria-activedescendant={
-                filtered[activeIndex] ? `${listboxId}-${activeIndex}` : undefined
-              }
+              aria-activedescendant={filtered[activeIndex] ? `${listboxId}-${activeIndex}` : undefined}
               autoComplete="off"
               spellCheck={false}
               onChange={(event) => {
@@ -262,9 +246,7 @@ export function SearchableSelect({
                 >
                   <span className={styles.optionCopy}>
                     <span className={styles.optionLabel}>{option.label}</span>
-                    {option.description && (
-                      <span className={styles.optionDescription}>{option.description}</span>
-                    )}
+                    {option.description && <span className={styles.optionDescription}>{option.description}</span>}
                   </span>
                   {option.value === value && (
                     <svg className={styles.check} viewBox="0 0 12 12" aria-hidden="true">

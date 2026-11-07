@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import {
-  getCommentDictionaryVersion,
-  subscribeCommentDictionary,
-} from "@/lib/comment-dictionary-version";
+import { getCommentDictionaryVersion, subscribeCommentDictionary } from "@/lib/comment-dictionary-version";
 import {
   getCommentTranslationPreference,
   subscribeCommentTranslationPreference,
@@ -12,11 +9,7 @@ import {
 
 /** 查看器顶部的译文开关，默认关闭。 */
 export function useCommentTranslationPreference(): boolean {
-  return useSyncExternalStore(
-    subscribeCommentTranslationPreference,
-    getCommentTranslationPreference,
-    () => false,
-  );
+  return useSyncExternalStore(subscribeCommentTranslationPreference, getCommentTranslationPreference, () => false);
 }
 
 /** 字典版本；保存译文后递增，用作译文渲染缓存的依赖。 */
@@ -28,10 +21,7 @@ export function useCommentDictionaryVersion(): number {
  * 按字典键取译文。字典版本变化时重新请求，渲染层不必重新加载源码。
  * 只有可见标签（active）才发起请求，遵循右侧面板的活动约定。
  */
-export function useCommentTranslationLookup(
-  keys: readonly string[],
-  active: boolean,
-): Record<string, string> {
+export function useCommentTranslationLookup(keys: readonly string[], active: boolean): Record<string, string> {
   const version = useCommentDictionaryVersion();
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const signature = JSON.stringify(keys);

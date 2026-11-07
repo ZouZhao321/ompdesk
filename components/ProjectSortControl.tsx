@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  type FocusEvent,
-  type KeyboardEventHandler,
-  type RefObject,
-} from "react";
+import { useCallback, useEffect, useRef, type FocusEvent, type KeyboardEventHandler, type RefObject } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
@@ -39,11 +32,7 @@ export type SortMenuKeyAction = { kind: "focus"; index: number } | { kind: "clos
  * Escape 关闭并把焦点交回触发按钮。其他按键（含 Tab）返回 null，
  * 保留浏览器默认行为，让焦点按顺序离开菜单。
  */
-export function sortMenuKeyAction(
-  key: string,
-  currentIndex: number,
-  count: number,
-): SortMenuKeyAction | null {
+export function sortMenuKeyAction(key: string, currentIndex: number, count: number): SortMenuKeyAction | null {
   if (count === 0) return null;
   switch (key) {
     case "ArrowDown":
@@ -66,11 +55,7 @@ export function sortMenuKeyAction(
  * 或浏览器没有给出 relatedTarget（Safari/Firefox 点击不聚焦、触摸输入）
  * 都不收起：这些情况下焦点去向未知，收起会把随后的点击变成重新打开。
  */
-export function shouldDismissOnBlur(
-  open: boolean,
-  container: ParentNode | null,
-  relatedTarget: Node | null,
-): boolean {
+export function shouldDismissOnBlur(open: boolean, container: ParentNode | null, relatedTarget: Node | null): boolean {
   if (!open || relatedTarget === null || container === null) return false;
   return !container.contains(relatedTarget);
 }
@@ -82,14 +67,7 @@ export function shouldDismissOnBlur(
  * 菜单右对齐到调用方行容器的右缘：调用方必须在包住触发按钮的那一行上建立
  * 定位上下文（`position: relative`），组件本身不建立定位上下文。
  */
-export function ProjectSortControl({
-  mode,
-  open,
-  menuRef,
-  onToggle,
-  onDismiss,
-  onSelectMode,
-}: Props) {
+export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, onSelectMode }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -145,8 +123,7 @@ export function ProjectSortControl({
   // 菜单项退出占位不会再把焦点甩到 body 上。
   const handleBlur = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {
-      if (shouldDismissOnBlur(open, event.currentTarget, event.relatedTarget as Node | null))
-        onDismiss();
+      if (shouldDismissOnBlur(open, event.currentTarget, event.relatedTarget as Node | null)) onDismiss();
     },
     [open, onDismiss],
   );

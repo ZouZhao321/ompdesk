@@ -13,8 +13,7 @@ const jiti = createJiti(import.meta.url, {
 });
 const { PUT, DELETE } = await jiti.import("./route.ts");
 const { GET: getCommentEntries } = await jiti.import("../comment-entries/route.ts");
-const { allowFileRoot, getAdditionalAllowedRoots, normalizeSlashes } =
-  await jiti.import("@/lib/allowed-roots.ts");
+const { allowFileRoot, getAdditionalAllowedRoots, normalizeSlashes } = await jiti.import("@/lib/allowed-roots.ts");
 
 function request(method, body) {
   return new Request("http://localhost:30141/api/comment-dictionary", {
@@ -51,12 +50,9 @@ async function createFixture(t) {
 async function listEntries(project) {
   const { NextRequest } = await import("next/server");
   const response = await getCommentEntries(
-    new NextRequest(
-      `http://localhost:30141/api/comment-entries?cwd=${encodeURIComponent(project)}`,
-      {
-        headers: { host: "localhost:30141" },
-      },
-    ),
+    new NextRequest(`http://localhost:30141/api/comment-entries?cwd=${encodeURIComponent(project)}`, {
+      headers: { host: "localhost:30141" },
+    }),
   );
   assert.equal(response.status, 200);
   return response.json();

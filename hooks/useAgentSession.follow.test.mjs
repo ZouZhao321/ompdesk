@@ -1,20 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import ts from "typescript";
-import {
-  FOLLOW_BOTTOM_THRESHOLD_PX,
-  FOLLOW_OBSERVATION_HOLD_MS,
-  reduceFollow,
-} from "../lib/transcript-follow.ts";
+import { FOLLOW_BOTTOM_THRESHOLD_PX, FOLLOW_OBSERVATION_HOLD_MS, reduceFollow } from "../lib/transcript-follow.ts";
 import { source, callbackSource } from "./useAgentSession.test-support.mjs";
 import { flattenSource } from "../test-support/source-text.ts";
 
-const CALLBACKS = [
-  "applyFollow",
-  "holdFollowObservation",
-  "releaseFollowObservation",
-  "handleScrollPositionChange",
-];
+const CALLBACKS = ["applyFollow", "holdFollowObservation", "releaseFollowObservation", "handleScrollPositionChange"];
 
 // 只剥掉 TypeScript 语法；判定（reduceFollow）、抑制器与滚动观测的接线都是真的，
 // 意图窗口、滚动元素、滚动入口与状态落点是 doubles。
@@ -23,12 +14,7 @@ const { outputText } = ts.transpileModule(
   { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
 );
 
-function harness({
-  intentUntil = 0,
-  scrollHeight = 4000,
-  clientHeight = 800,
-  now = () => Date.now(),
-} = {}) {
+function harness({ intentUntil = 0, scrollHeight = 4000, clientHeight = 800, now = () => Date.now() } = {}) {
   const container = { scrollHeight, clientHeight, scrollTop: scrollHeight - clientHeight };
   const intentUntilRef = { current: intentUntil };
   const followStates = [];
@@ -162,14 +148,8 @@ test("reads the scroll position no matter whether the session is running", () =>
     /if \(followObservationHeldRef\.current && Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/,
   );
   // 到期收回走同一个松开入口：合上状态与截止时间的写入只有 releaseFollowObservation 一处。
-  assert.match(
-    handler,
-    /if \(followObservationHeldRef\.current\) \{[\s\S]*?releaseFollowObservation\(\);/,
-  );
-  assert.match(
-    handler,
-    /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/,
-  );
+  assert.match(handler, /if \(followObservationHeldRef\.current\) \{[\s\S]*?releaseFollowObservation\(\);/);
+  assert.match(handler, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
 });
 
 test("bounds the observation hold with a deadline", () => {

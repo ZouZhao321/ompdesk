@@ -4,26 +4,11 @@ import { useEffect, useState, useRef, useCallback, useMemo, type MouseEvent } fr
 import ReactMarkdown from "react-markdown";
 import { useTheme } from "@/hooks/useTheme";
 import { SourceView, SOURCE_CODE_STYLE, SOURCE_LINE_NUMBER_STYLE } from "./SourceCodeView";
-import {
-  DOCX_PREVIEW_MAX_BYTES,
-  getFileExt,
-  isAudioPath,
-  isDocumentPreviewPath,
-  isImagePath,
-} from "@/lib/file-types";
-import {
-  getFileApiUrl,
-  getFileDirectory,
-  getFileName,
-  getRelativeFilePath,
-} from "@/lib/file-paths";
+import { DOCX_PREVIEW_MAX_BYTES, getFileExt, isAudioPath, isDocumentPreviewPath, isImagePath } from "@/lib/file-types";
+import { getFileApiUrl, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { resolveLocalFileHref } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
-import {
-  markdownPreviewRehypePlugins,
-  markdownPreviewRemarkPlugins,
-  normalizeDisplayMath,
-} from "@/lib/markdown";
+import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "./MermaidBlock";
 import { ImageZoomSurface } from "./ImageZoom";
 import { MarkdownImage } from "./MarkdownImage";
@@ -31,10 +16,7 @@ import { FrontmatterCard } from "./FrontmatterCard";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
 import { useI18n } from "@/hooks/useI18n";
-import {
-  useCommentTranslationLookup,
-  useCommentTranslationPreference,
-} from "@/hooks/useCommentTranslation";
+import { useCommentTranslationLookup, useCommentTranslationPreference } from "@/hooks/useCommentTranslation";
 import { extractCommentEntries } from "@/lib/comment-entries";
 import {
   commentTranslationKeys,
@@ -98,14 +80,10 @@ function MentionIcon() {
 }
 
 /** 相邻的源码行，跳过不占行号的译文行。 */
-function adjacentSourceLine(
-  element: HTMLElement,
-  direction: "next" | "previous",
-): HTMLElement | null {
+function adjacentSourceLine(element: HTMLElement, direction: "next" | "previous"): HTMLElement | null {
   let sibling = direction === "next" ? element.nextElementSibling : element.previousElementSibling;
   while (sibling) {
-    if (sibling instanceof HTMLElement && sibling.matches(".file-source-line[data-line-number]"))
-      return sibling;
+    if (sibling instanceof HTMLElement && sibling.matches(".file-source-line[data-line-number]")) return sibling;
     sibling = direction === "next" ? sibling.nextElementSibling : sibling.previousElementSibling;
   }
   return null;
@@ -124,10 +102,7 @@ function closestSourceLine(node: Node): HTMLElement | null {
   return translation ? adjacentSourceLine(translation, "previous") : null;
 }
 
-function getSelectedSourceLineRange(
-  root: HTMLElement,
-  selection: Selection | null,
-): SelectedLineRange | null {
+function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | null): SelectedLineRange | null {
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
 
   const range = selection.getRangeAt(0);
@@ -135,8 +110,7 @@ function getSelectedSourceLineRange(
 
   let startElement = closestSourceLine(range.startContainer);
   let endElement = closestSourceLine(range.endContainer);
-  if (!startElement || !endElement || !root.contains(startElement) || !root.contains(endElement))
-    return null;
+  if (!startElement || !endElement || !root.contains(startElement) || !root.contains(endElement)) return null;
 
   let startLine = Number(startElement.dataset.lineNumber);
   let endLine = Number(endElement.dataset.lineNumber);
@@ -250,13 +224,7 @@ function useFileWatch({
   return watching;
 }
 
-function DownloadLink({
-  filePath,
-  sourceSessionId,
-}: {
-  filePath: string;
-  sourceSessionId?: string | null;
-}) {
+function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceSessionId?: string | null }) {
   const { t } = useI18n();
   return (
     <a
@@ -368,8 +336,7 @@ function DiffView({ patch }: { patch: string }) {
     }
   }
 
-  const segments: Array<{ hidden: true; count: number } | { hidden: false; lines: DiffLine[] }> =
-    [];
+  const segments: Array<{ hidden: true; count: number } | { hidden: false; lines: DiffLine[] }> = [];
   let i = 0;
   while (i < diff.length) {
     if (visible.has(i)) {
@@ -426,11 +393,7 @@ function DiffView({ patch }: { patch: string }) {
                 : "transparent";
           const prefix = line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
           const prefixColor =
-            line.type === "added"
-              ? "#4ade80"
-              : line.type === "removed"
-                ? "#f87171"
-                : "var(--text-dim)";
+            line.type === "added" ? "#4ade80" : line.type === "removed" ? "#f87171" : "var(--text-dim)";
 
           return (
             <div
@@ -448,9 +411,7 @@ function DiffView({ patch }: { patch: string }) {
                       : "3px solid transparent",
               }}
             >
-              <span style={SOURCE_LINE_NUMBER_STYLE}>
-                {line.type === "removed" ? line.oldLineNo : line.newLineNo}
-              </span>
+              <span style={SOURCE_LINE_NUMBER_STYLE}>{line.type === "removed" ? line.oldLineNo : line.newLineNo}</span>
               <span
                 style={{
                   minWidth: 16,
@@ -487,9 +448,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
   const { t } = useI18n();
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
-  const [naturalSize, setNaturalSize] = useState<{ src: string; w: number; h: number } | null>(
-    null,
-  );
+  const [naturalSize, setNaturalSize] = useState<{ src: string; w: number; h: number } | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 
@@ -667,9 +626,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId, active = true }: Props) {
       >
         <div style={{ width: "min(680px, 100%)" }}>
           {error && (
-            <div style={{ color: "#f87171", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
-              {error}
-            </div>
+            <div style={{ color: "#f87171", fontSize: 13, marginBottom: 12, textAlign: "center" }}>{error}</div>
           )}
           <audio
             key={src}
@@ -833,34 +790,13 @@ export function FileViewer({
   active = true,
 }: Props) {
   if (isImagePath(filePath)) {
-    return (
-      <ImageViewer
-        filePath={filePath}
-        cwd={cwd}
-        sourceSessionId={sourceSessionId}
-        active={active}
-      />
-    );
+    return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
   if (isAudioPath(filePath)) {
-    return (
-      <AudioViewer
-        filePath={filePath}
-        cwd={cwd}
-        sourceSessionId={sourceSessionId}
-        active={active}
-      />
-    );
+    return <AudioViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
   if (isDocumentPreviewPath(filePath)) {
-    return (
-      <DocumentViewer
-        filePath={filePath}
-        cwd={cwd}
-        sourceSessionId={sourceSessionId}
-        active={active}
-      />
-    );
+    return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
   return (
     <TextFileViewer
@@ -968,10 +904,7 @@ function TextFileViewer({
     // HTML gets the same rendered-first treatment as markdown: a generated page
     // is usually more useful viewed than read as source. Both have a preview
     // mode already; the source tab stays one click away.
-    if (
-      (data?.language === "markdown" || data?.language === "html") &&
-      initialDisplayMode !== "diff"
-    ) {
+    if ((data?.language === "markdown" || data?.language === "html") && initialDisplayMode !== "diff") {
       setDisplayMode("preview");
     }
   }, [data?.language, initialDisplayMode]);
@@ -1013,20 +946,14 @@ function TextFileViewer({
     [data],
   );
 
-  const frontmatter = useMemo(
-    () => (data?.language === "markdown" ? parseFrontmatter(data.content) : null),
-    [data],
-  );
+  const frontmatter = useMemo(() => (data?.language === "markdown" ? parseFrontmatter(data.content) : null), [data]);
 
   // 注释译文只对 .ts/.tsx 生效；开关默认关闭，关闭时不产生任何译文行。
   const supportsCommentTranslation = /\.(ts|tsx)$/i.test(filePath);
   const commentTranslationEnabled = useCommentTranslationPreference();
   const translationTarget = commentTranslationTarget(locale);
   const showCommentTranslations =
-    supportsCommentTranslation &&
-    commentTranslationEnabled &&
-    displayMode === "source" &&
-    !isDeletedDiff;
+    supportsCommentTranslation && commentTranslationEnabled && displayMode === "source" && !isDeletedDiff;
 
   const commentEntries = useMemo(
     () =>
@@ -1037,15 +964,11 @@ function TextFileViewer({
   );
 
   const translationKeys = useMemo(
-    () =>
-      showCommentTranslations ? commentTranslationKeys(commentEntries, translationTarget) : [],
+    () => (showCommentTranslations ? commentTranslationKeys(commentEntries, translationTarget) : []),
     [commentEntries, showCommentTranslations, translationTarget],
   );
 
-  const commentTranslations = useCommentTranslationLookup(
-    translationKeys,
-    active && showCommentTranslations,
-  );
+  const commentTranslations = useCommentTranslationLookup(translationKeys, active && showCommentTranslations);
 
   // 译文行按源码行号索引；字典或开关变化都会让这个映射重建，查看器随之更新。
   const translationRows = useMemo(
@@ -1067,9 +990,7 @@ function TextFileViewer({
     const updateSelectedLineRange = () => {
       const root = contentRef.current;
       setSelectedLineRange(
-        displayMode === "source" && root
-          ? getSelectedSourceLineRange(root, window.getSelection())
-          : null,
+        displayMode === "source" && root ? getSelectedSourceLineRange(root, window.getSelection()) : null,
       );
     };
 
@@ -1101,8 +1022,7 @@ function TextFileViewer({
         return;
 
       const target = event.target;
-      if (target instanceof Element && target.closest("input, textarea, [contenteditable='true']"))
-        return;
+      if (target instanceof Element && target.closest("input, textarea, [contenteditable='true']")) return;
 
       const root = contentRef.current;
       const lineRange = root ? getSelectedSourceLineRange(root, window.getSelection()) : null;
@@ -1162,11 +1082,7 @@ function TextFileViewer({
   const effectiveDisplayMode = isDeletedDiff ? "diff" : displayMode;
   const displayModes: DisplayMode[] = isDeletedDiff
     ? ["diff"]
-    : [
-        "source",
-        ...(hasPreview ? ["preview" as const] : []),
-        ...(hasGitDiff ? ["diff" as const] : []),
-      ];
+    : ["source", ...(hasPreview ? ["preview" as const] : []), ...(hasGitDiff ? ["diff" as const] : [])];
   const metadata = isDeletedDiff
     ? t("files.deleted")
     : `${language} · ${lines.length} lines · ${formatSize(data!.size)}`;
@@ -1190,11 +1106,7 @@ function TextFileViewer({
           flexShrink: 0,
         }}
       >
-        <span
-          className="file-viewer-path"
-          style={{ fontFamily: "var(--font-mono)" }}
-          title={filePath}
-        >
+        <span className="file-viewer-path" style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
 
@@ -1301,14 +1213,10 @@ function TextFileViewer({
                     type="button"
                     onClick={() => setCommentTranslationPreference(!commentTranslationEnabled)}
                     title={
-                      commentTranslationEnabled
-                        ? t("i18n.hideCommentTranslations")
-                        : t("i18n.showCommentTranslations")
+                      commentTranslationEnabled ? t("i18n.hideCommentTranslations") : t("i18n.showCommentTranslations")
                     }
                     aria-label={
-                      commentTranslationEnabled
-                        ? t("i18n.hideCommentTranslations")
-                        : t("i18n.showCommentTranslations")
+                      commentTranslationEnabled ? t("i18n.hideCommentTranslations") : t("i18n.showCommentTranslations")
                     }
                     aria-pressed={commentTranslationEnabled}
                     className="file-viewer-icon-button"
@@ -1317,13 +1225,7 @@ function TextFileViewer({
                       color: commentTranslationEnabled ? "var(--text)" : "var(--text-muted)",
                     }}
                   >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" />
                     </svg>
                   </button>

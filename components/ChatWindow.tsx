@@ -31,11 +31,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { buildRewindEntries } from "@/lib/rewind";
 import type { DisplayOptions } from "@/lib/message-display";
 import type { WrittenFile } from "@/lib/turn-written-files";
-import {
-  isUserSkillPrompt,
-  skillPromptCommandLabel,
-  type SkillPromptDetailsLike,
-} from "@/lib/slash-display";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { buildTranscriptItems } from "@/lib/transcript-items";
 import {
   buildTranscriptRailDots,
@@ -48,12 +44,7 @@ import {
   type RailRenderedItem,
 } from "@/lib/transcript-rail";
 import { FOLLOW_BOTTOM_THRESHOLD_PX } from "@/lib/transcript-follow";
-import {
-  RAIL_JUMP_IDLE,
-  RAIL_JUMP_SETTLE_MS,
-  settleRailJump,
-  type RailJumpState,
-} from "@/lib/transcript-rail-jump";
+import { RAIL_JUMP_IDLE, RAIL_JUMP_SETTLE_MS, settleRailJump, type RailJumpState } from "@/lib/transcript-rail-jump";
 import { buildVirtualTranscriptModel, transcriptFollowOutput } from "@/lib/transcript-virtual-list";
 import {
   hasTranscriptLiveTail,
@@ -62,11 +53,7 @@ import {
   withTranscriptLiveTail,
   type TranscriptListItem,
 } from "@/lib/transcript-live-tail";
-import {
-  PROCESS_DETAILS_PART,
-  transcriptViewState,
-  useTranscriptExpanded,
-} from "@/lib/transcript-view-state";
+import { PROCESS_DETAILS_PART, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { MessageView } from "./MessageView";
 import { TranscriptRail } from "./TranscriptRail";
 import { MarkdownBody } from "./MarkdownBody";
@@ -180,12 +167,7 @@ function TranscriptFooterSlot({ context }: { context?: TranscriptSlotsContext })
  * 列表容器自己画：Virtuoso 的测量 ref 与跳转条的位置 ref 一起挂上。
  * 只透传 `ListProps` 里的三个属性，渲染 context 不落到 DOM 上。
  */
-function TranscriptListSlot({
-  ref: measurementRef,
-  "data-testid": testId,
-  style,
-  children,
-}: ListProps) {
+function TranscriptListSlot({ ref: measurementRef, "data-testid": testId, style, children }: ListProps) {
   const railListRef = useContext(TranscriptListRefContext);
   const attach = useCallback(
     (node: HTMLDivElement | null) => {
@@ -211,9 +193,7 @@ const TRANSCRIPT_SLOTS: Components<TranscriptListItem, TranscriptSlotsContext> =
 function getUserInputText(message: AgentMessage): string | null {
   // 技能指令是用户回合，跳转条与输入历史都要把它算进来。
   if (message.role === "custom" && isUserSkillPrompt(message as CustomMessage)) {
-    const label = skillPromptCommandLabel(
-      (message as CustomMessage).details as SkillPromptDetailsLike | undefined,
-    );
+    const label = skillPromptCommandLabel((message as CustomMessage).details as SkillPromptDetailsLike | undefined);
     return label.trim().length > 0 ? label.trim() : null;
   }
   if (message.role !== "user") return null;
@@ -247,18 +227,12 @@ function ProcessDetailsGroup({
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   // 展开状态存在转写视图状态里，虚拟列表卸载本组后重建仍保留用户的选择。
-  const expanded = useTranscriptExpanded(
-    sessionId,
-    anchorEntryId,
-    PROCESS_DETAILS_PART,
-    defaultExpanded,
-  );
+  const expanded = useTranscriptExpanded(sessionId, anchorEntryId, PROCESS_DETAILS_PART, defaultExpanded);
   const parts = [
     t("chat.processDetails"),
     `${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`,
   ];
-  if (toolCallCount > 0)
-    parts.push(`${toolCallCount} ${t(toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
+  if (toolCallCount > 0) parts.push(`${toolCallCount} ${t(toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -266,12 +240,7 @@ function ProcessDetailsGroup({
         type="button"
         aria-expanded={expanded}
         onClick={() =>
-          transcriptViewState.toggleExpanded(
-            sessionId,
-            anchorEntryId,
-            PROCESS_DETAILS_PART,
-            defaultExpanded,
-          )
+          transcriptViewState.toggleExpanded(sessionId, anchorEntryId, PROCESS_DETAILS_PART, defaultExpanded)
         }
         className="process-details-toggle"
         style={{
@@ -364,23 +333,15 @@ interface RowMessageOptions {
 function previousTimestampOf(messages: AgentMessage[], idx: number): number | undefined {
   if (idx <= 0) return undefined;
   const previous = messages[idx - 1];
-  return previous && "timestamp" in previous && typeof previous.timestamp === "number"
-    ? previous.timestamp
-    : undefined;
+  return previous && "timestamp" in previous && typeof previous.timestamp === "number" ? previous.timestamp : undefined;
 }
 
 // 视图状态的锚点：一轮里所有部件都挂在提问那条消息的 entryId 上，
 // 这样过程组与工具块的展开状态不随分组结果变化；独立渲染的消息退化为自身 entryId。
-function renderRowMessage(
-  row: TranscriptRowContext,
-  idx: number,
-  options: RowMessageOptions = {},
-): ReactNode {
+function renderRowMessage(row: TranscriptRowContext, idx: number, options: RowMessageOptions = {}): ReactNode {
   const msg = options.messageOverride ?? row.messages[idx];
   const prevAssistantEntryId =
-    msg.role === "user" && idx > 0 && row.messages[idx - 1].role === "assistant"
-      ? row.entryIds[idx - 1]
-      : undefined;
+    msg.role === "user" && idx > 0 && row.messages[idx - 1].role === "assistant" ? row.entryIds[idx - 1] : undefined;
   const keyPrefix = options.keyPrefix ?? "message";
   let showTimestamp = false;
   if (msg.role === "assistant") {
@@ -408,9 +369,7 @@ function renderRowMessage(
       cwd={row.cwd}
       onOpenFile={row.onOpenFile}
       entryId={row.entryIds[idx]}
-      onFork={
-        row.sessionBusy || row.isNew || (idx === 0 && msg.role === "user") ? undefined : row.onFork
-      }
+      onFork={row.sessionBusy || row.isNew || (idx === 0 && msg.role === "user") ? undefined : row.onFork}
       forking={row.forkingEntryId === row.entryIds[idx]}
       onNavigate={row.sessionBusy ? undefined : row.onNavigate}
       prevAssistantEntryId={row.sessionBusy ? undefined : prevAssistantEntryId}
@@ -484,9 +443,7 @@ function renderTranscriptItem(row: TranscriptRowContext, item: TranscriptListIte
           writtenFiles: item.writtenFiles,
           turnAnchorEntryId,
         })}
-      {item.tailIndices.map((messageIndex) =>
-        renderRowMessage(row, messageIndex, { turnAnchorEntryId }),
-      )}
+      {item.tailIndices.map((messageIndex) => renderRowMessage(row, messageIndex, { turnAnchorEntryId }))}
     </>
   );
 }
@@ -681,10 +638,7 @@ export function ChatWindow({
   // omp's render-affecting settings (hideThinkingBlock). Synced here once for
   // the whole transcript; MessageView reads the shared store directly.
   const { hideThinkingBlock } = useSyncedDisplaySettings(newSessionCwd ?? session?.cwd ?? null);
-  const displayOptions = useMemo<DisplayOptions>(
-    () => ({ hideThinking: hideThinkingBlock }),
-    [hideThinkingBlock],
-  );
+  const displayOptions = useMemo<DisplayOptions>(() => ({ hideThinking: hideThinkingBlock }), [hideThinkingBlock]);
 
   useEffect(() => {
     if (!extensionDialog || soundedExtensionDialogIdRef.current === extensionDialog.id) return;
@@ -763,8 +717,7 @@ export function ChatWindow({
     [sessionBusy, chatInputRef],
   );
 
-  const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } =
-    useDragDrop(onDrop);
+  const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
   // Stable Map identity: `messages` doesn't change during streaming updates
   // (the streaming message lives in streamState), so memoized MessageViews
@@ -805,15 +758,7 @@ export function ChatWindow({
         toolResults: toolResultsMap,
         cwd: messageCwd,
       }),
-    [
-      messages,
-      entryIds,
-      displayOptions,
-      streamState.isStreaming,
-      sessionBusy,
-      toolResultsMap,
-      messageCwd,
-    ],
+    [messages, entryIds, displayOptions, streamState.isStreaming, sessionBusy, toolResultsMap, messageCwd],
   );
 
   // 流式消息是列表的最后一项：它跟着数据块更新，前面的条目保持原对象。
@@ -824,9 +769,7 @@ export function ChatWindow({
     () => withTranscriptLiveTail(groupedTranscriptItems, streamingTranscriptMessage),
     [groupedTranscriptItems, streamingTranscriptMessage],
   );
-  const transcriptLiveTailKey = hasTranscriptLiveTail(streamingTranscriptMessage)
-    ? TRANSCRIPT_LIVE_TAIL_KEY
-    : null;
+  const transcriptLiveTailKey = hasTranscriptLiveTail(streamingTranscriptMessage) ? TRANSCRIPT_LIVE_TAIL_KEY : null;
 
   // 键与首屏定位只由分组结果与合成项的有无决定：流式数据块因此不重建键数组，
   // 列表每块拿到的 itemKeys 与 computeItemKey 都是同一份引用。
@@ -885,9 +828,7 @@ export function ChatWindow({
     // 可见条目走，否则短会话的最后一个圆点会一直高亮。
     const scrollable = scroller.scrollHeight > scroller.clientHeight;
     const atBottom =
-      scrollable &&
-      scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <=
-        FOLLOW_BOTTOM_THRESHOLD_PX;
+      scrollable && scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= FOLLOW_BOTTOM_THRESHOLD_PX;
     setRailAtBottom((current) => (current === atBottom ? current : atBottom));
   }, [scrollContainerRef]);
 
@@ -947,8 +888,7 @@ export function ChatWindow({
       railScrollCleanupRef.current = null;
       if (!(element instanceof HTMLDivElement)) return;
       element.addEventListener("scroll", scheduleRailMeasure, { passive: true });
-      railScrollCleanupRef.current = () =>
-        element.removeEventListener("scroll", scheduleRailMeasure);
+      railScrollCleanupRef.current = () => element.removeEventListener("scroll", scheduleRailMeasure);
       syncRailTopItem();
     },
     [scrollContainerRef, scheduleRailMeasure, syncRailTopItem],
@@ -984,10 +924,7 @@ export function ChatWindow({
     virtuosoRef.current?.scrollToIndex({ index: settled.realign, align: "start" });
     // 重定位同样是一次程序化落点，抑制器继续合着：由这次滚动的停止回调松开，
     // 等不到回调时由兜底定时器松开。
-    railJumpTimerRef.current = window.setTimeout(
-      () => settleRailJumpNowRef.current(),
-      RAIL_JUMP_SETTLE_MS,
-    );
+    railJumpTimerRef.current = window.setTimeout(() => settleRailJumpNowRef.current(), RAIL_JUMP_SETTLE_MS);
   }, [clearRailJumpTimer, releaseFollowObservation]);
   settleRailJumpNowRef.current = settleRailJumpNow;
 
@@ -1029,10 +966,7 @@ export function ChatWindow({
   const measureTranscriptAtBottom = useCallback(() => {
     const scroller = scrollContainerRef.current;
     if (!scroller) return null;
-    return (
-      scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <=
-      FOLLOW_BOTTOM_THRESHOLD_PX
-    );
+    return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= FOLLOW_BOTTOM_THRESHOLD_PX;
   }, [scrollContainerRef]);
 
   // 列表停稳：按实测高度收尾一次跳转，并松开落点抑制器。两条时机共用同一份目标，
@@ -1053,8 +987,7 @@ export function ChatWindow({
   // 卸载时取消还没落地的确认帧。
   useEffect(
     () => () => {
-      if (transcriptAtBottomFrameRef.current !== 0)
-        cancelAnimationFrame(transcriptAtBottomFrameRef.current);
+      if (transcriptAtBottomFrameRef.current !== 0) cancelAnimationFrame(transcriptAtBottomFrameRef.current);
     },
     [],
   );
@@ -1194,9 +1127,7 @@ export function ChatWindow({
   );
 
   const renderTranscriptRow = useCallback(
-    (_index: number, item: TranscriptListItem) => (
-      <TranscriptRow item={item} row={transcriptRowContext} />
-    ),
+    (_index: number, item: TranscriptListItem) => <TranscriptRow item={item} row={transcriptRowContext} />,
     [transcriptRowContext],
   );
 
@@ -1243,15 +1174,7 @@ export function ChatWindow({
         )}
       </div>
     ),
-    [
-      agentRunning,
-      streamingMessageInList,
-      agentPhase,
-      t,
-      bashRunning,
-      pendingBash,
-      activeSessionId,
-    ],
+    [agentRunning, streamingMessageInList, agentPhase, t, bashRunning, pendingBash, activeSessionId],
   );
   const transcriptSlots = useMemo<TranscriptSlotsContext>(
     () => ({ header: transcriptHeader, footer: transcriptFooter }),
@@ -1259,11 +1182,7 @@ export function ChatWindow({
   );
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center text-text-muted">
-        {t("chat.loadingSession")}
-      </div>
-    );
+    return <div className="flex h-full items-center justify-center text-text-muted">{t("chat.loadingSession")}</div>;
   }
 
   if (error) {
@@ -1315,14 +1234,7 @@ export function ChatWindow({
               strokeWidth="1.4"
               strokeLinejoin="round"
             />
-            <circle
-              cx="96"
-              cy="58"
-              r="8"
-              fill="rgba(37,99,235,0.22)"
-              stroke="rgba(37,99,235,0.55)"
-              strokeWidth="1.6"
-            />
+            <circle cx="96" cy="58" r="8" fill="rgba(37,99,235,0.22)" stroke="rgba(37,99,235,0.55)" strokeWidth="1.6" />
             <g stroke="rgba(37,99,235,0.45)" strokeWidth="1.4" strokeLinecap="round">
               <line x1="96" y1="46" x2="96" y2="43" />
               <line x1="96" y1="70" x2="96" y2="73" />
@@ -1337,17 +1249,11 @@ export function ChatWindow({
         </div>
       )}
 
-      {extensionDialog && (
-        <ExtensionDialog request={extensionDialog} onRespond={respondToExtensionUi} />
-      )}
+      {extensionDialog && <ExtensionDialog request={extensionDialog} onRespond={respondToExtensionUi} />}
 
-      {extensionCustomUi && (
-        <ExtensionCustomPanel request={extensionCustomUi} onInput={sendExtensionCustomInput} />
-      )}
+      {extensionCustomUi && <ExtensionCustomPanel request={extensionCustomUi} onInput={sendExtensionCustomInput} />}
 
-      {rewindOpen && (
-        <RewindDialog entries={rewindEntries} onSelect={selectRewindEntry} onClose={closeRewind} />
-      )}
+      {rewindOpen && <RewindDialog entries={rewindEntries} onSelect={selectRewindEntry} onClose={closeRewind} />}
 
       {isEmptyNew ? (
         <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8">
@@ -1377,16 +1283,10 @@ export function ChatWindow({
                 }}
               >
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  web{" "}
-                  <span style={{ color: "var(--text)" }}>
-                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}
-                  </span>
+                  web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
                 </span>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  omp{" "}
-                  <span style={{ color: "var(--text)" }}>
-                    v{process.env.NEXT_PUBLIC_OMP_VERSION ?? "0.0.0"}
-                  </span>
+                  omp <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_OMP_VERSION ?? "0.0.0"}</span>
                 </span>
               </div>
             </div>
@@ -1573,9 +1473,7 @@ function GoalBar({
       >
         {goal.objective}
       </span>
-      <span style={{ flexShrink: 0, color: "var(--text-dim)" }}>
-        {paused ? t("chat.goalPaused") : goal.status}
-      </span>
+      <span style={{ flexShrink: 0, color: "var(--text-dim)" }}>{paused ? t("chat.goalPaused") : goal.status}</span>
       <span style={{ flexShrink: 0, color: "var(--text-dim)" }}>{budget}</span>
     </div>
   );
@@ -1763,8 +1661,7 @@ function ExtensionDialog({
   if (request.method === "ask") {
     const canSubmit = request.questions.every(
       (question) =>
-        (selectedOptions[question.id]?.length ?? 0) > 0 ||
-        (customAnswers[question.id]?.trim().length ?? 0) > 0,
+        (selectedOptions[question.id]?.length ?? 0) > 0 || (customAnswers[question.id]?.trim().length ?? 0) > 0,
     );
     const toggleOption = (questionId: string, optionIndex: number, multi: boolean) => {
       setSelectedOptions((current) => {
@@ -1861,12 +1758,8 @@ function ExtensionDialog({
               ?
             </span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 680 }}>
-                {t("chat.agentQuestion")}
-              </div>
-              <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11 }}>
-                {t("chat.agentQuestionHint")}
-              </div>
+              <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 680 }}>{t("chat.agentQuestion")}</div>
+              <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11 }}>{t("chat.agentQuestionHint")}</div>
             </div>
           </div>
 
@@ -1891,9 +1784,7 @@ function ExtensionDialog({
                       background: "var(--bg-panel)",
                     }}
                   >
-                    <div
-                      style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}
-                    >
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
                       {question.header && (
                         <span
                           style={{
@@ -1945,9 +1836,7 @@ function ExtensionDialog({
                             type="button"
                             role={question.multi ? "checkbox" : "radio"}
                             aria-checked={checked}
-                            onClick={() =>
-                              toggleOption(question.id, optionIndex, question.multi ?? false)
-                            }
+                            onClick={() => toggleOption(question.id, optionIndex, question.multi ?? false)}
                             style={{
                               display: "grid",
                               gridTemplateColumns: "18px minmax(0, 1fr) auto",
@@ -1958,9 +1847,7 @@ function ExtensionDialog({
                               padding: "9px 10px",
                               border: `1px solid ${checked ? "color-mix(in srgb, var(--accent) 55%, var(--border))" : "var(--border)"}`,
                               borderRadius: 7,
-                              background: checked
-                                ? "color-mix(in srgb, var(--accent) 8%, var(--bg))"
-                                : "var(--bg)",
+                              background: checked ? "color-mix(in srgb, var(--accent) 8%, var(--bg))" : "var(--bg)",
                               color: "var(--text)",
                               cursor: "pointer",
                               textAlign: "left",
@@ -2075,8 +1962,7 @@ function ExtensionDialog({
                         }))
                       }
                       onKeyDown={(event) => {
-                        if ((event.metaKey || event.ctrlKey) && event.key === "Enter")
-                          submitAnswers();
+                        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitAnswers();
                       }}
                       placeholder={t("chat.customAnswer")}
                       aria-label={t("chat.customAnswer")}
@@ -2344,9 +2230,7 @@ function ExtensionDialog({
         aria-modal="true"
         style={{
           width: "min(560px, 100%)",
-          maxHeight: isMobile
-            ? "min(100%, calc(var(--app-viewport-height, 100dvh) - 24px))"
-            : undefined,
+          maxHeight: isMobile ? "min(100%, calc(var(--app-viewport-height, 100dvh) - 24px))" : undefined,
           display: isMobile ? "flex" : undefined,
           flexDirection: isMobile ? "column" : undefined,
           border: "1px solid var(--border)",
@@ -2659,9 +2543,7 @@ function ExtensionCustomPanel({
             flexShrink: isMobile ? 0 : undefined,
           }}
         >
-          <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 650 }}>
-            {t("chat.extensionPanel")}
-          </div>
+          <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 650 }}>{t("chat.extensionPanel")}</div>
           <button
             onClick={() => onInput(request, "\x03")}
             style={{

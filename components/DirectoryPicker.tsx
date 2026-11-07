@@ -303,10 +303,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
           </button>
         </form>
 
-        <div
-          className="directory-picker-list"
-          style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "8px 10px" }}
-        >
+        <div className="directory-picker-list" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "8px 10px" }}>
           {loading ? (
             <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>
               {t("directoryPicker.loadingDirectories")}
@@ -374,11 +371,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
                 }}
               >
                 <FolderIcon />
-                <span
-                  style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                >
-                  {entry.name}
-                </span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.name}</span>
               </button>
             ))
           ) : (
@@ -387,9 +380,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
             </div>
           )}
           {(loadError || error) && (
-            <div style={{ padding: "8px", color: "#dc2626", fontSize: 11 }}>
-              {loadError ?? error}
-            </div>
+            <div style={{ padding: "8px", color: "#dc2626", fontSize: 11 }}>{loadError ?? error}</div>
           )}
         </div>
 

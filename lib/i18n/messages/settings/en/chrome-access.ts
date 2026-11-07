@@ -22,8 +22,7 @@ export const chromeAccess: Record<string, string> = {
   "settings.access.replacePassword": "Replace the password",
   "settings.access.setPassword": "Set a password",
   "settings.access.newPassword": "New password",
-  "settings.access.newPasswordHint":
-    "At least {count} characters. Saving a password also turns password access on.",
+  "settings.access.newPasswordHint": "At least {count} characters. Saving a password also turns password access on.",
   "settings.access.confirmPassword": "Confirm password",
   "settings.access.confirmPasswordHint": "Both entries have to match before it can be saved.",
   "settings.access.lastChanged": "Last changed {time}",
@@ -46,7 +45,6 @@ export const chromeAccess: Record<string, string> = {
     'Password saved and password access turned on. The browser will ask for the username "{username}" and this password on the next request.',
   "settings.access.enabled":
     'Password access is on. The browser will ask for the username "{username}" and your password on the next request.',
-  "settings.access.disabled":
-    "Password access is off. The stored password is kept and can be switched back on here.",
+  "settings.access.disabled": "Password access is off. The stored password is kept and can be switched back on here.",
   "settings.access.cleared": "The stored password was removed and password access is off.",
 };

@@ -101,17 +101,11 @@ function getSpecialFileIcon(name: string): CatppuccinIconName | undefined {
   if ([".gitignore", ".gitattributes", ".gitmodules"].includes(name)) return "git";
   if (name === "package-lock.json") return "npm-lock";
   if (name === "bun.lock") return "bun-lock";
-  if (["next.config.js", "next.config.mjs", "next.config.cjs", "next.config.ts"].includes(name))
-    return "next";
+  if (["next.config.js", "next.config.mjs", "next.config.cjs", "next.config.ts"].includes(name)) return "next";
   if (
-    [
-      ".eslintrc",
-      ".eslintrc.js",
-      ".eslintrc.json",
-      ".eslintrc.yml",
-      "eslint.config.mjs",
-      "eslint.config.js",
-    ].includes(name)
+    [".eslintrc", ".eslintrc.js", ".eslintrc.json", ".eslintrc.yml", "eslint.config.mjs", "eslint.config.js"].includes(
+      name,
+    )
   )
     return "eslint";
   if (["yarn.lock", "pnpm-lock.yaml", "cargo.lock"].includes(name)) return "lock";

@@ -23,9 +23,6 @@ export const GET = withRequestLog("/api/sessions", async (req: Request) => {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    return NextResponse.json(
-      { error: String(error) },
-      { status: 500, headers: { "Cache-Control": "no-store" } },
-    );
+    return NextResponse.json({ error: String(error) }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 });

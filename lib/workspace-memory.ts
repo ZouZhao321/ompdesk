@@ -74,10 +74,7 @@ export function setLastOpenSession(
   }
 }
 
-export function clearLastOpen(
-  workspaceKey: string,
-  storage: StorageLike | null = getBrowserStorage(),
-): void {
+export function clearLastOpen(workspaceKey: string, storage: StorageLike | null = getBrowserStorage()): void {
   if (!storage) return;
   try {
     const map = readMap(storage);
@@ -137,10 +134,7 @@ export function clearSessionContinuation(
   expectedRuntimeId?: string,
 ): void {
   try {
-    if (
-      expectedRuntimeId &&
-      JSON.parse(storage?.getItem(CONTINUATION_KEY) ?? "null")?.runtimeId !== expectedRuntimeId
-    )
+    if (expectedRuntimeId && JSON.parse(storage?.getItem(CONTINUATION_KEY) ?? "null")?.runtimeId !== expectedRuntimeId)
       return;
     storage?.removeItem(CONTINUATION_KEY);
   } catch {
@@ -158,7 +152,6 @@ export function restoreSessionContinuation(
   const runtimeId = getSessionContinuation(sessionId, storage);
   const canonicalId = runtimeId ? (sessionIdsByRuntimeId[runtimeId] ?? sessionId) : sessionId;
   const session =
-    sessions.find((entry) => entry.id === canonicalId) ??
-    sessions.find((entry) => entry.id === sessionId);
+    sessions.find((entry) => entry.id === canonicalId) ?? sessions.find((entry) => entry.id === sessionId);
   return session ? { ...session, id: canonicalId, runtimeId } : undefined;
 }

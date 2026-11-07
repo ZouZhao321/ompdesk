@@ -9,13 +9,7 @@ function hostnameFromAuthority(value: string): string | null {
   if (!value || /[\s/@\\]/.test(value)) return null;
   try {
     const parsed = new URL(`http://${value}`);
-    if (
-      parsed.username ||
-      parsed.password ||
-      parsed.pathname !== "/" ||
-      parsed.search ||
-      parsed.hash
-    ) {
+    if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
       return null;
     }
     return normalizeHostname(parsed.hostname);
@@ -35,10 +29,9 @@ function isLoopbackHostname(hostname: string): boolean {
 }
 
 function configuredHostnamesFromEnvironment(): string[] {
-  return [
-    process.env.OMPDESK_HOSTNAME,
-    ...(process.env.OMPDESK_ALLOWED_HOSTS?.split(",") ?? []),
-  ].filter((value): value is string => Boolean(value?.trim()));
+  return [process.env.OMPDESK_HOSTNAME, ...(process.env.OMPDESK_ALLOWED_HOSTS?.split(",") ?? [])].filter(
+    (value): value is string => Boolean(value?.trim()),
+  );
 }
 
 function canonicalOrigin(value: string): string | null {
@@ -86,9 +79,7 @@ export function isApiRequestHostAllowed(
   if (!hostname) return false;
   if (isLoopbackHostname(hostname) || isIP(hostname)) return true;
 
-  return configuredHostnames.some(
-    (configured) => normalizeConfiguredHostname(configured) === hostname,
-  );
+  return configuredHostnames.some((configured) => normalizeConfiguredHostname(configured) === hostname);
 }
 
 /** Reject browser cross-site API requests while preserving non-browser clients. */
@@ -118,7 +109,6 @@ export function isApiRequestAllowed(
 export function hasJsonContentType(request: Request): boolean {
   const mediaType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
   return (
-    mediaType === "application/json" ||
-    Boolean(mediaType?.startsWith("application/") && mediaType.endsWith("+json"))
+    mediaType === "application/json" || Boolean(mediaType?.startsWith("application/") && mediaType.endsWith("+json"))
   );
 }

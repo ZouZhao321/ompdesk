@@ -8,8 +8,7 @@ import type {
   OmpdeskUpdateResponse,
 } from "@/lib/api-types";
 
-export const OMPDESK_GITHUB_RELEASE_API_URL =
-  "https://api.github.com/repos/ZouZhao321/ompdesk/releases/latest";
+export const OMPDESK_GITHUB_RELEASE_API_URL = "https://api.github.com/repos/ZouZhao321/ompdesk/releases/latest";
 export const OMPDESK_NPM_LATEST_URL = "https://registry.npmjs.org/ompdesk/latest";
 
 const RELEASE_CACHE_SECONDS = 60 * 60;
@@ -122,12 +121,9 @@ function releaseFromPayload(payload: GitHubReleasePayload): OmpdeskReleaseInfo {
   if (!version) throw new Error("The ompdesk release did not contain a valid version tag");
 
   const tagName =
-    typeof payload.tag_name === "string" && payload.tag_name.trim()
-      ? payload.tag_name.trim()
-      : `v${version}`;
+    typeof payload.tag_name === "string" && payload.tag_name.trim() ? payload.tag_name.trim() : `v${version}`;
   const htmlUrl =
-    typeof payload.html_url === "string" &&
-    payload.html_url.startsWith("https://github.com/ZouZhao321/ompdesk/")
+    typeof payload.html_url === "string" && payload.html_url.startsWith("https://github.com/ZouZhao321/ompdesk/")
       ? payload.html_url
       : `https://github.com/ZouZhao321/ompdesk/releases/tag/${encodeURIComponent(tagName)}`;
   const body = typeof payload.body === "string" ? payload.body.slice(0, MAX_CHANGELOG_LENGTH) : "";
@@ -216,9 +212,7 @@ export function buildInstallPlan({
   const manager = selectManager(env, runtime);
   const command = commandForManager(manager);
   const alternate = commandForManager(manager === "bun" ? "npm" : "bun");
-  const updateAvailable = Boolean(
-    latestPackage && isNewerVersion(latestPackage.version, currentAppVersion),
-  );
+  const updateAvailable = Boolean(latestPackage && isNewerVersion(latestPackage.version, currentAppVersion));
   const canInstall = updateAvailable && env.OMPDESK_DISABLE_SELF_UPDATE !== "1";
 
   let reason: OmpdeskInstallPlan["reason"];
@@ -237,9 +231,7 @@ export function buildInstallPlan({
   };
 }
 
-export async function getUpdateStatus(
-  options: UpdateStatusOptions = {},
-): Promise<OmpdeskUpdateResponse> {
+export async function getUpdateStatus(options: UpdateStatusOptions = {}): Promise<OmpdeskUpdateResponse> {
   const fetcher = options.fetcher ?? fetch;
   const currentAppVersion =
     canonicalVersion(options.currentAppVersion ?? process.env.NEXT_PUBLIC_APP_VERSION) ?? "unknown";
@@ -250,10 +242,7 @@ export async function getUpdateStatus(
 
   let latestRelease = releaseFromPackage(latestPackage.version);
   try {
-    const releasePayload = (await fetchJson(
-      OMPDESK_GITHUB_RELEASE_API_URL,
-      fetcher,
-    )) as GitHubReleasePayload;
+    const releasePayload = (await fetchJson(OMPDESK_GITHUB_RELEASE_API_URL, fetcher)) as GitHubReleasePayload;
     const candidate = releaseFromPayload(releasePayload);
     if (compareVersions(candidate.version, latestPackage.version) === 0) latestRelease = candidate;
   } catch {
@@ -285,9 +274,7 @@ export async function getUpdateStatus(
   };
 }
 
-export async function installUpdate({
-  manager,
-}: InstallOptions): Promise<OmpdeskUpdateInstallResult> {
+export async function installUpdate({ manager }: InstallOptions): Promise<OmpdeskUpdateInstallResult> {
   const command = commandForManager(manager);
   const result = await execFileAsync(command.executable, command.args, {
     timeout: UPDATE_TIMEOUT_MS,

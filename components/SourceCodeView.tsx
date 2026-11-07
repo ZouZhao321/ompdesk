@@ -57,11 +57,7 @@ function TranslationRow({
     // 译文行不参与 .file-source-line 选择器，也不带 data-line-number：
     // 它不属于任何源码行，选区到行号的映射与原文件保持一致。
     <span className="file-comment-translation" style={{ display: "flex", minWidth: "100%" }}>
-      <span
-        aria-hidden="true"
-        className="file-comment-translation-gutter"
-        style={SOURCE_LINE_NUMBER_STYLE}
-      />
+      <span aria-hidden="true" className="file-comment-translation-gutter" style={SOURCE_LINE_NUMBER_STYLE} />
       <span
         className="file-comment-translation-content"
         style={{
@@ -98,19 +94,14 @@ function SourceCodeRenderer({
     const children = row.children ?? [];
     const firstChildClasses = children[0]?.properties?.className;
     const hasLineNumber =
-      Array.isArray(firstChildClasses) &&
-      firstChildClasses.includes("react-syntax-highlighter-line-number");
+      Array.isArray(firstChildClasses) && firstChildClasses.includes("react-syntax-highlighter-line-number");
     const lineNumberNode = hasLineNumber ? children[0] : null;
     const contentNodes = hasLineNumber ? children.slice(1) : children;
     const translation = translations?.get(lineNumber);
 
     return (
       <Fragment key={`source-line-${lineNumber}`}>
-        <span
-          className="file-source-line"
-          data-line-number={lineNumber}
-          style={{ display: "flex", minWidth: "100%" }}
-        >
+        <span className="file-source-line" data-line-number={lineNumber} style={{ display: "flex", minWidth: "100%" }}>
           {lineNumberNode &&
             renderSyntaxNode({
               node: lineNumberNode,
@@ -138,12 +129,7 @@ function SourceCodeRenderer({
           </span>
         </span>
         {translation !== undefined && (
-          <TranslationRow
-            text={translation}
-            label={translationLabel}
-            wrapLines={wrapLines}
-            isDark={isDark}
-          />
+          <TranslationRow text={translation} label={translationLabel} wrapLines={wrapLines} isDark={isDark} />
         )}
       </Fragment>
     );

@@ -167,8 +167,7 @@ function readPackageVersion(cwd = ROOT): string {
   const manifest = JSON.parse(fs.readFileSync(path.join(cwd, PACKAGE_JSON), "utf8")) as {
     version?: unknown;
   };
-  if (typeof manifest.version !== "string")
-    fail(`${path.relative(ROOT, cwd) || "."}/package.json 没有 version 字段`);
+  if (typeof manifest.version !== "string") fail(`${path.relative(ROOT, cwd) || "."}/package.json 没有 version 字段`);
   return manifest.version;
 }
 
@@ -203,21 +202,17 @@ function assertRepoState(): void {
 }
 
 function resolveTarget(input: string, latest: string): string {
-  if (input === "major" || input === "minor" || input === "patch")
-    return bumpVersion(latest, input);
+  if (input === "major" || input === "minor" || input === "patch") return bumpVersion(latest, input);
   const normalized = normalizeVersion(input);
   if (!normalized) fail(`版本号「${input}」不合法，写 1.0.27、v1.0.27 或 major/minor/patch`);
   return normalized;
 }
 
 function assertTagAbsent(tag: string): void {
-  if (
-    git(["rev-parse", "--verify", "--quiet", `refs/tags/${tag}`], { allowFailure: true }).code === 0
-  ) {
+  if (git(["rev-parse", "--verify", "--quiet", `refs/tags/${tag}`], { allowFailure: true }).code === 0) {
     fail(`本地已有标签 ${tag}`);
   }
-  if (git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`]).stdout.trim())
-    fail(`远端已有标签 ${tag}`);
+  if (git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`]).stdout.trim()) fail(`远端已有标签 ${tag}`);
 }
 
 function renderPrBody(version: string, section: string): string {
@@ -267,11 +262,7 @@ function cmdPrepare(input: string, dryRun: boolean): void {
   }
 
   const today = todayStamp();
-  const promoted = promoteChangelog(
-    fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"),
-    target,
-    today,
-  );
+  const promoted = promoteChangelog(fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"), target, today);
   const section = extractChangelogSection(promoted, target);
 
   const branch = `chore/release-${target}`;
@@ -335,17 +326,7 @@ function watchCI(sha: string, slug: string): void {
   let lastSummary = "";
   for (;;) {
     const listed = run(
-      [
-        "gh",
-        "run",
-        "list",
-        "--commit",
-        sha,
-        "--limit",
-        "20",
-        "--json",
-        "databaseId,name,status,conclusion",
-      ],
+      ["gh", "run", "list", "--commit", sha, "--limit", "20", "--json", "databaseId,name,status,conclusion"],
       { allowFailure: true },
     );
     const runs: RunRow[] = listed.code === 0 ? (JSON.parse(listed.stdout) as RunRow[]) : [];
@@ -354,15 +335,11 @@ function watchCI(sha: string, slug: string): void {
       console.log("等待 CI 启动…");
     } else {
       const failed = runs.filter(
-        (row) =>
-          row.status === "completed" &&
-          row.conclusion !== "success" &&
-          row.conclusion !== "skipped",
+        (row) => row.status === "completed" && row.conclusion !== "success" && row.conclusion !== "skipped",
       );
       if (failed.length > 0) {
         const lines = failed.map(
-          (row) =>
-            `  ${row.name}：${row.conclusion} https://github.com/${slug}/actions/runs/${row.databaseId}`,
+          (row) => `  ${row.name}：${row.conclusion} https://github.com/${slug}/actions/runs/${row.databaseId}`,
         );
         fail(`CI 未通过：\n${lines.join("\n")}`);
       }
@@ -397,10 +374,7 @@ function cmdFinish(input: string, dryRun: boolean): void {
   const tag = `v${target}`;
   assertTagAbsent(tag);
 
-  const section = extractChangelogSection(
-    fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"),
-    target,
-  );
+  const section = extractChangelogSection(fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"), target);
   const sha = git(["rev-parse", "HEAD"]).stdout.trim();
   const slug = git(["remote", "get-url", "origin"])
     .stdout.trim()
@@ -427,10 +401,7 @@ function cmdFinish(input: string, dryRun: boolean): void {
 function cmdNotes(input: string): void {
   const target = normalizeVersion(input);
   if (!target) fail(`版本号「${input}」不合法，写 1.0.27 或 v1.0.27`);
-  const section = extractChangelogSection(
-    fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"),
-    target,
-  );
+  const section = extractChangelogSection(fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"), target);
   process.stdout.write(`${section}\n`);
 }
 

@@ -58,9 +58,7 @@ async function getRouteHandler(req: Request, { params }: { params: Promise<{ id:
     } catch {
       /* use header timestamp */
     }
-    const parentSessionId = header?.parentSession
-      ? await resolveSessionIdByPath(header.parentSession)
-      : undefined;
+    const parentSessionId = header?.parentSession ? await resolveSessionIdByPath(header.parentSession) : undefined;
     const info = header
       ? {
           path: filePath,
@@ -77,11 +75,8 @@ async function getRouteHandler(req: Request, { params }: { params: Promise<{ id:
                 return typeof c === "string"
                   ? c
                   : (Array.isArray(c)
-                      ? ((
-                          c.find((b: { type: string }) => b.type === "text") as
-                            | { text: string }
-                            | undefined
-                        )?.text ?? "")
+                      ? ((c.find((b: { type: string }) => b.type === "text") as { text: string } | undefined)?.text ??
+                        "")
                       : "") || "(no messages)";
               })()
             : "(no messages)",
@@ -154,8 +149,7 @@ export const PATCH = withRequestLog(
       return NextResponse.json({ ok: true });
     } catch (error) {
       if (renameAttempted && !renamed) auditFailure("session.rename", id, { status: 500, error });
-      if (archiveAttempted && !archived)
-        auditFailure("session.archive", id, { status: 500, error });
+      if (archiveAttempted && !archived) auditFailure("session.archive", id, { status: 500, error });
       return NextResponse.json({ error: String(error) }, { status: 500 });
     }
   },

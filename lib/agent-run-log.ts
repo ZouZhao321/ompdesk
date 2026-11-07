@@ -24,14 +24,7 @@ export type AgentRunCommand = "steer" | "follow_up" | "abort" | "fork" | "compac
  * stopReason 来自 SDK 的 assistant message；`fork` 表示运行被会话 fork 打断，
  * `unknown` 表示 SDK 没有给出原因。
  */
-export type AgentRunStopReason =
-  | "stop"
-  | "length"
-  | "toolUse"
-  | "error"
-  | "aborted"
-  | "fork"
-  | "unknown";
+export type AgentRunStopReason = "stop" | "length" | "toolUse" | "error" | "aborted" | "fork" | "unknown";
 
 export const AGENT_RUN_START = "agent.run.start";
 export const AGENT_RUN_END = "agent.run.end";
@@ -234,12 +227,7 @@ function readUsage(value: unknown): TokenTotals | undefined {
   const output = readCount(usage.output);
   const cacheRead = readCount(usage.cacheRead);
   const cacheWrite = readCount(usage.cacheWrite);
-  if (
-    input === undefined &&
-    output === undefined &&
-    cacheRead === undefined &&
-    cacheWrite === undefined
-  ) {
+  if (input === undefined && output === undefined && cacheRead === undefined && cacheWrite === undefined) {
     return undefined;
   }
   return {
@@ -280,9 +268,7 @@ function addTokens(target: TokenTotals, usage: TokenTotals): void {
  * 会话当前模型的角色：omp 每次切换模型都会追加一条 `model_change` 记录，
  * 最新一条的 role 就是驱动会话的角色。
  */
-export function resolveSessionModelRole(
-  entries: ReadonlyArray<{ type?: string; role?: string }>,
-): string {
+export function resolveSessionModelRole(entries: ReadonlyArray<{ type?: string; role?: string }>): string {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (entry?.type !== "model_change") continue;
@@ -563,10 +549,7 @@ export class AgentRunTracker {
     if (summary.model) run.model = summary.model;
   }
 
-  private end(
-    outcome: AgentRunOutcome = {},
-    extra: Record<string, unknown> = {},
-  ): AgentRunRecord[] {
+  private end(outcome: AgentRunOutcome = {}, extra: Record<string, unknown> = {}): AgentRunRecord[] {
     const run = this.active;
     if (!run) return [];
     this.active = undefined;
@@ -594,9 +577,7 @@ export class AgentRunTracker {
           outputTokens: tokens?.output,
           cacheReadTokens: tokens?.cacheRead,
           cacheWriteTokens: tokens?.cacheWrite,
-          totalTokens: tokens
-            ? tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite
-            : undefined,
+          totalTokens: tokens ? tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite : undefined,
           requestId: run.start.requestId,
           failed: outcome.error === undefined ? undefined : true,
           error: outcome.error,

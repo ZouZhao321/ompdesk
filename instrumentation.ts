@@ -16,9 +16,7 @@ type FsModule = { existsSync: typeof ExistsSync };
  * 因此按运行时加载。路径不存在时由调用方处理。
  */
 async function localModuleUrl(relativePath: string): Promise<string> {
-  const { pathToFileURL } = await importRuntimeModule<{ pathToFileURL: typeof PathToFileURL }>(
-    "node:url",
-  );
+  const { pathToFileURL } = await importRuntimeModule<{ pathToFileURL: typeof PathToFileURL }>("node:url");
   return pathToFileURL(`${process.cwd()}/${relativePath}`).href;
 }
 
@@ -59,9 +57,7 @@ export async function register(): Promise<void> {
   //
   // 这两份源码只存在于仓库检出里：npm 包只分发构建产物，没有 `lib/`。
   // 加载失败降级成“本次没有启动日志 / 没有自定义 dispatcher”，不挡住整个进程。
-  await runLocalModule<LoggingModule>("lib/logging-startup.ts", "启动日志", (module) =>
-    module.startLogging(),
-  );
+  await runLocalModule<LoggingModule>("lib/logging-startup.ts", "启动日志", (module) => module.startLogging());
 
   if (typeof process.versions.bun === "string") return;
 

@@ -31,10 +31,7 @@ export type StaticMarkerCounts = Partial<Record<StaticMarkerStatus, number>>;
  * 动态层有两个子状态：正在处理、等你回答；静态层是最后一条消息的结果。
  * 动态层优先，所以任一动态子状态成立时不会返回静态标记。
  */
-export type SessionMarker =
-  | { kind: "running" }
-  | { kind: "awaiting" }
-  | { kind: "static"; status: StaticMarkerStatus };
+export type SessionMarker = { kind: "running" } | { kind: "awaiting" } | { kind: "static"; status: StaticMarkerStatus };
 
 /** resolveSessionMarker 的输入条件。 */
 export interface SessionMarkerInput {
@@ -185,21 +182,16 @@ export function resolveFinishedRuns(input: FinishedRunsInput): FinishedRuns {
     ? (input.sessionIdsByRuntimeId?.[input.selectedRuntimeId] ?? input.selectedSessionId ?? null)
     : (input.selectedSessionId ?? null);
   const previousRuntimeIds = new Map(
-    Object.entries(input.previousSessionIdsByRuntimeId ?? {}).map(([runtimeId, sessionId]) => [
-      sessionId,
-      runtimeId,
-    ]),
+    Object.entries(input.previousSessionIdsByRuntimeId ?? {}).map(([runtimeId, sessionId]) => [sessionId, runtimeId]),
   );
 
   const finished: { id: string; isSelected: boolean }[] = [];
   for (const id of input.previousRunningSessionIds) {
     const runtimeId = previousRuntimeIds.get(id);
-    const currentId =
-      (runtimeId === undefined ? undefined : input.sessionIdsByRuntimeId?.[runtimeId]) ?? id;
+    const currentId = (runtimeId === undefined ? undefined : input.sessionIdsByRuntimeId?.[runtimeId]) ?? id;
     if (input.runningSessionIds.has(currentId)) continue;
     const isSelected =
-      currentId === selectedCanonicalId ||
-      (runtimeId !== undefined && runtimeId === input.selectedRuntimeId);
+      currentId === selectedCanonicalId || (runtimeId !== undefined && runtimeId === input.selectedRuntimeId);
     const merged = finished.find((run) => run.id === currentId);
     if (merged) {
       // 多次运行可能换算到同一个会话：任一次属于选中，这次结束就算被看到。

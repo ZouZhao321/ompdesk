@@ -7,14 +7,7 @@ export type { GoalStatusInfo } from "./omp-types";
 
 export type GoalSubcommand = "set" | "show" | "pause" | "resume" | "drop" | "budget";
 
-const GOAL_SUBCOMMANDS = new Set<GoalSubcommand>([
-  "set",
-  "show",
-  "pause",
-  "resume",
-  "drop",
-  "budget",
-]);
+const GOAL_SUBCOMMANDS = new Set<GoalSubcommand>(["set", "show", "pause", "resume", "drop", "budget"]);
 
 /**
  * Run modes whose name in `goal.continuationModes` enables auto-continuation
@@ -253,19 +246,12 @@ export class GoalModeController {
     const state = this.#session.getGoalModeState?.();
     // A bare `/goal` with a goal already recorded reports it: the TUI opens a
     // menu here, and this host has no menu to open.
-    if (!rest)
-      return state
-        ? this.#show()
-        : this.#fail("Usage: /goal <objective>, or /goal set <objective>.");
+    if (!rest) return state ? this.#show() : this.#fail("Usage: /goal <objective>, or /goal set <objective>.");
     if (state?.enabled) {
-      return this.#fail(
-        "Goal mode is already active. Use /goal set to replace it, or /goal drop to start over.",
-      );
+      return this.#fail("Goal mode is already active. Use /goal set to replace it, or /goal drop to start over.");
     }
     if (this.#pausedGoal()) {
-      return this.#fail(
-        "Resume the current goal first, or drop it before setting a new objective.",
-      );
+      return this.#fail("Resume the current goal first, or drop it before setting a new objective.");
     }
     return await this.#start(rest);
   }
@@ -311,9 +297,7 @@ export class GoalModeController {
         // (the agent calling `goal create`). Record the tool set to restore so
         // exiting does not leave the goal tool behind.
         if (state?.enabled && !this.#previousTools) {
-          this.#previousTools = this.#session
-            .getEnabledToolNames()
-            .filter((name) => name !== "goal");
+          this.#previousTools = this.#session.getEnabledToolNames().filter((name) => name !== "goal");
         }
         // An interrupted turn pauses the goal inside the SDK, which is what
         // stops the loop after the operator aborts.
@@ -353,9 +337,7 @@ export class GoalModeController {
   async #set(rest: string): Promise<GoalCommandResult> {
     if (!rest) return this.#fail("Usage: /goal set <objective>");
     if (!this.enabled && this.#pausedGoal()) {
-      return this.#fail(
-        "Resume the current goal first, or drop it before setting a new objective.",
-      );
+      return this.#fail("Resume the current goal first, or drop it before setting a new objective.");
     }
     if (!this.enabled) return await this.#start(rest);
 
@@ -412,9 +394,7 @@ export class GoalModeController {
   async #budget(rest: string): Promise<GoalCommandResult> {
     const state = this.#session.getGoalModeState?.();
     if (!this.enabled || !state?.enabled) {
-      return this.#fail(
-        this.#pausedGoal() ? "Resume the goal before adjusting the budget." : "No active goal.",
-      );
+      return this.#fail(this.#pausedGoal() ? "Resume the goal before adjusting the budget." : "No active goal.");
     }
     if (state.goal.status === "complete") return this.#fail("Goal is already complete.");
     if (!rest) return this.#fail("Usage: /goal budget <N|off>");
@@ -426,10 +406,7 @@ export class GoalModeController {
     this.#notifyStatus();
     this.#scheduleContinuation();
     return {
-      message:
-        budget === undefined
-          ? "Goal budget cleared."
-          : `Goal budget set to ${budget.toLocaleString()}.`,
+      message: budget === undefined ? "Goal budget cleared." : `Goal budget set to ${budget.toLocaleString()}.`,
       status: this.getStatus(),
     };
   }
@@ -471,8 +448,7 @@ export class GoalModeController {
   #scheduleContinuation(): void {
     this.#cancelContinuation();
     if (this.#disposed) return;
-    if (!isGoalContinuationEnabled(getSetting(this.#session.settings, "goal.continuationModes")))
-      return;
+    if (!isGoalContinuationEnabled(getSetting(this.#session.settings, "goal.continuationModes"))) return;
     if (this.#session.getPlanModeState?.()?.enabled) return;
     if (this.#suppressNextContinuation) return;
     const state = this.#session.getGoalModeState?.();

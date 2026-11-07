@@ -36,10 +36,7 @@ export const POST = withRequestLog("/api/skills/install", async (req: Request) =
     }
     if (pkg.length > MAX_SKILL_PACKAGE_LENGTH || !SKILL_PACKAGE_RE.test(pkg)) {
       auditFailure("skill.install", undefined, { status: 400, reason: "invalid-package" });
-      return NextResponse.json(
-        { error: "package must be a GitHub skill reference" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "package must be a GitHub skill reference" }, { status: 400 });
     }
     if (scope !== "global" && scope !== "project") {
       auditFailure("skill.install", pkg, { status: 400, reason: "invalid-scope" });

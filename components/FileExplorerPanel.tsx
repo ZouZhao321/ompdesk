@@ -22,14 +22,7 @@ interface Props {
  * Explorer view of the right panel tab page. The tab owns visibility, so the
  * panel itself only carries the tree toolbar and the tree.
  */
-export function FileExplorerPanel({
-  cwd,
-  onOpenFile,
-  refreshKey,
-  onRefresh,
-  onAtMention,
-  onAtMentions,
-}: Props) {
+export function FileExplorerPanel({ cwd, onOpenFile, refreshKey, onRefresh, onAtMention, onAtMentions }: Props) {
   const { t } = useI18n();
   const [uploadBusy, setUploadBusy] = useState(false);
   const [changesCount, setChangesCount] = useState(0);

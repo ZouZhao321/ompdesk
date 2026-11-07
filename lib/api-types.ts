@@ -161,10 +161,7 @@ export interface OmpdeskPackageInfo {
   version: string;
 }
 
-export type OmpdeskInstallPlanReason =
-  | "disabled"
-  | "latest-package-unavailable"
-  | "current-version-unknown";
+export type OmpdeskInstallPlanReason = "disabled" | "latest-package-unavailable" | "current-version-unknown";
 
 export interface OmpdeskInstallPlan {
   canInstall: boolean;

@@ -156,11 +156,7 @@ export interface AtInsertion {
  *   placed before the closing quote, so both further typing and manual
  *   completion keep the token well-formed.
  */
-export function buildAtInsertText(
-  entryPath: string,
-  isDir: boolean,
-  forceQuotes = false,
-): AtInsertion {
+export function buildAtInsertText(entryPath: string, isDir: boolean, forceQuotes = false): AtInsertion {
   const p = isDir ? `${entryPath}/` : entryPath;
   const needsQuotes = forceQuotes || p.includes(" ");
   if (isDir) {
@@ -182,11 +178,7 @@ export function buildAtMentionText(entryPath: string, isDir: boolean): string {
 }
 
 /** Closed file @mention scoped to one logical line or an inclusive line range. */
-export function buildFileLineMentionText(
-  entryPath: string,
-  startLine: number,
-  endLine: number,
-): string {
+export function buildFileLineMentionText(entryPath: string, startLine: number, endLine: number): string {
   const firstLine = Math.max(1, Math.min(startLine, endLine));
   const lastLine = Math.max(1, Math.max(startLine, endLine));
   const pathMention = entryPath.includes(" ") ? `@"${entryPath}"` : `@${entryPath}`;

@@ -22,14 +22,11 @@ function isModelRoleThinkingLevel(value: string | undefined): value is ModelRole
  * Return omp's thinking strip for a model, keeping only efforts supported by
  * that model. Inherit, off, and auto are always valid selector choices.
  */
-export function getModelRoleThinkingOptions(
-  supported?: readonly string[],
-): ModelRoleThinkingLevel[] {
+export function getModelRoleThinkingOptions(supported?: readonly string[]): ModelRoleThinkingLevel[] {
   if (!supported) return [...MODEL_ROLE_THINKING_LEVELS];
   const supportedSet = new Set(supported);
   return MODEL_ROLE_THINKING_LEVELS.filter(
-    (level) =>
-      level === "inherit" || level === "off" || level === "auto" || supportedSet.has(level),
+    (level) => level === "inherit" || level === "off" || level === "auto" || supportedSet.has(level),
   );
 }
 

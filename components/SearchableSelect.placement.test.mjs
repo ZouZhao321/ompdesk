@@ -8,36 +8,24 @@ const chatInputSource = await readSourceFile(new URL("./ChatInput.tsx", import.m
 
 test("opens the option list on whichever side of the trigger has room", () => {
   assert.match(source, /usePopupPlacement\(rootRef, open, \{[\s\S]*?prefer: "below"/);
-  assert.match(
-    source,
-    /side === "above"\s*\?\s*\{ bottom: `calc\(100% \+ \$\{POPOVER_GAP_PX\}px\)`, maxHeight \}/,
-  );
+  assert.match(source, /side === "above"\s*\?\s*\{ bottom: `calc\(100% \+ \$\{POPOVER_GAP_PX\}px\)`, maxHeight \}/);
   assert.match(source, /\{ top: `calc\(100% \+ \$\{POPOVER_GAP_PX\}px\)`, maxHeight \}/);
   // The side is chosen per open, so the stylesheet must not pin one.
   assert.doesNotMatch(css, /(?:^|[;{}])\s*top: calc\(100% \+ 5px\);/);
 });
 
 test("bounds the option list to the measured popover height", () => {
-  assert.match(
-    source,
-    /className=\{styles\.options\}[\s\S]*?maxHeight: Math\.max\(0, maxHeight - POPOVER_CHROME_PX\)/,
-  );
+  assert.match(source, /className=\{styles\.options\}[\s\S]*?maxHeight: Math\.max\(0, maxHeight - POPOVER_CHROME_PX\)/);
 });
 
 test("scrolls the keyboard-active option into view", () => {
-  assert.match(
-    source,
-    /optionRefs\.current\[activeIndex\]\?\.scrollIntoView\(\{ block: "nearest" \}\)/,
-  );
+  assert.match(source, /optionRefs\.current\[activeIndex\]\?\.scrollIntoView\(\{ block: "nearest" \}\)/);
   assert.match(source, /ref=\{\(node\) => \{ optionRefs\.current\[index\] = node; \}\}/);
 });
 
 test("sizes the composer popups from the space around the composer", () => {
   for (const name of ["historyPlacement", "slashPlacement", "atPlacement"]) {
-    assert.match(
-      chatInputSource,
-      new RegExp(`const ${name} = usePopupPlacement\\(composerAnchorRef,`),
-    );
+    assert.match(chatInputSource, new RegExp(`const ${name} = usePopupPlacement\\(composerAnchorRef,`));
     assert.match(chatInputSource, new RegExp(`\\.\\.\\.popupOffset\\(${name}\\.side\\)`));
     assert.match(chatInputSource, new RegExp(`maxHeight: ${name}\\.maxHeight`));
   }

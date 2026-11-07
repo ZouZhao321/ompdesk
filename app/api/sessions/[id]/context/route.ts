@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
-import {
-  resolveSessionPath,
-  buildSessionContext,
-  getHistoricalContextUsage,
-} from "@/lib/session-reader";
+import { resolveSessionPath, buildSessionContext, getHistoricalContextUsage } from "@/lib/session-reader";
 import { getRpcSession, getFinalRpcSessionId } from "@/lib/rpc-manager";
 
 export const GET = withRequestLog("/api/sessions/[id]/context", getRouteHandler);

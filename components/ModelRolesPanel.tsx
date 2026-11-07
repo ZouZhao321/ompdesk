@@ -125,20 +125,14 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
   const visibleRoles = useMemo(() => roles.filter((role) => !role.hidden), [roles]);
 
   if (!cwd) {
-    return (
-      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("roles.needsProject")}</div>
-    );
+    return <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("roles.needsProject")}</div>;
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
-          {t("roles.title")}
-        </div>
-        <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-          {t("roles.description")}
-        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{t("roles.title")}</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{t("roles.description")}</div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -181,13 +175,9 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {visibleRoles.map((role) => {
-            const current = role.resolved
-              ? `${role.resolved.provider}/${role.resolved.modelId}`
-              : "";
+            const current = role.resolved ? `${role.resolved.provider}/${role.resolved.modelId}` : "";
             const currentThinkingLevel = getModelRoleThinkingLevel(role.selector);
-            const thinkingKey = role.resolved
-              ? `${role.resolved.provider}:${role.resolved.modelId}`
-              : "";
+            const thinkingKey = role.resolved ? `${role.resolved.provider}:${role.resolved.modelId}` : "";
             const thinkingOptions = getModelRoleThinkingOptions(thinkingLevels[thinkingKey]);
             return (
               <div
@@ -223,12 +213,8 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
                   </span>
 
                   <div style={{ minWidth: 0, flex: "0 0 auto", width: 128 }}>
-                    <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>
-                      {role.name}
-                    </div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
-                      {t(`roles.source.${role.source}`)}
-                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>{role.name}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{t(`roles.source.${role.source}`)}</div>
                   </div>
 
                   <SearchableSelect
@@ -246,9 +232,7 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
                         ? thinkingLevels[`${selectedModel.provider}:${selectedModel.id}`]
                         : undefined;
                       const preservedLevel = getModelRoleThinkingLevel(role.selector);
-                      const nextLevel = getModelRoleThinkingOptions(supported).includes(
-                        preservedLevel,
-                      )
+                      const nextLevel = getModelRoleThinkingOptions(supported).includes(preservedLevel)
                         ? preservedLevel
                         : "inherit";
                       void assign(role.role, formatModelRoleSelector(value, nextLevel));
@@ -267,10 +251,7 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
                   />
 
                   {role.warning && (
-                    <span
-                      title={role.warning}
-                      style={{ color: "var(--warning, #ffb347)", fontSize: 12 }}
-                    >
+                    <span title={role.warning} style={{ color: "var(--warning, #ffb347)", fontSize: 12 }}>
                       !
                     </span>
                   )}

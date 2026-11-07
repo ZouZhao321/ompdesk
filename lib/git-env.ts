@@ -244,9 +244,7 @@ function stripRepoLocationCountedConfig(env: NodeJS.ProcessEnv): void {
     deleteCountedConfig(env);
     return;
   }
-  const kept = entries.filter(
-    (entry) => REPO_LOCATION_CONFIG_KEY_FLAGS[entry.key.trim().toLowerCase()] !== true,
-  );
+  const kept = entries.filter((entry) => REPO_LOCATION_CONFIG_KEY_FLAGS[entry.key.trim().toLowerCase()] !== true);
   if (kept.length === entries.length) return;
 
   deleteCountedConfig(env);

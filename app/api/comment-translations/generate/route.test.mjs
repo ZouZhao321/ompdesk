@@ -12,9 +12,7 @@ const jiti = createJiti(import.meta.url, {
 });
 const { POST } = await jiti.import("./route.ts");
 const { createCommentTranslationHandler } = await jiti.import("@/lib/comment-translation-route.ts");
-const { readCommentDictionary, saveCommentTranslation } = await jiti.import(
-  "@/lib/comment-dictionary.ts",
-);
+const { readCommentDictionary, saveCommentTranslation } = await jiti.import("@/lib/comment-dictionary.ts");
 
 function request(entries) {
   return new Request("http://localhost:30141/api/comment-translations/generate", {
@@ -125,9 +123,7 @@ test("unparsable model output fails every entry instead of writing empty text", 
   const model = { id: "fake/model", complete: async () => "Sorry, I cannot help with that." };
   const { agentDir, handler } = fixture(t, model);
 
-  const response = await handler(
-    request([{ original: "读取配置文件", originalLanguage: "zh", targetLanguage: "en" }]),
-  );
+  const response = await handler(request([{ original: "读取配置文件", originalLanguage: "zh", targetLanguage: "en" }]));
   const payload = await response.json();
 
   assert.equal(payload.results[0].status, "failed");
@@ -138,9 +134,7 @@ test("unparsable model output fails every entry instead of writing empty text", 
 test("no available model returns an explicit failure and makes no request", async (t) => {
   const { agentDir, handler } = fixture(t, null);
 
-  const response = await handler(
-    request([{ original: "读取配置", originalLanguage: "zh", targetLanguage: "en" }]),
-  );
+  const response = await handler(request([{ original: "读取配置", originalLanguage: "zh", targetLanguage: "en" }]));
 
   assert.equal(response.status, 409);
   const payload = await response.json();
@@ -168,18 +162,13 @@ test("a repeated original and target language hits the dictionary without callin
     model: "earlier/model",
   });
 
-  const response = await handler(
-    request([{ original: "读取配置", originalLanguage: "zh", targetLanguage: "en" }]),
-  );
+  const response = await handler(request([{ original: "读取配置", originalLanguage: "zh", targetLanguage: "en" }]));
   const payload = await response.json();
 
   assert.equal(payload.results[0].status, "cached");
   assert.equal(payload.results[0].translation, "Read the config");
   assert.equal(calls, 0);
-  assert.equal(
-    readCommentDictionary(agentDir).translations[payload.results[0].key].model,
-    "earlier/model",
-  );
+  assert.equal(readCommentDictionary(agentDir).translations[payload.results[0].key].model, "earlier/model");
 });
 
 test("a page-sized selection is split into several model prompts", async (t) => {

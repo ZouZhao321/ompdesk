@@ -1,10 +1,4 @@
-import type {
-  AgentMessage,
-  AssistantContentBlock,
-  AssistantMessage,
-  CustomMessage,
-  ToolResultMessage,
-} from "./types";
+import type { AgentMessage, AssistantContentBlock, AssistantMessage, CustomMessage, ToolResultMessage } from "./types";
 import {
   countToolCallBlocks,
   getAssistantErrorMessage,
@@ -113,11 +107,7 @@ function findFinalAssistantIndex(
   return -1;
 }
 
-function countToolCalls(
-  messages: AgentMessage[],
-  indices: number[],
-  options: DisplayOptions,
-): number {
+function countToolCalls(messages: AgentMessage[], indices: number[], options: DisplayOptions): number {
   let count = 0;
   for (const idx of indices) {
     const msg = messages[idx];
@@ -143,17 +133,10 @@ function hasDisplayableProcessMessage(message: AgentMessage, options: DisplayOpt
 }
 
 /** 这些过程消息里有没有 provider 错误：横幅只在展开的组里才看得见。 */
-function hasProviderError(
-  messages: AgentMessage[],
-  indices: readonly number[],
-  options: DisplayOptions,
-): boolean {
+function hasProviderError(messages: AgentMessage[], indices: readonly number[], options: DisplayOptions): boolean {
   return indices.some((index) => {
     const message = messages[index];
-    return (
-      message?.role === "assistant" &&
-      getAssistantErrorMessage(message as AssistantMessage, options) !== null
-    );
+    return message?.role === "assistant" && getAssistantErrorMessage(message as AssistantMessage, options) !== null;
   });
 }
 
@@ -208,23 +191,13 @@ function buildTurn(
   options: TranscriptItemsOptions,
   displayOptions: DisplayOptions,
 ): TranscriptItem {
-  const finalAssistantIndex = findFinalAssistantIndex(
-    messages,
-    anchorIndex,
-    endIndex,
-    displayOptions,
-  );
+  const finalAssistantIndex = findFinalAssistantIndex(messages, anchorIndex, endIndex, displayOptions);
   // 运行中的最后一轮不折叠：用户要看到过程消息一条条冒出来。
   const isLiveTail =
-    Boolean(options.busy || options.isStreaming) &&
-    anchorIndex === lastAnchorIndex &&
-    endIndex === messages.length;
+    Boolean(options.busy || options.isStreaming) && anchorIndex === lastAnchorIndex && endIndex === messages.length;
   const isLastTurn = anchorIndex === lastAnchorIndex;
 
-  const processIndices = sequence(
-    anchorIndex + 1,
-    finalAssistantIndex === -1 ? endIndex : finalAssistantIndex,
-  );
+  const processIndices = sequence(anchorIndex + 1, finalAssistantIndex === -1 ? endIndex : finalAssistantIndex);
   const visibleProcessIndices = processIndices.filter((processIdx) =>
     hasDisplayableProcessMessage(messages[processIdx], displayOptions),
   );
@@ -278,8 +251,7 @@ function buildTurn(
     hasProcessError: hasProviderError(messages, visibleProcessIndices, displayOptions),
     isLastTurn,
     toolCallCount:
-      countToolCalls(messages, visibleProcessIndices, displayOptions) +
-      countToolCallBlocks(finalSplit.processBlocks),
+      countToolCalls(messages, visibleProcessIndices, displayOptions) + countToolCallBlocks(finalSplit.processBlocks),
     writtenFiles,
     tailIndices: sequence(finalAssistantIndex + 1, endIndex),
     isLiveTail,
@@ -343,17 +315,7 @@ export function buildTranscriptItems(
     const anchorIndex = index;
     let endIndex = anchorIndex + 1;
     while (endIndex < messages.length && !isGroupAnchor(messages[endIndex])) endIndex += 1;
-    items.push(
-      buildTurn(
-        messages,
-        entryIds,
-        anchorIndex,
-        endIndex,
-        lastAnchorIndex,
-        options,
-        displayOptions,
-      ),
-    );
+    items.push(buildTurn(messages, entryIds, anchorIndex, endIndex, lastAnchorIndex, options, displayOptions));
     index = endIndex;
   }
   return items;

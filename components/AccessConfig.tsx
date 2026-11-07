@@ -83,9 +83,7 @@ export function AccessConfig() {
     const updated = await send(status.enabled ? "disable" : "enable");
     if (!updated) return;
     setNotice(
-      updated.enabled
-        ? t("settings.access.enabled", { username: updated.username })
-        : t("settings.access.disabled"),
+      updated.enabled ? t("settings.access.enabled", { username: updated.username }) : t("settings.access.disabled"),
     );
   }, [send, status, t]);
 
@@ -110,8 +108,7 @@ export function AccessConfig() {
           : t("settings.access.stateDisabled");
 
   const readOnly = status.managedByEnvironment;
-  const canSave =
-    !busy && !readOnly && password.length >= MIN_PASSWORD_LENGTH && password === confirmation;
+  const canSave = !busy && !readOnly && password.length >= MIN_PASSWORD_LENGTH && password === confirmation;
 
   return (
     <div className={styles.scrollContent}>
@@ -146,9 +143,7 @@ export function AccessConfig() {
               <div className={styles.settingLabel}>{t("settings.access.requirePassword")}</div>
               <div className={styles.settingDescription}>{stateText}</div>
               {!status.configured && !readOnly && (
-                <div className={styles.settingDescription}>
-                  {t("settings.access.setBeforeEnabling")}
-                </div>
+                <div className={styles.settingDescription}>{t("settings.access.setBeforeEnabling")}</div>
               )}
               {error && <div className={styles.error}>{error}</div>}
             </div>
@@ -168,9 +163,7 @@ export function AccessConfig() {
 
         <section className={styles.group}>
           <h3 className={styles.groupTitle}>
-            {status.stored
-              ? t("settings.access.replacePassword")
-              : t("settings.access.setPassword")}
+            {status.stored ? t("settings.access.replacePassword") : t("settings.access.setPassword")}
           </h3>
           <div className={styles.settingRow}>
             <div>
@@ -193,9 +186,7 @@ export function AccessConfig() {
           <div className={styles.settingRow}>
             <div>
               <div className={styles.settingLabel}>{t("settings.access.confirmPassword")}</div>
-              <div className={styles.settingDescription}>
-                {t("settings.access.confirmPasswordHint")}
-              </div>
+              <div className={styles.settingDescription}>{t("settings.access.confirmPasswordHint")}</div>
             </div>
             <div className={styles.settingControl}>
               <input
@@ -266,9 +257,7 @@ export function AccessConfig() {
           <div className={styles.settingRow}>
             <div>
               <div className={styles.settingLabel}>{t("settings.access.basicAuthNote")}</div>
-              <div className={styles.settingDescription}>
-                {t("settings.access.basicAuthDetail")}
-              </div>
+              <div className={styles.settingDescription}>{t("settings.access.basicAuthDetail")}</div>
             </div>
             <div className={styles.settingControl} />
           </div>

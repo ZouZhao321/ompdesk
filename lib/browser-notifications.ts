@@ -10,10 +10,7 @@ interface ServiceWorkerRegistrationLike {
 }
 
 export interface BrowserNotificationEnvironment {
-  createWindowNotification: (
-    title: string,
-    options?: NotificationOptions,
-  ) => WindowNotificationLike;
+  createWindowNotification: (title: string, options?: NotificationOptions) => WindowNotificationLike;
   getServiceWorkerRegistration: (() => Promise<ServiceWorkerRegistrationLike | undefined>) | null;
 }
 
@@ -29,15 +26,11 @@ export type NotificationDelivery = "service-worker" | "window" | null;
 
 type DocumentAttentionState = Pick<Document, "visibilityState" | "hasFocus">;
 
-export function shouldShowBrowserNotification(
-  attentionState: DocumentAttentionState = document,
-): boolean {
+export function shouldShowBrowserNotification(attentionState: DocumentAttentionState = document): boolean {
   return attentionState.visibilityState !== "visible" || !attentionState.hasFocus();
 }
 
-export function isBlockingExtensionUiRequest(
-  request: ExtensionUiRequest,
-): request is BlockingExtensionUiRequest {
+export function isBlockingExtensionUiRequest(request: ExtensionUiRequest): request is BlockingExtensionUiRequest {
   switch (request.method) {
     case "select":
     case "confirm":
@@ -63,8 +56,7 @@ export function claimExtensionAttentionNotification(
 function getBrowserEnvironment(): BrowserNotificationEnvironment {
   return {
     createWindowNotification: (title, options) => new Notification(title, options),
-    getServiceWorkerRegistration:
-      "serviceWorker" in navigator ? () => navigator.serviceWorker.getRegistration() : null,
+    getServiceWorkerRegistration: "serviceWorker" in navigator ? () => navigator.serviceWorker.getRegistration() : null,
   };
 }
 

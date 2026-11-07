@@ -195,8 +195,8 @@ body {
      font CDN at build or at runtime, and the terminal-native faces below are
      already what omp users read code in. CJK fallbacks stay last. */
   --font-mono:
-    ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", "Noto Sans Mono",
-    "DejaVu Sans Mono", Consolas, "Liberation Mono", "PingFang SC", "Microsoft YaHei", monospace;
+    ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", "Noto Sans Mono", "DejaVu Sans Mono",
+    Consolas, "Liberation Mono", "PingFang SC", "Microsoft YaHei", monospace;
 }
 
 pre,
@@ -349,10 +349,7 @@ code {
   background: color-mix(in srgb, var(--accent) 10%, var(--bg));
 }
 .markdown-body .task-list-item > input[type="checkbox"]:checked::before,
-.markdown-body
-  .task-list-item
-  > p:first-child
-  > input[type="checkbox"]:first-child:checked::before {
+.markdown-body .task-list-item > p:first-child > input[type="checkbox"]:first-child:checked::before {
   content: "";
   width: 4px;
   height: 8px;
@@ -1061,10 +1058,8 @@ code {
   touch-action: none;
   background-color: var(--bg-panel);
   background-image:
-    linear-gradient(45deg, var(--bg) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--bg) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--bg) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--bg) 75%);
+    linear-gradient(45deg, var(--bg) 25%, transparent 25%), linear-gradient(-45deg, var(--bg) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg) 75%), linear-gradient(-45deg, transparent 75%, var(--bg) 75%);
   background-size: 16px 16px;
   background-position:
     0 0,
@@ -1219,8 +1214,7 @@ code {
   height: 100dvh;
   max-height: none;
   margin: 0;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   border: 0;
   background: var(--bg);
   color: var(--text);
@@ -1720,9 +1714,7 @@ span.linenumber {
   /* 悬停提示与车道之间的间距。 */
   --transcript-rail-tip-gap: 8px;
   /* 跳转条左缘相对转写区中线的偏移：版心一半 + 内边距 + 缝隙。 */
-  --transcript-rail-inset: calc(
-    var(--chat-column-width) / 2 + var(--chat-column-padding) + var(--transcript-rail-gap)
-  );
+  --transcript-rail-inset: calc(var(--chat-column-width) / 2 + var(--chat-column-padding) + var(--transcript-rail-gap));
   /* 放得下车道的最小转写区宽度：中线到跳转条左缘、车道、右边缘留白两侧对称。 */
   --transcript-rail-min-region: calc(
     2 * (var(--transcript-rail-inset) + var(--transcript-rail-lane) + var(--transcript-rail-margin))
@@ -1749,10 +1741,7 @@ span.linenumber {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: max(
-    var(--transcript-rail-margin),
-    calc(50% - var(--transcript-rail-inset) - var(--transcript-rail-lane))
-  );
+  right: max(var(--transcript-rail-margin), calc(50% - var(--transcript-rail-inset) - var(--transcript-rail-lane)));
   width: var(--transcript-rail-lane);
   display: flex;
   flex-direction: column;

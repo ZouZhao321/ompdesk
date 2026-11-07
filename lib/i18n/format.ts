@@ -26,12 +26,7 @@ export function interpolateMessage(message: string, params: TranslationParams = 
  * @param fallback 缺失时使用的原文
  * @returns 翻译结果或 fallback
  */
-export function translateOrFallback(
-  locale: Locale,
-  key: string,
-  messages: MessagesByLocale,
-  fallback: string,
-): string {
+export function translateOrFallback(locale: Locale, key: string, messages: MessagesByLocale, fallback: string): string {
   const message = messages[locale]?.[key] ?? messages.en?.[key];
   if (message !== undefined) return message;
   if (process.env.NODE_ENV !== "production" && !warnedMissingKeys.has(key)) {
@@ -78,8 +73,5 @@ export function formatRelativeTime(date: Date | string, locale: Locale, now = ne
           ? ["hour", 3_600_000]
           : ["day", 86_400_000];
   const value = Math.round(diffMs / divisor);
-  return new Intl.RelativeTimeFormat(locale, { numeric: "always" }).format(
-    value,
-    unit as Intl.RelativeTimeFormatUnit,
-  );
+  return new Intl.RelativeTimeFormat(locale, { numeric: "always" }).format(value, unit as Intl.RelativeTimeFormatUnit);
 }

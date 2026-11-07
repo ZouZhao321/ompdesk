@@ -76,9 +76,7 @@ test("renders shell blocks as themed terminal content", () => {
             {
               role: "toolResult",
               toolCallId: "shell-1",
-              content: [
-                { type: "text", text: "staged 0, unstaged 1\n M components/MessageView.tsx" },
-              ],
+              content: [{ type: "text", text: "staged 0, unstaged 1\n M components/MessageView.tsx" }],
             },
           ],
         ]),
@@ -150,10 +148,7 @@ test("uses i/title in the standard header for grep, read, write, glob, and eval 
     const renderedPreview = preview.replaceAll("'", "&#x27;");
     const previewPosition = html.indexOf(renderedPreview);
     const toolPosition = html.indexOf(`>${toolName}</span>`);
-    assert.ok(
-      previewPosition > toolPosition,
-      `expected ${property} from ${toolName} in the standard header`,
-    );
+    assert.ok(previewPosition > toolPosition, `expected ${property} from ${toolName} in the standard header`);
     assert.doesNotMatch(html, /class="tool-intent-preview"/);
     assert.ok(!html.includes(fallback), `expected ${toolName} fallback to stay out of the header`);
   }
@@ -372,10 +367,7 @@ test("keeps bash and todo blocks off the expand-state subscription", () => {
   assert.equal(source.match(/useTranscriptExpanded\(/g)?.length, 1);
   const cardIndex = source.indexOf("function ToolCallCard(");
   assert.ok(cardIndex !== -1, "MessageView must declare ToolCallCard");
-  assert.ok(
-    source.indexOf("useTranscriptExpanded(") > cardIndex,
-    "useTranscriptExpanded must live in ToolCallCard",
-  );
+  assert.ok(source.indexOf("useTranscriptExpanded(") > cardIndex, "useTranscriptExpanded must live in ToolCallCard");
   // bash 输出预览记忆化，行切分与高亮都收在 useMemo 里，展开别处的块不再重跑。
   assert.match(source, /const ConsoleOutputPreview = memo\(function ConsoleOutputPreview\(/);
   assert.match(source, /\{lineElements\}/);
@@ -386,12 +378,7 @@ test("reads a deferred thought that was saved without a session id", () => {
   // 读写因此落在同一个位置。
   // 这里只锁首帧：SSR 不跑 effect，effect 里「已有正文就不落错误」的那条分支由
   // lib/transcript-view-state.test.mjs 的 planDeferredContent 用例覆盖。
-  transcriptViewState.markLoaded(
-    undefined,
-    "entry-unsaved",
-    thinkingPart("entry-unsaved", 0),
-    "尚未落盘的正文",
-  );
+  transcriptViewState.markLoaded(undefined, "entry-unsaved", thinkingPart("entry-unsaved", 0), "尚未落盘的正文");
 
   const html = renderToStaticMarkup(
     React.createElement(

@@ -48,10 +48,7 @@ async function getRouteHandler(request: Request) {
     );
   } catch (error) {
     if (error instanceof LogQueryError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status, headers: NO_STORE },
-      );
+      return NextResponse.json({ error: error.message }, { status: error.status, headers: NO_STORE });
     }
     return NextResponse.json({ error: "Unable to read logs" }, { status: 500, headers: NO_STORE });
   }

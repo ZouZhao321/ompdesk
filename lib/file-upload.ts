@@ -34,10 +34,7 @@ export function validateUploadFileNames(fileNames: string[]): string | null {
   return null;
 }
 
-export function inspectUploadTargets(
-  directory: string,
-  fileNames: string[],
-): UploadTargetInspection {
+export function inspectUploadTargets(directory: string, fileNames: string[]): UploadTargetInspection {
   const conflicts: string[] = [];
   const nonReplaceable: string[] = [];
 

@@ -8,29 +8,17 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { interopDefault: true });
-const { seedSessions, resetSessionFixtures, withAgentDirLock } =
-  await jiti.import("./session-fixtures.ts");
-const { createAgentDirSandbox, restoreAgentDir, switchAgentDir } =
-  await jiti.import("./agent-dir-sandbox.ts");
+const { seedSessions, resetSessionFixtures, withAgentDirLock } = await jiti.import("./session-fixtures.ts");
+const { createAgentDirSandbox, restoreAgentDir, switchAgentDir } = await jiti.import("./agent-dir-sandbox.ts");
 const { SessionManager } = await jiti.import("@oh-my-pi/pi-coding-agent");
-const { getAgentDir, getBaseConfigRoot, __resetDirsFromEnvForTests } =
-  await jiti.import("@oh-my-pi/pi-utils/dirs");
+const { getAgentDir, getBaseConfigRoot, __resetDirsFromEnvForTests } = await jiti.import("@oh-my-pi/pi-utils/dirs");
 
 const TITLE_SINGLE_TURN = "伪造会话 single-turn";
 const TITLE_EMPTY = "伪造会话 empty";
@@ -73,16 +61,11 @@ function probeDirectorySymlinks() {
   const root = mkdtempSync(join(tmpdir(), "ompdesk-link-probe-"));
   try {
     mkdirSync(join(root, "target"));
-    symlinkSync(
-      join(root, "target"),
-      join(root, "link"),
-      process.platform === "win32" ? "junction" : "dir",
-    );
+    symlinkSync(join(root, "target"), join(root, "link"), process.platform === "win32" ? "junction" : "dir");
     return true;
   } catch (error) {
     const code = error?.code;
-    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP")
-      return false;
+    if (code === "EPERM" || code === "EACCES" || code === "ENOSYS" || code === "ENOTSUP") return false;
     throw error;
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -90,8 +73,7 @@ function probeDirectorySymlinks() {
 }
 
 const SYMLINKS_SUPPORTED = probeDirectorySymlinks();
-const SYMLINK_SKIP_REASON =
-  "Creating directory symlinks requires additional privileges on this platform";
+const SYMLINK_SKIP_REASON = "Creating directory symlinks requires additional privileges on this platform";
 
 /** 建目录符号链接；链接不可用时用例已在注册时跳过，这里不再兜底。 */
 function linkDirectory(target, link) {
@@ -109,9 +91,7 @@ function listInfoFor(infos, id) {
 }
 
 function hasStagingDirectory(sessionsDir) {
-  return (
-    existsSync(sessionsDir) && readdirSync(sessionsDir).some((name) => name.startsWith(".staging-"))
-  );
+  return existsSync(sessionsDir) && readdirSync(sessionsDir).some((name) => name.startsWith(".staging-"));
 }
 
 function pause(ms) {
@@ -129,16 +109,9 @@ test("single-turn 场景生成后能被 SessionManager.listAll 读回", async (t
   const [session] = seeded;
   assert.equal(session.cwd, resolve(sandbox.cwd));
   assert.equal(session.title, TITLE_SINGLE_TURN);
-  assert.equal(
-    dirname(session.path),
-    join(resolve(sandbox.agentDir), "sessions", "fixture-single-turn"),
-  );
+  assert.equal(dirname(session.path), join(resolve(sandbox.agentDir), "sessions", "fixture-single-turn"));
   assert.ok(existsSync(session.path), "样本会话文件应落在场景目录里");
-  assert.deepEqual(
-    readdirSync(sandbox.agentDir),
-    ["sessions"],
-    "铺样本只动样本目录，不碰 agentDir 顶层",
-  );
+  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "铺样本只动样本目录，不碰 agentDir 顶层");
 
   sandbox.readFixtures();
 
@@ -411,9 +384,7 @@ test("同一 agentDir 上的并发铺设互不干扰", async (t) => {
   assert.equal(longSessions.length, 1);
   assert.equal(emptySessions.length, 1);
   assert.deepEqual(jsonlFiles(join(sessionsDir, "fixture-long")), [basename(longSessions[0].path)]);
-  assert.deepEqual(jsonlFiles(join(sessionsDir, "fixture-empty")), [
-    basename(emptySessions[0].path),
-  ]);
+  assert.deepEqual(jsonlFiles(join(sessionsDir, "fixture-empty")), [basename(emptySessions[0].path)]);
   assert.deepEqual(readdirSync(sessionsDir).sort(), ["fixture-empty", "fixture-long"]);
   assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "并发铺设不得留下中间目录");
 
@@ -477,9 +448,7 @@ test(
   "同一 agentDir 的大小写变体共用一条队列",
   {
     // Bun 的 node:test 实现里 `t.skip()` 抛 NotImplementedError，跳过只能给在注册选项上。
-    skip: CASE_INSENSITIVE_FILESYSTEM
-      ? false
-      : "大小写敏感的文件系统上大小写变体是两个不同的目录，无法共用一条队列",
+    skip: CASE_INSENSITIVE_FILESYSTEM ? false : "大小写敏感的文件系统上大小写变体是两个不同的目录，无法共用一条队列",
   },
   async (t) => {
     const sandbox = createSandbox(t);
@@ -587,11 +556,7 @@ test(
     );
     await assert.rejects(() => resetSessionFixtures(sandbox.agentDir), /必须位于 agentDir 之内/);
 
-    assert.deepEqual(
-      readdirSync(outsideSessions),
-      [".staging-killed"],
-      "拒绝时不得在链接目标里新建或删除条目",
-    );
+    assert.deepEqual(readdirSync(outsideSessions), [".staging-killed"], "拒绝时不得在链接目标里新建或删除条目");
     assert.deepEqual(readdirSync(leftover), ["keep.jsonl"], "拒绝时不得删掉链接目标里的残留");
   },
 );
@@ -624,10 +589,7 @@ test("新场景同样拒绝带 sessions 以外条目的 agentDir", async (t) => 
   writeFileSync(join(sandbox.agentDir, "models.yml"), "");
 
   for (const scenario of ["branch", "subagent", "tools", "long"]) {
-    await assert.rejects(
-      () => seedSessions(scenario, { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-      /models\.yml/,
-    );
+    await assert.rejects(() => seedSessions(scenario, { agentDir: sandbox.agentDir, cwd: sandbox.cwd }), /models\.yml/);
   }
   assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
 });
@@ -744,10 +706,7 @@ test("活动 agent 目录位于目标 agentDir 内部时拒绝铺样本", async 
   assert.equal(existsSync(nested), false, "用例依赖的路径不得事先存在");
   const before = switchAgentDir(nested);
   try {
-    await assert.rejects(
-      () => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-      /内部/,
-    );
+    await assert.rejects(() => seedSessions("single-turn", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }), /内部/);
     assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
     assert.equal(existsSync(nested), false, "拒绝时不得在样本树里创建目录");
   } finally {
@@ -760,10 +719,7 @@ test("真实用户配置根下的 agentDir 直接拒绝铺样本", async (t) => 
   // 配置根下确定不存在的子目录：真实的 agent 目录首次运行前为空，条目检查会放行。
   const target = join(getBaseConfigRoot(), `absent-agent-dir-${randomUUID()}`);
 
-  await assert.rejects(
-    () => seedSessions("single-turn", { agentDir: target, cwd: sandbox.cwd }),
-    /真实用户配置根/,
-  );
+  await assert.rejects(() => seedSessions("single-turn", { agentDir: target, cwd: sandbox.cwd }), /真实用户配置根/);
   assert.equal(existsSync(target), false, "拒绝时不得创建目录");
 });
 
@@ -783,10 +739,7 @@ test("缺失的 agentDir 与非样本目录都会被拒绝", async (t) => {
   );
 
   writeFileSync(join(sandbox.agentDir, "agent.db"), "");
-  await assert.rejects(
-    () => seedSessions("empty", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }),
-    /agent\.db/,
-  );
+  await assert.rejects(() => seedSessions("empty", { agentDir: sandbox.agentDir, cwd: sandbox.cwd }), /agent\.db/);
   assert.equal(existsSync(fixturesDir(sandbox.agentDir)), false, "拒绝时不得创建 sessions");
 });
 
@@ -820,11 +773,7 @@ test("resetSessionFixtures 删除全部场景目录与中间目录，重复调�
   assert.equal(existsSync(join(fixturesDir(sandbox.agentDir), "fixture-single-turn")), false);
   assert.equal(existsSync(join(fixturesDir(sandbox.agentDir), "fixture-empty")), false);
   assert.deepEqual(readdirSync(fixturesDir(sandbox.agentDir)), []);
-  assert.deepEqual(
-    readdirSync(sandbox.agentDir),
-    ["sessions"],
-    "复位应清掉 agentDir 顶层的替换备份",
-  );
+  assert.deepEqual(readdirSync(sandbox.agentDir), ["sessions"], "复位应清掉 agentDir 顶层的替换备份");
 
   await resetSessionFixtures(sandbox.agentDir);
   const missing = join(sandbox.root, "missing");
@@ -838,11 +787,7 @@ test("resetSessionFixtures 拒绝带 sessions 以外条目的 agentDir", async (
   writeFileSync(join(sandbox.agentDir, "agent.db"), "");
 
   await assert.rejects(() => resetSessionFixtures(sandbox.agentDir), /agent\.db/);
-  assert.deepEqual(
-    readdirSync(fixturesDir(sandbox.agentDir)),
-    ["fixture-single-turn"],
-    "拒绝时不得删除样本",
-  );
+  assert.deepEqual(readdirSync(fixturesDir(sandbox.agentDir)), ["fixture-single-turn"], "拒绝时不得删除样本");
 });
 
 test("resetSessionFixtures 在活动 agent 目录与目标相同时拒绝", async (t) => {
@@ -851,11 +796,7 @@ test("resetSessionFixtures 在活动 agent 目录与目标相同时拒绝", asyn
   switchAgentDir(sandbox.agentDir);
 
   await assert.rejects(() => resetSessionFixtures(sandbox.agentDir), /活动 agent 目录/);
-  assert.deepEqual(
-    readdirSync(fixturesDir(sandbox.agentDir)),
-    ["fixture-single-turn"],
-    "拒绝时不得删除样本",
-  );
+  assert.deepEqual(readdirSync(fixturesDir(sandbox.agentDir)), ["fixture-single-turn"], "拒绝时不得删除样本");
 });
 
 test("resetSessionFixtures 拒绝真实用户配置根下的 agentDir，符号链接亦然", async (t) => {

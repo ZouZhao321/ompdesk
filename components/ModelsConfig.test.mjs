@@ -4,9 +4,7 @@ import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
-const { serializeHeaderRows, setCompatBool, updateHeaderRow } = await jiti.import(
-  "./models-config-helpers.ts",
-);
+const { serializeHeaderRows, setCompatBool, updateHeaderRow } = await jiti.import("./models-config-helpers.ts");
 
 const source = await readFile(new URL("./ModelsConfig.tsx", import.meta.url), "utf8");
 
@@ -33,12 +31,9 @@ test("custom model config exposes model headers and supportsDeveloperRole compat
 });
 
 test("disabling the developer role writes an explicit false override", () => {
-  assert.deepEqual(
-    setCompatBool({ compat: { supportsStore: true } }, "supportsDeveloperRole", false),
-    {
-      compat: { supportsStore: true, supportsDeveloperRole: false },
-    },
-  );
+  assert.deepEqual(setCompatBool({ compat: { supportsStore: true } }, "supportsDeveloperRole", false), {
+    compat: { supportsStore: true, supportsDeveloperRole: false },
+  });
 });
 
 test("editing a header preserves row order and stable identities", () => {

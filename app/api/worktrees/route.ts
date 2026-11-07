@@ -2,20 +2,9 @@ import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
 import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import { existsSync } from "fs";
-import {
-  ensureWorktree,
-  listBranches,
-  listWorktrees,
-  removeWorktree,
-  resolveProject,
-} from "@/lib/worktree";
+import { ensureWorktree, listBranches, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
 import type { BranchInfo, WorktreeInfo } from "@/lib/worktree";
-import {
-  allowFileRoot,
-  getAllowedFileRoots,
-  isExistingFilePathAllowed,
-  isFilePathAllowed,
-} from "@/lib/file-access";
+import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 /** Same gate as /api/files: only session cwds / project roots / explicitly

@@ -15,11 +15,7 @@ function hasHeader(headers: Headers, name: string): boolean {
   return headers.has(name);
 }
 
-function buildHeaders(
-  api: string,
-  apiKey: string | undefined,
-  configured: Record<string, string>,
-): Headers {
+function buildHeaders(api: string, apiKey: string | undefined, configured: Record<string, string>): Headers {
   const headers = new Headers(configured);
   if (!hasHeader(headers, "accept")) headers.set("Accept", "application/json");
   if (!apiKey) return headers;
@@ -46,17 +42,12 @@ export const POST = withRequestLog("/api/models-config/discover", async (req: Re
   try {
     const body = (await req.json()) as { providerName?: unknown; provider?: unknown };
     const providerName = typeof body.providerName === "string" ? body.providerName.trim() : "";
-    if (!providerName)
-      return NextResponse.json({ error: "providerName is required" }, { status: 400 });
-    if (!isRecord(body.provider))
-      return NextResponse.json({ error: "provider is required" }, { status: 400 });
+    if (!providerName) return NextResponse.json({ error: "providerName is required" }, { status: 400 });
+    if (!isRecord(body.provider)) return NextResponse.json({ error: "provider is required" }, { status: 400 });
 
     const baseUrl = typeof body.provider.baseUrl === "string" ? body.provider.baseUrl.trim() : "";
     if (!baseUrl) return NextResponse.json({ error: "Base URL is required" }, { status: 400 });
-    const api =
-      typeof body.provider.api === "string" && body.provider.api
-        ? body.provider.api
-        : "openai-completions";
+    const api = typeof body.provider.api === "string" && body.provider.api ? body.provider.api : "openai-completions";
 
     let endpoint: URL;
     try {
@@ -67,10 +58,7 @@ export const POST = withRequestLog("/api/models-config/discover", async (req: Re
 
     const auth = await resolveModelDiscoveryAuth(providerName, body.provider);
     if (typeof body.provider.apiKey === "string" && body.provider.apiKey.trim() && !auth.apiKey) {
-      return NextResponse.json(
-        { error: `No API key found for "${providerName}"` },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: `No API key found for "${providerName}"` }, { status: 400 });
     }
 
     const response = await fetch(endpoint, {
@@ -93,17 +81,11 @@ export const POST = withRequestLog("/api/models-config/discover", async (req: Re
     try {
       payload = JSON.parse(responseText);
     } catch {
-      return NextResponse.json(
-        { error: "Upstream model list was not valid JSON" },
-        { status: 502 },
-      );
+      return NextResponse.json({ error: "Upstream model list was not valid JSON" }, { status: 502 });
     }
     const models = parseDiscoveredModels(payload);
     if (models.length === 0) {
-      return NextResponse.json(
-        { error: "No models found in the upstream response" },
-        { status: 502 },
-      );
+      return NextResponse.json({ error: "No models found in the upstream response" }, { status: 502 });
     }
 
     return NextResponse.json({ models, endpoint: endpoint.toString() });

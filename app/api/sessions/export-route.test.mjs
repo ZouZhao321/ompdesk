@@ -84,9 +84,7 @@ async function assertTranscript(response, id) {
   assert.equal(response.headers.get("Content-Type"), "text/html; charset=utf-8");
   assert.match(response.headers.get("Content-Disposition"), /^inline;/);
   const html = await response.text();
-  const encoded = html.match(
-    /<script id="session-data" type="application\/json">([^<]+)<\/script>/,
-  )?.[1];
+  const encoded = html.match(/<script id="session-data" type="application\/json">([^<]+)<\/script>/)?.[1];
   assert.ok(encoded, "export contains the SDK's embedded transcript");
   const data = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
   assert.equal(data.header.id, id);

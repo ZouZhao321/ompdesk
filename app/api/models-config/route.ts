@@ -41,8 +41,7 @@ function readModelsConfig(): Record<string, unknown> {
     // `parse` handles JSON too — it is a subset of YAML — so a not-yet-migrated
     // `models.json` still loads.
     const parsed: unknown = parseYaml(readFileSync(path, "utf8"));
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
-      return { providers: {} };
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return { providers: {} };
     return parsed as Record<string, unknown>;
   } catch {
     return { providers: {} };
@@ -106,9 +105,7 @@ export const PUT = withRequestLog("/api/models-config", async (req: Request) => 
     const config = body as Record<string, unknown>;
     if (
       "providers" in config &&
-      (typeof config.providers !== "object" ||
-        config.providers === null ||
-        Array.isArray(config.providers))
+      (typeof config.providers !== "object" || config.providers === null || Array.isArray(config.providers))
     ) {
       auditFailure("models.config.write", target, { status: 400, reason: "invalid-providers" });
       return NextResponse.json({ error: "providers must be an object" }, { status: 400 });
@@ -119,9 +116,7 @@ export const PUT = withRequestLog("/api/models-config", async (req: Request) => 
     // request rebuilds against the edited providers.
     invalidateOmpRuntime();
     const providers =
-      config.providers && typeof config.providers === "object"
-        ? Object.keys(config.providers).length
-        : 0;
+      config.providers && typeof config.providers === "object" ? Object.keys(config.providers).length : 0;
     auditSuccess("models.config.write", target, { providers });
     return NextResponse.json({ success: true });
   } catch (error) {

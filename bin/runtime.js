@@ -100,9 +100,7 @@ const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "::1"];
  * startup, so the launcher has to add loopback before Bun is spawned.
  */
 function withLoopbackNoProxy(env) {
-  const proxied = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"].some(
-    (name) => env[name],
-  );
+  const proxied = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"].some((name) => env[name]);
   if (!proxied) return env;
   const current = env.NO_PROXY ?? env.no_proxy ?? "";
   if (current.trim() === "*") return env;

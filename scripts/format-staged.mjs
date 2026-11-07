@@ -43,9 +43,7 @@ function stagedFiles() {
     process.stderr.write(result.stderr ?? "");
     process.exit(result.status ?? 1);
   }
-  return result.stdout
-    .split("\0")
-    .filter((path) => path.length > 0 && existsSync(join(ROOT, path)));
+  return result.stdout.split("\0").filter((path) => path.length > 0 && existsSync(join(ROOT, path)));
 }
 
 function batches(files) {
@@ -63,11 +61,11 @@ let formatted = 0;
 for (const group of GROUPS) {
   const selected = files.filter((path) => group.extensions.has(extname(path).toLowerCase()));
   for (const batch of batches(selected)) {
-    const result = spawnSync(
-      process.execPath,
-      [prettierBin, "--config", group.config, "--write", ...batch],
-      { cwd: ROOT, env: createGitEnv(), stdio: "inherit" },
-    );
+    const result = spawnSync(process.execPath, [prettierBin, "--config", group.config, "--write", ...batch], {
+      cwd: ROOT,
+      env: createGitEnv(),
+      stdio: "inherit",
+    });
     if (result.error || result.status !== 0) {
       process.stderr.write(`[format] ${group.label} 分组排版失败，提交中止。\n`);
       process.exit(result.status ?? 1);

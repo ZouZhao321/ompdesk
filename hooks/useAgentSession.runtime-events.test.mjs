@@ -233,11 +233,7 @@ for (const initialId of ["a", "b"]) {
     const old = h.sources[0];
     h.followSessionIdentity("b", null);
     await tick();
-    assert.equal(
-      oldAttempt.status,
-      "fulfilled",
-      "cancellation must not wait for the five-second timeout",
-    );
+    assert.equal(oldAttempt.status, "fulfilled", "cancellation must not wait for the five-second timeout");
     assert.equal(oldAttempt.value.status, "closed");
     assert.equal(old.readyState, 2);
     assert.equal(h.timers.size, 0, "cancelled attempt must clear its timeout");
@@ -360,11 +356,7 @@ for (const existingAttempt of [false, true]) {
     current.open();
     h.runTimers(5_000);
     await tick();
-    assert.notEqual(
-      ensuring.status,
-      "fulfilled",
-      "OPEN without a connected frame cannot permit prompting",
-    );
+    assert.notEqual(ensuring.status, "fulfilled", "OPEN without a connected frame cannot permit prompting");
     // A reused failed attempt may be retried once; that replacement must also
     // complete its own handshake rather than inheriting OPEN from the old one.
     if (ensuring.status === "pending") {
@@ -479,8 +471,7 @@ for (const connectedAgain of [false, true]) {
     original.readyState = 0;
     original.onerror();
     original.open();
-    if (connectedAgain)
-      original.frame({ type: "connected", sessionId: "b", runtimeId: "runtime:r1" });
+    if (connectedAgain) original.frame({ type: "connected", sessionId: "b", runtimeId: "runtime:r1" });
     const ensuring = track(h.ensureEventsConnected("b"));
     await tick();
     if (connectedAgain) {
@@ -488,11 +479,7 @@ for (const connectedAgain of [false, true]) {
       assert.equal(h.sources.length, 1);
       assert.equal(original.closeCount, 0);
     } else {
-      assert.equal(
-        ensuring.status,
-        "pending",
-        "a reconnect must establish a fresh connected handshake",
-      );
+      assert.equal(ensuring.status, "pending", "a reconnect must establish a fresh connected handshake");
       assert.equal(h.sources.length, 2);
       assert.equal(original.readyState, 2);
       const current = h.sources[1];
@@ -516,32 +503,20 @@ for (const transportOpen of [false, true]) {
     const current = h.sources[0];
     if (transportOpen) current.open();
     const contextUsage = { percent: 20, contextWindow: 1000, tokens: 200 };
-    h.replies.push(
-      response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2", contextUsage } }),
-    );
+    h.replies.push(response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2", contextUsage } }));
     await h.refreshContextUsage("b");
     await tick();
-    assert.equal(
-      current.closeCount,
-      0,
-      "the state poll must not cancel its own canonical connection",
-    );
+    assert.equal(current.closeCount, 0, "the state poll must not cancel its own canonical connection");
     assert.equal(h.bindings.eventSourceRef.current, current);
     assert.equal(h.bindings.eventSourceRuntimeIdRef.current, "runtime:r2");
     assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
-    assert.deepEqual(
-      h.state.ContextUsage,
-      contextUsage,
-      "the actual refresh callback must apply the state",
-    );
+    assert.deepEqual(h.state.ContextUsage, contextUsage, "the actual refresh callback must apply the state");
     assert.equal(sending.status, "pending");
     assert.equal(promptStarted, false);
 
     // A second poll is now addressed by R2. It must neither replace the source
     // nor count runtime discovery as a completed SSE handshake.
-    h.replies.push(
-      response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2", contextUsage } }),
-    );
+    h.replies.push(response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2", contextUsage } }));
     await h.refreshContextUsage("b");
     await tick();
     assert.deepEqual(h.requests, ["/api/agent/b", "/api/agent/runtime%3Ar2"]);
@@ -572,9 +547,7 @@ for (const [label, sourceId, selectedId, incomingId] of [
     const connection = track(h.connectEvents(sourceId));
     const current = h.sources[0];
     h.bindings.sessionIdRef.current = selectedId;
-    h.replies.push(
-      response({ running: true, state: { sessionId: incomingId, runtimeId: "runtime:r2" } }),
-    );
+    h.replies.push(response({ running: true, state: { sessionId: incomingId, runtimeId: "runtime:r2" } }));
     await h.refreshContextUsage(selectedId);
     await tick();
     assert.equal(connection.status, "fulfilled");
@@ -637,11 +610,7 @@ test("a conflicting first handshake after R2 adoption cannot roll back identity 
   h.replies.push(response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2" } }));
   await h.refreshContextUsage("b");
   await tick();
-  assert.equal(
-    h.bindings.eventSourceRef.current,
-    current,
-    "R2 discovery must preserve the pending source",
-  );
+  assert.equal(h.bindings.eventSourceRef.current, current, "R2 discovery must preserve the pending source");
   assert.equal(sending.status, "pending");
   h.effects.length = 0;
   current.open();

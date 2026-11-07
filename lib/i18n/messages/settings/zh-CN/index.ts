@@ -26,7 +26,4 @@ export const settingsZhParts: Record<string, Record<string, string>> = {
   chromeLogs,
 };
 
-export const settingsZhMessages: Record<string, string> = Object.assign(
-  {},
-  ...Object.values(settingsZhParts),
-);
+export const settingsZhMessages: Record<string, string> = Object.assign({}, ...Object.values(settingsZhParts));

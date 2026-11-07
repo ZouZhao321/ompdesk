@@ -97,11 +97,7 @@ function renderRows(paths, pinned, locale) {
   );
 
   return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      { initialLocale: locale },
-      React.createElement(React.Fragment, null, ...rows),
-    ),
+    React.createElement(I18nProvider, { initialLocale: locale }, React.createElement(React.Fragment, null, ...rows)),
   );
 }
 
@@ -109,10 +105,7 @@ test("renders the project name and exposes the full path as the project button t
   const html = renderRow();
 
   assert.ok(html.includes(">my-app<"), "expected the project name to be rendered");
-  assert.ok(
-    html.includes(`title="${PROJECT_PATH}"`),
-    "expected the project button title to be the full project path",
-  );
+  assert.ok(html.includes(`title="${PROJECT_PATH}"`), "expected the project button title to be the full project path");
 });
 
 test("collapse button mirrors isCollapsed through aria-expanded and its label", () => {
@@ -127,10 +120,7 @@ test("renders accessible labels and counts for running, waiting and unread activ
   const html = renderRow({ activity: { running: 2, waiting: 1, unread: { interrupted: 3 } } });
 
   assert.ok(html.includes('aria-label="Agent running… (2)"'), "expected the running count label");
-  assert.ok(
-    html.includes('aria-label="Waiting for your answer (1)"'),
-    "expected the waiting count label",
-  );
+  assert.ok(html.includes('aria-label="Waiting for your answer (1)"'), "expected the waiting count label");
   assert.ok(html.includes('aria-label="Interrupted (3)"'), "expected the unread count label");
 });
 
@@ -210,10 +200,7 @@ test("new-session button label contains the full project path", () => {
 });
 
 test("actions button mirrors menuOpen through aria-expanded", () => {
-  assert.equal(
-    ariaExpandedOf(buttonTag(renderRow({ menuOpen: false }), "Project actions")),
-    "false",
-  );
+  assert.equal(ariaExpandedOf(buttonTag(renderRow({ menuOpen: false }), "Project actions")), "false");
   assert.equal(ariaExpandedOf(buttonTag(renderRow({ menuOpen: true }), "Project actions")), "true");
 });
 
@@ -243,11 +230,7 @@ test("hides both row actions when the row is neither hovered nor menu-open", () 
   for (const label of [`New session in ${PROJECT_PATH}`, "Project actions"]) {
     const style = stylesOf(buttonTag(html, label));
     assert.equal(style.opacity, "0", `expected "${label}" to be transparent by default`);
-    assert.equal(
-      style["pointer-events"],
-      "none",
-      `expected "${label}" to ignore pointers by default`,
-    );
+    assert.equal(style["pointer-events"], "none", `expected "${label}" to ignore pointers by default`);
   }
 });
 
@@ -269,14 +252,8 @@ test("selected styling differs from unselected styling", () => {
   const unselected = renderRow({ isSelected: false });
 
   assert.notEqual(selected, unselected);
-  assert.ok(
-    selected.includes("var(--bg-hover)"),
-    "expected the selected row to use the hover background token",
-  );
-  assert.ok(
-    !unselected.includes("var(--bg-hover)"),
-    "expected the unselected row to stay transparent",
-  );
+  assert.ok(selected.includes("var(--bg-hover)"), "expected the selected row to use the hover background token");
+  assert.ok(!unselected.includes("var(--bg-hover)"), "expected the unselected row to stay transparent");
 });
 
 test("render does not invoke callbacks or change markup", () => {
@@ -329,10 +306,7 @@ test("keeps the activity badges alongside the pin mark", () => {
     "expected the extra mark to be the pin",
   );
   for (const label of ["Agent running… (2)", "Waiting for your answer (1)", "Interrupted (3)"]) {
-    assert.ok(
-      pinned.includes(`aria-label="${label}"`),
-      `expected the badge labelled "${label}" while pinned`,
-    );
+    assert.ok(pinned.includes(`aria-label="${label}"`), `expected the badge labelled "${label}" while pinned`);
   }
 });
 
@@ -359,14 +333,8 @@ test("renders the localized pin mark label in zh-CN", () => {
 });
 
 test("renders full-width parentheses in the zh-CN activity labels", () => {
-  const html = renderRow(
-    { activity: { running: 2, waiting: 0, unread: { interrupted: 3 } } },
-    "zh-CN",
-  );
+  const html = renderRow({ activity: { running: 2, waiting: 0, unread: { interrupted: 3 } } }, "zh-CN");
 
-  assert.ok(
-    html.includes('aria-label="Agent 运行中…（2）"'),
-    "expected the localized running count label",
-  );
+  assert.ok(html.includes('aria-label="Agent 运行中…（2）"'), "expected the localized running count label");
   assert.ok(html.includes('aria-label="已中断（3）"'), "expected the localized unread count label");
 });

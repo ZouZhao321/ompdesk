@@ -29,30 +29,19 @@ test("fenced code in an assistant message renders as a code block", () => {
     model: "mock-model",
     provider: "mock",
   });
-  assert.ok(
-    visibleText(html).includes("const answer = 42"),
-    "code body missing from rendered markup",
-  );
+  assert.ok(visibleText(html).includes("const answer = 42"), "code body missing from rendered markup");
   assert.ok(/<pre|<code/.test(html), "no code element was rendered");
 });
 
 test("a normalized tool call renders its name and argument", () => {
   const html = renderMessage({
     role: "assistant",
-    content: [
-      { type: "toolCall", toolCallId: "call-1", toolName: "read", input: { path: TOOL_PATH } },
-    ],
+    content: [{ type: "toolCall", toolCallId: "call-1", toolName: "read", input: { path: TOOL_PATH } }],
     model: "mock-model",
     provider: "mock",
   });
-  assert.ok(
-    visibleText(html).includes(TOOL_PATH),
-    "tool call argument missing from rendered markup",
-  );
-  assert.ok(
-    visibleText(html).toLowerCase().includes("read"),
-    "tool name missing from rendered markup",
-  );
+  assert.ok(visibleText(html).includes(TOOL_PATH), "tool call argument missing from rendered markup");
+  assert.ok(visibleText(html).toLowerCase().includes("read"), "tool name missing from rendered markup");
 });
 
 // 工具结果不是独立消息：MessageView 对 role="toolResult" 返回 null，结果正文只通过

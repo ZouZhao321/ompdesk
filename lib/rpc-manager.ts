@@ -23,10 +23,7 @@ import {
 import { discoverCustomToolPaths } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
 import { initializeExtensions } from "@oh-my-pi/pi-coding-agent/modes/runtime-init";
 import { readPlanFile } from "@oh-my-pi/pi-coding-agent/plan-mode/plan-files";
-import {
-  readRpcSubagentTranscript,
-  RpcSubagentRegistry,
-} from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-subagents";
+import { readRpcSubagentTranscript, RpcSubagentRegistry } from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-subagents";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@oh-my-pi/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, realpathSync, writeFileSync } from "fs";
@@ -35,11 +32,7 @@ import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
-import {
-  isUserSkillPrompt,
-  skillPromptCommandLabel,
-  type SkillPromptDetailsLike,
-} from "./slash-display";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
 import { untrustedProjectSessionOptions } from "./project-trust";
 import { resolveSessionSystemPrompts } from "./session-system-prompt";
 import { readDefaultModelRole } from "./model-roles";
@@ -119,12 +112,7 @@ const RUNNING_STATE_EVENT_TYPES = new Set([
   "compaction_end",
 ]);
 
-const IDLE_RESET_EVENT_TYPES = new Set([
-  "agent_end",
-  "agent_settled",
-  "auto_compaction_end",
-  "compaction_end",
-]);
+const IDLE_RESET_EVENT_TYPES = new Set(["agent_end", "agent_settled", "auto_compaction_end", "compaction_end"]);
 
 const MAX_SUBAGENT_HISTORY = 128;
 
@@ -169,9 +157,7 @@ export interface RpcSessionStartOptions {
   thinkingLevel?: ConfiguredThinkingLevel;
 }
 
-const CODING_TOOL_NAMES: Record<string, true> = Object.fromEntries(
-  PRESET_FULL.map((name) => [name, true]),
-);
+const CODING_TOOL_NAMES: Record<string, true> = Object.fromEntries(PRESET_FULL.map((name) => [name, true]));
 
 // Extensions require a complete Theme, while the web UI applies its own styling.
 class PlainTextTheme extends Theme {
@@ -226,9 +212,7 @@ const CUSTOM_UI_KEYBINDINGS = new TuiKeybindingsManager(TUI_KEYBINDINGS);
 function withExtensionTools(session: AgentSessionLike, toolNames: string[]): string[] {
   if (toolNames.length === 0) return [];
 
-  const extensionToolNames = session
-    .getAllToolNames()
-    .filter((name) => CODING_TOOL_NAMES[name] !== true);
+  const extensionToolNames = session.getAllToolNames().filter((name) => CODING_TOOL_NAMES[name] !== true);
 
   return [...new Set([...toolNames, ...extensionToolNames])];
 }
@@ -246,11 +230,7 @@ type AvailableCommandsSession = Parameters<typeof buildAvailableSlashCommands>[0
 /** Why a `/skill:<name>` draft could not be delivered as a skill message. */
 type SkillFallbackReason = "disabled" | "unknown" | "unreadable" | "dropped";
 
-function appendSlashCommand(
-  commands: SlashCommandInfo[],
-  seenNames: Set<string>,
-  command: SlashCommandInfo,
-): void {
+function appendSlashCommand(commands: SlashCommandInfo[], seenNames: Set<string>, command: SlashCommandInfo): void {
   const name = command.name.trim();
   if (!name || seenNames.has(name)) return;
   seenNames.add(name);
@@ -270,9 +250,7 @@ export const BROWSER_NATIVE_SLASH_COMMANDS = ["fork", "goal"] as const;
  * /fork pane/window/tab subcommands that open the fork in a terminal
  * multiplexer; the browser fork ignores them, so it keeps its own description.
  */
-const BROWSER_NATIVE_DESCRIPTIONS: Partial<
-  Record<(typeof BROWSER_NATIVE_SLASH_COMMANDS)[number], string>
-> = {
+const BROWSER_NATIVE_DESCRIPTIONS: Partial<Record<(typeof BROWSER_NATIVE_SLASH_COMMANDS)[number], string>> = {
   fork: "Create a new fork from a previous message",
 };
 
@@ -284,15 +262,11 @@ const BROWSER_NATIVE_DESCRIPTIONS: Partial<
  * because it has no shared SDK handler yet. /handoff gained one in omp 18, so
  * it now arrives through discovery like every other shared builtin.
  */
-export async function getAvailableSlashCommands(
-  session: AgentSessionLike,
-): Promise<SlashCommandInfo[]> {
+export async function getAvailableSlashCommands(session: AgentSessionLike): Promise<SlashCommandInfo[]> {
   const commands: SlashCommandInfo[] = [];
   const seenNames = new Set<string>();
 
-  const discovered = await buildAvailableSlashCommands(
-    session as unknown as AvailableCommandsSession,
-  );
+  const discovered = await buildAvailableSlashCommands(session as unknown as AvailableCommandsSession);
   for (const command of discovered) {
     appendSlashCommand(commands, seenNames, command);
   }
@@ -419,14 +393,9 @@ export class AgentSessionWrapper {
       if (live) this.rememberSubagentSnapshot(live as unknown as SubagentSnapshot);
       return;
     }
-    const previous =
-      (live as unknown as SubagentSnapshot | undefined) ?? this.subagentHistory.get(payload.id);
+    const previous = (live as unknown as SubagentSnapshot | undefined) ?? this.subagentHistory.get(payload.id);
     const terminalStatus: SubagentSnapshot["status"] =
-      payload.status === "failed"
-        ? "failed"
-        : payload.status === "aborted"
-          ? "aborted"
-          : "completed";
+      payload.status === "failed" ? "failed" : payload.status === "aborted" ? "aborted" : "completed";
     this.rememberSubagentSnapshot({
       id: payload.id,
       index: payload.index ?? previous?.index ?? 0,
@@ -506,10 +475,7 @@ export class AgentSessionWrapper {
   start(): void {
     this.syncPlanModeFromSession();
     void this.goalMode.restore().catch((error) => {
-      console.error(
-        "[ompdesk] failed to restore goal mode:",
-        error instanceof Error ? error.message : error,
-      );
+      console.error("[ompdesk] failed to restore goal mode:", error instanceof Error ? error.message : error);
     });
     this.unsubscribe = this.inner.subscribe((sessionEvent) => {
       // SDK event members are closed interfaces; the browser stream treats them
@@ -591,9 +557,7 @@ export class AgentSessionWrapper {
       });
       this.extensionsBound = true;
       this.applyForcedEmptySystemPrompt();
-      console.log(
-        `[ompdesk] session_start dispatched to extensions for session ${this.inner.sessionId}`,
-      );
+      console.log(`[ompdesk] session_start dispatched to extensions for session ${this.inner.sessionId}`);
     })().catch((err) => {
       this.extensionBindingError = err;
       throw err;
@@ -738,9 +702,7 @@ export class AgentSessionWrapper {
         this.announceSkillFallback("unreadable", skill.name);
         return fallback();
       }
-      const content = images?.length
-        ? [{ type: "text" as const, text: built.message }, ...images]
-        : built.message;
+      const content = images?.length ? [{ type: "text" as const, text: built.message }, ...images] : built.message;
       const delivered = await this.inner.promptCustomMessage(
         {
           customType: SKILL_PROMPT_MESSAGE_TYPE,
@@ -813,11 +775,7 @@ export class AgentSessionWrapper {
         break;
       }
       const planFilePath = persistedMode?.data?.planFilePath;
-      if (
-        persistedMode?.mode === "plan" &&
-        typeof planFilePath === "string" &&
-        planFilePath.length > 0
-      ) {
+      if (persistedMode?.mode === "plan" && typeof planFilePath === "string" && planFilePath.length > 0) {
         state = {
           enabled: true,
           planFilePath,
@@ -961,10 +919,7 @@ export class AgentSessionWrapper {
           return;
         }
         void this.shutdown().catch((error) => {
-          console.error(
-            "[pi-web] failed to shut down idle session:",
-            error instanceof Error ? error.message : error,
-          );
+          console.error("[pi-web] failed to shut down idle session:", error instanceof Error ? error.message : error);
         });
       },
       10 * 60 * 1000,
@@ -979,8 +934,7 @@ export class AgentSessionWrapper {
     const header = manager.getHeader();
     if (!header) return;
 
-    const content =
-      [header, ...manager.getEntries()].map((entry) => JSON.stringify(entry)).join("\n") + "\n";
+    const content = [header, ...manager.getEntries()].map((entry) => JSON.stringify(entry)).join("\n") + "\n";
     writeFileSync(sessionFile, content, { encoding: "utf8", flag: "wx" });
 
     // omp normally delays the first flush until an assistant message exists.
@@ -1028,17 +982,11 @@ export class AgentSessionWrapper {
         // and supersedes one already scheduled.
         this.goalMode.onUserPrompt();
         // Fire and forget — events come via subscribe
-        const promptImages = command.images as
-          | Array<{ type: "image"; data: string; mimeType: string }>
-          | undefined;
+        const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         const streamingBehavior = command.streamingBehavior as "steer" | "followUp" | undefined;
         // 只排入当前轮次的 prompt 属于这次运行，记为 steer/follow_up 结果，不再另开 run。
         const queuedCommand =
-          streamingBehavior === "steer"
-            ? "steer"
-            : streamingBehavior === "followUp"
-              ? "follow_up"
-              : undefined;
+          streamingBehavior === "steer" ? "steer" : streamingBehavior === "followUp" ? "follow_up" : undefined;
         const startedAt = performance.now();
         this.promptRunning = true;
         notifyRunningChange();
@@ -1072,16 +1020,12 @@ export class AgentSessionWrapper {
 
         let running: Promise<boolean>;
         try {
-          running = this.dispatchSkillAwareCommand(
-            command.message as string,
-            promptImages,
-            streamingBehavior,
-            () =>
-              this.inner.prompt(command.message as string, {
-                ...(promptImages?.length ? { images: promptImages } : {}),
-                ...(streamingBehavior ? { streamingBehavior } : {}),
-                userInitiated: true,
-              }),
+          running = this.dispatchSkillAwareCommand(command.message as string, promptImages, streamingBehavior, () =>
+            this.inner.prompt(command.message as string, {
+              ...(promptImages?.length ? { images: promptImages } : {}),
+              ...(streamingBehavior ? { streamingBehavior } : {}),
+              userInitiated: true,
+            }),
           );
         } catch (error) {
           // The SDK rejected the prompt before returning a promise, so there is
@@ -1118,9 +1062,7 @@ export class AgentSessionWrapper {
         // call because `abort()` may release the prompt while it awaits.
         const hadRun = this.promptRunning;
         try {
-          await this.withRunCommand("abort", () =>
-            this.withFinalRunningNotification(() => this.inner.abort()),
-          );
+          await this.withRunCommand("abort", () => this.withFinalRunningNotification(() => this.inner.abort()));
         } finally {
           // A failing `abort()` still ends the run it targeted, or that run
           // would stay open for the rest of the process.
@@ -1219,10 +1161,7 @@ export class AgentSessionWrapper {
             throw new Error("Cannot fork while a shell command is running");
           }
           const sessionManager = this.inner.sessionManager;
-          const entryId = resolveForkEntryId(
-            sessionManager.getBranch() as ForkBranchEntry[],
-            command.entryId,
-          );
+          const entryId = resolveForkEntryId(sessionManager.getBranch() as ForkBranchEntry[], command.entryId);
           if (!entryId) throw new Error("No user message to fork from yet");
           const currentSessionFile = this.inner.sessionFile;
 
@@ -1347,8 +1286,8 @@ export class AgentSessionWrapper {
         // force the state back so the compat layer can use it correctly.
         if (
           level === "xhigh" &&
-          (this.inner.model as { compat?: { thinkingFormat?: string } } | null)?.compat
-            ?.thinkingFormat === "deepseek" &&
+          (this.inner.model as { compat?: { thinkingFormat?: string } } | null)?.compat?.thinkingFormat ===
+            "deepseek" &&
           this.inner.agent?.state
         ) {
           this.inner.agent.state.thinkingLevel = "xhigh";
@@ -1414,19 +1353,14 @@ export class AgentSessionWrapper {
       }
 
       case "steer": {
-        const steerImages = command.images as
-          | Array<{ type: "image"; data: string; mimeType: string }>
-          | undefined;
+        const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         await this.withRunCommand("steer", () =>
           this.dispatchSkillAwareCommand(
             command.message as string,
             steerImages,
             "steer",
             async () => {
-              await this.inner.steer(
-                command.message as string,
-                steerImages?.length ? steerImages : undefined,
-              );
+              await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
               return true;
             },
             true,
@@ -1436,19 +1370,14 @@ export class AgentSessionWrapper {
       }
 
       case "follow_up": {
-        const followImages = command.images as
-          | Array<{ type: "image"; data: string; mimeType: string }>
-          | undefined;
+        const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         await this.withRunCommand("follow_up", () =>
           this.dispatchSkillAwareCommand(
             command.message as string,
             followImages,
             "followUp",
             async () => {
-              await this.inner.followUp(
-                command.message as string,
-                followImages?.length ? followImages : undefined,
-              );
+              await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
               return true;
             },
             true,
@@ -1476,28 +1405,25 @@ export class AgentSessionWrapper {
 
       case "execute_slash_command": {
         const output: string[] = [];
-        const result: AcpBuiltinSlashCommandResult = await executeAcpBuiltinSlashCommand(
-          command.message as string,
-          {
-            session: this.inner as never,
-            sessionManager: this.inner.sessionManager,
-            settings: this.inner.settings,
-            cwd: this.cwd,
-            output: (text) => {
-              output.push(text);
-            },
-            refreshCommands: () => {},
-            reloadPlugins: async () => {
-              await this.waitForExtensionsBound();
-              this.extensionStatuses.clear();
-              this.extensionWidgets.clear();
-              await this.inner.reload();
-              await this.inner.refreshSkills?.();
-              this.applyForcedEmptySystemPrompt();
-              invalidateModelsCache();
-            },
+        const result: AcpBuiltinSlashCommandResult = await executeAcpBuiltinSlashCommand(command.message as string, {
+          session: this.inner as never,
+          sessionManager: this.inner.sessionManager,
+          settings: this.inner.settings,
+          cwd: this.cwd,
+          output: (text) => {
+            output.push(text);
           },
-        );
+          refreshCommands: () => {},
+          reloadPlugins: async () => {
+            await this.waitForExtensionsBound();
+            this.extensionStatuses.clear();
+            this.extensionWidgets.clear();
+            await this.inner.reload();
+            await this.inner.refreshSkills?.();
+            this.applyForcedEmptySystemPrompt();
+            invalidateModelsCache();
+          },
+        });
         if (result === false) return { handled: false, output };
         return {
           handled: true,
@@ -1548,12 +1474,7 @@ export class AgentSessionWrapper {
       }
 
       case "bash": {
-        if (
-          this.promptRunning ||
-          this.inner.isStreaming ||
-          this.inner.isCompacting ||
-          this.inner.isBashRunning
-        ) {
+        if (this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning) {
           throw new Error("Cannot run a shell command while the session is busy");
         }
         const execution = this.inner.executeBash(command.command as string, undefined, {
@@ -1662,9 +1583,7 @@ export class AgentSessionWrapper {
     const resolved = typeof overlayOptions === "function" ? overlayOptions() : overlayOptions;
     if (!resolved || typeof resolved !== "object") return DEFAULT_CUSTOM_UI_COLUMNS;
     const width = (resolved as { width?: unknown }).width;
-    return typeof width === "number" && Number.isFinite(width)
-      ? Math.max(40, Math.min(140, Math.round(width)))
-      : 92;
+    return typeof width === "number" && Number.isFinite(width) ? Math.max(40, Math.min(140, Math.round(width))) : 92;
   }
 
   private emitCustomUiRender(id: string, custom: ActiveCustomUi): void {
@@ -1672,9 +1591,7 @@ export class AgentSessionWrapper {
     try {
       lines = custom.component.render(custom.width);
     } catch (error) {
-      lines = [
-        `Extension custom UI render failed: ${error instanceof Error ? error.message : String(error)}`,
-      ];
+      lines = [`Extension custom UI render failed: ${error instanceof Error ? error.message : String(error)}`];
     }
     const event = {
       type: "extension_ui_request",
@@ -1959,8 +1876,7 @@ export class AgentSessionWrapper {
           title,
         } as ExtensionUiRequest as AgentEvent);
       },
-      custom: <T = unknown>(factory: unknown, options?: unknown) =>
-        this.requestExtensionCustomUi<T>(factory, options),
+      custom: <T = unknown>(factory: unknown, options?: unknown) => this.requestExtensionCustomUi<T>(factory, options),
       pasteToEditor: (text) => {
         this.emit({
           type: "extension_ui_request",
@@ -2003,9 +1919,7 @@ export class AgentSessionWrapper {
 declare global {
   var __ompSessions: Map<string, AgentSessionWrapper> | undefined;
   var __ompFinalSessionIds: Map<string, string> | undefined;
-  var __ompStartLocks:
-    | Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>>
-    | undefined;
+  var __ompStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
   var __ompStartingSessionCwds: Map<string, number> | undefined;
   var __ompRunningListeners: Set<(activity: SessionActivitySnapshot) => void> | undefined;
 }
@@ -2023,8 +1937,7 @@ function getRegistry(): Map<string, AgentSessionWrapper> {
     // HMR retains pre-identity wrappers, including their SDK run and listeners.
     // Upgrade only wrapper instances carrying the existing private state.
     if (!Array.isArray(Reflect.get(session, "listeners"))) continue;
-    if (!session.runtimeId)
-      Object.defineProperty(session, "runtimeId", { value: `runtime:${randomUUID()}` });
+    if (!session.runtimeId) Object.defineProperty(session, "runtimeId", { value: `runtime:${randomUUID()}` });
     // The old manager callback deleted the startup ID even after relocation.
     // Current destroy() removes entries by wrapper identity instead.
     Reflect.set(session, "onDestroyCallback", null);
@@ -2077,9 +1990,7 @@ export function getRpcSession(sessionId: string): AgentSessionWrapper | undefine
   const registered = registry.get(sessionId);
   if (registered?.isAlive() && registered.sessionId === sessionId) return registered;
   return [...registry.values()].find(
-    (candidate) =>
-      candidate.isAlive() &&
-      (candidate.sessionId === sessionId || candidate.runtimeId === sessionId),
+    (candidate) => candidate.isAlive() && (candidate.sessionId === sessionId || candidate.runtimeId === sessionId),
   );
 }
 
@@ -2110,9 +2021,7 @@ function runtimeMessageActivityMs(entry: SessionMessageEntry): number | undefine
 }
 
 /** 第一轮发言的预览文本：技能指令取命令行，普通消息取正文。 */
-function runtimeFirstMessage(
-  entry: { type: string; details?: unknown } | SessionMessageEntry | undefined,
-): string {
+function runtimeFirstMessage(entry: { type: string; details?: unknown } | SessionMessageEntry | undefined): string {
   if (!entry) return "(no messages)";
   if (entry.type === "custom_message") {
     return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
@@ -2132,19 +2041,14 @@ export function getRpcSessionInfos(): SessionInfo[] {
 
     const manager = session.inner.sessionManager;
     const header = manager.getHeader();
-    const entries = manager.getEntries() as unknown as Array<
-      { type: string; timestamp: string } | SessionMessageEntry
-    >;
-    const messages = entries.filter(
-      (entry): entry is SessionMessageEntry => entry.type === "message",
-    );
+    const entries = manager.getEntries() as unknown as Array<{ type: string; timestamp: string } | SessionMessageEntry>;
+    const messages = entries.filter((entry): entry is SessionMessageEntry => entry.type === "message");
     // 按落盘顺序取第一条用户回合：技能指令是 custom_message，普通提问是 message。
     // 两者混在一份列表里时，先出现的那条才决定标题与预览。
     const firstTurn = entries.find((entry) =>
       entry.type === "message"
         ? isUserTurnEntry(entry as SessionMessageEntry)
-        : entry.type === "custom_message" &&
-          isUserSkillPrompt(entry as { customType?: string; attribution?: string }),
+        : entry.type === "custom_message" && isUserSkillPrompt(entry as { customType?: string; attribution?: string }),
     );
     const sessionFile = manager.getSessionFile() ?? session.sessionFile;
     const persisted = Boolean(sessionFile && existsSync(sessionFile));
@@ -2186,9 +2090,7 @@ export function hasBusyRpcSessionForCwd(cwd: string): boolean {
 
 export async function destroyRpcSessionsForCwd(cwd: string): Promise<number> {
   const targetCwd = normalizeRpcCwd(cwd);
-  const sessions = Array.from(getRegistry().values()).filter(
-    (session) => normalizeRpcCwd(session.cwd) === targetCwd,
-  );
+  const sessions = Array.from(getRegistry().values()).filter((session) => normalizeRpcCwd(session.cwd) === targetCwd);
   await Promise.all(sessions.map((session) => session.shutdown()));
   return sessions.length;
 }
@@ -2198,9 +2100,7 @@ export async function destroyRpcSessionsForCwd(cwd: string): Promise<number> {
 export function getRpcSessionActivitySnapshot(): SessionActivitySnapshot {
   const runningSessionIds = new Set<string>();
   const waitingSessionIds = new Set<string>();
-  const sessionIdsByRuntimeId: Record<string, string> = Object.fromEntries(
-    globalThis.__ompFinalSessionIds ?? [],
-  );
+  const sessionIdsByRuntimeId: Record<string, string> = Object.fromEntries(globalThis.__ompFinalSessionIds ?? []);
   for (const session of getRegistry().values()) {
     if (!session.isAlive()) continue;
     sessionIdsByRuntimeId[session.runtimeId] = session.sessionId;
@@ -2230,9 +2130,7 @@ function getRunningListeners(): Set<(activity: SessionActivitySnapshot) => void>
 }
 
 /** Subscribe to running/waiting changes. Returns an unsubscribe function. */
-export function subscribeRunningSessions(
-  listener: (activity: SessionActivitySnapshot) => void,
-): () => void {
+export function subscribeRunningSessions(listener: (activity: SessionActivitySnapshot) => void): () => void {
   const listeners = getRunningListeners();
   listeners.add(listener);
   return () => {
@@ -2348,11 +2246,7 @@ export async function startRpcSession(
       // instance rather than this session's project-scoped clone.
       const [telemetry, scope] = await Promise.all([
         sessionTelemetry(runtime.settings, modelRegistry),
-        resolveVisibleModels(
-          modelRegistry,
-          getSetting<string[]>(settings, "enabledModels"),
-          settings,
-        ),
+        resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings),
       ]);
       const defaultRole = readDefaultModelRole(settings);
       const hasExistingMessages = sessionManager.buildSessionContext().messages.length > 0;
@@ -2381,16 +2275,8 @@ export async function startRpcSession(
       if (telemetry) sessionOptions.telemetry = telemetry;
       // omp's own applier, so a prompt file goes through the same templates the
       // CLI renders it with instead of overwriting the whole system prompt.
-      applyResolvedSystemPromptInputs(
-        sessionOptions,
-        systemPrompts.systemPrompt,
-        systemPrompts.appendPrompt,
-      );
-      const {
-        session: inner,
-        eventBus,
-        setToolUIContext,
-      } = await createAgentSession(sessionOptions);
+      applyResolvedSystemPromptInputs(sessionOptions, systemPrompts.systemPrompt, systemPrompts.appendPrompt);
+      const { session: inner, eventBus, setToolUIContext } = await createAgentSession(sessionOptions);
 
       const persistedPreferences = await persistExplicitStartupPreferences(
         runtime.settings,
@@ -2399,9 +2285,7 @@ export async function startRpcSession(
           ...(thinkingLevel ? { thinkingLevel } : {}),
         },
         {
-          ...(inner.model
-            ? { model: { provider: inner.model.provider, modelId: inner.model.id } }
-            : {}),
+          ...(inner.model ? { model: { provider: inner.model.provider, modelId: inner.model.id } } : {}),
           thinkingLevel: inner.thinkingLevel ?? "off",
           supportsThinking: Boolean(inner.model?.reasoning),
         },

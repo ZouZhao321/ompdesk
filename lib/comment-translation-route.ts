@@ -15,11 +15,7 @@ const MAX_ORIGINAL_LENGTH = 4_000;
 function parseRequestEntries(body: unknown): CommentTranslationRequestEntry[] | null {
   if (typeof body !== "object" || body === null || !("entries" in body)) return null;
   const entries = body.entries;
-  if (
-    !Array.isArray(entries) ||
-    entries.length === 0 ||
-    entries.length > MAX_COMMENT_TRANSLATION_ENTRIES
-  ) {
+  if (!Array.isArray(entries) || entries.length === 0 || entries.length > MAX_COMMENT_TRANSLATION_ENTRIES) {
     return null;
   }
 
@@ -32,8 +28,7 @@ function parseRequestEntries(body: unknown): CommentTranslationRequestEntry[] | 
     if (!("originalLanguage" in value) || !isCommentLanguage(value.originalLanguage)) return null;
     if (!("targetLanguage" in value) || !isCommentLanguage(value.targetLanguage)) return null;
     if (value.originalLanguage === value.targetLanguage) return null;
-    if ("force" in value && value.force !== undefined && typeof value.force !== "boolean")
-      return null;
+    if ("force" in value && value.force !== undefined && typeof value.force !== "boolean") return null;
     parsed.push({
       original,
       originalLanguage: value.originalLanguage,
@@ -62,10 +57,7 @@ export interface CommentTranslationHandlerDeps {
 export function createCommentTranslationHandler(deps: CommentTranslationHandlerDeps) {
   return async (req: Request): Promise<Response> => {
     if (!isApiRequestAllowed(req)) {
-      return NextResponse.json(
-        { code: "untrusted_request", error: "Untrusted API request" },
-        { status: 403 },
-      );
+      return NextResponse.json({ code: "untrusted_request", error: "Untrusted API request" }, { status: 403 });
     }
     if (!hasJsonContentType(req)) {
       return NextResponse.json(
@@ -78,10 +70,7 @@ export function createCommentTranslationHandler(deps: CommentTranslationHandlerD
     try {
       body = await req.json();
     } catch {
-      return NextResponse.json(
-        { code: "invalid_entries", error: "Body must be JSON" },
-        { status: 400 },
-      );
+      return NextResponse.json({ code: "invalid_entries", error: "Body must be JSON" }, { status: 400 });
     }
     const entries = parseRequestEntries(body);
     if (!entries) {

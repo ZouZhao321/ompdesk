@@ -34,9 +34,7 @@ test("compressChain labels a chain by its first message entry", () => {
 });
 
 test("compressChain skips non-message entries such as session_info", () => {
-  const chain = node(info("s1"), [
-    node(msg("u1", "user", "原始问题"), [node(msg("a1", "assistant", "答"))]),
-  ]);
+  const chain = node(info("s1"), [node(msg("u1", "user", "原始问题"), [node(msg("a1", "assistant", "答"))])]);
   const { labelEntry, node: rep, skipped } = compressChain(chain);
   assert.equal(labelEntry.id, "u1");
   assert.equal(rep.entry.id, "a1");

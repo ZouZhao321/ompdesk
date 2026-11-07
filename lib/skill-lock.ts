@@ -32,9 +32,7 @@ export function getGlobalSkillsLockPath({
   homeDir = homedir(),
   xdgStateHome = process.env.XDG_STATE_HOME,
 }: GlobalLockPathOptions = {}): string {
-  return xdgStateHome
-    ? join(xdgStateHome, "skills", ".skill-lock.json")
-    : join(homeDir, ".agents", ".skill-lock.json");
+  return xdgStateHome ? join(xdgStateHome, "skills", ".skill-lock.json") : join(homeDir, ".agents", ".skill-lock.json");
 }
 
 function readSkillLock(path: string): Record<string, SkillLockEntry> {
@@ -51,10 +49,7 @@ function isWithin(path: string, root: string): boolean {
   return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
-function findLockEntry(
-  entries: Record<string, SkillLockEntry>,
-  skillName: string,
-): SkillLockEntry | undefined {
+function findLockEntry(entries: Record<string, SkillLockEntry>, skillName: string): SkillLockEntry | undefined {
   if (entries[skillName]) return entries[skillName];
   const normalizedName = skillName.toLowerCase();
   const key = Object.keys(entries).find((name) => name.toLowerCase() === normalizedName);
@@ -92,8 +87,7 @@ function getInstallInfo(
   const skillPath = typeof entry.skillPath === "string" ? entry.skillPath : undefined;
   const ref = typeof entry.ref === "string" ? entry.ref : undefined;
   const rawVersionHash = scope === "global" ? entry.skillFolderHash : entry.computedHash;
-  const versionHash =
-    typeof rawVersionHash === "string" && rawVersionHash ? rawVersionHash : undefined;
+  const versionHash = typeof rawVersionHash === "string" && rawVersionHash ? rawVersionHash : undefined;
   const isGitHubSource = sourceType === "github" && /^[\w.-]+\/[\w.-]+$/.test(source);
   const hasComparableVersion = scope === "global" || !ref;
 

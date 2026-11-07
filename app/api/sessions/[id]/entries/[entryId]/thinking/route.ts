@@ -4,10 +4,7 @@ import { getSessionEntries, resolveSessionPath } from "@/lib/session-reader";
 
 export const GET = withRequestLog("/api/sessions/[id]/entries/[entryId]/thinking", getRouteHandler);
 
-async function getRouteHandler(
-  req: Request,
-  { params }: { params: Promise<{ id: string; entryId: string }> },
-) {
+async function getRouteHandler(req: Request, { params }: { params: Promise<{ id: string; entryId: string }> }) {
   const { id, entryId } = await params;
   const blockIndexParam = new URL(req.url).searchParams.get("blockIndex");
   const blockIndex = blockIndexParam === null ? Number.NaN : Number(blockIndexParam);

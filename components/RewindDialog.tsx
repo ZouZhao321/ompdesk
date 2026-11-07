@@ -113,9 +113,7 @@ export function RewindDialog({
 
         <div style={{ minHeight: 0, overflowY: "auto", padding: "0 10px 10px" }}>
           {entries.length === 0 ? (
-            <div style={{ padding: "20px 8px", fontSize: 12, color: "var(--text-muted)" }}>
-              {t("chat.rewindEmpty")}
-            </div>
+            <div style={{ padding: "20px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("chat.rewindEmpty")}</div>
           ) : (
             entries.map((entry) => (
               <button

@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  forwardRef,
-  useState,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-} from "react";
+import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import {
   getFileApiUrl,
@@ -252,8 +244,7 @@ function TreeNode({
   let labelColor = "var(--text)";
   if (ignored) labelColor = GIT_IGNORED_COLOR;
   else if (gitStatus?.status === "untracked") labelColor = "var(--success)";
-  const containsGitChanges =
-    node.isDir && (gitStatus !== undefined || changedDirectoryPaths.has(normalizedPath));
+  const containsGitChanges = node.isDir && (gitStatus !== undefined || changedDirectoryPaths.has(normalizedPath));
   const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
@@ -292,16 +283,7 @@ function TreeNode({
     } else {
       onOpenFile(node.fullPath, node.name);
     }
-  }, [
-    node.isDir,
-    node.fullPath,
-    node.name,
-    loaded,
-    open,
-    loadChildren,
-    onOpenFile,
-    onToggleExpanded,
-  ]);
+  }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onToggleExpanded]);
 
   return (
     <div>
@@ -685,9 +667,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         setUploadProgress(100);
         applyUploadResult(data);
       } catch (uploadFailure) {
-        setUploadError(
-          uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure),
-        );
+        setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
       } finally {
         setUploadPhase("idle");
       }
@@ -725,9 +705,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
 
         await performUpload(files, "error");
       } catch (uploadFailure) {
-        setUploadError(
-          uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure),
-        );
+        setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
       } finally {
         setUploadPhase("idle");
       }
@@ -819,14 +797,11 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     onChangesCountChange?.(gitFiles.length);
   }, [gitFiles, onChangesCountChange]);
 
-  const showUploadFeedback =
-    uploadBusy || pendingConflict !== null || uploadError !== null || uploadSummary !== null;
+  const showUploadFeedback = uploadBusy || pendingConflict !== null || uploadError !== null || uploadSummary !== null;
 
   const addUploadedFilesToChat = useCallback(() => {
     if (!uploadSummary || uploadSummary.uploaded.length === 0) return;
-    onAtMentions?.(
-      uploadSummary.uploaded.map((name) => getRelativeFilePath(joinFilePath(cwd, name), cwd)),
-    );
+    onAtMentions?.(uploadSummary.uploaded.map((name) => getRelativeFilePath(joinFilePath(cwd, name), cwd)));
   }, [cwd, onAtMentions, uploadSummary]);
 
   return (
@@ -839,9 +814,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               role="status"
               aria-live="polite"
               aria-label={
-                uploadPhase === "checking"
-                  ? t("files.checking")
-                  : t("files.uploading", { progress: uploadProgress })
+                uploadPhase === "checking" ? t("files.checking") : t("files.uploading", { progress: uploadProgress })
               }
             >
               <div
@@ -885,9 +858,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                     <path d="M5 20h14" />
                   </svg>
                 )}
-                {uploadPhase === "uploading" && (
-                  <span style={{ fontSize: 10 }}>{uploadProgress}%</span>
-                )}
+                {uploadPhase === "uploading" && <span style={{ fontSize: 10 }}>{uploadProgress}%</span>}
               </div>
               {uploadPhase === "uploading" && (
                 <div
@@ -1030,9 +1001,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                   fontSize: 11,
                 }}
               >
-                <div
-                  style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}
-                >
+                <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
                   {uploadSummary.uploaded.length > 0 && (
                     <span
                       title={`${uploadSummary.uploaded.length} uploaded`}
@@ -1112,14 +1081,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                     type="button"
                     onClick={addUploadedFilesToChat}
                     title={
-                      uploadSummary.uploaded.length === 1
-                        ? t("files.addUploadedFile")
-                        : t("files.addAllUploadedFiles")
+                      uploadSummary.uploaded.length === 1 ? t("files.addUploadedFile") : t("files.addAllUploadedFiles")
                     }
                     aria-label={
-                      uploadSummary.uploaded.length === 1
-                        ? t("files.addUploadedFile")
-                        : t("files.addAllUploadedFiles")
+                      uploadSummary.uploaded.length === 1 ? t("files.addUploadedFile") : t("files.addAllUploadedFiles")
                     }
                     style={{
                       height: 22,
@@ -1143,10 +1108,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                     {t("files.mention")}
                   </button>
                 )}
-                <DismissButton
-                  onClick={() => setUploadSummary(null)}
-                  title={t("files.dismissUploadResults")}
-                />
+                <DismissButton onClick={() => setUploadSummary(null)} title={t("files.dismissUploadResults")} />
               </div>
               {uploadSummary.errors.map((item) => (
                 <div
@@ -1212,9 +1174,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               fontSize: 12,
             }}
           >
-            <span style={{ color: "var(--text-dim)" }}>
-              {t("files.changedCount", { count: gitFiles.length })}
-            </span>
+            <span style={{ color: "var(--text-dim)" }}>{t("files.changedCount", { count: gitFiles.length })}</span>
             <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)" }}>
               +{gitLineStats.additions}
             </span>
@@ -1223,13 +1183,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             </span>
           </div>
           {gitFiles.map((status) => (
-            <ChangeRow
-              key={status.filePath}
-              status={status}
-              cwd={cwd}
-              onOpenFile={onOpenFile}
-              t={t}
-            />
+            <ChangeRow key={status.filePath} status={status} cwd={cwd} onOpenFile={onOpenFile} t={t} />
           ))}
         </div>
       )}
@@ -1237,9 +1191,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       {(changesCollapsed || gitFiles.length === 0) && (
         <div style={{ padding: "2px 4px" }}>
           {loading ? (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
-              {t("files.loading")}
-            </div>
+            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("files.loading")}</div>
           ) : error ? (
             <div style={{ padding: "8px 12px", fontSize: 11, color: "#f87171" }}>{error}</div>
           ) : (
@@ -1262,9 +1214,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             ))
           )}
           {!loading && !error && roots.length === 0 && (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
-              {t("files.noFiles")}
-            </div>
+            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("files.noFiles")}</div>
           )}
         </div>
       )}

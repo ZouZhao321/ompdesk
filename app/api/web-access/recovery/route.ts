@@ -93,10 +93,7 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
     );
   }
   if (!status.stored) {
-    return NextResponse.json(
-      { error: "No password is configured, so there is nothing to recover." },
-      { status: 409 },
-    );
+    return NextResponse.json({ error: "No password is configured, so there is nothing to recover." }, { status: 409 });
   }
 
   if (body.action === "request") {
@@ -116,8 +113,7 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
       });
       return NextResponse.json(
         {
-          error:
-            "A recovery code was just issued. Check the server console, or wait a moment and try again.",
+          error: "A recovery code was just issued. Check the server console, or wait a moment and try again.",
         },
         { status: 429, headers: { "Retry-After": String(Math.ceil(issued.retryAfterMs / 1000)) } },
       );
@@ -129,10 +125,7 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
     });
     auditSuccess("web-access.recovery.issue", "recovery-code", { expiresAt: issued.expiresAt });
     announceRecoveryCode(issued.code, issued.expiresAt);
-    return NextResponse.json(
-      { ok: true, expiresAt: issued.expiresAt },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    return NextResponse.json({ ok: true, expiresAt: issued.expiresAt }, { headers: { "Cache-Control": "no-store" } });
   }
 
   if (body.action === "complete") {
@@ -163,20 +156,11 @@ export const POST = withRequestLog("/api/web-access/recovery", async (req: Reque
           { status: 403 },
         );
       case "expired":
-        return NextResponse.json(
-          { error: "That recovery code has expired. Request a new one." },
-          { status: 403 },
-        );
+        return NextResponse.json({ error: "That recovery code has expired. Request a new one." }, { status: 403 });
       case "too-many-attempts":
-        return NextResponse.json(
-          { error: "Too many attempts. Request a new recovery code." },
-          { status: 429 },
-        );
+        return NextResponse.json({ error: "Too many attempts. Request a new recovery code." }, { status: 429 });
       case "no-code":
-        return NextResponse.json(
-          { error: "No recovery code is pending. Request one first." },
-          { status: 409 },
-        );
+        return NextResponse.json({ error: "No recovery code is pending. Request one first." }, { status: 409 });
     }
   }
 

@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useReducer,
-} from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, useReducer } from "react";
 import type {
   AgentMessage,
   BlockingExtensionUiRequest,
@@ -22,11 +14,7 @@ import type {
 } from "@/lib/types";
 import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
-import {
-  isUserSkillPrompt,
-  skillPromptCommandLabel,
-  type SkillPromptDetailsLike,
-} from "@/lib/slash-display";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { stripAnsi } from "@/lib/ansi";
 import {
   canApplySessionIdentity,
@@ -35,20 +23,11 @@ import {
   type RuntimeSessionBinding,
 } from "@/lib/agent-client";
 import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
-import {
-  FOLLOW_OBSERVATION_HOLD_MS,
-  reduceFollow,
-  type FollowEvent,
-} from "@/lib/transcript-follow";
+import { FOLLOW_OBSERVATION_HOLD_MS, reduceFollow, type FollowEvent } from "@/lib/transcript-follow";
 import type { ChatDraftImage } from "@/lib/draft-store";
 import { rememberSessionContinuation, clearSessionContinuation } from "@/lib/workspace-memory";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
-import type {
-  ContextUsage,
-  GoalStatusInfo,
-  SessionStatsInfo,
-  SlashCommandInfo,
-} from "@/lib/omp-types";
+import type { ContextUsage, GoalStatusInfo, SessionStatsInfo, SlashCommandInfo } from "@/lib/omp-types";
 import type { ModelRoleAssignment } from "@/lib/api-types";
 import type { TranslationParams } from "@/lib/i18n/types";
 
@@ -172,18 +151,13 @@ interface QueuedRestoredMessage {
   images?: Array<{ type: "image"; data: string; mimeType: string }>;
 }
 
-function normalizeQueuedMessages(
-  q?: { steering?: string[]; followUp?: string[] } | null,
-): QueuedMessages {
+function normalizeQueuedMessages(q?: { steering?: string[]; followUp?: string[] } | null): QueuedMessages {
   return { steering: q?.steering ?? [], followUp: q?.followUp ?? [] };
 }
 // State refreshes contain only live SDK entries; merge terminal frames into a bounded history.
 const MAX_SUBAGENT_HISTORY = 128;
 
-function mergeSubagentSnapshots(
-  current: SubagentSnapshot[],
-  incoming: SubagentSnapshot[],
-): SubagentSnapshot[] {
+function mergeSubagentSnapshots(current: SubagentSnapshot[], incoming: SubagentSnapshot[]): SubagentSnapshot[] {
   const byId = new Map(current.map((subagent) => [subagent.id, subagent]));
   for (const subagent of incoming) byId.set(subagent.id, subagent);
   const snapshots = [...byId.values()];
@@ -277,15 +251,7 @@ export interface UseAgentSessionOptions {
   t: (key: string, params?: TranslationParams) => string;
 }
 
-export type ThinkingLevelOption =
-  | "auto"
-  | "off"
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh"
-  | "max";
+export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 const USER_SCROLL_INTENT_MS = 1200;
 // 跟随观测抑制器的截止时长与判定都在 lib/transcript-follow.ts：抑制器只能由外部
@@ -301,17 +267,7 @@ const EVENT_STREAM_CONNECT_TIMEOUT_MS = 5_000;
 const MAX_NOTICES = 5;
 const NOTICE_VISIBLE_MS = 5000;
 const NOTICE_EXIT_ANIMATION_MS = 180;
-const SCROLL_KEYS = new Set([
-  "ArrowUp",
-  "ArrowDown",
-  "PageUp",
-  "PageDown",
-  "Home",
-  "End",
-  " ",
-  "Space",
-  "Spacebar",
-]);
+const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Space", "Spacebar"]);
 
 type EventStreamConnectionStatus = "connected" | "timeout" | "closed";
 
@@ -412,8 +368,7 @@ function extractMessageText(message: Partial<AgentMessage>): string {
 }
 
 function imageSignature(block: unknown): string {
-  if (!block || typeof block !== "object" || (block as { type?: unknown }).type !== "image")
-    return "";
+  if (!block || typeof block !== "object" || (block as { type?: unknown }).type !== "image") return "";
   const source = (block as { source?: unknown }).source;
   if (source && typeof source === "object") {
     const src = source as { type?: unknown; media_type?: unknown; data?: unknown; url?: unknown };
@@ -548,9 +503,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelError, setModelError] = useState<string | null>(null);
   const [modelScopeWarnings, setModelScopeWarnings] = useState<string[]>([]);
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
-  const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<
-    Record<string, Record<string, string | null>>
-  >({});
+  const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>(
+    {},
+  );
   const [modelRoles, setModelRoles] = useState<ModelRoleAssignment[]>([]);
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
   const [newSessionDefaultModel, setNewSessionDefaultModel] = useState<SelectedModel | null>(null);
@@ -574,9 +529,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     provider: string;
     modelId: string;
   } | null>(null);
-  const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(
-    null,
-  );
+  const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [modelSwitching, setModelSwitching] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
   const [compactError, setCompactError] = useState<string | null>(null);
@@ -615,8 +568,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionIdRef.current = session.id;
       runtimeIdRef.current = session.runtimeId ?? null;
     }
-    identityDraftKeyRef.current =
-      session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined);
+    identityDraftKeyRef.current = session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined);
     return () => {
       mountedRef.current = false;
     };
@@ -632,8 +584,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 载入后的回底票号：载入与滚动在同一个同步块里时，滚的还是提交前的旧列表。
   const [contextFollowTicket, setContextFollowTicket] = useState(0);
   const [goalStatus, setGoalStatus] = useState<GoalStatusInfo | null>(null);
-  const executeBashRef =
-    useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
+  const executeBashRef = useRef<(command: string, excludeFromContext: boolean) => Promise<void> | undefined>(undefined);
   const userScrollIntentUntilRef = useRef(0);
   // 上一次观测到的容器与 scrollTop：只有位置真的变了才算一次滚动，内容增高与行
   // 重测量引起的距离变化不算。
@@ -676,15 +627,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     let toolResults = 0;
     let toolCalls = 0;
     for (const msg of messages) {
-      if (msg.role === "user" || (msg.role === "custom" && isUserSkillPrompt(msg)))
-        userMessages += 1;
+      if (msg.role === "user" || (msg.role === "custom" && isUserSkillPrompt(msg))) userMessages += 1;
       if (msg.role === "toolResult") toolResults += 1;
       if (msg.role !== "assistant") continue;
       assistantMessages += 1;
       const u = (msg as import("@/lib/types").AssistantMessage).usage;
-      toolCalls += (msg as import("@/lib/types").AssistantMessage).content.filter(
-        (c) => c.type === "toolCall",
-      ).length;
+      toolCalls += (msg as import("@/lib/types").AssistantMessage).content.filter((c) => c.type === "toolCall").length;
       if (!u) continue;
       tokens.input += u.input ?? 0;
       tokens.output += u.output ?? 0;
@@ -708,15 +656,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       totalActiveMs: data?.totalActiveMs,
       ...(contextUsage ? { contextUsage } : {}),
     } satisfies SessionStatsInfo;
-  }, [
-    messages,
-    sessionStatsOverride,
-    contextUsage,
-    data?.filePath,
-    data?.totalActiveMs,
-    session?.id,
-    session?.name,
-  ]);
+  }, [messages, sessionStatsOverride, contextUsage, data?.filePath, data?.totalActiveMs, session?.id, session?.name]);
 
   const closeEvents = useCallback(() => {
     const source = eventSourceRef.current;
@@ -737,11 +677,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // A source belongs to one live wrapper, not merely its transcript ID. An
       // expired wrapper can keep heartbeating, so OPEN alone cannot prove reuse is
       // safe. Same-runtime relocations retain their source and pending handshake.
-      if (
-        runtimeId !== undefined &&
-        eventSourceRef.current &&
-        eventSourceRuntimeIdRef.current !== runtimeId
-      ) {
+      if (runtimeId !== undefined && eventSourceRef.current && eventSourceRuntimeIdRef.current !== runtimeId) {
         const attempt = eventConnectionAttemptRef.current;
         // State polling can discover a canonical connection's new wrapper before
         // its first frame arrives. Adopt that expected binding without declaring
@@ -761,8 +697,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       }
       if (runtimeId !== undefined) runtimeIdRef.current = runtimeId;
-      if (runtimeId === null && previousRuntimeId)
-        clearSessionContinuation(undefined, previousRuntimeId);
+      if (runtimeId === null && previousRuntimeId) clearSessionContinuation(undefined, previousRuntimeId);
       if (runtimeIdRef.current) rememberSessionContinuation(nextId, runtimeIdRef.current);
       if (nextId === sessionIdRef.current) {
         if (handleChanged || runtimeId === null) onSessionForked?.(nextId, runtimeId);
@@ -791,19 +726,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   };
 
   const followRuntimeState = useCallback(
-    (
-      state: AgentStateResponse | undefined,
-      requestedId: string,
-      requestedRuntimeId: string | null,
-    ) => {
+    (state: AgentStateResponse | undefined, requestedId: string, requestedRuntimeId: string | null) => {
       // A response from an expired handle can arrive after another request has
       // installed its replacement for the same transcript. Drop all stale state,
       // including idle flags, rather than clearing or settling that newer runtime.
-      if (
-        !mountedRef.current ||
-        sessionIdRef.current !== requestedId ||
-        runtimeIdRef.current !== requestedRuntimeId
-      )
+      if (!mountedRef.current || sessionIdRef.current !== requestedId || runtimeIdRef.current !== requestedRuntimeId)
         return true;
       if (state?.sessionId) {
         followSessionIdentity(state.sessionId, state.runtimeId ?? null);
@@ -819,12 +746,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         showLoading?: boolean,
         includeState?: boolean,
         retryAfterSettled?: boolean,
-      ) => Promise<
-        | { running: boolean; state?: AgentStateResponse }
-        | SessionLoadDeferred
-        | SessionLoadApplied
-        | null
-      >)
+      ) => Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | SessionLoadApplied | null>)
     | null
   >(null);
 
@@ -834,17 +756,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       showLoading = false,
       includeState = false,
       retryAfterSettled = true,
-    ): Promise<
-      | { running: boolean; state?: AgentStateResponse }
-      | SessionLoadDeferred
-      | SessionLoadApplied
-      | null
-    > => {
+    ): Promise<{ running: boolean; state?: AgentStateResponse } | SessionLoadDeferred | SessionLoadApplied | null> => {
       const requestId = ++historyRequestRef.current;
       const ownsHistory = () =>
-        mountedRef.current &&
-        sessionIdRef.current === sid &&
-        historyRequestRef.current === requestId;
+        mountedRef.current && sessionIdRef.current === sid && historyRequestRef.current === requestId;
       // 发出这次请求时的导航代数与在途目标。导航会自己写叶子与正文，这次载入只代表
       // 发出那一刻的持久化视图。
       const navigationGeneration = navigationGenerationRef.current;
@@ -888,12 +803,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             // 重发只做一次，再次让位就放弃。
             if (retryAfterSettled) {
               queueMicrotask(() => {
-                void loadSessionRef.current?.(
-                  sessionIdRef.current ?? sid,
-                  showLoading,
-                  includeState,
-                  false,
-                );
+                void loadSessionRef.current?.(sessionIdRef.current ?? sid, showLoading, includeState, false);
               });
             }
             return null;
@@ -925,9 +835,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setCurrentModelOverride((current) => (modelSwitchPendingRef.current ? current : null));
         setError(null);
         setThinkingLevel(
-          (d.context.configuredThinkingLevel ??
-            d.context.thinkingLevel ??
-            "off") as ThinkingLevelOption,
+          (d.context.configuredThinkingLevel ?? d.context.thinkingLevel ?? "off") as ThinkingLevelOption,
         );
         setEffectiveThinkingLevel(d.context.thinkingLevel);
 
@@ -953,19 +861,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (followRuntimeState(liveState, sid, requestedRuntimeId)) return null;
           if (!agentState.running && liveState?.sessionId) runtimeIdRef.current = null;
           if (liveState) {
-            if (liveState.contextUsage !== undefined)
-              setContextUsage(liveState.contextUsage ?? null);
+            if (liveState.contextUsage !== undefined) setContextUsage(liveState.contextUsage ?? null);
             if (liveState.thinkingLevel !== undefined) {
-              setThinkingLevel(
-                (liveState.configuredThinkingLevel ??
-                  liveState.thinkingLevel) as ThinkingLevelOption,
-              );
+              setThinkingLevel((liveState.configuredThinkingLevel ?? liveState.thinkingLevel) as ThinkingLevelOption);
               setEffectiveThinkingLevel(liveState.thinkingLevel);
             }
-            if (liveState.extensionStatuses !== undefined)
-              setExtensionStatuses(liveState.extensionStatuses ?? []);
-            if (liveState.extensionWidgets !== undefined)
-              setExtensionWidgets(liveState.extensionWidgets ?? []);
+            if (liveState.extensionStatuses !== undefined) setExtensionStatuses(liveState.extensionStatuses ?? []);
+            if (liveState.extensionWidgets !== undefined) setExtensionWidgets(liveState.extensionWidgets ?? []);
             if (liveState.queuedMessages !== undefined)
               setQueuedMessages(normalizeQueuedMessages(liveState.queuedMessages));
             if (liveState.subagents !== undefined)
@@ -1060,8 +962,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const promoteNewSession = useCallback(
     (messageCount = 0, firstMessage = "(no messages)") => {
       const sid = sessionIdRef.current;
-      if (!mountedRef.current || !isNew || !newSessionCwd || !sid || newSessionPromotedRef.current)
-        return;
+      if (!mountedRef.current || !isNew || !newSessionCwd || !sid || newSessionPromotedRef.current) return;
       newSessionPromotedRef.current = true;
       onSessionCreated?.({
         id: sid,
@@ -1098,9 +999,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           cwd: newSessionCwd,
           type: "ensure_session",
           toolNames,
-          ...(selectedModel
-            ? { provider: selectedModel.provider, modelId: selectedModel.modelId }
-            : {}),
+          ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
           ...(selectedThinkingLevel ? { thinkingLevel: selectedThinkingLevel } : {}),
         }),
       });
@@ -1144,11 +1043,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     setSlashCommandsLoading(true);
     try {
-      const data = await sendAgentCommand<SlashCommandsResponse>(
-        sid,
-        { type: "get_commands" },
-        runtimeIdRef,
-      );
+      const data = await sendAgentCommand<SlashCommandsResponse>(sid, { type: "get_commands" }, runtimeIdRef);
       const commands = data?.commands ?? [];
       setSlashCommands(commands);
       return commands;
@@ -1174,9 +1069,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     (sid: string): Promise<EventStreamConnectionResult> => {
       if (!mountedRef.current) return Promise.reject(new Error("Session is no longer active"));
       closeEvents();
-      const es = new EventSource(
-        `/api/agent/${encodeURIComponent(runtimeIdRef.current ?? sid)}/events`,
-      );
+      const es = new EventSource(`/api/agent/${encodeURIComponent(runtimeIdRef.current ?? sid)}/events`);
       eventSourceRef.current = es;
       eventSourceSessionIdRef.current = sid;
       eventSourceRuntimeIdRef.current = runtimeIdRef.current;
@@ -1208,11 +1101,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               // unbound. Reject a contradictory first frame, even after timeout,
               // instead of rolling the selected runtime back to another wrapper.
               const expectedRuntimeId = eventSourceRuntimeIdRef.current;
-              if (
-                !receivedConnected &&
-                expectedRuntimeId !== null &&
-                event.runtimeId !== expectedRuntimeId
-              ) {
+              if (!receivedConnected && expectedRuntimeId !== null && event.runtimeId !== expectedRuntimeId) {
                 closeEvents();
                 return;
               }
@@ -1230,17 +1119,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         };
         es.onerror = () => {
           if (!mountedRef.current || eventSourceRef.current !== es) return;
-          if (eventConnectionAttemptRef.current?.source === es)
-            eventConnectionAttemptRef.current.connected = false;
+          if (eventConnectionAttemptRef.current?.source === es) eventConnectionAttemptRef.current.connected = false;
           if (es.readyState === EventSource.CLOSED) {
             // Fatal error (404/500/content-type mismatch): browser won't
             // auto-reconnect. Settle the Promise and manually reconnect for
             // already-running sessions or an active idle grace window.
             settle("closed");
-            if (
-              eventSourceRef.current === es &&
-              (agentRunningRef.current || eventStreamGraceActiveRef.current)
-            ) {
+            if (eventSourceRef.current === es && (agentRunningRef.current || eventStreamGraceActiveRef.current)) {
               eventSourceRef.current = null;
               eventSourceSessionIdRef.current = null;
               eventSourceRuntimeIdRef.current = null;
@@ -1286,12 +1171,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             running?: boolean;
             state?: AgentStateResponse;
           };
-          if (!mountedRef.current || sessionIdRef.current !== sid)
-            throw new Error("Session is no longer active");
+          if (!mountedRef.current || sessionIdRef.current !== sid) throw new Error("Session is no longer active");
           const stale = followRuntimeState(state.state, sid, requestedRuntimeId);
           if (!stale && !state.running) {
-            if (!state.state?.sessionId)
-              throw new Error("Runtime identity expired; reopen the intended session");
+            if (!state.state?.sessionId) throw new Error("Runtime identity expired; reopen the intended session");
             runtimeIdRef.current = null;
           }
           sid = sessionIdRef.current ?? sid;
@@ -1315,11 +1198,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             current.readyState === EventSource.OPEN
           )
             return;
-        } else if (
-          attempt?.source === current &&
-          attempt.connected &&
-          current.readyState === EventSource.OPEN
-        ) {
+        } else if (attempt?.source === current && attempt.connected && current.readyState === EventSource.OPEN) {
           return;
         }
       }
@@ -1333,8 +1212,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (eventSourceRef.current === result.source) eventSourceRef.current = null;
       if (eventSourceSessionIdRef.current === sid) eventSourceSessionIdRef.current = null;
       eventSourceRuntimeIdRef.current = null;
-      if (eventConnectionAttemptRef.current?.source === result.source)
-        eventConnectionAttemptRef.current = null;
+      if (eventConnectionAttemptRef.current?.source === result.source) eventConnectionAttemptRef.current = null;
       result.source.close();
       throw new EventStreamConnectionError(result.status);
     },
@@ -1366,26 +1244,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     [],
   );
 
-  const sendExtensionCustomInput = useCallback(
-    async (request: ExtensionUiCustomRequest, data: string) => {
-      const sid = sessionIdRef.current;
-      if (!sid) return;
-      try {
-        await sendAgentCommand(
-          sid,
-          {
-            type: "extension_ui_input",
-            id: request.id,
-            data,
-          },
-          runtimeIdRef,
-        );
-      } catch (e) {
-        console.error("Failed to send extension custom UI input:", e);
-      }
-    },
-    [],
-  );
+  const sendExtensionCustomInput = useCallback(async (request: ExtensionUiCustomRequest, data: string) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    try {
+      await sendAgentCommand(
+        sid,
+        {
+          type: "extension_ui_input",
+          id: request.id,
+          data,
+        },
+        runtimeIdRef,
+      );
+    } catch (e) {
+      console.error("Failed to send extension custom UI input:", e);
+    }
+  }, []);
 
   const addNotice = useCallback((notice: { id?: string; message: string; type?: NoticeType }) => {
     const message = notice.message.trim();
@@ -1521,19 +1396,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const state = data.state;
           if (followRuntimeState(state, sid, requestedRuntimeId)) {
             if (mountedRef.current) {
-              eventStreamGraceTimerRef.current = setTimeout(
-                () => void checkServerIdle(),
-                PROMPT_SETTLE_POLL_MS,
-              );
+              eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), PROMPT_SETTLE_POLL_MS);
             }
             return;
           }
           sid = sessionIdRef.current ?? sid;
           setSubagents((current) => mergeSubagentSnapshots(current, state?.subagents ?? []));
           const promptActive = Boolean(
-            data.running &&
-              state &&
-              (state.isStreaming || state.isPromptRunning || state.isHandoffRunning),
+            data.running && state && (state.isStreaming || state.isPromptRunning || state.isHandoffRunning),
           );
           if (promptActive) {
             eventStreamGraceActiveRef.current = false;
@@ -1542,25 +1412,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             rpcPromptPendingRef.current = Boolean(state?.isPromptRunning);
             agentRunningRef.current = true;
             setAgentRunning(true);
-            setAgentPhase(
-              state?.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" },
-            );
+            setAgentPhase(state?.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
             return;
           }
 
           if (data.running && state?.isCompacting) {
             setIsCompacting(true);
-            eventStreamGraceTimerRef.current = setTimeout(
-              () => void checkServerIdle(),
-              PROMPT_SETTLE_POLL_MS,
-            );
+            eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), PROMPT_SETTLE_POLL_MS);
             return;
           }
           if (data.running && (state?.subagents?.length ?? 0) > 0) {
-            eventStreamGraceTimerRef.current = setTimeout(
-              () => void checkServerIdle(),
-              CONTEXT_USAGE_REFRESH_MS,
-            );
+            eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), CONTEXT_USAGE_REFRESH_MS);
             return;
           }
 
@@ -1575,17 +1437,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             !eventStreamGraceActiveRef.current
           )
             return;
-          eventStreamGraceTimerRef.current = setTimeout(
-            () => void checkServerIdle(),
-            PROMPT_SETTLE_POLL_MS,
-          );
+          eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), PROMPT_SETTLE_POLL_MS);
         }
       };
 
-      eventStreamGraceTimerRef.current = setTimeout(
-        () => void checkServerIdle(),
-        EVENT_STREAM_IDLE_GRACE_MS,
-      );
+      eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), EVENT_STREAM_IDLE_GRACE_MS);
     },
     [cancelEventStreamGrace, closeEvents, followRuntimeState],
   );
@@ -1642,10 +1498,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               const busy = Boolean(
                 data.running &&
                   state &&
-                  (state.isStreaming ||
-                    state.isPromptRunning ||
-                    state.isCompacting ||
-                    state.isHandoffRunning),
+                  (state.isStreaming || state.isPromptRunning || state.isCompacting || state.isHandoffRunning),
               );
               if (!busy) {
                 await finishPromptWithoutStream(sid, runId);
@@ -1731,16 +1584,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const busy =
           data.running &&
           state &&
-          (state.isStreaming ||
-            state.isPromptRunning ||
-            state.isCompacting ||
-            state.isHandoffRunning);
+          (state.isStreaming || state.isPromptRunning || state.isCompacting || state.isHandoffRunning);
         if (busy || !agentRunningRef.current) return;
         if (state) {
-          if (state.extensionStatuses !== undefined)
-            setExtensionStatuses(state.extensionStatuses ?? []);
-          if (state.extensionWidgets !== undefined)
-            setExtensionWidgets(state.extensionWidgets ?? []);
+          if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
+          if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
         }
         await finishPromptWithoutStream(sid, runId);
       } catch {
@@ -1771,8 +1619,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             modelId: data.state.model.id,
           });
         }
-        if (data.state?.contextUsage !== undefined)
-          setContextUsage(data.state.contextUsage ?? null);
+        if (data.state?.contextUsage !== undefined) setContextUsage(data.state.contextUsage ?? null);
       } catch {
         // The next refresh retries; state reconciliation owns error recovery.
       }
@@ -1828,10 +1675,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         case "connected":
         case "session_changed":
           if (typeof event.sessionId === "string") {
-            followSessionIdentity(
-              event.sessionId,
-              typeof event.runtimeId === "string" ? event.runtimeId : undefined,
-            );
+            followSessionIdentity(event.sessionId, typeof event.runtimeId === "string" ? event.runtimeId : undefined);
           }
           break;
         case "agent_start":
@@ -1870,17 +1714,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               .then((r) => r.json())
               .then((d: { state?: AgentStateResponse }) => {
                 if (followRuntimeState(d.state, sid, requestedRuntimeId)) return;
-                if (d.state?.contextUsage !== undefined)
-                  setContextUsage(d.state.contextUsage ?? null);
-                if (d.state?.extensionStatuses !== undefined)
-                  setExtensionStatuses(d.state.extensionStatuses ?? []);
-                if (d.state?.extensionWidgets !== undefined)
-                  setExtensionWidgets(d.state.extensionWidgets ?? []);
+                if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
+                if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
+                if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
                 if (d.state?.isCompacting !== undefined) setIsCompacting(d.state.isCompacting);
                 if (d.state?.subagents !== undefined)
-                  setSubagents((current) =>
-                    mergeSubagentSnapshots(current, d.state?.subagents ?? []),
-                  );
+                  setSubagents((current) => mergeSubagentSnapshots(current, d.state?.subagents ?? []));
                 if (d.state?.goal !== undefined) setGoalStatus(d.state.goal ?? null);
                 // Aborted turns can leave messages queued in pi (delivered with the
                 // next turn); dead wrapper (no state) means the queue is gone.
@@ -1923,8 +1762,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           break;
         case "skill_command_unavailable": {
           const reason = event.reason as string | undefined;
-          const messageKey =
-            SKILL_UNAVAILABLE_MESSAGE_KEYS[reason ?? ""] ?? SKILL_UNAVAILABLE_MESSAGE_KEYS.unknown;
+          const messageKey = SKILL_UNAVAILABLE_MESSAGE_KEYS[reason ?? ""] ?? SKILL_UNAVAILABLE_MESSAGE_KEYS.unknown;
           addNotice({
             type: "warning",
             message: t(messageKey, { skill: (event.skill as string | undefined) ?? "" }),
@@ -1970,11 +1808,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             optimisticUserMessageKeyRef.current = null;
             setMessages((prev) => {
               const last = prev[prev.length - 1];
-              if (
-                optimisticKey &&
-                last?.role === "user" &&
-                userMessageKey(last) === optimisticKey
-              ) {
+              if (optimisticKey && last?.role === "user" && userMessageKey(last) === optimisticKey) {
                 return optimisticKey === deliveredKey ? prev : [...prev.slice(0, -1), delivered];
               }
               return [...prev, delivered];
@@ -2046,11 +1880,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (!payload?.id) break;
           if (payload.status !== "started") {
             const terminalStatus: SubagentSnapshot["status"] =
-              payload.status === "failed"
-                ? "failed"
-                : payload.status === "aborted"
-                  ? "aborted"
-                  : "completed";
+              payload.status === "failed" ? "failed" : payload.status === "aborted" ? "aborted" : "completed";
             setSubagents((current) => {
               const previous = current.find((subagent) => subagent.id === payload.id);
               const finished: SubagentSnapshot = {
@@ -2065,9 +1895,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                 sessionFile: payload.sessionFile ?? previous?.sessionFile,
                 parentToolCallId: payload.parentToolCallId ?? previous?.parentToolCallId,
                 lastUpdate: Date.now(),
-                progress: previous?.progress
-                  ? { ...previous.progress, status: terminalStatus }
-                  : undefined,
+                progress: previous?.progress ? { ...previous.progress, status: terminalStatus } : undefined,
               };
               return mergeSubagentSnapshots(current, [finished]);
             });
@@ -2148,9 +1976,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             setCompactError(event.errorMessage as string);
             setCompactResult(null);
           } else if (!event.aborted) {
-            setCompactResult(
-              readCompactResult(event.result, (event.reason as string | undefined) ?? "auto"),
-            );
+            setCompactResult(readCompactResult(event.result, (event.reason as string | undefined) ?? "auto"));
             const sid = sessionIdRef.current;
             if (sid) {
               void loadSession(sid);
@@ -2300,9 +2126,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (optimisticKey) {
           setMessages((prev) => {
             const last = prev[prev.length - 1];
-            return last?.role === "user" && userMessageKey(last) === optimisticKey
-              ? prev.slice(0, -1)
-              : prev;
+            return last?.role === "user" && userMessageKey(last) === optimisticKey ? prev.slice(0, -1) : prev;
           });
         }
         addNotice({ type: "error", message: e instanceof Error ? e.message : String(e) });
@@ -2398,8 +2222,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
    */
   const handleFork = useCallback(
     async (entryId?: string): Promise<{ forked: boolean; error?: string }> => {
-      if (bashRunningRef.current)
-        return { forked: false, error: "Cannot fork while a shell command is running" };
+      if (bashRunningRef.current) return { forked: false, error: "Cannot fork while a shell command is running" };
       const sid = sessionIdRef.current;
       if (!sid) return { forked: false, error: "No active session to fork" };
       setForkingEntryId(entryId ?? null);
@@ -2523,10 +2346,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // 只有高亮、运行时与在途导航都没有别的说法时才跳过：高亮在载入前就写下了，命令
       // 失败后运行时仍停在旧叶子上，只看高亮会把同一条分支的重试静默吞掉。
       const navigating = navigatingLeafRef.current;
-      if (
-        leafId === activeLeafIdRef.current &&
-        (leafId === runtimeLeafIdRef.current || navigating?.leafId === leafId)
-      )
+      if (leafId === activeLeafIdRef.current && (leafId === runtimeLeafIdRef.current || navigating?.leafId === leafId))
         return;
       await runNavigation(leafId);
     },
@@ -2610,8 +2430,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!sid) return;
       try {
         await sendAgentCommand(sid, { type: "set_role_model", role }, runtimeIdRef);
-        if (!isNew)
-          setCurrentModelOverride({ provider: resolved.provider, modelId: resolved.modelId });
+        if (!isNew) setCurrentModelOverride({ provider: resolved.provider, modelId: resolved.modelId });
       } catch (e) {
         console.error("Failed to set role model:", e);
       }
@@ -2626,11 +2445,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setCompactError(null);
     setCompactResult(null);
     try {
-      const result = await sendAgentCommand<CompactCommandResult>(
-        sid,
-        { type: "compact" },
-        runtimeIdRef,
-      );
+      const result = await sendAgentCommand<CompactCommandResult>(sid, { type: "compact" }, runtimeIdRef);
       setCompactResult(readCompactResult(result, "manual"));
       await loadSession(sid, true);
     } catch (e) {
@@ -2644,9 +2459,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const loadModels = useCallback(
     async (signal?: AbortSignal) => {
       const modelCwd = newSessionCwd ?? session?.cwd ?? "";
-      const modelsUrl = modelCwd
-        ? `/api/models?cwd=${encodeURIComponent(modelCwd)}`
-        : "/api/models";
+      const modelsUrl = modelCwd ? `/api/models?cwd=${encodeURIComponent(modelCwd)}` : "/api/models";
       const res = await fetch(modelsUrl, signal ? { signal } : undefined);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = (await res.json()) as ModelsResponse;
@@ -2660,18 +2473,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setModelList(nextModelList);
       if (isNew && !sessionIdRef.current) {
         const match = d.defaultModel
-          ? nextModelList.find(
-              (m) => m.id === d.defaultModel?.modelId && m.provider === d.defaultModel?.provider,
-            )
+          ? nextModelList.find((m) => m.id === d.defaultModel?.modelId && m.provider === d.defaultModel?.provider)
           : undefined;
         const displayModel = match ?? nextModelList[0];
-        setNewSessionDefaultModel(
-          displayModel ? { provider: displayModel.provider, modelId: displayModel.id } : null,
-        );
+        setNewSessionDefaultModel(displayModel ? { provider: displayModel.provider, modelId: displayModel.id } : null);
         // An `enabledModels` pattern may pin a thinking level (`anthropic/*:high`).
         // Like pi, apply it to the model a new session starts with.
-        const pinned =
-          displayModel && d.thinkingLevelPins?.[`${displayModel.provider}/${displayModel.id}`];
+        const pinned = displayModel && d.thinkingLevelPins?.[`${displayModel.provider}/${displayModel.id}`];
         if (thinkingLevelOverrideRef.current === null) {
           setThinkingLevel((pinned as ThinkingLevelOption | undefined) ?? "auto");
         }
@@ -2703,8 +2511,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       try {
         switch (normalizedCommandName) {
           case "compact": {
-            if (!sid || isCompacting)
-              return complete({ handled: true, error: "No active session to compact" });
+            if (!sid || isCompacting) return complete({ handled: true, error: "No active session to compact" });
             setIsCompacting(true);
             setCompactError(null);
             setCompactResult(null);
@@ -2725,12 +2532,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           case "reload": {
             if (!sid) return complete({ handled: true, error: "No active session to reload" });
             await sendAgentCommand(sid, { type: "reload" }, runtimeIdRef);
-            await Promise.all([
-              loadSession(sid, false, true),
-              loadTools(sid),
-              loadSlashCommands(),
-              loadModels(),
-            ]);
+            await Promise.all([loadSession(sid, false, true), loadTools(sid), loadSlashCommands(), loadModels()]);
             return complete({ handled: true, message: "Reloaded session resources" });
           }
 
@@ -2745,11 +2547,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
           case "session": {
             if (!sid) return complete({ handled: true, error: "No active session" });
-            const stats = await sendAgentCommand<SessionStatsInfo>(
-              sid,
-              { type: "get_session_stats" },
-              runtimeIdRef,
-            );
+            const stats = await sendAgentCommand<SessionStatsInfo>(sid, { type: "get_session_stats" }, runtimeIdRef);
             if (stats) {
               setSessionStatsOverride(stats);
             }
@@ -2766,8 +2564,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               runtimeIdRef,
             );
             const textToCopy = data?.text ?? "";
-            if (!textToCopy)
-              return complete({ handled: true, error: "No assistant message to copy" });
+            if (!textToCopy) return complete({ handled: true, error: "No assistant message to copy" });
             await navigator.clipboard.writeText(textToCopy);
             return complete({ handled: true, message: "Copied last assistant message" });
           }
@@ -2783,11 +2580,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
           case "goal": {
             if (!sid) return complete({ handled: true, error: "No active session" });
-            const result = await sendAgentCommand<GoalCommandResponse>(
-              sid,
-              { type: "goal", args },
-              runtimeIdRef,
-            );
+            const result = await sendAgentCommand<GoalCommandResponse>(sid, { type: "goal", args }, runtimeIdRef);
             setGoalStatus(result?.status ?? null);
             if (result?.error) return complete({ handled: true, error: result.error });
             // `/goal show` output belongs in the transcript, not a toast that
@@ -3069,13 +2862,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         .map((entry) => entry.text)
         .filter((part) => part.trim())
         .join("\n\n");
-      const images = recalled
-        .flatMap((entry) => entry.images ?? [])
-        .map(({ data, mimeType }) => ({ data, mimeType }));
+      const images = recalled.flatMap((entry) => entry.images ?? []).map(({ data, mimeType }) => ({ data, mimeType }));
       if (mountedRef.current && (text || images.length > 0)) {
-        const dropped =
-          opts.chatInputRef?.current?.restoreSubmission(text, images.length ? images : undefined) ??
-          0;
+        const dropped = opts.chatInputRef?.current?.restoreSubmission(text, images.length ? images : undefined) ?? 0;
         if (dropped > 0) {
           addNotice({ type: "error", message: t("chat.recallDropped", { count: dropped }) });
         }
@@ -3185,11 +2974,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const markUserScrollIntent = useCallback((event: Event) => {
     if (event instanceof KeyboardEvent) {
       if (!SCROLL_KEYS.has(event.key)) return;
-      if (
-        event.target instanceof Element &&
-        event.target.closest("input, textarea, [contenteditable='true']")
-      )
-        return;
+      if (event.target instanceof Element && event.target.closest("input, textarea, [contenteditable='true']")) return;
     }
     userScrollIntentUntilRef.current = Date.now() + USER_SCROLL_INTENT_MS;
   }, []);
@@ -3201,14 +2986,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // 才不会把落点误当成一次新的位置变化。
     const previousScroll = lastScrollRef.current;
     const movedTowardEnd =
-      previousScroll !== null &&
-      previousScroll.container === container &&
-      previousScroll.top < container.scrollTop;
+      previousScroll !== null && previousScroll.container === container && previousScroll.top < container.scrollTop;
     lastScrollRef.current = { container, top: container.scrollTop };
     // 跳转自己的落点还在滚：这一串位置不参与判定，读到的一律丢掉。抑制器到点自己
     // 失效，调用方漏了松开也不会让跟随永久停摆。
-    if (followObservationHeldRef.current && Date.now() < followObservationHoldUntilRef.current)
-      return;
+    if (followObservationHeldRef.current && Date.now() < followObservationHoldUntilRef.current) return;
     if (followObservationHeldRef.current) {
       // 到点收回走同一个松开入口：合上状态与截止时间只有一处写。
       releaseFollowObservation();
@@ -3251,11 +3033,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             rpcPromptPendingRef.current = Boolean(agentState.state.isPromptRunning);
             agentRunningRef.current = true;
             setAgentRunning(true);
-            setAgentPhase(
-              agentState.state.isStreaming
-                ? { kind: "waiting_model" }
-                : { kind: "running_command" },
-            );
+            setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
             dispatch({ type: "start" });
             void connectEvents(sid);
             if (!agentState.state.isStreaming && agentState.state.isPromptRunning) {
@@ -3276,17 +3054,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (state.isCompacting !== undefined) setIsCompacting(state.isCompacting);
           if (state.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
           if (state.thinkingLevel !== undefined) {
-            setThinkingLevel(
-              (state.configuredThinkingLevel ?? state.thinkingLevel) as ThinkingLevelOption,
-            );
+            setThinkingLevel((state.configuredThinkingLevel ?? state.thinkingLevel) as ThinkingLevelOption);
             setEffectiveThinkingLevel(state.thinkingLevel);
           }
-          if (state.extensionStatuses !== undefined)
-            setExtensionStatuses(state.extensionStatuses ?? []);
-          if (state.extensionWidgets !== undefined)
-            setExtensionWidgets(state.extensionWidgets ?? []);
-          if (state.queuedMessages !== undefined)
-            setQueuedMessages(normalizeQueuedMessages(state.queuedMessages));
+          if (state.extensionStatuses !== undefined) setExtensionStatuses(state.extensionStatuses ?? []);
+          if (state.extensionWidgets !== undefined) setExtensionWidgets(state.extensionWidgets ?? []);
+          if (state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(state.queuedMessages));
           if (state.subagents !== undefined)
             setSubagents((current) => mergeSubagentSnapshots(current, state.subagents ?? []));
           if (state.goal !== undefined) setGoalStatus(state.goal ?? null);

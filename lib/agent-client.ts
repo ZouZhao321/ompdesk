@@ -89,12 +89,7 @@ export async function sendAgentCommand<T = unknown>(
         return sendAgentCommand<T>(body.sessionId, command, runtime);
       }
     }
-    throw new AgentCommandError(
-      body.error ?? `HTTP ${res.status}`,
-      res.status,
-      body.code,
-      body.accepted,
-    );
+    throw new AgentCommandError(body.error ?? `HTTP ${res.status}`, res.status, body.code, body.accepted);
   }
   if (runtime && runtime.current === runtimeId && body.sessionId && body.runtimeId) {
     const identity = { sessionId: body.sessionId, runtimeId: body.runtimeId };

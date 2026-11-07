@@ -118,11 +118,7 @@ function loadRemovedProjects(): Set<string> {
     if (!raw) return new Set();
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed)
-      ? new Set(
-          parsed
-            .filter((project): project is string => typeof project === "string")
-            .map(normalizeProjectKey),
-        )
+      ? new Set(parsed.filter((project): project is string => typeof project === "string").map(normalizeProjectKey))
       : new Set();
   } catch {
     return new Set();
@@ -165,9 +161,7 @@ function loadPersistedRunningSessionIds(): Set<string> {
     const raw = window.localStorage.getItem(RUNNING_SESSIONS_STORAGE_KEY);
     if (!raw) return new Set();
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed)
-      ? new Set(parsed.filter((id): id is string => typeof id === "string"))
-      : new Set();
+    return Array.isArray(parsed) ? new Set(parsed.filter((id): id is string => typeof id === "string")) : new Set();
   } catch {
     return new Set();
   }
@@ -233,9 +227,7 @@ function loadPinnedProjects(): string[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return dedupePinnedProjects(
-      parsed.filter((project): project is string => typeof project === "string"),
-    );
+    return dedupePinnedProjects(parsed.filter((project): project is string => typeof project === "string"));
   } catch {
     return [];
   }
@@ -442,9 +434,7 @@ function PiWebTitle() {
     >
       <OmpWordmark
         label={display}
-        labelStyle={
-          showVersion ? { fontFamily: "var(--font-mono)", letterSpacing: "-0.01em" } : undefined
-        }
+        labelStyle={showVersion ? { fontFamily: "var(--font-mono)", letterSpacing: "-0.01em" } : undefined}
       />
     </button>
   );
@@ -511,15 +501,9 @@ export function SessionSidebar({
     return () => clearTimeout(timer);
   }, [sessionRefreshDone]);
   const [activitySnapshot, setActivitySnapshot] = useState<SessionActivitySnapshotState>({});
-  const runningSessionIds = useMemo(
-    () => new Set(activitySnapshot.runningSessionIds ?? []),
-    [activitySnapshot],
-  );
+  const runningSessionIds = useMemo(() => new Set(activitySnapshot.runningSessionIds ?? []), [activitySnapshot]);
   // 运行中但停在提问表单上、等待用户作答的会话。
-  const waitingSessionIds = useMemo(
-    () => new Set(activitySnapshot.waitingSessionIds ?? []),
-    [activitySnapshot],
-  );
+  const waitingSessionIds = useMemo(() => new Set(activitySnapshot.waitingSessionIds ?? []), [activitySnapshot]);
   // 未读集合与打开路径共用同一份状态：这里只订阅，写入由 add/clear 完成。
   const unreadSessionIds = useSyncExternalStore(
     subscribeUnreadSessionIds,
@@ -607,11 +591,9 @@ export function SessionSidebar({
     if (!initialRestoreSettled) return;
     if (allSessions.length === 0 || !shouldSeedInitialMarkerUnread()) return;
     markInitialMarkerUnreadSeeded();
-    const seededIds = initialMarkerUnreadIds(
-      allSessions,
-      runningSessionIds,
-      waitingSessionIds,
-    ).filter((id) => id !== selectedSessionId && id !== launchSessionIdRef.current);
+    const seededIds = initialMarkerUnreadIds(allSessions, runningSessionIds, waitingSessionIds).filter(
+      (id) => id !== selectedSessionId && id !== launchSessionIdRef.current,
+    );
     addUnreadSessionIds(seededIds);
   }, [allSessions, runningSessionIds, waitingSessionIds, selectedSessionId, initialRestoreSettled]);
 
@@ -725,9 +707,7 @@ export function SessionSidebar({
     ) {
       clearUnreadSessionIds([selectedSessionId]);
     }
-    const hasUnlistedRunningSession = newlyRunning.some(
-      (id) => !allSessions.some((session) => session.id === id),
-    );
+    const hasUnlistedRunningSession = newlyRunning.some((id) => !allSessions.some((session) => session.id === id));
     // 只有确实产生了未读结果才重读最后状态：选中会话每轮结束都已读，不必全量刷新。
     if (finished.unreadIds.length > 0 || hasUnlistedRunningSession) {
       loadSessions(false, true);
@@ -863,11 +843,7 @@ export function SessionSidebar({
       // 打开，同样是启动后立刻可见的会话，旧的未读标记在这里一并清掉。URL 可能
       // 带 continuation handle（runtime id），先换算成当前会话 id 再清。
       if (initialSessionId) {
-        const target = restoreSessionContinuation(
-          initialSessionId,
-          allSessions,
-          listedRuntimeIdsRef.current,
-        );
+        const target = restoreSessionContinuation(initialSessionId, allSessions, listedRuntimeIdsRef.current);
         clearUnreadSessionIds([target?.id ?? initialSessionId]);
       }
       setInitialRestoreSettled(true);
@@ -887,11 +863,7 @@ export function SessionSidebar({
       // If restoring a session, set cwd to match that session
       if (initialSessionId && !restoredRef.current) {
         restoredRef.current = true;
-        const target = restoreSessionContinuation(
-          initialSessionId,
-          allSessions,
-          listedRuntimeIdsRef.current,
-        );
+        const target = restoreSessionContinuation(initialSessionId, allSessions, listedRuntimeIdsRef.current);
         // 恢复目标已经确定，播种从这里开始，并按本次选中的会话过滤。
         setInitialRestoreSettled(true);
         if (target) {
@@ -983,9 +955,7 @@ export function SessionSidebar({
         worktreePath: branch.name === branchName ? path : branch.worktreePath,
         current: branch.name === branchName,
       }));
-      const branches = known
-        ? updated
-        : [...updated, { name: branchName, worktreePath: path, current: true }];
+      const branches = known ? updated : [...updated, { name: branchName, worktreePath: path, current: true }];
       return { ...prev, forCwd: path, worktrees, branches };
     });
     setSelectedCwd(path);
@@ -1186,11 +1156,7 @@ export function SessionSidebar({
   const recentProjectPaths = getRecentProjects(sessionsForDisplay).filter(
     (project) => !removedProjects.has(normalizeProjectKey(project)),
   );
-  const orderedProjectPaths = orderProjectPaths(
-    recentProjectPaths,
-    projectSortMode,
-    pinnedProjects,
-  );
+  const orderedProjectPaths = orderProjectPaths(recentProjectPaths, projectSortMode, pinnedProjects);
   const pinnedProjectKeys = new Set(pinnedProjects.map(normalizeProjectKey));
   // 当前选中但还没有会话的项目也要出现在列表里：已置顶的按置顶位次落位，
   // 其余排在全部置顶项之后、其他未置顶项目之前。
@@ -1234,13 +1200,7 @@ export function SessionSidebar({
       }
     }
     return counts;
-  }, [
-    sessionsForDisplay,
-    workspaceActivity,
-    unreadSessionIds,
-    runningSessionIds,
-    waitingSessionIds,
-  ]);
+  }, [sessionsForDisplay, workspaceActivity, unreadSessionIds, runningSessionIds, waitingSessionIds]);
 
   const executeRemoveProject = (project: string) => {
     const key = normalizeProjectKey(project);
@@ -1292,10 +1252,7 @@ export function SessionSidebar({
   });
 
   const showWorktreeSwitcher = Boolean(
-    worktreeState?.isGit &&
-      worktreeState.isTopLevel &&
-      selectedCwd &&
-      selectedProject === worktreeState.projectRoot,
+    worktreeState?.isGit && worktreeState.isTopLevel && selectedCwd && selectedProject === worktreeState.projectRoot,
   );
   const currentWt =
     worktreeState?.worktrees.find((worktree) => worktree.path === selectedCwd) ??
@@ -1316,9 +1273,7 @@ export function SessionSidebar({
   const filterText = showWtFilter ? wtFilter.trim().toLowerCase() : "";
   const matchesFilter = (value: string) => !filterText || value.toLowerCase().includes(filterText);
   const visibleBranches = branches.filter(
-    (branch) =>
-      matchesFilter(branch.name) ||
-      (branch.worktreePath !== null && matchesFilter(branch.worktreePath)),
+    (branch) => matchesFilter(branch.name) || (branch.worktreePath !== null && matchesFilter(branch.worktreePath)),
   );
   const visibleOrphans = orphanCheckouts.filter((wt) => matchesFilter(wt.path));
   const visibleFallback = fallbackCheckouts.filter((wt) => matchesFilter(wt.branch ?? wt.path));
@@ -1485,9 +1440,7 @@ export function SessionSidebar({
             <span style={{ width: 10, flexShrink: 0 }} />
           )}
           <PathLabel text={row.label} style={{ flex: 1 }} />
-          {row.tag && (
-            <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{row.tag}</span>
-          )}
+          {row.tag && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{row.tag}</span>}
         </button>
         {row.removable && row.path && removeCheckoutButton(row.path)}
       </div>
@@ -1715,13 +1668,9 @@ export function SessionSidebar({
 
       <div style={{ flex: "1 1 0", overflowY: "auto", minHeight: 80, padding: "0 6px 10px" }}>
         {loading && (
-          <div style={{ padding: "12px 8px", color: "var(--text-muted)", fontSize: 12 }}>
-            {t("sidebar.loading")}
-          </div>
+          <div style={{ padding: "12px 8px", color: "var(--text-muted)", fontSize: 12 }}>{t("sidebar.loading")}</div>
         )}
-        {error && (
-          <div style={{ padding: "10px 8px", color: "#f87171", fontSize: 12 }}>{error}</div>
-        )}
+        {error && <div style={{ padding: "10px 8px", color: "#f87171", fontSize: 12 }}>{error}</div>}
         {!loading && !error && projectGroups.length === 0 && (
           <div style={{ padding: "12px 8px", color: "var(--text-muted)", fontSize: 12 }}>
             {normalizedProjectFilter ? t("sidebar.noMatchingProjects") : t("sidebar.noSessions")}
@@ -1734,9 +1683,7 @@ export function SessionSidebar({
               selectedProjectKey !== null && normalizeProjectKey(project) === selectedProjectKey;
             const isCollapsed = collapsedProjects.has(project) && !normalizedProjectFilter;
             const isExpanded = expandedProjects.has(project);
-            const visibleSessionsForProject = isExpanded
-              ? sessions
-              : sessions.slice(0, PROJECT_SESSION_LIMIT);
+            const visibleSessionsForProject = isExpanded ? sessions : sessions.slice(0, PROJECT_SESSION_LIMIT);
             const sessionTree = buildSessionTree(visibleSessionsForProject);
             const showMore = sessions.length > PROJECT_SESSION_LIMIT;
 
@@ -1764,11 +1711,7 @@ export function SessionSidebar({
                   }}
                   onHoverChange={(next) =>
                     setHoveredProject((current) =>
-                      next
-                        ? project
-                        : current === project && projectMenuOpen !== project
-                          ? null
-                          : current,
+                      next ? project : current === project && projectMenuOpen !== project ? null : current,
                     )
                   }
                 >
@@ -1892,22 +1835,16 @@ export function SessionSidebar({
                           <div style={{ maxHeight: "min(40vh, 300px)", overflowY: "auto" }}>
                             {visibleBranches.map((branch) => {
                               const holderPath = branch.worktreePath;
-                              const holder = holderPath
-                                ? checkouts.find((wt) => wt.path === holderPath)
-                                : null;
+                              const holder = holderPath ? checkouts.find((wt) => wt.path === holderPath) : null;
                               const isMain = holder?.isMain === true;
                               let stateLabel = t("sidebar.branchNoCheckout");
                               if (holderPath) {
-                                stateLabel = isMain
-                                  ? t("sidebar.mainCheckout")
-                                  : t("sidebar.hasCheckout");
+                                stateLabel = isMain ? t("sidebar.mainCheckout") : t("sidebar.hasCheckout");
                               }
                               return renderCheckoutRow({
                                 key: branch.name,
                                 path: holderPath,
-                                title:
-                                  holderPath ??
-                                  t("sidebar.branchNoCheckoutTitle", { branch: branch.name }),
+                                title: holderPath ?? t("sidebar.branchNoCheckoutTitle", { branch: branch.name }),
                                 checked: branch.current,
                                 label: branch.name,
                                 tag: stateLabel,
@@ -2044,8 +1981,7 @@ export function SessionSidebar({
                                     color: "#fff",
                                     fontSize: 11,
                                     fontWeight: 600,
-                                    cursor:
-                                      wtBusy || !wtNewBranch.trim() ? "not-allowed" : "pointer",
+                                    cursor: wtBusy || !wtNewBranch.trim() ? "not-allowed" : "pointer",
                                     opacity: wtBusy || !wtNewBranch.trim() ? 0.65 : 1,
                                   }}
                                 >
@@ -2162,8 +2098,7 @@ export function SessionSidebar({
                           textAlign: "left",
                         }}
                         onMouseEnter={(event) => {
-                          event.currentTarget.style.background =
-                            "color-mix(in srgb, var(--danger) 10%, transparent)";
+                          event.currentTarget.style.background = "color-mix(in srgb, var(--danger) 10%, transparent)";
                         }}
                         onMouseLeave={(event) => {
                           event.currentTarget.style.background = "transparent";
@@ -2192,9 +2127,7 @@ export function SessionSidebar({
                 </ProjectRow>
 
                 {!isCollapsed && sessions.length === 0 && isSelectedProject && (
-                  <div
-                    style={{ padding: "6px 12px 7px 32px", color: "var(--text-dim)", fontSize: 11 }}
-                  >
+                  <div style={{ padding: "6px 12px 7px 32px", color: "var(--text-dim)", fontSize: 11 }}>
                     {t("sidebar.noSessions")}
                   </div>
                 )}
@@ -2376,10 +2309,7 @@ function ArchivedSessionsSection({
                   gap: 4,
                   cursor: "pointer",
                   overflow: "hidden",
-                  borderLeft:
-                    s.id === selectedSessionId
-                      ? "2px solid var(--accent)"
-                      : "2px solid transparent",
+                  borderLeft: s.id === selectedSessionId ? "2px solid var(--accent)" : "2px solid transparent",
                   background: s.id === selectedSessionId ? "var(--bg-selected)" : "transparent",
                 }}
               >
@@ -2526,21 +2456,9 @@ function RunningSessionIndicator() {
         color: "var(--accent)",
       }}
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-        style={{ display: "block" }}
-      >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
         <g>
-          <path
-            d="M21 12a9 9 0 1 1-3.8-7.4"
-            stroke="currentColor"
-            strokeWidth="2.8"
-            strokeLinecap="round"
-          />
+          <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
           <animateTransform
             attributeName="transform"
             type="rotate"
@@ -2577,22 +2495,10 @@ function WaitingSessionIndicator() {
         color: "var(--warning)",
       }}
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        fill="none"
-        aria-hidden="true"
-        style={{ display: "block" }}
-      >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
         <circle cx="7" cy="7" r="4.6" stroke="currentColor" strokeWidth="2">
           <animate attributeName="r" values="4.2;5;4.2" dur="1.8s" repeatCount="indefinite" />
-          <animate
-            attributeName="stroke-opacity"
-            values="1;0.4;1"
-            dur="1.8s"
-            repeatCount="indefinite"
-          />
+          <animate attributeName="stroke-opacity" values="1;0.4;1" dur="1.8s" repeatCount="indefinite" />
         </circle>
       </svg>
     </span>
@@ -2618,14 +2524,7 @@ function StaticSessionMarker({ status }: { status: StaticMarkerStatus }) {
         color,
       }}
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        fill="none"
-        aria-hidden="true"
-        style={{ display: "block" }}
-      >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
         <circle cx="7" cy="7" r="4" fill="currentColor" />
       </svg>
     </span>

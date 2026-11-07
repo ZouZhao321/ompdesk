@@ -6,22 +6,10 @@ export function normalizeFilePathSlashes(filePath: string): string {
 }
 
 export function encodeFilePathForApi(filePath: string): string {
-  return normalizeFilePathSlashes(filePath)
-    .split("/")
-    .filter(Boolean)
-    .map(encodeURIComponent)
-    .join("/");
+  return normalizeFilePathSlashes(filePath).split("/").filter(Boolean).map(encodeURIComponent).join("/");
 }
 
-export type FileApiType =
-  | "read"
-  | "download"
-  | "meta"
-  | "preview"
-  | "watch"
-  | "list"
-  | "upload"
-  | "upload-check";
+export type FileApiType = "read" | "download" | "meta" | "preview" | "watch" | "list" | "upload" | "upload-check";
 
 export function getFileApiUrl(
   filePath: string,

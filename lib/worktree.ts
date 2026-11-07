@@ -225,11 +225,7 @@ function isUsableWorktree(wt: RawWorktree): boolean {
  * this removes only the administration directory whose `gitdir` points here.
  */
 async function forgetWorktreeRegistration(repoRoot: string, worktreePath: string): Promise<void> {
-  const commonDir = await git(repoRoot, [
-    "rev-parse",
-    "--path-format=absolute",
-    "--git-common-dir",
-  ]);
+  const commonDir = await git(repoRoot, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
   const adminRoot = join(normalize(commonDir), "worktrees");
   if (!existsSync(adminRoot)) return;
 
@@ -265,15 +261,10 @@ export async function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
   // Prunable worktrees point at missing/broken gitdirs and cannot be browsed
   // or selected usefully. Also skip vanished paths even if git has not marked
   // them prunable yet.
-  return raw
-    .filter(isUsableWorktree)
-    .map((wt) => ({ path: wt.path, branch: wt.branch, isMain: wt.path === mainPath }));
+  return raw.filter(isUsableWorktree).map((wt) => ({ path: wt.path, branch: wt.branch, isMain: wt.path === mainPath }));
 }
 
-export async function listBranches(
-  cwd: string,
-  knownWorktrees?: WorktreeInfo[],
-): Promise<BranchInfo[]> {
+export async function listBranches(cwd: string, knownWorktrees?: WorktreeInfo[]): Promise<BranchInfo[]> {
   const [refs, worktrees] = await Promise.all([
     // Full ref names: short names gain a `heads/` prefix whenever a tag of the
     // same name exists, which would render the branch as a different branch.
@@ -304,11 +295,7 @@ function sanitizeBranchForDir(branch: string): string {
 /** First free directory under baseDir: name, then name-2, name-3… */
 function pickFreeDir(baseDir: string, dirName: string, reserved: Set<string>): string {
   let candidate = join(baseDir, dirName);
-  for (
-    let suffix = 2;
-    existsSync(candidate) || reserved.has(directoryKey(candidate));
-    suffix += 1
-  ) {
+  for (let suffix = 2; existsSync(candidate) || reserved.has(directoryKey(candidate)); suffix += 1) {
     if (suffix > 99) throw new Error(`No free directory name for ${dirName}`);
     candidate = join(baseDir, `${dirName}-${suffix}`);
   }
@@ -371,12 +358,7 @@ export async function ensureWorktree(
 
   // The branch came from a list read moments ago; if it vanished since then,
   // report it instead of silently creating a fresh branch at HEAD.
-  const branchExists = await git(repoRoot, [
-    "rev-parse",
-    "--verify",
-    "--quiet",
-    `refs/heads/${trimmed}`,
-  ])
+  const branchExists = await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`])
     .then(() => true)
     .catch(() => false);
   if (!branchExists && options.createBranch !== true) {
@@ -402,9 +384,7 @@ export async function addWorktree(
   const baseDir = `${resolve(repoRoot)}-worktrees`;
   mkdirSync(baseDir, { recursive: true });
   const reserved = new Set(
-    parseWorktreeList(await git(repoRoot, ["worktree", "list", "--porcelain"])).map((wt) =>
-      directoryKey(wt.path),
-    ),
+    parseWorktreeList(await git(repoRoot, ["worktree", "list", "--porcelain"])).map((wt) => directoryKey(wt.path)),
   );
   const worktreePath = pickFreeDir(baseDir, dirName, reserved);
 
@@ -427,9 +407,7 @@ export async function addWorktree(
     // failure (disk full, timeout mid-add) must surface instead of being
     // masked by a half-built checkout.
     if (/already checked out|already exists|missing but already registered/i.test(message)) {
-      const raced = (await listWorktrees(repoRoot).catch(() => [])).find(
-        (wt) => wt.branch === trimmed,
-      );
+      const raced = (await listWorktrees(repoRoot).catch(() => [])).find((wt) => wt.branch === trimmed);
       if (raced) {
         allowFileRoot(raced.path);
         invalidateProjectCache();
@@ -444,11 +422,7 @@ export async function addWorktree(
   return { path: worktreePath, branch: trimmed };
 }
 
-export async function removeWorktree(
-  cwd: string,
-  worktreePath: string,
-  force = false,
-): Promise<void> {
+export async function removeWorktree(cwd: string, worktreePath: string, force = false): Promise<void> {
   const worktrees = await listWorktrees(cwd);
   const target = worktrees.find((w) => w.path === worktreePath);
   if (!target) throw new Error(`Not a worktree of this repository: ${worktreePath}`);

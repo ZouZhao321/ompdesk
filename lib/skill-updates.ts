@@ -126,15 +126,7 @@ async function resolveGitTreeHash(install: SkillInstallInfo): Promise<string> {
     });
     await execFileAsync(
       "git",
-      [
-        `--git-dir=${gitDir}`,
-        "fetch",
-        "--depth=1",
-        "--filter=blob:none",
-        "--no-tags",
-        repository,
-        ref,
-      ],
+      [`--git-dir=${gitDir}`, "fetch", "--depth=1", "--filter=blob:none", "--no-tags", repository, ref],
       { timeout: GIT_CHECK_TIMEOUT_MS, env: createGitEnv() },
     );
     const revision = folder ? `FETCH_HEAD:${folder}` : "FETCH_HEAD^{tree}";
@@ -169,9 +161,7 @@ async function checkGlobalSkill(
     latestVersion = typeof raw.sha === "string" && !folder ? raw.sha : undefined;
 
     if (folder && Array.isArray(raw.tree)) {
-      const entry = (raw.tree as GitHubTreeEntry[]).find(
-        (item) => item.type === "tree" && item.path === folder,
-      );
+      const entry = (raw.tree as GitHubTreeEntry[]).find((item) => item.type === "tree" && item.path === folder);
       if (entry && typeof entry.sha === "string") latestVersion = entry.sha;
     }
   } catch (error) {
@@ -184,11 +174,7 @@ async function checkGlobalSkill(
   if (!latestVersion) {
     return result(install, "error", undefined, "Remote skill path was not found.");
   }
-  return result(
-    install,
-    latestVersion === install.versionHash ? "up-to-date" : "update-available",
-    latestVersion,
-  );
+  return result(install, latestVersion === install.versionHash ? "up-to-date" : "update-available", latestVersion);
 }
 
 async function checkProjectSkill(
@@ -203,11 +189,7 @@ async function checkProjectSkill(
   if (!latestVersion) {
     return result(install, "error", undefined, "skills.sh did not return a version hash.");
   }
-  return result(
-    install,
-    latestVersion === install.versionHash ? "up-to-date" : "update-available",
-    latestVersion,
-  );
+  return result(install, latestVersion === install.versionHash ? "up-to-date" : "update-available", latestVersion);
 }
 
 export async function checkSkillUpdate(
@@ -215,12 +197,7 @@ export async function checkSkillUpdate(
   options: CheckOptions = {},
 ): Promise<SkillUpdateResult> {
   if (!install.canCheckForUpdates || !install.versionHash || !install.skillPath) {
-    return result(
-      install,
-      "unsupported",
-      undefined,
-      "This lock entry cannot be checked automatically.",
-    );
+    return result(install, "unsupported", undefined, "This lock entry cannot be checked automatically.");
   }
 
   const resolvedOptions = {
@@ -235,12 +212,7 @@ export async function checkSkillUpdate(
       ? await checkGlobalSkill(install, resolvedOptions)
       : await checkProjectSkill(install, resolvedOptions);
   } catch (error) {
-    return result(
-      install,
-      "error",
-      undefined,
-      error instanceof Error ? error.message : String(error),
-    );
+    return result(install, "error", undefined, error instanceof Error ? error.message : String(error));
   }
 }
 

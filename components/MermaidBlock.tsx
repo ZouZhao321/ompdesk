@@ -82,9 +82,7 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false }: Merm
               ? t("i18n.showMermaidSource")
               : t("i18n.previewMermaid")
         }
-        className={["markdown-code-action", previewVisible ? "is-active" : ""]
-          .filter(Boolean)
-          .join(" ")}
+        className={["markdown-code-action", previewVisible ? "is-active" : ""].filter(Boolean).join(" ")}
       >
         {previewVisible ? t("i18n.source") : t("i18n.preview")}
       </button>
@@ -93,24 +91,14 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false }: Merm
   );
 
   if (!previewVisible) {
-    return (
-      <CodeBlock
-        code={code}
-        lang="mermaid"
-        headerAction={previewButton}
-        isStreaming={isStreaming}
-      />
-    );
+    return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} isStreaming={isStreaming} />;
   }
 
   const body =
     renderState?.key === currentKey && renderState.status === "error" ? (
       <div className="mermaid-block mermaid-block-error">{t("i18n.invalidMermaid")}</div>
     ) : renderState?.key !== currentKey || renderState.status !== "ready" ? (
-      <div
-        className="mermaid-block mermaid-block-loading"
-        aria-label={t("i18n.renderingMermaid")}
-      />
+      <div className="mermaid-block mermaid-block-loading" aria-label={t("i18n.renderingMermaid")} />
     ) : (
       <>
         {!zoomOpen && (
@@ -296,12 +284,7 @@ interface CodeBlockProps {
  * monospace text — highlighting a growing block re-tokenizes all of it on
  * every chunk, which is the single most expensive part of streamed rendering.
  */
-export const CodeBlock = memo(function CodeBlock({
-  code,
-  lang,
-  headerAction,
-  isStreaming,
-}: CodeBlockProps) {
+export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isStreaming }: CodeBlockProps) {
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);

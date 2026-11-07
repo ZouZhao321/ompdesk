@@ -8,9 +8,8 @@ import { loadEntriesFromFile, migrateToCurrentVersion } from "@oh-my-pi/pi-codin
 import { renderMessage, visibleText } from "../lib/testing/render-harness.mjs";
 
 const jiti = createJiti(import.meta.url);
-const { buildSessionContext, invalidateSessionListCache, listAllSessions } = await jiti.import(
-  "../lib/session-reader.ts",
-);
+const { buildSessionContext, invalidateSessionListCache, listAllSessions } =
+  await jiti.import("../lib/session-reader.ts");
 const { getDisplayableAssistantBlocks } = await jiti.import("../lib/message-display.ts");
 const { seedSessions } = await jiti.import("../test-support/session-fixtures.ts");
 const { SandboxDirectoryCreateError, createAgentDirSandbox, switchAgentDir } = await jiti.import(
@@ -110,9 +109,7 @@ async function selectLocalFixture() {
     } catch (error) {
       if (isMissingPathError(error)) {
         // 列出与读取之间文件没了：不是回归，换下一个候选，最终没有可用的就走样本。
-        console.log(
-          `[history-fixtures] 会话文件在列出之后消失，跳过 ${session.path}: ${error.message}`,
-        );
+        console.log(`[history-fixtures] 会话文件在列出之后消失，跳过 ${session.path}: ${error.message}`);
       } else if (isUnreadableStoreError(error)) {
         console.log(`[history-fixtures] 跳过无法读取的会话 ${session.path}: ${error.message}`);
       } else {
@@ -149,8 +146,7 @@ async function seedFixture(t) {
     // 内部，失败时抛的是别的错误类型（EPERM/EBUSY 也可能出现在那里），会直接让
     // 用例失败，不会被当成 CI 跳过。
     if (!isSandboxDirectoryCreateError(error)) throw error;
-    const cause =
-      error.cause instanceof Error ? error.cause.message : String(error.cause ?? "无更多信息");
+    const cause = error.cause instanceof Error ? error.cause.message : String(error.cause ?? "无更多信息");
     console.log(`[history-fixtures] 无法在临时目录铺设会话样本：${error.message}（${cause}）`);
     return null;
   }
@@ -215,11 +211,7 @@ function contentFragments(message) {
         ) {
           // bash 走 ConsoleOutputPreview，只渲染命令与输出，不渲染工具名。
           addText(input?.command);
-        } else if (
-          normalized === "todo" ||
-          normalized.endsWith(".todo") ||
-          normalized.endsWith("_todo")
-        ) {
+        } else if (normalized === "todo" || normalized.endsWith(".todo") || normalized.endsWith("_todo")) {
           // 无结果时走通用头部（显示工具名）；有 phases 时标题为 Todo。
           addText(name);
           addText("Todo");

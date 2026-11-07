@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  bumpVersion,
-  compareVersions,
-  extractChangelogSection,
-  normalizeVersion,
-  promoteChangelog,
-} from "./release";
+import { bumpVersion, compareVersions, extractChangelogSection, normalizeVersion, promoteChangelog } from "./release";
 
 test("版本号只接受三段数字", () => {
   assert.equal(normalizeVersion("v1.2.3"), "1.2.3");
@@ -53,16 +47,9 @@ test("把未发布段落转成带日期的版本，并留一个新的未发布",
 });
 
 test("未发布段落为空时拒绝发版", () => {
-  assert.throws(
-    () =>
-      promoteChangelog("## 未发布\n\n## [1.0.26] - 2026-11-02\n\n- a\n", "1.0.27", "2026-11-03"),
-    /空/,
-  );
+  assert.throws(() => promoteChangelog("## 未发布\n\n## [1.0.26] - 2026-11-02\n\n- a\n", "1.0.27", "2026-11-03"), /空/);
 });
 
 test("缺少未发布段落时拒绝发版", () => {
-  assert.throws(
-    () => promoteChangelog("## [1.0.26] - 2026-11-02\n\n- a\n", "1.0.27", "2026-11-03"),
-    /未发布/,
-  );
+  assert.throws(() => promoteChangelog("## [1.0.26] - 2026-11-02\n\n- a\n", "1.0.27", "2026-11-03"), /未发布/);
 });

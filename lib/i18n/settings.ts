@@ -55,8 +55,6 @@ export function filterSettingFieldsByQuery<T extends SettingSearchField>(
   if (!normalized) return [];
   return fields.filter((field) => {
     const display = text(field);
-    return `${display.label} ${display.description} ${field.path} ${display.group}`
-      .toLowerCase()
-      .includes(normalized);
+    return `${display.label} ${display.description} ${field.path} ${display.group}`.toLowerCase().includes(normalized);
   });
 }

@@ -35,11 +35,7 @@ function appendPreviewText(current: string, value: unknown): string {
 }
 
 function previewForEntry(entry: ProjectableEntry): BranchPreview | undefined {
-  if (
-    entry.type !== "message" ||
-    !isRecord(entry.message) ||
-    typeof entry.message.role !== "string"
-  ) {
+  if (entry.type !== "message" || !isRecord(entry.message) || typeof entry.message.role !== "string") {
     return undefined;
   }
 
@@ -63,10 +59,7 @@ function previewForEntry(entry: ProjectableEntry): BranchPreview | undefined {
     text = hasImage ? "[image]" : entry.message.role === "assistant" ? "[assistant]" : "message";
   }
 
-  const role =
-    entry.message.role === "user" || entry.message.role === "assistant"
-      ? entry.message.role
-      : undefined;
+  const role = entry.message.role === "user" || entry.message.role === "assistant" ? entry.message.role : undefined;
   return { ...(role ? { role } : {}), text };
 }
 
@@ -102,9 +95,7 @@ export function projectTreeForResponse<T extends ProjectableTreeNode<T>>(nodes: 
     ...(compressedEntryIds?.length ? { compressedEntryIds } : {}),
     ...(branchPreview ? { branchPreview } : {}),
   });
-  const projectedRoots = nodes.map((node) =>
-    cloneNode(node, undefined, previewForEntry(node.entry)),
-  );
+  const projectedRoots = nodes.map((node) => cloneNode(node, undefined, previewForEntry(node.entry)));
   const tasks = nodes.map((source, index) => ({
     source,
     projected: projectedRoots[index],

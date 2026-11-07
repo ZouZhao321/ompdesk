@@ -50,15 +50,12 @@ const nextConfig: NextConfig = {
       config.resolve.alias["@/lib/http-dispatcher"] = false;
       return config;
     }
-    const externals = Array.isArray(config.externals)
-      ? config.externals
-      : [config.externals].filter(Boolean);
+    const externals = Array.isArray(config.externals) ? config.externals : [config.externals].filter(Boolean);
     config.externals = [
       ({ request }: { request?: string }, callback: (error?: unknown, result?: string) => void) => {
         // `import`, not `commonjs`: the SDK's package exports declare only an
         // `import` condition, so a `require()` of it cannot resolve at all.
-        if (request && OMP_SDK_REQUEST.test(request))
-          return callback(undefined, `import ${request}`);
+        if (request && OMP_SDK_REQUEST.test(request)) return callback(undefined, `import ${request}`);
         return callback();
       },
       ...externals,

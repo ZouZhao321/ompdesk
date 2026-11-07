@@ -249,12 +249,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
     setRowFailures({});
   }, [cwd]);
 
-  const beginEdit = (
-    entry: CommentEntry,
-    targetLanguage: CommentLanguage,
-    key: string,
-    value: string,
-  ) => {
+  const beginEdit = (entry: CommentEntry, targetLanguage: CommentLanguage, key: string, value: string) => {
     setSaveError(null);
     setEditing({ key, entry, targetLanguage, value });
   };
@@ -300,9 +295,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
     try {
       const response = await fetch("/api/comment-dictionary", { method: "DELETE" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setLoaded((previous) =>
-        previous && previous.cwd === cwd ? { ...previous, translations: {} } : previous,
-      );
+      setLoaded((previous) => (previous && previous.cwd === cwd ? { ...previous, translations: {} } : previous));
       setEditing(null);
     } catch {
       setDeleteFailed(true);
@@ -367,8 +360,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
         Object.assign(translations, payload.translations);
         for (const result of payload.results) {
           if (result.status !== "failed") continue;
-          failures[result.key] =
-            result.reason === "no_output" ? "noOutput" : (result.missing ?? []);
+          failures[result.key] = result.reason === "no_output" ? "noOutput" : (result.missing ?? []);
         }
       }
     } catch {
@@ -392,9 +384,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
   const failed = failedCwd === cwd;
   const translatedCount = current ? Object.keys(current.translations).length : 0;
   const allSelected = Boolean(
-    current &&
-      current.entries.length > 0 &&
-      current.entries.every((entry) => selected.has(rowId(entry))),
+    current && current.entries.length > 0 && current.entries.every((entry) => selected.has(rowId(entry))),
   );
 
   // 按文件分组，文件头提供按文件全选。
@@ -440,9 +430,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
             </button>
           )}
         </div>
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
-          {t("comments.scope")}
-        </div>
+        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{t("comments.scope")}</div>
         <div style={toolbarRowStyle}>
           <label
             style={{
@@ -458,9 +446,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
               type="checkbox"
               checked={allSelected}
               disabled={!current || current.entries.length === 0}
-              onChange={(event) =>
-                toggleSelection(current ? current.entries.map(rowId) : [], event.target.checked)
-              }
+              onChange={(event) => toggleSelection(current ? current.entries.map(rowId) : [], event.target.checked)}
             />
             {t("comments.selectAll")}
           </label>
@@ -476,21 +462,13 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
               minHeight: hitTarget,
             }}
           >
-            {generating
-              ? t("comments.generating")
-              : t("comments.generateSelected", { count: selected.size })}
+            {generating ? t("comments.generating") : t("comments.generateSelected", { count: selected.size })}
           </button>
         </div>
         {deleteFailed && (
-          <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>
-            {t("comments.deleteFailed")}
-          </div>
+          <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>{t("comments.deleteFailed")}</div>
         )}
-        {generateError && (
-          <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>
-            {t(generateError)}
-          </div>
-        )}
+        {generateError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 2 }}>{t(generateError)}</div>}
       </div>
       <div
         style={{
@@ -512,9 +490,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {failed && <div style={messageStyle}>{t("comments.error")}</div>}
         {!failed && !current && loading && <div style={messageStyle}>{t("comments.loading")}</div>}
-        {!failed && current && current.entries.length === 0 && (
-          <div style={messageStyle}>{t("comments.empty")}</div>
-        )}
+        {!failed && current && current.entries.length === 0 && <div style={messageStyle}>{t("comments.empty")}</div>}
         {!failed &&
           current &&
           groups.map((group) => {
@@ -522,15 +498,11 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
             return (
               <div key={group.filePath}>
                 <div style={fileHeaderStyle}>
-                  <label
-                    style={{ ...checkboxHitBoxStyle, minWidth: hitTarget, minHeight: hitTarget }}
-                  >
+                  <label style={{ ...checkboxHitBoxStyle, minWidth: hitTarget, minHeight: hitTarget }}>
                     <input
                       type="checkbox"
                       checked={groupSelected}
-                      onChange={(event) =>
-                        toggleSelection(group.rows.map(rowId), event.target.checked)
-                      }
+                      onChange={(event) => toggleSelection(group.rows.map(rowId), event.target.checked)}
                       title={t("comments.selectFile")}
                       aria-label={`${t("comments.selectFile")}: ${group.filePath}`}
                     />
@@ -550,9 +522,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                           <textarea
                             autoFocus
                             value={activeEdit.value}
-                            onChange={(event) =>
-                              setEditing({ ...activeEdit, value: event.target.value })
-                            }
+                            onChange={(event) => setEditing({ ...activeEdit, value: event.target.value })}
                             onKeyDown={(event) => {
                               if (event.key === "Escape") {
                                 event.preventDefault();
@@ -594,9 +564,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                             </button>
                           </div>
                           {saveError && (
-                            <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>
-                              {saveError}
-                            </div>
+                            <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>{saveError}</div>
                           )}
                         </>
                       ) : record ? (
@@ -604,9 +572,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                           <button
                             type="button"
                             title={t("comments.editTranslation")}
-                            onClick={() =>
-                              beginEdit(entry, targetLanguage, key, record.translation)
-                            }
+                            onClick={() => beginEdit(entry, targetLanguage, key, record.translation)}
                             style={{ ...translationButtonStyle, minHeight: hitTarget }}
                           >
                             {record.translation}
@@ -614,13 +580,10 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                           <span
                             style={{
                               ...sourceBadgeStyle,
-                              color:
-                                record.origin === "manual" ? "var(--accent)" : "var(--text-dim)",
+                              color: record.origin === "manual" ? "var(--accent)" : "var(--text-dim)",
                             }}
                           >
-                            {record.origin === "manual"
-                              ? t("comments.sourceManual")
-                              : t("comments.sourceModel")}
+                            {record.origin === "manual" ? t("comments.sourceManual") : t("comments.sourceModel")}
                           </span>
                         </>
                       ) : (
@@ -641,9 +604,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                           {rowFailures[key] === "noOutput"
                             ? t("comments.noOutput")
                             : t("comments.missingFragments", {
-                                missing: rowFailures[key]
-                                  .map((fragment) => fragment.value)
-                                  .join(", "),
+                                missing: rowFailures[key].map((fragment) => fragment.value).join(", "),
                               })}
                         </div>
                       )}
@@ -652,10 +613,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
 
                   const id = rowId(entry);
                   return (
-                    <div
-                      key={id}
-                      style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}
-                    >
+                    <div key={id} style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
                       <div style={rowHeaderStyle}>
                         <label
                           style={{
@@ -681,12 +639,8 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
                           marginTop: 3,
                         }}
                       >
-                        <div style={columnStyle}>
-                          {entry.language === "zh" ? originalColumn : translationColumn}
-                        </div>
-                        <div style={columnStyle}>
-                          {entry.language === "en" ? originalColumn : translationColumn}
-                        </div>
+                        <div style={columnStyle}>{entry.language === "zh" ? originalColumn : translationColumn}</div>
+                        <div style={columnStyle}>{entry.language === "en" ? originalColumn : translationColumn}</div>
                       </div>
                     </div>
                   );
@@ -695,13 +649,7 @@ export function CommentTranslationPanel({ cwd, active }: Props) {
             );
           })}
       </div>
-      {current && (
-        <CommentTranslationPreview
-          cwd={cwd}
-          entries={current.entries}
-          translations={current.translations}
-        />
-      )}
+      {current && <CommentTranslationPreview cwd={cwd} entries={current.entries} translations={current.translations} />}
     </div>
   );
 }

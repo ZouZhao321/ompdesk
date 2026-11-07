@@ -23,11 +23,9 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.grep.enabled.label": "Grep",
   "settings.field.grep.enabled.description": "Enable the grep tool for regex content search",
   "settings.field.astGrep.enabled.label": "AST Grep",
-  "settings.field.astGrep.enabled.description":
-    "Enable the ast_grep tool for structural AST search",
+  "settings.field.astGrep.enabled.description": "Enable the ast_grep tool for structural AST search",
   "settings.field.astEdit.enabled.label": "AST Edit",
-  "settings.field.astEdit.enabled.description":
-    "Enable the ast_edit tool for structural AST rewrites",
+  "settings.field.astEdit.enabled.description": "Enable the ast_edit tool for structural AST rewrites",
   "settings.field.find.enabled.label": "Find (semantic grep)",
   "settings.field.find.enabled.description":
     "Enable the find tool: natural-language search for files and line ranges, judged by the judge model role. Auto enables it only when the judge role resolves to a native TypeSafe jev model",
@@ -52,8 +50,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.archive.enabled.description":
     "Enable the read-only archive eval prelude: prompt history, recent projects, past sessions and recaps",
   "settings.field.checkpoint.enabled.label": "Checkpoint/Rewind",
-  "settings.field.checkpoint.enabled.description":
-    "Enable the checkpoint and rewind tools for context checkpointing",
+  "settings.field.checkpoint.enabled.description": "Enable the checkpoint and rewind tools for context checkpointing",
   "settings.field.fetch.enabled.label": "Read URLs",
   "settings.field.fetch.enabled.description": "Allow the read tool to fetch and process URLs",
   "settings.field.vault.enabled.label": "Obsidian Vault",
@@ -63,8 +60,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.github.enabled.description":
     "Enable the github tool (op-based dispatch for repository, issue, pull request, diff, search, checkout, push, and Actions watch workflows)",
   "settings.field.web_search.enabled.label": "Web Search",
-  "settings.field.web_search.enabled.description":
-    "Enable the web_search tool for live web results",
+  "settings.field.web_search.enabled.description": "Enable the web_search tool for live web results",
   "settings.field.security.enabled.label": "Security",
   "settings.field.security.enabled.description":
     "Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
@@ -80,11 +76,9 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.todo.reminders.label": "Todo Reminders",
   "settings.field.todo.reminders.description": "Remind the agent to complete todos before stopping",
   "settings.field.todo.remindersMax.label": "Todo Reminder Limit",
-  "settings.field.todo.remindersMax.description":
-    "Maximum number of todo reminders before giving up",
+  "settings.field.todo.remindersMax.description": "Maximum number of todo reminders before giving up",
   "settings.field.todo.eager.label": "Create Todos Automatically",
-  "settings.field.todo.eager.description":
-    "How strongly to push automatic todo-list creation after the first message",
+  "settings.field.todo.eager.description": "How strongly to push automatic todo-list creation after the first message",
   "settings.field.tasks.todoClearDelay.label": "Todo Auto-Clear Delay",
   "settings.field.tasks.todoClearDelay.description":
     "Delay before completed or abandoned todos are removed from the todo widget",
@@ -100,11 +94,9 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.browser.relay.description":
     "Drive your own Chrome tabs through the omp browser relay. Install the extension once (`omp browser-relay install`); the relay server auto-starts when the browser prelude needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.",
   "settings.field.browser.relayUrl.label": "Browser Relay URL",
-  "settings.field.browser.relayUrl.description":
-    "omp browser relay endpoint (default http://127.0.0.1:9224).",
+  "settings.field.browser.relayUrl.description": "omp browser relay endpoint (default http://127.0.0.1:9224).",
   "settings.field.browser.headless.label": "Headless Browser",
-  "settings.field.browser.headless.description":
-    "Launch browser in headless mode (disable to show browser UI)",
+  "settings.field.browser.headless.description": "Launch browser in headless mode (disable to show browser UI)",
   "settings.field.browser.cmux.label": "cmux Browser",
   "settings.field.browser.cmux.description":
     "Use cmux WKWebView surfaces for browser automation when a cmux socket is available. Set PI_BROWSER_CMUX=0 or PI_BROWSER_CMUX=1 to override.",
@@ -173,16 +165,14 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.tools.speculativeExecution.enabled.label": "Experimental Speculative Execution",
   "settings.field.tools.speculativeExecution.enabled.description":
     "Enable the discard-safe first slice: validated local reads through direct read calls and nested eval. Network requests, provider completions, and live filesystem writes are not part of this baseline.",
-  "settings.field.tools.speculativeExecution.maxInFlight.label":
-    "Speculative Execution Concurrency",
+  "settings.field.tools.speculativeExecution.maxInFlight.label": "Speculative Execution Concurrency",
   "settings.field.tools.speculativeExecution.maxInFlight.description":
     "Maximum number of validated local reads allowed to run before normal dispatch.",
   "settings.field.tools.maxTimeout.label": "Max Tool Timeout",
   "settings.field.tools.maxTimeout.description":
     "Maximum timeout in seconds the agent can set for any tool (0 = no limit)",
   "settings.field.async.enabled.label": "Async Execution",
-  "settings.field.async.enabled.description":
-    "Enable async bash commands and background task execution",
+  "settings.field.async.enabled.description": "Enable async bash commands and background task execution",
 
   "settings.field.tools.xdev.label": "xd:// Tools",
   "settings.field.tools.xdev.description":
@@ -196,8 +186,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.mcp.renderMarkdownResults.description":
     "Render non-JSON MCP text results as Markdown in the transcript",
   "settings.field.mcp.notifications.label": "MCP Update Injection",
-  "settings.field.mcp.notifications.description":
-    "Inject MCP resource updates into the agent conversation",
+  "settings.field.mcp.notifications.description": "Inject MCP resource updates into the agent conversation",
 
   "settings.field.dev.autoqa.label": "Auto QA",
   "settings.field.dev.autoqa.description":
@@ -207,17 +196,13 @@ export const toolsFiles: Record<string, string> = {
     "Full URL receiving Auto QA JSON reports (default https://qa.omp.sh/v1/grievances)",
 
   "settings.field.edit.mode.label": "Edit Mode",
-  "settings.field.edit.mode.description":
-    "Select the edit tool variant (replace, patch, hashline, or apply_patch)",
+  "settings.field.edit.mode.description": "Select the edit tool variant (replace, patch, hashline, or apply_patch)",
   "settings.field.edit.fuzzyMatch.label": "Fuzzy Match",
-  "settings.field.edit.fuzzyMatch.description":
-    "Accept high-confidence fuzzy matches for whitespace differences",
+  "settings.field.edit.fuzzyMatch.description": "Accept high-confidence fuzzy matches for whitespace differences",
   "settings.field.edit.fuzzyThreshold.label": "Fuzzy Match Threshold",
-  "settings.field.edit.fuzzyThreshold.description":
-    "Similarity threshold (0-1) for accepting fuzzy matches",
+  "settings.field.edit.fuzzyThreshold.description": "Similarity threshold (0-1) for accepting fuzzy matches",
   "settings.field.edit.streamingAbort.label": "Abort on Failed Preview",
-  "settings.field.edit.streamingAbort.description":
-    "Abort streaming edit tool calls when patch preview fails",
+  "settings.field.edit.streamingAbort.description": "Abort streaming edit tool calls when patch preview fails",
   "settings.field.edit.recoverInlineEdits.label": "Recover Inline Edit Payloads",
   "settings.field.edit.recoverInlineEdits.description":
     "Execute edit payloads the model emits as plain text by converting them into edit tool calls",
@@ -235,8 +220,7 @@ export const toolsFiles: Record<string, string> = {
     "When an edit breaks a file's AST parse, ask the smol model to fix the broken region (validated by re-parse; falls back to a warning)",
 
   "settings.field.readLineNumbers.label": "Line Numbers",
-  "settings.field.readLineNumbers.description":
-    "Prepend line numbers to read tool output by default",
+  "settings.field.readLineNumbers.description": "Prepend line numbers to read tool output by default",
   "settings.field.read.defaultLimit.label": "Default Read Limit",
   "settings.field.read.defaultLimit.description":
     "Default number of lines returned when agent calls read without a limit",
@@ -251,8 +235,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.read.summarize.enabled.description":
     "Return structural code summaries when read is called without an explicit selector",
   "settings.field.read.summarize.prose.label": "Prose Summaries",
-  "settings.field.read.summarize.prose.description":
-    "Return structural summaries for Markdown and plain text reads",
+  "settings.field.read.summarize.prose.description": "Return structural summaries for Markdown and plain text reads",
 
   "settings.field.lsp.enabled.label": "LSP",
   "settings.field.lsp.enabled.description":
@@ -264,14 +247,11 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.lsp.shared.description":
     "Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)",
   "settings.field.lsp.formatOnWrite.label": "Format on Write",
-  "settings.field.lsp.formatOnWrite.description":
-    "Automatically format code files using LSP after writing",
+  "settings.field.lsp.formatOnWrite.description": "Automatically format code files using LSP after writing",
   "settings.field.lsp.diagnosticsOnWrite.label": "Diagnostics on Write",
-  "settings.field.lsp.diagnosticsOnWrite.description":
-    "Return LSP diagnostics after writing code files",
+  "settings.field.lsp.diagnosticsOnWrite.description": "Return LSP diagnostics after writing code files",
   "settings.field.lsp.diagnosticsOnEdit.label": "Diagnostics on Edit",
-  "settings.field.lsp.diagnosticsOnEdit.description":
-    "Return LSP diagnostics after editing code files",
+  "settings.field.lsp.diagnosticsOnEdit.description": "Return LSP diagnostics after editing code files",
   "settings.field.lsp.diagnosticsDeduplicate.label": "Deduplicate Diagnostics",
   "settings.field.lsp.diagnosticsDeduplicate.description":
     "Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones",

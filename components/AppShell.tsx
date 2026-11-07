@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  memo,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useState, useCallback, useRef, useEffect, memo, type CSSProperties, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
@@ -43,11 +35,7 @@ import {
   type PanelViewKind,
   type Tab,
 } from "@/lib/panel-tabs";
-import {
-  buildAtMentionText,
-  buildFileAtMentionsText,
-  buildFileLineMentionText,
-} from "@/lib/file-fuzzy";
+import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
   shouldShowBrowserNotification,
@@ -78,12 +66,7 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
-import type {
-  BlockingExtensionUiRequest,
-  SessionInfo,
-  SessionTreeNode,
-  SubagentSnapshot,
-} from "@/lib/types";
+import type { BlockingExtensionUiRequest, SessionInfo, SessionTreeNode, SubagentSnapshot } from "@/lib/types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/omp-types";
@@ -96,11 +79,7 @@ const MemoGitChangesPanel = memo(GitChangesPanel);
 const MemoSubagentPanel = memo(SubagentPanel);
 
 type SessionCopyField = "file" | "id";
-type AutoNameStatus =
-  | { kind: "idle" }
-  | { kind: "naming" }
-  | { kind: "success" }
-  | { kind: "error"; message: string };
+type AutoNameStatus = { kind: "idle" } | { kind: "naming" } | { kind: "success" } | { kind: "error"; message: string };
 
 /** 顶栏尺寸：手机档把高度与按钮命中区放大到 44px，桌面档保持原样。 */
 const TOP_BAR_METRICS = {
@@ -223,21 +202,9 @@ function AutoNameAction({
         }}
       >
         {status.kind === "naming" ? (
-          <svg
-            className="animate-spin"
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
+          <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-            <path
-              d="M21 12a9 9 0 0 0-9-9"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         ) : ui.isSuccess ? (
           <svg
@@ -357,8 +324,7 @@ export function AppShell() {
   const searchParams = useSearchParams();
   const [initialNavigation] = useState(() => getInitialNavigation(searchParams));
   const { preference, toggleTheme } = useTheme();
-  const themeLabelKey =
-    preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
+  const themeLabelKey = preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
   const isMobile = useIsMobile();
   const topBar = isMobile ? TOP_BAR_METRICS.mobile : TOP_BAR_METRICS.desktop;
@@ -374,9 +340,9 @@ export function AppShell() {
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   // When user clicks +, we only store the cwd — no fake session id
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
-  const [initialCwdStatus, setInitialCwdStatus] = useState<
-    "idle" | "validating" | "ready" | "error"
-  >(() => (initialNavigation.requestedCwd ? "validating" : "idle"));
+  const [initialCwdStatus, setInitialCwdStatus] = useState<"idle" | "validating" | "ready" | "error">(() =>
+    initialNavigation.requestedCwd ? "validating" : "idle",
+  );
   const [initialCwdError, setInitialCwdError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
@@ -393,10 +359,7 @@ export function AppShell() {
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
   const getResponsiveRightPanelWidth = useCallback(
-    () =>
-      typeof window === "undefined"
-        ? RIGHT_PANEL_FALLBACK_WIDTH
-        : getDefaultRightPanelWidth(window.innerWidth),
+    () => (typeof window === "undefined" ? RIGHT_PANEL_FALLBACK_WIDTH : getDefaultRightPanelWidth(window.innerWidth)),
     [],
   );
   const getResponsiveSidebarMaxWidth = useCallback(
@@ -473,11 +436,7 @@ export function AppShell() {
   }, [selectedSession?.id]);
 
   const handleBranchDataChange = useCallback(
-    (
-      tree: SessionTreeNode[],
-      activeLeafId: string | null,
-      onLeafChange: (leafId: string | null) => void,
-    ) => {
+    (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
       setBranchTree(tree);
       setBranchActiveLeafId(activeLeafId);
       branchLeafChangeFnRef.current = onLeafChange;
@@ -532,9 +491,7 @@ export function AppShell() {
   );
 
   // Single active panel — only one dropdown open at a time
-  const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "session" | "language" | null>(
-    null,
-  );
+  const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "session" | "language" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{
     top: number;
     left: number;
@@ -566,10 +523,7 @@ export function AppShell() {
       if (activeTopPanel === "language" && !isMobile && languageBtnRef.current) {
         const buttonRect = languageBtnRef.current.getBoundingClientRect();
         const width = Math.min(LANGUAGE_MENU_WIDTH, topBarRect.width);
-        const left = Math.min(
-          buttonRect.left - 1,
-          Math.max(topBarRect.left, topBarRect.right - width),
-        );
+        const left = Math.min(buttonRect.left - 1, Math.max(topBarRect.left, topBarRect.right - width));
         setTopPanelPos({ top: topBarRect.bottom, left, width });
         return;
       }
@@ -630,9 +584,7 @@ export function AppShell() {
   });
   const activeProjectRootRef = useRef<string | null>(null);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
-  const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(
-    () => !initialSessionId,
-  );
+  const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
   const suppressCwdBumpRef = useRef(false);
   // Guards the async workspace restore so a slow response from an earlier
@@ -648,8 +600,7 @@ export function AppShell() {
   // carry projectRoot, so use the active project identity until hydration.
   useEffect(() => {
     if (!selectedSession) return;
-    const projectKey =
-      selectedSession.projectRoot ?? activeProjectRootRef.current ?? selectedSession.cwd;
+    const projectKey = selectedSession.projectRoot ?? activeProjectRootRef.current ?? selectedSession.cwd;
     setLastOpenSession(projectKey, selectedSession.id);
   }, [selectedSession]);
 
@@ -708,9 +659,7 @@ export function AppShell() {
         )
         .then((d) => {
           if (token !== workspaceRestoreTokenRef.current) return; // stale switch
-          const s = d
-            ? restoreSessionContinuation(lastOpenSessionId, d.sessions, d.sessionIdsByRuntimeId)
-            : undefined;
+          const s = d ? restoreSessionContinuation(lastOpenSessionId, d.sessions, d.sessionIdsByRuntimeId) : undefined;
           if (!s) {
             // The list loaded but the remembered session is gone — forget it.
             // When the list itself failed (d === null) keep the memory so a
@@ -748,8 +697,7 @@ export function AppShell() {
       if (!cwd) return;
       const newProject = projectRoot ?? cwd;
       const currentProject =
-        activeProjectRootRef.current ??
-        (selectedSession ? (selectedSession.projectRoot ?? selectedSession.cwd) : null);
+        activeProjectRootRef.current ?? (selectedSession ? (selectedSession.projectRoot ?? selectedSession.cwd) : null);
       activeProjectRootRef.current = newProject;
 
       // Keep the project identity in sync during the initial URL restore without
@@ -804,8 +752,7 @@ export function AppShell() {
       // Keep ordinary same-session clicks as a no-op.
       if (!isRestore && selectedSession) {
         const sameProject =
-          (selectedSession.projectRoot ?? selectedSession.cwd) ===
-          (session.projectRoot ?? session.cwd);
+          (selectedSession.projectRoot ?? selectedSession.cwd) === (session.projectRoot ?? session.cwd);
         if (selectedSession.id === session.id && sameProject && !selectedSession.runtimeId) {
           if (isMobile) setSidebarOpen(false);
           return;
@@ -815,9 +762,7 @@ export function AppShell() {
       if (!isRestore) clearSessionContinuation();
       setSelectedSession({
         ...session,
-        runtimeId: isRestore
-          ? (session.runtimeId ?? getSessionContinuation(session.id))
-          : undefined,
+        runtimeId: isRestore ? (session.runtimeId ?? getSessionContinuation(session.id)) : undefined,
       });
       setSessionKey((k) => k + 1);
       setInitialSessionRestored(true);
@@ -922,9 +867,7 @@ export function AppShell() {
       if (!("Notification" in window)) return;
 
       const fire = () => {
-        const sessionUrl = targetSession
-          ? `/?session=${encodeURIComponent(targetSession.id)}`
-          : "/";
+        const sessionUrl = targetSession ? `/?session=${encodeURIComponent(targetSession.id)}` : "/";
         void showBrowserNotification({
           title,
           body,
@@ -970,8 +913,7 @@ export function AppShell() {
   const handleAttentionNeeded = useCallback(
     (request: BlockingExtensionUiRequest) => {
       if (!shouldShowBrowserNotification()) return;
-      if (!claimExtensionAttentionNotification(request, notifiedAttentionRequestIdsRef.current))
-        return;
+      if (!claimExtensionAttentionNotification(request, notifiedAttentionRequestIdsRef.current)) return;
 
       deliverSessionNotification({
         targetSession: selectedSession,
@@ -1017,8 +959,7 @@ export function AppShell() {
         runtimeId: activeRuntimeIdRef.current ?? null,
       };
       if (!canApplySessionIdentity(current, identity, request)) return false;
-      if (current.sessionId === identity.sessionId && current.runtimeId === identity.runtimeId)
-        return true;
+      if (current.sessionId === identity.sessionId && current.runtimeId === identity.runtimeId) return true;
       chatInputRef.current?.rekeyDraft(current.sessionId, identity.sessionId);
       if (identity.runtimeId) rememberSessionContinuation(identity.sessionId, identity.runtimeId);
       else if (request.runtimeId) clearSessionContinuation(undefined, request.runtimeId);
@@ -1037,12 +978,9 @@ export function AppShell() {
     setAutoNameStatus({ kind: "naming" });
 
     try {
-      const response = await fetch(
-        `/api/sessions/${encodeURIComponent(runtimeId ?? sessionId)}/auto-name`,
-        {
-          method: "POST",
-        },
-      );
+      const response = await fetch(`/api/sessions/${encodeURIComponent(runtimeId ?? sessionId)}/auto-name`, {
+        method: "POST",
+      });
       const body = (await response.json().catch(() => ({}))) as {
         title?: string;
         error?: string;
@@ -1063,12 +1001,8 @@ export function AppShell() {
         )
       )
         return;
-      setSelectedSession((current) =>
-        current?.id === canonicalId ? { ...current, name: title } : current,
-      );
-      setSessionStats((current) =>
-        current ? { ...current, sessionId: canonicalId, sessionName: title } : current,
-      );
+      setSelectedSession((current) => (current?.id === canonicalId ? { ...current, name: title } : current));
+      setSessionStats((current) => (current ? { ...current, sessionId: canonicalId, sessionName: title } : current));
       setAutoNameStatus({ kind: "success" });
       autoNameTimerRef.current = setTimeout(() => setAutoNameStatus({ kind: "idle" }), 1800);
     } catch (error) {
@@ -1113,11 +1047,7 @@ export function AppShell() {
   );
 
   const handleOpenFile = useCallback(
-    (
-      filePath: string,
-      fileName: string,
-      options?: { sourceSessionId?: string | null; modeHint?: "diff" },
-    ) => {
+    (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => {
       const sourceSessionId = options?.sourceSessionId;
       const modeHint = options?.modeHint;
       const tabId = `file:${filePath}`;
@@ -1212,8 +1142,7 @@ export function AppShell() {
   }, [selectedSession]);
 
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
-  const effectiveNewSessionCwd =
-    newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
+  const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
   // 手机档顶栏展示的会话标题，与侧栏会话行共用 lib/session-title.ts 的回退顺序。
   const mobileSessionTitle = selectedSession ? sessionDisplayTitle(selectedSession) : "";
@@ -1270,9 +1199,7 @@ export function AppShell() {
   const runningSubagentCount = subagents.filter(isSubagentActive).length;
   const renderedPanelTabs =
     runningSubagentCount > 0
-      ? panelTabs.map((tab) =>
-          tab.kind === "subagents" ? { ...tab, badge: runningSubagentCount } : tab,
-        )
+      ? panelTabs.map((tab) => (tab.kind === "subagents" ? { ...tab, badge: runningSubagentCount } : tab))
       : panelTabs;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ompdesk` : "ompdesk";
@@ -1516,14 +1443,9 @@ export function AppShell() {
   const autoNameUi: AutoNameUi = (() => {
     // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
     const hasMessages = Boolean(
-      selectedSession &&
-        ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
+      selectedSession && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
     );
-    const disabled =
-      !selectedSession ||
-      selectedSession.transient ||
-      !hasMessages ||
-      autoNameStatus.kind === "naming";
+    const disabled = !selectedSession || selectedSession.transient || !hasMessages || autoNameStatus.kind === "naming";
     const isSuccess = autoNameStatus.kind === "success";
     const isError = autoNameStatus.kind === "error";
     const label =
@@ -1894,8 +1816,7 @@ export function AppShell() {
                 e.currentTarget.style.color = "var(--text)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color =
-                  activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)";
+                e.currentTarget.style.color = activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)";
               }}
             >
               <svg
@@ -1970,9 +1891,7 @@ export function AppShell() {
                     <button
                       onClick={handleViewFullHistory}
                       disabled={!selectedSession}
-                      title={
-                        selectedSession ? translate("history.full") : translate("history.unsaved")
-                      }
+                      title={selectedSession ? translate("history.full") : translate("history.unsaved")}
                       aria-label={translate("history.full")}
                       style={{
                         display: "flex",
@@ -1998,9 +1917,7 @@ export function AppShell() {
                         e.currentTarget.style.background = "var(--bg-hover)";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.color = selectedSession
-                          ? "var(--text-muted)"
-                          : "var(--text-dim)";
+                        e.currentTarget.style.color = selectedSession ? "var(--text-muted)" : "var(--text-dim)";
                         e.currentTarget.style.background = "none";
                       }}
                     >
@@ -2133,10 +2050,7 @@ export function AppShell() {
                       height: "100%",
                       background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
                       border: "none",
-                      borderTop:
-                        activeTopPanel === "session"
-                          ? "2px solid var(--accent)"
-                          : "2px solid transparent",
+                      borderTop: activeTopPanel === "session" ? "2px solid var(--accent)" : "2px solid transparent",
                       fontSize: 11,
                       color: "var(--text-muted)",
                       whiteSpace: "nowrap",
@@ -2148,8 +2062,7 @@ export function AppShell() {
                       e.currentTarget.style.color = "var(--text)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.color =
-                        activeTopPanel === "session" ? "var(--text)" : "var(--text-muted)";
+                      e.currentTarget.style.color = activeTopPanel === "session" ? "var(--text)" : "var(--text-muted)";
                     }}
                   >
                     {isMobile && (
@@ -2290,12 +2203,10 @@ export function AppShell() {
                           transition: "background 0.1s",
                         }}
                         onMouseEnter={(e) => {
-                          if (locale !== plugin.id)
-                            e.currentTarget.style.background = "var(--bg-hover)";
+                          if (locale !== plugin.id) e.currentTarget.style.background = "var(--bg-hover)";
                         }}
                         onMouseLeave={(e) => {
-                          if (locale !== plugin.id)
-                            e.currentTarget.style.background = "transparent";
+                          if (locale !== plugin.id) e.currentTarget.style.background = "transparent";
                         }}
                       >
                         <span>{plugin.label}</span>
@@ -2357,56 +2268,22 @@ export function AppShell() {
                             : []),
                         ];
                         const messageRows = [
-                          [
-                            translate("session.user"),
-                            sessionStats.userMessages.toLocaleString(locale),
-                          ],
-                          [
-                            translate("session.assistant"),
-                            sessionStats.assistantMessages.toLocaleString(locale),
-                          ],
-                          [
-                            translate("session.toolCalls"),
-                            sessionStats.toolCalls.toLocaleString(locale),
-                          ],
-                          [
-                            translate("session.toolResults"),
-                            sessionStats.toolResults.toLocaleString(locale),
-                          ],
-                          [
-                            translate("session.total"),
-                            sessionStats.totalMessages.toLocaleString(locale),
-                          ],
+                          [translate("session.user"), sessionStats.userMessages.toLocaleString(locale)],
+                          [translate("session.assistant"), sessionStats.assistantMessages.toLocaleString(locale)],
+                          [translate("session.toolCalls"), sessionStats.toolCalls.toLocaleString(locale)],
+                          [translate("session.toolResults"), sessionStats.toolResults.toLocaleString(locale)],
+                          [translate("session.total"), sessionStats.totalMessages.toLocaleString(locale)],
                         ];
                         const tokenRows = [
-                          [
-                            translate("session.input"),
-                            sessionStats.tokens.input.toLocaleString(locale),
-                          ],
-                          [
-                            translate("session.output"),
-                            sessionStats.tokens.output.toLocaleString(locale),
-                          ],
+                          [translate("session.input"), sessionStats.tokens.input.toLocaleString(locale)],
+                          [translate("session.output"), sessionStats.tokens.output.toLocaleString(locale)],
                           ...(sessionStats.tokens.cacheRead > 0
-                            ? [
-                                [
-                                  translate("session.cacheRead"),
-                                  sessionStats.tokens.cacheRead.toLocaleString(locale),
-                                ],
-                              ]
+                            ? [[translate("session.cacheRead"), sessionStats.tokens.cacheRead.toLocaleString(locale)]]
                             : []),
                           ...(sessionStats.tokens.cacheWrite > 0
-                            ? [
-                                [
-                                  translate("session.cacheWrite"),
-                                  sessionStats.tokens.cacheWrite.toLocaleString(locale),
-                                ],
-                              ]
+                            ? [[translate("session.cacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString(locale)]]
                             : []),
-                          [
-                            translate("session.total"),
-                            sessionStats.tokens.total.toLocaleString(locale),
-                          ],
+                          [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
                         ];
                         const ctx = contextUsage ?? sessionStats.contextUsage;
                         const formatCompact = (n: number) =>
@@ -2429,10 +2306,7 @@ export function AppShell() {
                             : []),
                           // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
                           ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 &&
-                          sessionStats.tokens.cacheRead +
-                            sessionStats.tokens.cacheWrite +
-                            sessionStats.tokens.input >
-                            0
+                          sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0
                             ? [
                                 [
                                   translate("session.cacheHitRate"),
@@ -2461,9 +2335,7 @@ export function AppShell() {
                             <div
                               style={{
                                 display: "grid",
-                                gridTemplateColumns: compact
-                                  ? "max-content max-content"
-                                  : "auto minmax(0, 1fr)",
+                                gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
                                 columnGap: compact ? 14 : 12,
                                 rowGap: 4,
                                 justifyContent: compact ? "start" : undefined,
@@ -2471,9 +2343,7 @@ export function AppShell() {
                             >
                               {sectionRows.map(([label, value]) => (
                                 <div key={`${title}:${label}`} style={{ display: "contents" }}>
-                                  <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-                                    {label}
-                                  </div>
+                                  <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{label}</div>
                                   <div
                                     style={{
                                       color: "var(--text-muted)",
@@ -2498,9 +2368,7 @@ export function AppShell() {
                               title={
                                 copied
                                   ? translate("session.copied")
-                                  : translate(
-                                      field === "file" ? "session.copyFile" : "session.copyId",
-                                    )
+                                  : translate(field === "file" ? "session.copyFile" : "session.copyId")
                               }
                               onClick={() => handleCopySessionField(field, value)}
                               style={{
@@ -2525,9 +2393,7 @@ export function AppShell() {
                                 e.currentTarget.style.background = "var(--bg-hover)";
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.color = copied
-                                  ? "var(--accent)"
-                                  : "var(--text-dim)";
+                                e.currentTarget.style.color = copied ? "var(--accent)" : "var(--text-dim)";
                                 e.currentTarget.style.borderColor = "var(--border)";
                                 e.currentTarget.style.background = "transparent";
                               }}
@@ -2587,13 +2453,8 @@ export function AppShell() {
                               }}
                             >
                               {sessionRows.map((row) => (
-                                <div
-                                  key={`session-info:${row.label}`}
-                                  style={{ display: "contents" }}
-                                >
-                                  <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-                                    {row.label}
-                                  </div>
+                                <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
+                                  <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{row.label}</div>
                                   <div
                                     style={{
                                       color: "var(--text-muted)",
@@ -2605,9 +2466,7 @@ export function AppShell() {
                                   >
                                     {row.value}
                                   </div>
-                                  <div>
-                                    {row.copyField ? copyButton(row.copyField, row.value) : null}
-                                  </div>
+                                  <div>{row.copyField ? copyButton(row.copyField, row.value) : null}</div>
                                 </div>
                               ))}
                             </div>
@@ -2629,19 +2488,12 @@ export function AppShell() {
                           >
                             {sessionInfoSection}
                             {section(translate("session.messages"), messageRows)}
-                            {section(
-                              translate("session.tokens"),
-                              [...tokenRows, ...extraTokenRows],
-                              "right",
-                              true,
-                            )}
+                            {section(translate("session.tokens"), [...tokenRows, ...extraTokenRows], "right", true)}
                           </div>
                         );
                       })()
                     ) : (
-                      <div
-                        style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}
-                      >
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
                         {translate("session.load")}
                       </div>
                     )}
@@ -2661,11 +2513,7 @@ export function AppShell() {
                           type="button"
                           onClick={handleViewFullHistory}
                           disabled={!selectedSession}
-                          title={
-                            selectedSession
-                              ? translate("history.full")
-                              : translate("history.unsaved")
-                          }
+                          title={selectedSession ? translate("history.full") : translate("history.unsaved")}
                           style={{
                             ...MOBILE_SESSION_ACTION_STYLE,
                             opacity: selectedSession ? 1 : 0.45,
@@ -2762,9 +2610,7 @@ export function AppShell() {
                     textAlign: "center",
                   }}
                 >
-                  <div style={{ fontSize: 14, color: "var(--text)" }}>
-                    {translate("workspace.opening")}
-                  </div>
+                  <div style={{ fontSize: 14, color: "var(--text)" }}>{translate("workspace.opening")}</div>
                   <div
                     style={{
                       maxWidth: "min(720px, 100%)",
@@ -2791,9 +2637,7 @@ export function AppShell() {
                     textAlign: "center",
                   }}
                 >
-                  <div style={{ fontSize: 14, color: "var(--danger)" }}>
-                    {translate("workspace.unable")}
-                  </div>
+                  <div style={{ fontSize: 14, color: "var(--danger)" }}>{translate("workspace.unable")}</div>
                   <div
                     style={{
                       maxWidth: "min(720px, 100%)",
@@ -2971,10 +2815,7 @@ export function AppShell() {
             {/* The fixed panel toggle sits in this corner. On mobile the top bar
               owns the toggle and the tab bar already reserves its width. */}
             {!isMobile && (
-              <div
-                style={{ width: RIGHT_PANEL_HEADER_RESERVED_WIDTH, flexShrink: 0 }}
-                aria-hidden="true"
-              />
+              <div style={{ width: RIGHT_PANEL_HEADER_RESERVED_WIDTH, flexShrink: 0 }} aria-hidden="true" />
             )}
           </div>
 

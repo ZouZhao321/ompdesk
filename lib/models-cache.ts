@@ -49,10 +49,7 @@ export function invalidateModelsCache(): void {
   state.inFlight.clear();
 }
 
-export function withModelRuntimeError(
-  data: ModelsData,
-  modelError: string | undefined,
-): ModelsData {
+export function withModelRuntimeError(data: ModelsData, modelError: string | undefined): ModelsData {
   return modelError ? { ...data, modelError } : data;
 }
 
@@ -60,10 +57,7 @@ export function withSafeModelLoadFailure(data: ModelsData): ModelsData {
   return { ...data, modelError: SAFE_MODEL_LOAD_FAILURE_MESSAGE };
 }
 
-export function loadModelsWithCache(
-  cwd: string,
-  loader: () => Promise<ModelsData>,
-): Promise<ModelsData> {
+export function loadModelsWithCache(cwd: string, loader: () => Promise<ModelsData>): Promise<ModelsData> {
   const state = getModelsCacheState();
   const cached = state.entries.get(cwd);
   if (cached) {

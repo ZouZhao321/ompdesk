@@ -38,9 +38,6 @@ async function getRouteHandler(request: NextRequest) {
 
     return NextResponse.json(await getGitStatus(cwd));
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

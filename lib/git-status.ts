@@ -8,9 +8,7 @@ export interface GitPorcelainEntry {
 }
 
 function usesRenamePath(indexStatus: string, worktreeStatus: string): boolean {
-  return (
-    indexStatus === "R" || indexStatus === "C" || worktreeStatus === "R" || worktreeStatus === "C"
-  );
+  return indexStatus === "R" || indexStatus === "C" || worktreeStatus === "R" || worktreeStatus === "C";
 }
 
 export function parseGitPorcelainV1(output: string): GitPorcelainEntry[] {
@@ -38,9 +36,7 @@ export function parseGitPorcelainV1(output: string): GitPorcelainEntry[] {
 
 const CONFLICT_STATUSES = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
 
-export function classifyGitStatus(
-  entry: GitPorcelainEntry,
-): Pick<GitFileStatus, "status" | "code"> {
+export function classifyGitStatus(entry: GitPorcelainEntry): Pick<GitFileStatus, "status" | "code"> {
   const pair = `${entry.indexStatus}${entry.worktreeStatus}`;
   if (pair === "??") return { status: "untracked", code: "U" };
   if (CONFLICT_STATUSES.has(pair) || pair.includes("U")) return { status: "conflict", code: "C" };

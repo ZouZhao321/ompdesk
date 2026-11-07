@@ -39,12 +39,7 @@ interface LogEntryRowProps {
  * array every couple of seconds while the existing entries keep their identity;
  * without this every visible row re-renders on each poll.
  */
-const LogEntryRow = memo(function LogEntryRow({
-  entry,
-  styles,
-  expanded,
-  onToggleEntry,
-}: LogEntryRowProps) {
+const LogEntryRow = memo(function LogEntryRow({ entry, styles, expanded, onToggleEntry }: LogEntryRowProps) {
   return (
     <article className={styles.entry} data-level={entry.level ?? "raw"} data-expanded={expanded}>
       <button
@@ -237,12 +232,8 @@ export function LogsPanelView({
           <>
             <code className={styles.fileName}>{file.name}</code>
             <span>{formatFileSize(file.size)}</span>
-            <span>
-              {t("settings.logs.lastWrite", { time: formatFileModified(file.modifiedAt) })}
-            </span>
-            {file.current && (
-              <span className={styles.currentBadge}>{t("settings.logs.active")}</span>
-            )}
+            <span>{t("settings.logs.lastWrite", { time: formatFileModified(file.modifiedAt) })}</span>
+            {file.current && <span className={styles.currentBadge}>{t("settings.logs.active")}</span>}
           </>
         ) : (
           <span>{t("settings.logs.noFileSelected")}</span>
@@ -258,11 +249,7 @@ export function LogsPanelView({
 
       <div className={styles.list} ref={listRef} data-state={state.kind} onScroll={onListScroll}>
         {stateText ? (
-          <div
-            className={styles.empty}
-            role={state.kind === "error" ? "alert" : "status"}
-            data-kind={state.kind}
-          >
+          <div className={styles.empty} role={state.kind === "error" ? "alert" : "status"} data-kind={state.kind}>
             <strong>{stateText.title}</strong>
             <span>{stateText.detail}</span>
           </div>

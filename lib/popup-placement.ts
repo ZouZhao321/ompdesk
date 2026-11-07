@@ -39,10 +39,7 @@ export function computePopupPlacement(
   const prefer = options.prefer ?? "above";
   // A viewport too short for the floor gets the whole viewport instead, rather
   // than a popup that reaches past both edges.
-  const floor = Math.min(
-    options.minHeight ?? POPUP_MIN_HEIGHT_PX,
-    Math.max(0, viewportHeight - margin * 2),
-  );
+  const floor = Math.min(options.minHeight ?? POPUP_MIN_HEIGHT_PX, Math.max(0, viewportHeight - margin * 2));
 
   const spaceAbove = Math.max(0, anchorTop - gap - margin);
   const spaceBelow = Math.max(0, viewportHeight - anchorBottom - gap - margin);
@@ -59,10 +56,6 @@ export function computePopupPlacement(
 }
 
 /** Preferred height as a share of the viewport, capped at an absolute value. */
-export function preferredPopupHeight(
-  viewportHeight: number,
-  viewportFraction: number,
-  cap: number,
-): number {
+export function preferredPopupHeight(viewportHeight: number, viewportFraction: number, cap: number): number {
   return Math.min(viewportHeight * viewportFraction, cap);
 }

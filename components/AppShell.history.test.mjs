@@ -56,13 +56,7 @@ for (const { name, selectedSession, expectedId } of [
     assert.deepEqual(
       opened,
       expectedId
-        ? [
-            [
-              `/api/sessions/${encodeURIComponent(expectedId)}/export?inline=1`,
-              "_blank",
-              "noopener,noreferrer",
-            ],
-          ]
+        ? [[`/api/sessions/${encodeURIComponent(expectedId)}/export?inline=1`, "_blank", "noopener,noreferrer"]]
         : [],
     );
   });

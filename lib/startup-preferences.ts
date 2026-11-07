@@ -49,15 +49,9 @@ export async function persistExplicitStartupPreferences(
 
   if (
     explicit.thinkingLevel &&
-    (explicit.thinkingLevel === "auto" ||
-      effective.supportsThinking ||
-      effective.thinkingLevel !== "off")
+    (explicit.thinkingLevel === "auto" || effective.supportsThinking || effective.thinkingLevel !== "off")
   ) {
-    setSetting(
-      settings,
-      "defaultThinkingLevel",
-      explicit.thinkingLevel === "auto" ? "auto" : effective.thinkingLevel,
-    );
+    setSetting(settings, "defaultThinkingLevel", explicit.thinkingLevel === "auto" ? "auto" : effective.thinkingLevel);
   }
 
   await settings.flush();

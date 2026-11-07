@@ -25,9 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function stringRecord(value: unknown): Record<string, string> {
   if (!isRecord(value)) return {};
   return Object.fromEntries(
-    Object.entries(value).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
   );
 }
 

@@ -9,10 +9,7 @@ const jiti = createJiti(import.meta.url, {
 const { BUILTIN_SLASH_COMMANDS } = await jiti.import("./ChatInput.tsx");
 
 test("registers /rewind as the only local rewind command", () => {
-  assert.ok(
-    Array.isArray(BUILTIN_SLASH_COMMANDS),
-    "BUILTIN_SLASH_COMMANDS must be an exported array",
-  );
+  assert.ok(Array.isArray(BUILTIN_SLASH_COMMANDS), "BUILTIN_SLASH_COMMANDS must be an exported array");
 
   const matches = BUILTIN_SLASH_COMMANDS.filter((command) => command.name === "rewind");
   assert.equal(matches.length, 1, "rewind must be registered exactly once");

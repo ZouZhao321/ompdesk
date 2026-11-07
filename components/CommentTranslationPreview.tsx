@@ -179,13 +179,9 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
       </div>
 
       {!viewerEnabled ? (
-        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>
-          {t("comments.previewHidden")}
-        </div>
+        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>{t("comments.previewHidden")}</div>
       ) : !record ? (
-        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>
-          {t("comments.previewEmpty")}
-        </div>
+        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>{t("comments.previewEmpty")}</div>
       ) : null}
     </div>
   );

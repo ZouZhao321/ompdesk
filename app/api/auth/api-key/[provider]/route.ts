@@ -26,61 +26,52 @@ async function getRouteHandler(_req: Request, { params }: Params) {
 }
 
 // POST /api/auth/api-key/[provider]  body: { apiKey: string }
-export const POST = withRequestLog(
-  "/api/auth/api-key/[provider]",
-  async (req: Request, { params }: Params) => {
-    const { provider } = await params;
-    try {
-      const { apiKey } = (await req.json()) as { apiKey?: string };
-      if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
-        auditFailure("auth.api-key.set", provider, { status: 400, reason: "apiKey-required" });
-        return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
-      }
-      const { modelRegistry, authStorage } = await getOmpRuntime();
-      if (!modelRegistry.hasProvider(provider)) {
-        auditFailure("auth.api-key.set", provider, { status: 400, reason: "unknown-provider" });
-        return NextResponse.json({ error: `Unknown provider: ${provider}` }, { status: 400 });
-      }
-      // omp stores one row per credential in `agent.db`; writing through
-      // AuthStorage keeps the CLI and ompdesk on the same store and lock.
-      await authStorage.credentials.set(provider, {
-        type: "api_key",
-        key: apiKey.trim(),
-        source: "login",
-      });
-      invalidateModelsCache();
-      auditSuccess("auth.api-key.set", provider);
-      return NextResponse.json({ success: true });
-    } catch (error) {
-      auditFailure("auth.api-key.set", provider, { status: 500, error });
-      return NextResponse.json({ error: String(error) }, { status: 500 });
+export const POST = withRequestLog("/api/auth/api-key/[provider]", async (req: Request, { params }: Params) => {
+  const { provider } = await params;
+  try {
+    const { apiKey } = (await req.json()) as { apiKey?: string };
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      auditFailure("auth.api-key.set", provider, { status: 400, reason: "apiKey-required" });
+      return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
     }
-  },
-);
+    const { modelRegistry, authStorage } = await getOmpRuntime();
+    if (!modelRegistry.hasProvider(provider)) {
+      auditFailure("auth.api-key.set", provider, { status: 400, reason: "unknown-provider" });
+      return NextResponse.json({ error: `Unknown provider: ${provider}` }, { status: 400 });
+    }
+    // omp stores one row per credential in `agent.db`; writing through
+    // AuthStorage keeps the CLI and ompdesk on the same store and lock.
+    await authStorage.credentials.set(provider, {
+      type: "api_key",
+      key: apiKey.trim(),
+      source: "login",
+    });
+    invalidateModelsCache();
+    auditSuccess("auth.api-key.set", provider);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    auditFailure("auth.api-key.set", provider, { status: 500, error });
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+});
 
 // DELETE /api/auth/api-key/[provider] — removes stored API keys
-export const DELETE = withRequestLog(
-  "/api/auth/api-key/[provider]",
-  async (_req: Request, { params }: Params) => {
-    const { provider } = await params;
-    try {
-      const { authStorage } = await getOmpRuntime();
-      const stored = authStorage.credentials.list(provider);
-      if (stored.some((entry) => entry.credential.type === "oauth")) {
-        auditFailure("auth.api-key.remove", provider, { status: 409, reason: "oauth-credential" });
-        return NextResponse.json(
-          { error: `${provider} is authenticated with OAuth, not an API key` },
-          { status: 409 },
-        );
-      }
-      await authStorage.credentials.remove(provider);
-      invalidateModelsCache();
-      invalidateOmpRuntime();
-      auditSuccess("auth.api-key.remove", provider);
-      return NextResponse.json({ success: true });
-    } catch (error) {
-      auditFailure("auth.api-key.remove", provider, { status: 500, error });
-      return NextResponse.json({ error: String(error) }, { status: 500 });
+export const DELETE = withRequestLog("/api/auth/api-key/[provider]", async (_req: Request, { params }: Params) => {
+  const { provider } = await params;
+  try {
+    const { authStorage } = await getOmpRuntime();
+    const stored = authStorage.credentials.list(provider);
+    if (stored.some((entry) => entry.credential.type === "oauth")) {
+      auditFailure("auth.api-key.remove", provider, { status: 409, reason: "oauth-credential" });
+      return NextResponse.json({ error: `${provider} is authenticated with OAuth, not an API key` }, { status: 409 });
     }
-  },
-);
+    await authStorage.credentials.remove(provider);
+    invalidateModelsCache();
+    invalidateOmpRuntime();
+    auditSuccess("auth.api-key.remove", provider);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    auditFailure("auth.api-key.remove", provider, { status: 500, error });
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+});

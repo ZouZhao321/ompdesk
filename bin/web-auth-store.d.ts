@@ -84,10 +84,7 @@ export declare function consumeRecoveryCode(
   password: unknown,
   options?: WebAuthStoreOptions,
 ): RecoveryConsumeResult;
-export declare function createDigest(
-  secret: string,
-  params?: WebAuthStoreOptions["params"],
-): WebAuthDigest;
+export declare function createDigest(secret: string, params?: WebAuthStoreOptions["params"]): WebAuthDigest;
 export declare function getWebAuthStatus(options?: WebAuthStoreOptions): WebAuthStatus;
 export declare function issueRecoveryCode(options?: WebAuthStoreOptions): RecoveryIssueResult;
 export declare function normalizeRecoveryCode(code: unknown): string;
@@ -95,17 +92,8 @@ export declare function readWebAuthState(file?: string): WebAuthState;
 export declare function resolveAgentDir(env?: NodeJS.ProcessEnv): string;
 export declare function resolveWebAuthFile(env?: NodeJS.ProcessEnv): string;
 export declare function resolveWebAuthPolicy(options?: WebAuthStoreOptions): WebAuthPolicy;
-export declare function setWebPassword(
-  password: unknown,
-  options?: WebAuthStoreOptions,
-): WebAuthStatus;
-export declare function setWebPasswordEnabled(
-  enabled: boolean,
-  options?: WebAuthStoreOptions,
-): WebAuthStatus;
+export declare function setWebPassword(password: unknown, options?: WebAuthStoreOptions): WebAuthStatus;
+export declare function setWebPasswordEnabled(enabled: boolean, options?: WebAuthStoreOptions): WebAuthStatus;
 export declare function validatePassword(password: unknown): string | null;
 export declare function verifyDigest(secret: unknown, digest: unknown): boolean;
-export declare function verifyWebPassword(
-  password: unknown,
-  options?: WebAuthStoreOptions,
-): boolean;
+export declare function verifyWebPassword(password: unknown, options?: WebAuthStoreOptions): boolean;

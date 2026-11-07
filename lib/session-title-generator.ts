@@ -15,9 +15,7 @@ import { findFirstTitleSource, truncateTitle, type GeneratedSessionTitle } from 
  * bundle, so the pure helpers live in `session-title.ts` and this module is
  * imported only by API routes.
  */
-export async function generateSessionTitle(
-  session: AgentSessionLike,
-): Promise<GeneratedSessionTitle | null> {
+export async function generateSessionTitle(session: AgentSessionLike): Promise<GeneratedSessionTitle | null> {
   const context = session.sessionManager.buildSessionContext();
   const firstMessage = findFirstTitleSource(context.messages);
   if (!firstMessage) {

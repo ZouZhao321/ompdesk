@@ -22,12 +22,7 @@ import {
 import { getOmpRuntime, getSettingsForCwd } from "@/lib/omp-runtime";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { getAvailableWebThemes, getWebThemeConfig } from "@/lib/omp-theme";
-import type {
-  SettingsField,
-  SettingsOption,
-  SettingsResponse,
-  SettingsValue,
-} from "@/lib/settings-api";
+import type { SettingsField, SettingsOption, SettingsResponse, SettingsValue } from "@/lib/settings-api";
 
 export const dynamic = "force-dynamic";
 
@@ -76,42 +71,30 @@ function validateSettingValue(path: SettingPath, value: unknown): SettingsValue 
   if (schemaType === "string") {
     if (typeof value !== "string") throw new Error("Expected text");
     const allowed = optionsFor(path, []);
-    if (
-      ui.options !== "runtime" &&
-      allowed?.length &&
-      !allowed.some((option) => option.value === value)
-    ) {
+    if (ui.options !== "runtime" && allowed?.length && !allowed.some((option) => option.value === value)) {
       throw new Error("Invalid option");
     }
     return value;
   }
   if (schemaType === "enum") {
-    if (typeof value !== "string" || !getEnumValues(path)?.includes(value))
-      throw new Error("Invalid option");
+    if (typeof value !== "string" || !getEnumValues(path)?.includes(value)) throw new Error("Invalid option");
     return value;
   }
   if (schemaType === "number") {
-    if (typeof value !== "number" || !Number.isFinite(value))
-      throw new Error("Expected a finite number");
-    const allowed = Array.isArray(ui.options)
-      ? ui.options.map((option) => Number(option.value))
-      : [];
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("Expected a finite number");
+    const allowed = Array.isArray(ui.options) ? ui.options.map((option) => Number(option.value)) : [];
     if (allowed.length && !allowed.includes(value)) throw new Error("Invalid option");
     return value;
   }
   if (schemaType === "array") {
     if (!Array.isArray(value) || value.some((item) => typeof item !== "string"))
       throw new Error("Expected a string list");
-    const allowed = Array.isArray(ui.options)
-      ? new Set(ui.options.map((option) => option.value))
-      : null;
-    if (!allowed || value.some((item) => !allowed.has(item)))
-      throw new Error("Invalid list option");
+    const allowed = Array.isArray(ui.options) ? new Set(ui.options.map((option) => option.value)) : null;
+    if (!allowed || value.some((item) => !allowed.has(item))) throw new Error("Invalid list option");
     return [...new Set(value)] as string[];
   }
   if (schemaType === "record" && path === "providers.maxInFlightRequests") {
-    if (!value || typeof value !== "object" || Array.isArray(value))
-      throw new Error("Expected provider limits");
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected provider limits");
     const result: Record<string, number> = {};
     for (const [provider, limit] of Object.entries(value)) {
       if (!provider.trim() || typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) {
@@ -130,10 +113,7 @@ async function getRouteHandler(req: Request) {
   try {
     const cwd = await validateCwd(new URL(req.url).searchParams.get("cwd"));
     const settings = await getSettingsForCwd(cwd);
-    const [availableThemes, theme] = await Promise.all([
-      getAvailableWebThemes(),
-      getWebThemeConfig(settings),
-    ]);
+    const [availableThemes, theme] = await Promise.all([getAvailableWebThemes(), getWebThemeConfig(settings)]);
     const themeNames = availableThemes.map(({ name }) => name);
     const fields: SettingsField[] = [];
 
@@ -173,10 +153,7 @@ async function getRouteHandler(req: Request) {
     return NextResponse.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json(
-      { error: message },
-      { status: message === "Access denied" ? 403 : 500 },
-    );
+    return NextResponse.json({ error: message }, { status: message === "Access denied" ? 403 : 500 });
   }
 }
 
@@ -193,8 +170,7 @@ export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
     const value = validateSettingValue(path, body.value);
     if (
       (path === "theme.dark" || path === "theme.light") &&
-      (typeof value !== "string" ||
-        !(await getAvailableWebThemes()).some(({ name }) => name === value))
+      (typeof value !== "string" || !(await getAvailableWebThemes()).some(({ name }) => name === value))
     ) {
       throw new Error("Unknown omp theme");
     }
@@ -208,9 +184,6 @@ export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
     });
   } catch (error) {
     auditFailure("settings.write", target, { status: 400, error });
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
 });

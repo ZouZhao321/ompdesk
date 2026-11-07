@@ -42,12 +42,7 @@ const { outputText } = ts.transpileModule(
 
 const createChatInputCallbacks = new Function(`${outputText}\nreturn buildCallbacks;`)();
 
-function harness({
-  value = "",
-  attachedImages = [],
-  isStreaming = false,
-  builtinResult = { handled: true },
-} = {}) {
+function harness({ value = "", attachedImages = [], isStreaming = false, builtinResult = { handled: true } } = {}) {
   const input = { value, cleared: false };
   const calls = [];
   const record = (name, ...args) => {
@@ -90,11 +85,7 @@ for (const [label, message] of [
       h.calls.filter(([name]) => name === "onBuiltinCommand"),
       [["onBuiltinCommand", message]],
     );
-    assert.equal(
-      h.names().includes("onPromptWithStreamingBehavior"),
-      false,
-      "must not queue as a streaming prompt",
-    );
+    assert.equal(h.names().includes("onPromptWithStreamingBehavior"), false, "must not queue as a streaming prompt");
     assert.equal(h.names().includes("onSteer"), false, "must not steer the running agent");
     assert.equal(h.names().includes("onFollowUp"), false);
     assert.equal(h.names().includes("onSend"), false);
@@ -152,11 +143,7 @@ test("handleSend dispatches /rewind to the builtin handler when the session is i
     h.calls.filter(([name]) => name === "onBuiltinCommand"),
     [["onBuiltinCommand", "/rewind"]],
   );
-  assert.equal(
-    h.names().includes("onSend"),
-    false,
-    "handled dispatch must not fall through to onSend",
-  );
+  assert.equal(h.names().includes("onSend"), false, "handled dispatch must not fall through to onSend");
   assert.equal(h.names().filter((name) => name === "clearInput").length, 1);
 });
 

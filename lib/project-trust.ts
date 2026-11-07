@@ -179,9 +179,7 @@ export function untrustedProjectSessionOptions<TTool extends DiscoveredToolPath>
   if (!status.requiresTrust || status.trusted) return undefined;
 
   return {
-    preloadedExtensionPaths: discovered.extensionPaths.filter(
-      (path) => !isInsideProject(path, cwd),
-    ),
+    preloadedExtensionPaths: discovered.extensionPaths.filter((path) => !isInsideProject(path, cwd)),
     preloadedCustomToolPaths: discovered.customToolPaths.filter(
       (tool) => tool.source?.level !== "project" && !isInsideProject(tool.path, cwd),
     ),

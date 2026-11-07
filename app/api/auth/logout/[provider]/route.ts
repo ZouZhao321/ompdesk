@@ -20,10 +20,7 @@ export const POST = withRequestLog(
       const stored = authStorage.credentials.list(provider);
       if (stored.length > 0 && !stored.some((entry) => entry.credential.type === "oauth")) {
         auditFailure("auth.oauth.logout", provider, { status: 409, reason: "api-key-credential" });
-        return Response.json(
-          { error: `${provider} is authenticated with an API key, not OAuth` },
-          { status: 409 },
-        );
+        return Response.json({ error: `${provider} is authenticated with an API key, not OAuth` }, { status: 409 });
       }
 
       await authStorage.credentials.remove(provider);

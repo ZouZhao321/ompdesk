@@ -8,12 +8,7 @@
 
 export function isWriteToolName(toolName: string): boolean {
   const name = toolName.toLowerCase();
-  return (
-    name === "write" ||
-    name.startsWith("write_") ||
-    name.endsWith(".write") ||
-    name.endsWith("_write")
-  );
+  return name === "write" || name.startsWith("write_") || name.endsWith(".write") || name.endsWith("_write");
 }
 
 export function isEditToolName(toolName: string): boolean {

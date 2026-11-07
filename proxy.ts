@@ -65,11 +65,7 @@ function unauthorizedPage(): string {
  * Forward the correlation headers to the route handler. The client's own values
  * are replaced, so a caller cannot choose the id their request is logged under.
  */
-function continueWithRequestHeaders(
-  request: NextRequest,
-  requestId: string,
-  actor: RequestActor,
-): NextResponse {
+function continueWithRequestHeaders(request: NextRequest, requestId: string, actor: RequestActor): NextResponse {
   const headers = new Headers(request.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
   headers.set(ACTOR_HEADER, actor);
@@ -90,9 +86,7 @@ export function proxy(request: NextRequest) {
     method: request.method,
   };
   const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
-  const isTrustedRequest = isApiRequest
-    ? isApiRequestAllowed(request)
-    : isApiRequestHostAllowed(request);
+  const isTrustedRequest = isApiRequest ? isApiRequestAllowed(request) : isApiRequestHostAllowed(request);
 
   if (!isTrustedRequest) {
     // The combined check already rejected the request; asking about the host
@@ -105,10 +99,7 @@ export function proxy(request: NextRequest) {
     if (!isApiRequest) {
       return new NextResponse("Untrusted request", { status: 403, headers: SECURITY_HEADERS });
     }
-    return NextResponse.json(
-      { error: "Untrusted API request" },
-      { status: 403, headers: SECURITY_HEADERS },
-    );
+    return NextResponse.json({ error: "Untrusted API request" }, { status: 403, headers: SECURITY_HEADERS });
   }
 
   // Recovery stays reachable while locked out — that is the whole point of it —

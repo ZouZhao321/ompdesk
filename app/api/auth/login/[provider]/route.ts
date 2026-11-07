@@ -8,9 +8,7 @@ export const dynamic = "force-dynamic";
 
 // In-memory registry: loginToken -> resolve/reject for the manualCodeInput promise
 declare global {
-  var __ompLoginCallbacks:
-    | Map<string, { resolve: (v: string) => void; reject: (e: Error) => void }>
-    | undefined;
+  var __ompLoginCallbacks: Map<string, { resolve: (v: string) => void; reject: (e: Error) => void }> | undefined;
 }
 
 function getCallbackRegistry() {
@@ -48,10 +46,7 @@ export const POST = withRequestLog(
 // GET /api/auth/login/[provider] — SSE stream for OAuth flow
 export const GET = withRequestLog("/api/auth/login/[provider]", getRouteHandler);
 
-async function getRouteHandler(
-  req: Request,
-  { params }: { params: Promise<{ provider: string }> },
-) {
+async function getRouteHandler(req: Request, { params }: { params: Promise<{ provider: string }> }) {
   const { provider } = await params;
 
   const encoder = new TextEncoder();

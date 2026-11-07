@@ -34,29 +34,21 @@ function startTelemetryExport(settings: Settings): Promise<boolean> {
   // load must not fail or block session creation. omp caches its own rejected
   // init promise, so a retry would replay the same error — this one attempt
   // stands for the process, and a failure keeps sessions running without export.
-  globalThis.__ompTelemetryStarted ??= initTelemetryExport(
-    cfgTelemetryOtlpExportEnabled.get(settings),
-  ).catch((error: unknown) => {
-    console.error(
-      "[ompdesk] telemetry export init failed:",
-      error instanceof Error ? error.message : error,
-    );
-  });
+  globalThis.__ompTelemetryStarted ??= initTelemetryExport(cfgTelemetryOtlpExportEnabled.get(settings)).catch(
+    (error: unknown) => {
+      console.error("[ompdesk] telemetry export init failed:", error instanceof Error ? error.message : error);
+    },
+  );
 
   // After a timeout, stop blocking new sessions but keep asking the SDK whether
   // the late init finished: caching `false` here would contradict providers that
   // registered anyway.
   if (globalThis.__ompTelemetryInitTimedOut) return Promise.resolve(isTelemetryExportEnabled());
 
-  return settleTelemetryInit(
-    globalThis.__ompTelemetryStarted,
-    isTelemetryExportEnabled,
-    INIT_TIMEOUT_MS,
-    () => {
-      globalThis.__ompTelemetryInitTimedOut = true;
-      console.error("[ompdesk] telemetry export init timed out; sessions continue without export");
-    },
-  );
+  return settleTelemetryInit(globalThis.__ompTelemetryStarted, isTelemetryExportEnabled, INIT_TIMEOUT_MS, () => {
+    globalThis.__ompTelemetryInitTimedOut = true;
+    console.error("[ompdesk] telemetry export init timed out; sessions continue without export");
+  });
 }
 
 /**
@@ -99,10 +91,7 @@ export async function sessionTelemetry(
   } catch (error) {
     // Optional observability again: the enable check and a broken export config
     // must not fail the session that was about to start.
-    console.error(
-      "[ompdesk] telemetry config failed:",
-      error instanceof Error ? error.message : error,
-    );
+    console.error("[ompdesk] telemetry config failed:", error instanceof Error ? error.message : error);
     return undefined;
   }
 }
@@ -119,10 +108,7 @@ export async function flushSessionTelemetry(timeoutMs?: number): Promise<void> {
     const flushing = flushTelemetryExport();
     await (timeoutMs === undefined ? flushing : withTimeout(flushing, timeoutMs, () => undefined));
   } catch (error) {
-    console.error(
-      "[ompdesk] telemetry flush failed:",
-      error instanceof Error ? error.message : error,
-    );
+    console.error("[ompdesk] telemetry flush failed:", error instanceof Error ? error.message : error);
   }
 }
 

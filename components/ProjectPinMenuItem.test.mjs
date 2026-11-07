@@ -45,10 +45,7 @@ test("shows the unpin label on a menu button while the project is pinned", () =>
 
   assert.equal(tags.length, 1, "expected the menu item to render one button");
   assert.ok(html.includes(`>${UNPIN_LABEL}<`), `expected the visible label "${UNPIN_LABEL}"`);
-  assert.ok(
-    tags[0].includes(`title="${UNPIN_LABEL}"`),
-    `expected the button title "${UNPIN_LABEL}"`,
-  );
+  assert.ok(tags[0].includes(`title="${UNPIN_LABEL}"`), `expected the button title "${UNPIN_LABEL}"`);
   assert.ok(!html.includes(PIN_LABEL), "expected the pin label to be absent");
 });
 

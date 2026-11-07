@@ -23,11 +23,7 @@ import { resolveDirentIsDirectory } from "@/lib/file-dirent";
 import { checkIgnoredEntries } from "@/lib/git-ignore";
 import { isFilePathReferencedBySession } from "@/lib/session-file-references";
 import { isApiRequestAllowed } from "@/lib/request-security";
-import {
-  inspectUploadTargets,
-  parseUploadConflictStrategy,
-  validateUploadFileNames,
-} from "@/lib/file-upload";
+import { inspectUploadTargets, parseUploadConflictStrategy, validateUploadFileNames } from "@/lib/file-upload";
 import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 
 const IGNORED_NAMES = new Set([
@@ -134,9 +130,7 @@ function parseFileRequestType(value: string): FileRequestType | null {
   return FILE_REQUEST_TYPE_SET.has(value) ? (value as FileRequestType) : null;
 }
 
-async function getUploadDirectory(
-  segments: string[],
-): Promise<{ directory: string } | { response: NextResponse }> {
+async function getUploadDirectory(segments: string[]): Promise<{ directory: string } | { response: NextResponse }> {
   const directory = filePathFromSegments(segments);
   const allowedRoots = await getAllowedFileRoots();
   if (!isFilePathAllowed(directory, allowedRoots)) {
@@ -198,10 +192,7 @@ export const POST = withRequestLog(
         const body = (await request.json().catch(() => null)) as { fileNames?: unknown } | null;
         const fileNames = parseUploadFileNames(body?.fileNames);
         if (!fileNames) {
-          return NextResponse.json(
-            { error: "fileNames must be an array of strings" },
-            { status: 400 },
-          );
+          return NextResponse.json({ error: "fileNames must be an array of strings" }, { status: 400 });
         }
         const validationError = validateUploadFileNames(fileNames);
         if (validationError) {
@@ -228,9 +219,7 @@ export const POST = withRequestLog(
         }
         throw error;
       }
-      const files = formData
-        .getAll("files")
-        .filter((entry): entry is File => typeof entry !== "string");
+      const files = formData.getAll("files").filter((entry): entry is File => typeof entry !== "string");
       if (files.some((file) => file.size > MAX_UPLOAD_FILE_BYTES)) {
         return NextResponse.json({ error: "Each upload must be 25MB or smaller" }, { status: 413 });
       }
@@ -306,23 +295,14 @@ export const POST = withRequestLog(
         }
       }
 
-      return NextResponse.json(
-        { uploaded, skipped, errors },
-        { status: errors.length > 0 ? 207 : 200 },
-      );
+      return NextResponse.json({ uploaded, skipped, errors }, { status: errors.length > 0 ? 207 : 200 });
     } catch (error) {
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : String(error) },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
   },
 );
 
-function createFileBodyStream(
-  filePath: string,
-  range?: { start: number; end: number },
-): ReadableStream<Uint8Array> {
+function createFileBodyStream(filePath: string, range?: { start: number; end: number }): ReadableStream<Uint8Array> {
   const fileStream = fs.createReadStream(filePath, range);
   let closed = false;
 
@@ -364,10 +344,7 @@ function createFileBodyStream(
 }
 
 function encodeHeaderValue(value: string): string {
-  return encodeURIComponent(value).replace(
-    /[!'()*]/g,
-    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
+  return encodeURIComponent(value).replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 function getContentDisposition(filePath: string, asDownload = false): string {
@@ -419,13 +396,7 @@ function streamFile(
     end = stat.size - 1;
   }
 
-  if (
-    !Number.isFinite(start) ||
-    !Number.isFinite(end) ||
-    start < 0 ||
-    end < start ||
-    start >= stat.size
-  ) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= stat.size) {
     return new Response(null, {
       status: 416,
       headers: {
@@ -507,10 +478,7 @@ ${bodyHtml}
 
 export const GET = withRequestLog("/api/files/[...path]", getRouteHandler);
 
-async function getRouteHandler(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
+async function getRouteHandler(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   try {
     const { path: segments } = await params;
     const filePath = filePathFromSegments(segments);
@@ -524,9 +492,7 @@ async function getRouteHandler(
     const allowedRoots = await getAllowedFileRoots();
     const allowedByRoot = isFilePathAllowed(filePath, allowedRoots);
     const allowedBySessionReference =
-      !allowedByRoot &&
-      type !== "list" &&
-      (await isFilePathReferencedBySession(filePath, sessionId));
+      !allowedByRoot && type !== "list" && (await isFilePathReferencedBySession(filePath, sessionId));
     if (!allowedByRoot && !allowedBySessionReference) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
@@ -574,10 +540,7 @@ async function getRouteHandler(
         return NextResponse.json({ error: "Not a file" }, { status: 400 });
       }
       const mime =
-        getImageMime(filePath) ||
-        getAudioMime(filePath) ||
-        getDocumentMime(filePath) ||
-        "application/octet-stream";
+        getImageMime(filePath) || getAudioMime(filePath) || getDocumentMime(filePath) || "application/octet-stream";
       return streamFile(filePath, stat, mime, request.headers.get("range"), true);
     }
 
@@ -601,10 +564,7 @@ async function getRouteHandler(
         return NextResponse.json({ error: "Not a file" }, { status: 400 });
       }
       if (getFileExt(filePath) !== "docx") {
-        return NextResponse.json(
-          { error: "Preview not available for this file type" },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: "Preview not available for this file type" }, { status: 400 });
       }
       if (stat.size > DOCX_PREVIEW_MAX_BYTES) {
         return NextResponse.json({ error: "DOCX too large for preview (>10MB)" }, { status: 413 });
@@ -708,17 +668,13 @@ async function getRouteHandler(
     // filesystems without directory type information use the stat fallback.
     const dirents = fs
       .readdirSync(filePath, { withFileTypes: true })
-      .filter(
-        (d) =>
-          ALWAYS_HIDDEN_NAMES[d.name] !== true && !IGNORED_SUFFIXES.some((s) => d.name.endsWith(s)),
-      );
+      .filter((d) => ALWAYS_HIDDEN_NAMES[d.name] !== true && !IGNORED_SUFFIXES.some((s) => d.name.endsWith(s)));
     // null 表示不是 Git 仓库或无法判定，此时退回固定的隐藏名单。
     const ignoredNames = await checkIgnoredEntries(
       filePath,
       dirents.map((d) => d.name),
     );
-    const visibleDirents =
-      ignoredNames === null ? dirents.filter((d) => !IGNORED_NAMES.has(d.name)) : dirents;
+    const visibleDirents = ignoredNames === null ? dirents.filter((d) => !IGNORED_NAMES.has(d.name)) : dirents;
     const entries = visibleDirents
       .flatMap((d) => {
         const isDir = resolveDirentIsDirectory(d, path.join(filePath, d.name));

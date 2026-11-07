@@ -88,13 +88,8 @@ export function buildLogsRequest(input: LogsRequestInput): string {
 }
 
 /** Append a cursor page without duplicating lines already on screen. */
-export function mergeLogEntries(
-  existing: LogEntry[],
-  incoming: LogEntry[],
-  limit = MAX_VISIBLE_ENTRIES,
-): LogEntry[] {
-  if (incoming.length === 0)
-    return existing.length > limit ? existing.slice(existing.length - limit) : existing;
+export function mergeLogEntries(existing: LogEntry[], incoming: LogEntry[], limit = MAX_VISIBLE_ENTRIES): LogEntry[] {
+  if (incoming.length === 0) return existing.length > limit ? existing.slice(existing.length - limit) : existing;
   const lastExisting = existing[existing.length - 1];
   // The poll path almost always appends strictly newer offsets; skip the map
   // and sort unless a page overlaps or arrives out of order.
@@ -116,13 +111,7 @@ export function entryDetail(entry: LogEntry): string {
   return JSON.stringify(entry.fields, null, 2);
 }
 
-export type LogsEmptyKind =
-  | "loading"
-  | "error"
-  | "no-files"
-  | "empty"
-  | "no-matches"
-  | "catching-up";
+export type LogsEmptyKind = "loading" | "error" | "no-files" | "empty" | "no-matches" | "catching-up";
 
 export interface LogsStateDescription {
   kind: LogsEmptyKind | "ready";
@@ -188,10 +177,7 @@ export interface LogScrollMetrics {
  * yanked back on every poll.
  */
 export function isScrolledToBottom(metrics: LogScrollMetrics): boolean {
-  return (
-    metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <=
-    LOG_SCROLL_BOTTOM_TOLERANCE_PX
-  );
+  return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= LOG_SCROLL_BOTTOM_TOLERANCE_PX;
 }
 
 /**

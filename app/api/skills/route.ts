@@ -60,10 +60,7 @@ export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
     }
     if (typeof disableModelInvocation !== "boolean") {
       auditFailure("skill.toggle", filePath, { status: 400, reason: "invalid-flag" });
-      return NextResponse.json(
-        { error: "disableModelInvocation must be boolean" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "disableModelInvocation must be boolean" }, { status: 400 });
     }
     if (path.basename(filePath).toLowerCase() !== "skill.md") {
       auditFailure("skill.toggle", filePath, { status: 400, reason: "not-skill-md" });

@@ -138,10 +138,7 @@ export const TranscriptRail = memo(function TranscriptRail({
       current === null || current === currentDotIndex || current >= dots.length ? null : current,
     );
   }, [currentDotIndex, dots.length]);
-  const activeDotIndex = Math.min(
-    keyboardDotIndex ?? Math.max(currentDotIndex, 0),
-    Math.max(dots.length - 1, 0),
-  );
+  const activeDotIndex = Math.min(keyboardDotIndex ?? Math.max(currentDotIndex, 0), Math.max(dots.length - 1, 0));
   const handleDotKeyDown = useCallback(
     (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
       let target = index;
@@ -154,9 +151,7 @@ export const TranscriptRail = memo(function TranscriptRail({
       const clamped = Math.min(Math.max(target, 0), dots.length - 1);
       if (clamped === index) return;
       setKeyboardDotIndex(clamped);
-      dotsRef.current
-        ?.querySelectorAll<HTMLButtonElement>(".transcript-rail-dot")
-        [clamped]?.focus();
+      dotsRef.current?.querySelectorAll<HTMLButtonElement>(".transcript-rail-dot")[clamped]?.focus();
     },
     [dots.length],
   );

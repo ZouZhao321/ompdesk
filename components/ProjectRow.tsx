@@ -6,11 +6,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { useI18n } from "@/hooks/useI18n";
 import type { TranslationParams } from "@/lib/i18n/types";
-import {
-  STATIC_MARKER_APPEARANCE,
-  STATIC_MARKER_STATUSES,
-  type StaticMarkerCounts,
-} from "@/lib/session-marker";
+import { STATIC_MARKER_APPEARANCE, STATIC_MARKER_STATUSES, type StaticMarkerCounts } from "@/lib/session-marker";
 
 /**
  * 项目行展示的活动计数：运行中、等待回答与未读会话。
@@ -180,9 +176,7 @@ export function ProjectRow({
         >
           <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
         </svg>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {name}
-        </span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
         {isPinned && (
           <span
             role="img"
@@ -316,9 +310,7 @@ function showProjectActivity(
     return null;
   }
   return (
-    <span
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}
-    >
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 6 }}>
       {activity.running > 0 && (
         <span
           title={t("sidebar.agentRunning")}
@@ -333,21 +325,9 @@ function showProjectActivity(
             fontFamily: "var(--font-mono)",
           }}
         >
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            style={{ display: "block" }}
-          >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
             <g>
-              <path
-                d="M21 12a9 9 0 1 1-3.8-7.4"
-                stroke="currentColor"
-                strokeWidth="2.8"
-                strokeLinecap="round"
-              />
+              <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
               <animateTransform
                 attributeName="transform"
                 type="rotate"
@@ -375,14 +355,7 @@ function showProjectActivity(
             fontFamily: "var(--font-mono)",
           }}
         >
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 14 14"
-            fill="none"
-            aria-hidden="true"
-            style={{ display: "block" }}
-          >
+          <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
             <circle cx="7" cy="7" r="4" fill="currentColor" />
           </svg>
           {activity.waiting}

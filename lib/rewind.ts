@@ -15,10 +15,7 @@ export type RewindPlan = { handled: true; error: string } | { handled: true; act
  * @param state 当前 agent 与 shell 的运行状态
  * @returns 忙碌时返回错误；否则要求打开回退选点
  */
-export function planRewindCommand(state: {
-  agentRunning: boolean;
-  bashRunning: boolean;
-}): RewindPlan {
+export function planRewindCommand(state: { agentRunning: boolean; bashRunning: boolean }): RewindPlan {
   if (state.agentRunning || state.bashRunning) {
     return { handled: true, error: "Cannot rewind while the session is busy" };
   }
@@ -50,12 +47,7 @@ function readText(content: unknown): string {
   const parts: string[] = [];
   for (const block of content) {
     if (!block || typeof block !== "object") continue;
-    if (
-      "type" in block &&
-      block.type === "text" &&
-      "text" in block &&
-      typeof block.text === "string"
-    ) {
+    if ("type" in block && block.type === "text" && "text" in block && typeof block.text === "string") {
       parts.push(block.text);
     }
   }
@@ -98,10 +90,7 @@ function readImages(content: unknown): ChatDraftImage[] {
  * @param entryIds 与消息按下标一一对应的会话 entry id
  * @returns 至多一个条目；最后一条用户消息缺少 entry id 时返回空
  */
-export function buildRewindEntries(
-  messages: AgentMessage[],
-  entryIds: readonly string[],
-): RewindEntry[] {
+export function buildRewindEntries(messages: AgentMessage[], entryIds: readonly string[]): RewindEntry[] {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message.role !== "user") continue;

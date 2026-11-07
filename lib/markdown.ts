@@ -114,11 +114,7 @@ export function normalizeDisplayMath(markdown: string): string {
         // See the comment on bracketDisplayOneLine: without matching indentation,
         // a formula nested in a GFM list item is mis-parsed by remark-math and the
         // text after the formula renders as a garbled KaTeX error block.
-        normalized.push(
-          `${displayMathMatch[1]}$$`,
-          `${displayMathMatch[1]}${math}`,
-          `${displayMathMatch[1]}$$`,
-        );
+        normalized.push(`${displayMathMatch[1]}$$`, `${displayMathMatch[1]}${math}`, `${displayMathMatch[1]}$$`);
         continue;
       }
     }

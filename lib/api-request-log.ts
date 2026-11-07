@@ -12,9 +12,7 @@ export function resolveSlowRequestMs(env: NodeJS.ProcessEnv = process.env): numb
   if (!raw) return DEFAULT_SLOW_REQUEST_MS;
   const parsed = Number(raw);
   // A positive value below 0.5 would round to 0 and mark every request slow.
-  return Number.isFinite(parsed) && parsed > 0
-    ? Math.max(1, Math.round(parsed))
-    : DEFAULT_SLOW_REQUEST_MS;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.max(1, Math.round(parsed)) : DEFAULT_SLOW_REQUEST_MS;
 }
 
 function completionLevel(status: number): LogLevel {
@@ -39,8 +37,7 @@ export function withRequestLog<RequestType extends Request, Rest extends unknown
   handler: (request: RequestType, ...rest: Rest) => RouteResult,
 ): (request: RequestType, ...rest: Rest) => Promise<Response> {
   return async (request, ...rest) => {
-    const requestId =
-      request.headers.get(REQUEST_ID_HEADER)?.trim() || globalThis.crypto.randomUUID();
+    const requestId = request.headers.get(REQUEST_ID_HEADER)?.trim() || globalThis.crypto.randomUUID();
     const actor = parseRequestActor(request.headers.get(ACTOR_HEADER));
     const method = request.method;
     const startedAt = performance.now();
@@ -61,9 +58,8 @@ export function withRequestLog<RequestType extends Request, Rest extends unknown
     };
 
     try {
-      const response = await runWithLogContext(
-        { requestId, route, method, ...(actor ? { actor } : {}) },
-        () => handler(request, ...rest),
+      const response = await runWithLogContext({ requestId, route, method, ...(actor ? { actor } : {}) }, () =>
+        handler(request, ...rest),
       );
       complete(response.status);
       return response;

@@ -149,8 +149,5 @@ test("degrades to plain images when no preview host is mounted", () => {
 test("passes the session id to local image urls", () => {
   const html = renderMarkdown("![shot](./assets/shot.png)", { sessionId: "sess-1" });
 
-  assert.match(
-    html,
-    /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read&amp;sessionId=sess-1"/,
-  );
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read&amp;sessionId=sess-1"/);
 });

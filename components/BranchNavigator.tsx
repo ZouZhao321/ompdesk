@@ -118,14 +118,7 @@ interface TreeNodeProps {
   onSelect: (id: string) => void;
 }
 
-function TreeNodeView({
-  node,
-  activePathIds,
-  depth,
-  isLast,
-  parentLines,
-  onSelect,
-}: TreeNodeProps) {
+function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelect }: TreeNodeProps) {
   const { node: rep, skipped, branchPreview, labelEntry } = compressChain(node);
   const isActive = activePathIds.has(rep.entry.id);
   const isOnPath = activePathIds.has(node.entry.id) || activePathIds.has(rep.entry.id);
@@ -217,11 +210,7 @@ function TreeNodeView({
             height: 7,
             borderRadius: "50%",
             flexShrink: 0,
-            background: isActive
-              ? "var(--accent)"
-              : isOnPath
-                ? "var(--text-muted)"
-                : "var(--border)",
+            background: isActive ? "var(--accent)" : isOnPath ? "var(--text-muted)" : "var(--border)",
             border: isActive ? "none" : "1px solid var(--text-dim)",
             marginRight: 6,
             transition: "background 0.12s",
@@ -250,9 +239,7 @@ function TreeNodeView({
 
         {/* Skipped indicator */}
         {skipped > 0 && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)", marginRight: 5, flexShrink: 0 }}>
-            +{skipped}
-          </span>
+          <span style={{ fontSize: 10, color: "var(--text-dim)", marginRight: 5, flexShrink: 0 }}>+{skipped}</span>
         )}
 
         {/* Label */}
@@ -333,11 +320,7 @@ export function BranchNavigator({
     [onLeafChange],
   );
 
-  const noBranchReason = !hasSession
-    ? t("i18n.noActiveSession")
-    : !hasBranch(tree)
-      ? t("i18n.noBranches")
-      : null;
+  const noBranchReason = !hasSession ? t("i18n.noActiveSession") : !hasBranch(tree) ? t("i18n.noBranches") : null;
 
   const topLevel = selectTopLevelBranches(tree);
   const hasContent = !noBranchReason && topLevel.length > 0;

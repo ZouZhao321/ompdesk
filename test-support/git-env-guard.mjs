@@ -44,13 +44,7 @@ function scriptKindFor(filename) {
 
 /** 解析源码；`filename` 只用于选择解析模式与报错定位。 */
 function parseSource(source, filename) {
-  return ts.createSourceFile(
-    filename,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKindFor(filename),
-  );
+  return ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, scriptKindFor(filename));
 }
 
 /** 调用点在源码里的行号（从 1 起），用于报错定位。 */
@@ -106,9 +100,7 @@ function resolveObjectLiteral(node, scopes) {
  */
 function isGitLiteral(node) {
   if (!node) return false;
-  return (
-    (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === "git"
-  );
+  return (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === "git";
 }
 
 /**
@@ -220,10 +212,7 @@ export function subprocessCallSiteLines(source, filename = "source.ts") {
 export function hasCreateGitEnvProperty(objectLiteral) {
   return objectLiteral.properties.some((property) => {
     if (!ts.isPropertyAssignment(property)) return false;
-    const name =
-      ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
-        ? property.name.text
-        : null;
+    const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : null;
     return (
       name === "env" &&
       ts.isCallExpression(property.initializer) &&

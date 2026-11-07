@@ -174,15 +174,12 @@ export function OmpUpdateIndicator() {
           transition: "background 0.12s, border-color 0.12s, color 0.12s",
         }}
         onMouseEnter={(event) => {
-          event.currentTarget.style.background =
-            "color-mix(in srgb, var(--warning) 14%, var(--bg-hover))";
+          event.currentTarget.style.background = "color-mix(in srgb, var(--warning) 14%, var(--bg-hover))";
           event.currentTarget.style.borderColor = "var(--warning)";
         }}
         onMouseLeave={(event) => {
-          event.currentTarget.style.background =
-            "color-mix(in srgb, var(--warning) 8%, transparent)";
-          event.currentTarget.style.borderColor =
-            "color-mix(in srgb, var(--warning) 54%, var(--border))";
+          event.currentTarget.style.background = "color-mix(in srgb, var(--warning) 8%, transparent)";
+          event.currentTarget.style.borderColor = "color-mix(in srgb, var(--warning) 54%, var(--border))";
         }}
       >
         <span
@@ -274,9 +271,7 @@ export function OmpUpdateIndicator() {
                 fontFamily: "var(--font-mono)",
               }}
             >
-              <span>
-                {t("updates.current", { version: displayVersion(status.currentAppVersion) })}
-              </span>
+              <span>{t("updates.current", { version: displayVersion(status.currentAppVersion) })}</span>
               {releaseDate && <span>{releaseDate}</span>}
             </div>
           </div>
@@ -293,10 +288,7 @@ export function OmpUpdateIndicator() {
             >
               {t("updates.changelog")}
             </div>
-            <div
-              className="update-changelog"
-              style={{ color: "var(--text-muted)", fontSize: 11, lineHeight: 1.5 }}
-            >
+            <div className="update-changelog" style={{ color: "var(--text-muted)", fontSize: 11, lineHeight: 1.5 }}>
               <MarkdownBody>{changelog}</MarkdownBody>
             </div>
           </div>
@@ -347,9 +339,7 @@ export function OmpUpdateIndicator() {
               </button>
             ) : (
               <div style={{ color: "var(--text-muted)", fontSize: 11, lineHeight: 1.45 }}>
-                <div style={{ marginBottom: 7, color: "var(--text-dim)" }}>
-                  {t("updates.manual")}
-                </div>
+                <div style={{ marginBottom: 7, color: "var(--text-dim)" }}>{t("updates.manual")}</div>
                 {[status.install.command, status.install.alternateCommand].map((command) => (
                   <div
                     key={command}
@@ -379,16 +369,8 @@ export function OmpUpdateIndicator() {
                     <button
                       type="button"
                       onClick={() => void copyCommand(command)}
-                      title={
-                        copiedCommand === command
-                          ? t("updates.commandCopied")
-                          : t("updates.copyCommand")
-                      }
-                      aria-label={
-                        copiedCommand === command
-                          ? t("updates.commandCopied")
-                          : t("updates.copyCommand")
-                      }
+                      title={copiedCommand === command ? t("updates.commandCopied") : t("updates.copyCommand")}
+                      aria-label={copiedCommand === command ? t("updates.commandCopied") : t("updates.copyCommand")}
                       style={{
                         flex: "0 0 auto",
                         width: 24,

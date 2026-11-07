@@ -1,19 +1,7 @@
 "use client";
 
-import React, {
-  useRef,
-  useState,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  forwardRef,
-  KeyboardEvent,
-} from "react";
-import type {
-  BuiltinSlashCommandResult,
-  CompactResultInfo,
-  QueuedMessages,
-} from "@/hooks/useAgentSession";
+import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
+import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages } from "@/hooks/useAgentSession";
 import type { ModelRoleAssignment, SkillsResponse } from "@/lib/api-types";
 import type { ContextUsage, SlashCommandInfo } from "@/lib/omp-types";
 import type { TextContent, UserMessage } from "@/lib/types";
@@ -26,11 +14,7 @@ import {
   setDraft,
   type ChatDraftImage,
 } from "@/lib/draft-store";
-import {
-  MAX_ATTACHED_IMAGE_BYTES,
-  MAX_ATTACHED_IMAGES,
-  isBase64ImageWithinLimits,
-} from "@/lib/image-attachments";
+import { MAX_ATTACHED_IMAGE_BYTES, MAX_ATTACHED_IMAGES, isBase64ImageWithinLimits } from "@/lib/image-attachments";
 import {
   buildEntriesFromFiles,
   buildAtInsertText,
@@ -45,12 +29,7 @@ import { formatTokenCount } from "@/lib/format-tokens";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { usePopupPlacement } from "@/hooks/usePopupPlacement";
-import {
-  computePopupPlacement,
-  preferredPopupHeight,
-  POPUP_GAP_PX,
-  type PopupSide,
-} from "@/lib/popup-placement";
+import { computePopupPlacement, preferredPopupHeight, POPUP_GAP_PX, type PopupSide } from "@/lib/popup-placement";
 import { useI18n } from "@/hooks/useI18n";
 import { PRESET_DEFAULT, PRESET_FULL } from "@/lib/tool-presets";
 import { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } from "@/lib/transcript-rail";
@@ -72,11 +51,7 @@ interface Props {
   onAbort: () => void;
   onSteer?: (message: string, images?: AttachedImage[]) => void;
   onFollowUp?: (message: string, images?: AttachedImage[]) => void;
-  onPromptWithStreamingBehavior?: (
-    message: string,
-    behavior: "steer" | "followUp",
-    images?: AttachedImage[],
-  ) => void;
+  onPromptWithStreamingBehavior?: (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => void;
   isStreaming: boolean;
   model?: { provider: string; modelId: string } | null;
   isAutoModelSelection?: boolean;
@@ -99,9 +74,7 @@ interface Props {
   onToolPresetChange?: (preset: "none" | "default" | "full") => void;
   thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
   effectiveThinkingLevel?: string;
-  onThinkingLevelChange?: (
-    level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max",
-  ) => void;
+  onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
@@ -138,16 +111,12 @@ const TOOL_PRESET_MAP: Record<"off" | "default" | "full", "none" | "default" | "
   full: "full",
 };
 const DEFAULT_TOOL_LABEL = PRESET_DEFAULT.join(" · ");
-const FULL_TOOL_ADDITIONS = PRESET_FULL.filter((name) => !PRESET_DEFAULT.includes(name)).join(
-  " · ",
-);
+const FULL_TOOL_ADDITIONS = PRESET_FULL.filter((name) => !PRESET_DEFAULT.includes(name)).join(" · ");
 const COMPOSITION_END_ENTER_GRACE_MS = 100;
 
 /** Offset a composer popup from the input on the side placement chose. */
 function popupOffset(side: PopupSide): React.CSSProperties {
-  return side === "above"
-    ? { bottom: `calc(100% + ${POPUP_GAP_PX}px)` }
-    : { top: `calc(100% + ${POPUP_GAP_PX}px)` };
+  return side === "above" ? { bottom: `calc(100% + ${POPUP_GAP_PX}px)` } : { top: `calc(100% + ${POPUP_GAP_PX}px)` };
 }
 
 const MODEL_FILTER_THRESHOLD = 8;
@@ -166,21 +135,10 @@ export function filterModelOptions(options: ModelOption[], query: string): Model
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (!normalizedQuery) return options;
 
-  return options.filter((option) =>
-    `${option.name} ${option.modelId}`.toLocaleLowerCase().includes(normalizedQuery),
-  );
+  return options.filter((option) => `${option.name} ${option.modelId}`.toLocaleLowerCase().includes(normalizedQuery));
 }
 
-const THINKING_LEVELS = [
-  "auto",
-  "off",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-] as const;
+const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const THINKING_LEVEL_DESC_KEYS: Record<(typeof THINKING_LEVELS)[number], string> = {
   auto: "chat.thinkingAuto",
   off: "chat.thinkingOff",
@@ -211,15 +169,7 @@ export const BUILTIN_SLASH_COMMANDS: LocalBuiltinSlashCommand[] = [
   { name: "rewind", descriptionKey: "chat.commandRewind", source: "builtin" },
 ];
 
-const SLASH_SOURCES: SlashCommandSource[] = [
-  "builtin",
-  "extension",
-  "custom",
-  "mcp_prompt",
-  "prompt",
-  "file",
-  "skill",
-];
+const SLASH_SOURCES: SlashCommandSource[] = ["builtin", "extension", "custom", "mcp_prompt", "prompt", "file", "skill"];
 
 const SLASH_SOURCE_GROUP_LABEL_KEYS: Record<SlashCommandSource, string> = {
   builtin: "chat.builtIn",
@@ -241,11 +191,7 @@ const SLASH_SOURCE_ORDER: Record<SlashCommandSource, number> = {
   skill: 6,
 };
 
-function slashMatchRank(
-  command: SlashCommandPaletteItem,
-  query: string,
-  t: (key: string) => string,
-): number {
+function slashMatchRank(command: SlashCommandPaletteItem, query: string, t: (key: string) => string): number {
   const name = command.name.toLowerCase();
   const description = getSlashDescription(command, t).toLowerCase();
   if (name === query) return 0;
@@ -261,18 +207,12 @@ function getSlashDescription(command: SlashCommandPaletteItem, t: (key: string) 
 
 // Skill slash commands are named "skill:<skillName>"; look the skill up in the
 // dormancy map fetched from /api/skills. Unknown skills are treated as active.
-function isDormantSkillCommand(
-  command: SlashCommandPaletteItem,
-  dormancy: Record<string, boolean>,
-): boolean {
+function isDormantSkillCommand(command: SlashCommandPaletteItem, dormancy: Record<string, boolean>): boolean {
   if (command.source !== "skill" || !command.name.startsWith("skill:")) return false;
   return dormancy[command.name.slice("skill:".length)] === true;
 }
 
-export function buildSlashCommandLayout(
-  commands: SlashCommandPaletteItem[],
-  dormancy: Record<string, boolean>,
-) {
+export function buildSlashCommandLayout(commands: SlashCommandPaletteItem[], dormancy: Record<string, boolean>) {
   let index = 0;
   const groups = SLASH_SOURCES.map((source) => {
     const sourceCommands = commands.filter((command) => command.source === source);
@@ -307,17 +247,10 @@ function draftImageToAttachedImage(image: ChatDraftImage): AttachedImage {
 }
 
 function draftImagesToAttachedImages(images: ChatDraftImage[] | undefined): AttachedImage[] {
-  return (images ?? [])
-    .filter(isBase64ImageWithinLimits)
-    .slice(0, MAX_ATTACHED_IMAGES)
-    .map(draftImageToAttachedImage);
+  return (images ?? []).filter(isBase64ImageWithinLimits).slice(0, MAX_ATTACHED_IMAGES).map(draftImageToAttachedImage);
 }
 
-export function canRestoreUserMessage(
-  value: string,
-  attachedImageCount: number,
-  pendingImageCount: number,
-): boolean {
+export function canRestoreUserMessage(value: string, attachedImageCount: number, pendingImageCount: number): boolean {
   return !value.trim() && attachedImageCount === 0 && pendingImageCount === 0;
 }
 
@@ -380,24 +313,12 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
       >
         {kind}
       </span>
-      <span
-        style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-      >
-        {label}
-      </span>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
     </div>
   );
 }
 
-function ModelNoticeBanner({
-  tone,
-  title,
-  body,
-}: {
-  tone: "error" | "warning";
-  title: string;
-  body: string;
-}) {
+function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; title: string; body: string }) {
   const color = tone === "error" ? "239,68,68" : "234,179,8";
   return (
     <div
@@ -595,14 +516,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     replaceMessage(message: UserMessage) {
       const ta = textareaRef.current;
       const current = ta ? ta.value : value;
-      if (
-        !canRestoreUserMessage(
-          current,
-          attachedImagesRef.current.length,
-          pendingImageCountRef.current,
-        )
-      )
-        return;
+      if (!canRestoreUserMessage(current, attachedImagesRef.current.length, pendingImageCountRef.current)) return;
 
       const restoredText = getUserMessageText(message);
       const restoredImages = draftImagesToAttachedImages(getUserMessageDraftImages(message));
@@ -642,8 +556,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
         moved.images.length === currentDraft.images.length &&
         moved.images.every(
           (image, index) =>
-            image.data === currentDraft.images[index]?.data &&
-            image.mimeType === currentDraft.images[index]?.mimeType,
+            image.data === currentDraft.images[index]?.data && image.mimeType === currentDraft.images[index]?.mimeType,
         );
       draftKeyRef.current = nextKey;
       if (unchanged) return;
@@ -668,15 +581,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       const currentDraftKey = draftKeyRef.current;
       const destinationDraftKey = targetDraftKey ?? currentDraftKey;
       const targetsCurrentComposer = destinationDraftKey === currentDraftKey;
-      const storedDraft =
-        !targetsCurrentComposer && destinationDraftKey ? getDraft(destinationDraftKey) : null;
+      const storedDraft = !targetsCurrentComposer && destinationDraftKey ? getDraft(destinationDraftKey) : null;
       const restoredDraft = mergeRestoredSubmissionDraft(
         text,
         images,
         targetsCurrentComposer ? valueRef.current : (storedDraft?.value ?? ""),
-        targetsCurrentComposer
-          ? attachedImagesRef.current.map(imageToDraftImage)
-          : (storedDraft?.images ?? []),
+        targetsCurrentComposer ? attachedImagesRef.current.map(imageToDraftImage) : (storedDraft?.images ?? []),
       );
       // The first optimistic message switches ChatWindow out of its empty-state
       // layout and remounts this component. Persist synchronously so recovery is
@@ -898,8 +808,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     onSend(msg, attachedImages.length ? attachedImages : undefined);
   }, [value, attachedImages, isStreaming, onBuiltinCommand, onSend, clearInput, onAudioUnlock]);
 
-  const slashQuery =
-    value.startsWith("/") && !/\s/.test(value.slice(1)) ? value.slice(1).toLowerCase() : null;
+  const slashQuery = value.startsWith("/") && !/\s/.test(value.slice(1)) ? value.slice(1).toLowerCase() : null;
 
   const filteredSlashCommands = (() => {
     if (slashQuery === null) return [];
@@ -915,8 +824,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
         const rankDelta = slashMatchRank(a, slashQuery, t) - slashMatchRank(b, slashQuery, t);
         if (rankDelta !== 0) return rankDelta;
         return (
-          SLASH_SOURCE_ORDER[a.source] - SLASH_SOURCE_ORDER[b.source] ||
-          MODEL_OPTION_COLLATOR.compare(a.name, b.name)
+          SLASH_SOURCE_ORDER[a.source] - SLASH_SOURCE_ORDER[b.source] || MODEL_OPTION_COLLATOR.compare(a.name, b.name)
         );
       })
       .filter((command) => {
@@ -927,8 +835,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       });
   })();
 
-  const { commands: displayedSlashCommands, groups: groupedSlashCommands } =
-    buildSlashCommandLayout(filteredSlashCommands, skillDormancy);
+  const { commands: displayedSlashCommands, groups: groupedSlashCommands } = buildSlashCommandLayout(
+    filteredSlashCommands,
+    skillDormancy,
+  );
 
   const slashCommandCountLabel =
     filteredSlashCommands.length === 1
@@ -985,16 +895,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   }, [needsServerSearch, atQueryText, cwd]);
 
   const serverResultInUse =
-    needsServerSearch &&
-    atServerResult !== null &&
-    atServerResult.cwd === cwd &&
-    atServerResult.query === atQueryText;
+    needsServerSearch && atServerResult !== null && atServerResult.cwd === cwd && atServerResult.query === atQueryText;
   const atMatches: FileIndexEntry[] = serverResultInUse ? atServerResult.matches : atLocalMatches;
 
   // Open/reset the menu whenever the @token appears or changes (mirrors the
   // slash menu: Escape closes it, the next keystroke re-opens it).
-  const atTokenKey =
-    atQuery === null ? null : `${atQuery.start}:${atQuery.quoted ? 1 : 0}:${atQuery.query}`;
+  const atTokenKey = atQuery === null ? null : `${atQuery.start}:${atQuery.quoted ? 1 : 0}:${atQuery.query}`;
   useEffect(() => {
     if (atTokenKey === null) {
       setAtMenuOpen(false);
@@ -1166,11 +1072,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       const streamingBehavior = mode === "steer" ? "steer" : "followUp";
       if (msg.startsWith("/") && onPromptWithStreamingBehavior) {
         clearInput();
-        onPromptWithStreamingBehavior(
-          msg,
-          streamingBehavior,
-          attachedImages.length ? attachedImages : undefined,
-        );
+        onPromptWithStreamingBehavior(msg, streamingBehavior, attachedImages.length ? attachedImages : undefined);
         return;
       }
       clearInput();
@@ -1202,9 +1104,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
 
       const currentNode = slashItemRefs.current[slashActiveIndex];
       if (!currentNode) {
-        return direction === "down"
-          ? Math.min(lastIndex, slashActiveIndex + 1)
-          : Math.max(0, slashActiveIndex - 1);
+        return direction === "down" ? Math.min(lastIndex, slashActiveIndex + 1) : Math.max(0, slashActiveIndex - 1);
       }
 
       const currentRect = currentNode.getBoundingClientRect();
@@ -1231,9 +1131,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       }
 
       if (bestIndex >= 0) return bestIndex;
-      return direction === "down"
-        ? Math.min(lastIndex, slashActiveIndex + 1)
-        : Math.max(0, slashActiveIndex - 1);
+      return direction === "down" ? Math.min(lastIndex, slashActiveIndex + 1) : Math.max(0, slashActiveIndex - 1);
     },
     [displayedSlashCommands.length, slashActiveIndex],
   );
@@ -1241,10 +1139,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       const nativeEvent = e.nativeEvent;
-      const recentlyComposed =
-        Date.now() - lastCompositionEndAtRef.current < COMPOSITION_END_ENTER_GRACE_MS;
-      const isComposing =
-        isComposingRef.current || nativeEvent.isComposing || nativeEvent.keyCode === 229;
+      const recentlyComposed = Date.now() - lastCompositionEndAtRef.current < COMPOSITION_END_ENTER_GRACE_MS;
+      const isComposing = isComposingRef.current || nativeEvent.isComposing || nativeEvent.keyCode === 229;
 
       if (e.key === "Enter" && !e.shiftKey && (isComposing || recentlyComposed)) {
         if (recentlyComposed) e.preventDefault();
@@ -1267,10 +1163,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
           setHistoryMenuOpen(false);
           return;
         }
-        if (
-          (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) &&
-          inputHistory[historyActiveIndex]
-        ) {
+        if ((e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) && inputHistory[historyActiveIndex]) {
           e.preventDefault();
           applyHistoryInput(inputHistory[historyActiveIndex]);
           return;
@@ -1303,10 +1196,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
           setSlashMenuOpen(false);
           return;
         }
-        if (
-          (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) &&
-          displayedSlashCommands[slashActiveIndex]
-        ) {
+        if ((e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) && displayedSlashCommands[slashActiveIndex]) {
           e.preventDefault();
           applySlashCommand(displayedSlashCommands[slashActiveIndex]);
           return;
@@ -1338,13 +1228,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
         }
       }
 
-      if (
-        e.key === "ArrowUp" &&
-        !isComposing &&
-        !isStreaming &&
-        inputHistory.length > 0 &&
-        value.trim().length === 0
-      ) {
+      if (e.key === "ArrowUp" && !isComposing && !isStreaming && inputHistory.length > 0 && value.trim().length === 0) {
         e.preventDefault();
         setSlashMenuOpen(false);
         setAtMenuOpen(false);
@@ -1480,9 +1364,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   // Build model options: prefer modelList (has provider info), fallback to modelNames
   const modelOptions: ModelOption[] = (() => {
     if (modelList && modelList.length > 0) {
-      return modelList
-        .map((m) => ({ provider: m.provider, modelId: m.id, name: m.name }))
-        .sort(compareModelOptions);
+      return modelList.map((m) => ({ provider: m.provider, modelId: m.id, name: m.name })).sort(compareModelOptions);
     }
     return Object.entries(modelNames ?? {})
       .map(([modelId, name]) => ({
@@ -1507,15 +1389,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
   // and the ones with nothing configured to switch to.
   const roleRows = (modelRoles ?? []).filter((role) => !role.hidden && role.resolved);
   const activeRole = model
-    ? roleRows.find(
-        (role) =>
-          role.resolved?.provider === model.provider && role.resolved?.modelId === model.modelId,
-      )
+    ? roleRows.find((role) => role.resolved?.provider === model.provider && role.resolved?.modelId === model.modelId)
     : undefined;
 
   const displayModelName = model
-    ? (modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)
-        ?.name ?? model.modelId)
+    ? (modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)?.name ?? model.modelId)
     : null;
   const currentName = displayModelName;
 
@@ -1529,16 +1407,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     const lvl = thinkingLevel ?? "auto";
     if (lvl === "auto") {
       const effective =
-        effectiveThinkingLevel &&
-        (thinkingLevelMap?.[effectiveThinkingLevel] ?? effectiveThinkingLevel);
+        effectiveThinkingLevel && (thinkingLevelMap?.[effectiveThinkingLevel] ?? effectiveThinkingLevel);
       return effective ? `auto (${effective})` : "auto";
     }
     if (!thinkingLevelMap) return lvl;
     return thinkingLevelMap[lvl] ?? lvl;
   })();
   const toolPresetLabel =
-    Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ??
-    "default";
+    Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default";
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -1631,8 +1507,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                 }}
               >
                 {t("chat.queued", {
-                  count:
-                    (queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0),
+                  count: (queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0),
                 })}
               </span>
               {onRecallQueue && (
@@ -1655,8 +1530,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.borderColor =
-                      "color-mix(in srgb, var(--accent) 45%, var(--border))";
+                    e.currentTarget.style.borderColor = "color-mix(in srgb, var(--accent) 45%, var(--border))";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "transparent";
@@ -1719,9 +1593,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
               <path d="M3 3v5h5" />
             </svg>
             {t("chat.retrying", { attempt: retryInfo.attempt, max: retryInfo.maxAttempts })}
-            {retryInfo.errorMessage && (
-              <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>
-            )}
+            {retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
         {compactResultText && (
@@ -2024,9 +1896,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                         }}
                       >
                         <span>{t(SLASH_SOURCE_GROUP_LABEL_KEYS[group.source])}</span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 500 }}>
-                          {group.items.length}
-                        </span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 500 }}>{group.items.length}</span>
                       </div>
                       <div
                         style={{
@@ -2126,9 +1996,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             (() => {
               const indexLoading = fileIndexLoading && (!fileIndex || fileIndex.cwd !== cwd);
               const matchCountLabel =
-                atMatches.length === 1
-                  ? t("chat.match")
-                  : t("chat.matches", { count: atMatches.length });
+                atMatches.length === 1 ? t("chat.match") : t("chat.matches", { count: atMatches.length });
               // With a truncated index, local results are provisional — the
               // debounced server search over the full listing replaces them.
               const truncatedHint =
@@ -2181,9 +2049,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                   >
                     {!indexLoading && atMatches.length === 0 ? (
                       <div style={{ padding: "6px 8px", fontSize: 12, color: "var(--text-dim)" }}>
-                        {needsServerSearch && !serverResultInUse
-                          ? t("chat.searching")
-                          : t("chat.noMatchingFiles")}
+                        {needsServerSearch && !serverResultInUse ? t("chat.searching") : t("chat.noMatchingFiles")}
                       </div>
                     ) : (
                       atMatches.map((entry, index) => {
@@ -2231,9 +2097,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {dirPrefix && (
-                                <span style={{ color: "var(--text-dim)" }}>{dirPrefix}</span>
-                              )}
+                              {dirPrefix && <span style={{ color: "var(--text-dim)" }}>{dirPrefix}</span>}
                               {name}
                               {entry.isDir && <span style={{ color: "var(--text-dim)" }}>/</span>}
                             </span>
@@ -2421,8 +2285,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                   padding: "7px 14px",
                   minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
                   minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                  background:
-                    value.trim() || attachedImages.length ? "var(--accent)" : "var(--bg-panel)",
+                  background: value.trim() || attachedImages.length ? "var(--accent)" : "var(--bg-panel)",
                   border: "none",
                   borderRadius: 8,
                   color: value.trim() || attachedImages.length ? "#fff" : "var(--text-dim)",
@@ -2430,10 +2293,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                   fontSize: 13,
                   fontWeight: 600,
                   letterSpacing: "-0.01em",
-                  boxShadow:
-                    value.trim() || attachedImages.length
-                      ? "0 1px 3px rgba(37,99,235,0.25)"
-                      : "none",
+                  boxShadow: value.trim() || attachedImages.length ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
                   transition: "background 0.15s, box-shadow 0.15s",
                 }}
               >
@@ -2520,15 +2380,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = attachedImages.length
-                  ? "var(--accent)"
-                  : "var(--text)";
+                e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = attachedImages.length
-                  ? "var(--accent)"
-                  : "var(--text-muted)";
+                e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text-muted)";
               }}
             >
               <svg
@@ -2597,9 +2453,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                     e.currentTarget.style.color = "var(--text)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = modelDropdownOpen
-                      ? "var(--bg-hover)"
-                      : "none";
+                    e.currentTarget.style.background = modelDropdownOpen ? "var(--bg-hover)" : "none";
                     e.currentTarget.style.color = "var(--text-muted)";
                   }}
                   title={
@@ -2761,8 +2615,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                               </div>
                               {roleRows.map((role) => {
                                 const isActive = activeRole?.role === role.role;
-                                const resolvedName =
-                                  role.resolved?.name ?? role.resolved?.modelId ?? "";
+                                const resolvedName = role.resolved?.name ?? role.resolved?.modelId ?? "";
                                 return (
                                   <button
                                     key={role.role}
@@ -2788,8 +2641,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                       whiteSpace: "nowrap",
                                     }}
                                     onMouseEnter={(e) => {
-                                      if (!isActive)
-                                        e.currentTarget.style.background = "var(--bg-hover)";
+                                      if (!isActive) e.currentTarget.style.background = "var(--bg-hover)";
                                     }}
                                     onMouseLeave={(e) => {
                                       if (!isActive) e.currentTarget.style.background = "none";
@@ -2830,9 +2682,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                     >
                                       {role.tag ?? role.role.toUpperCase()}
                                     </span>
-                                    <span style={{ fontWeight: isActive ? 600 : 500 }}>
-                                      {role.name}
-                                    </span>
+                                    <span style={{ fontWeight: isActive ? 600 : 500 }}>{role.name}</span>
                                     <span
                                       style={{
                                         marginLeft: "auto",
@@ -2844,9 +2694,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                       }}
                                     >
                                       {resolvedName}
-                                      {role.resolved?.thinkingLevel
-                                        ? ` · ${role.resolved.thinkingLevel}`
-                                        : ""}
+                                      {role.resolved?.thinkingLevel ? ` · ${role.resolved.thinkingLevel}` : ""}
                                     </span>
                                   </button>
                                 );
@@ -2875,9 +2723,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {modelFilter.trim()
-                                ? t("chat.noMatchingModels")
-                                : "No available models"}
+                              {modelFilter.trim() ? t("chat.noMatchingModels") : "No available models"}
                             </div>
                           ) : (
                             modelsByProvider.map((group, gi) => (
@@ -2898,17 +2744,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                   </div>
                                 )}
                                 {group.options.map((opt) => {
-                                  const isActive =
-                                    opt.modelId === model?.modelId &&
-                                    opt.provider === model?.provider;
+                                  const isActive = opt.modelId === model?.modelId && opt.provider === model?.provider;
                                   return (
                                     <button
                                       key={`${opt.provider}:${opt.modelId}`}
                                       onClick={() => {
                                         setModelDropdownOpen(false);
                                         setModelFilter("");
-                                        if (!isActive || isAutoModelSelection)
-                                          onModelChange(opt.provider, opt.modelId);
+                                        if (!isActive || isAutoModelSelection) onModelChange(opt.provider, opt.modelId);
                                       }}
                                       style={{
                                         display: "flex",
@@ -2927,8 +2770,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                         whiteSpace: "nowrap",
                                       }}
                                       onMouseEnter={(e) => {
-                                        if (!isActive)
-                                          e.currentTarget.style.background = "var(--bg-hover)";
+                                        if (!isActive) e.currentTarget.style.background = "var(--bg-hover)";
                                       }}
                                       onMouseLeave={(e) => {
                                         if (!isActive) e.currentTarget.style.background = "none";
@@ -3092,9 +2934,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                       e.currentTarget.style.color = "var(--text)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = thinkingDropdownOpen
-                        ? "var(--bg-hover)"
-                        : "none";
+                      e.currentTarget.style.background = thinkingDropdownOpen ? "var(--bg-hover)" : "none";
                       e.currentTarget.style.color = "var(--text-muted)";
                     }}
                   >
@@ -3138,10 +2978,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                       }).map((lvl) => {
                         const isActive = (thinkingLevel ?? "auto") === lvl;
                         const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
-                        const mappedVal =
-                          lvl !== "auto" && thinkingLevelMap ? thinkingLevelMap[lvl] : undefined;
-                        const displayLabel =
-                          mappedVal != null && mappedVal !== lvl ? mappedVal : lvl;
+                        const mappedVal = lvl !== "auto" && thinkingLevelMap ? thinkingLevelMap[lvl] : undefined;
+                        const displayLabel = mappedVal != null && mappedVal !== lvl ? mappedVal : lvl;
                         const showOriginal = mappedVal != null && mappedVal !== lvl;
                         return (
                           <button
@@ -3205,9 +3043,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                 </span>
                               )}
                             </span>
-                            <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>
-                              {desc}
-                            </span>
+                            <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
                           </button>
                         );
                       })}
@@ -3246,9 +3082,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                       e.currentTarget.style.color = "var(--text)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = toolDropdownOpen
-                        ? "var(--bg-hover)"
-                        : "none";
+                      e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
                       e.currentTarget.style.color = "var(--text-muted)";
                     }}
                   >
@@ -3264,9 +3098,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                     >
                       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                     </svg>
-                    {(!isMobile || controlsMenuOpen) && (
-                      <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>
-                    )}
+                    {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
                   </button>
                   {toolDropdownOpen && (
                     <div
@@ -3342,9 +3174,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                               <span style={{ width: 10, flexShrink: 0 }} />
                             )}
                             <span style={{ flex: 1 }}>{lvl}</span>
-                            <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>
-                              {desc}
-                            </span>
+                            <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
                           </button>
                         );
                       })}
@@ -3378,15 +3208,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                     }}
                     onMouseEnter={(e) => {
                       if (isStreaming && !isCompacting) return;
-                      e.currentTarget.style.background = isCompacting
-                        ? "rgba(239,68,68,0.16)"
-                        : "var(--bg-hover)";
+                      e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.16)" : "var(--bg-hover)";
                       e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = isCompacting
-                        ? "rgba(239,68,68,0.08)"
-                        : "none";
+                      e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.08)" : "none";
                       e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text-muted)";
                     }}
                     title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
@@ -3491,9 +3317,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "none";
-                    e.currentTarget.style.color = soundEnabled
-                      ? "var(--text-muted)"
-                      : "var(--text-dim)";
+                    e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
                     e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
                   }}
                 >
@@ -3612,13 +3436,9 @@ export function ContextUsageMeter({
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const contextWindow =
-    usage && Number.isFinite(usage.contextWindow) && usage.contextWindow > 0
-      ? usage.contextWindow
-      : null;
+    usage && Number.isFinite(usage.contextWindow) && usage.contextWindow > 0 ? usage.contextWindow : null;
   const tokens =
-    usage && typeof usage.tokens === "number" && Number.isFinite(usage.tokens)
-      ? Math.max(0, usage.tokens)
-      : null;
+    usage && typeof usage.tokens === "number" && Number.isFinite(usage.tokens) ? Math.max(0, usage.tokens) : null;
   const percent = usage ? getContextPercent(usage) : null;
   if (tokens === null || tokens <= 0) return null;
   const level =
@@ -3627,18 +3447,13 @@ export function ContextUsageMeter({
       : percent !== null && percent >= CONTEXT_WARNING_PERCENT
         ? "warning"
         : "normal";
-  const color =
-    level === "critical" ? "#ef4444" : level === "warning" ? "#eab308" : "var(--text-muted)";
+  const color = level === "critical" ? "#ef4444" : level === "warning" ? "#eab308" : "var(--text-muted)";
   const usedLabel = tokens === null ? "?" : formatTokenCount(tokens);
   const limitLabel = contextWindow === null ? "?" : formatTokenCount(contextWindow);
   const percentLabel = percent === null ? "?" : `${percent.toFixed(0)}%`;
   const progress = percent === null ? 0 : Math.min(100, Math.max(0, percent));
   const status =
-    level === "critical"
-      ? t("chat.contextUsageCritical")
-      : level === "warning"
-        ? t("chat.contextUsageWarning")
-        : null;
+    level === "critical" ? t("chat.contextUsageCritical") : level === "warning" ? t("chat.contextUsageWarning") : null;
   const title = t("chat.contextUsageTitle", {
     used: usedLabel,
     limit: limitLabel,
@@ -3666,9 +3481,7 @@ export function ContextUsageMeter({
         whiteSpace: "nowrap",
       }}
     >
-      <span style={{ color: "var(--text-dim)", letterSpacing: 0.2 }}>
-        {t("chat.contextUsageLabel")}
-      </span>
+      <span style={{ color: "var(--text-dim)", letterSpacing: 0.2 }}>{t("chat.contextUsageLabel")}</span>
       <svg
         width="18"
         height="18"

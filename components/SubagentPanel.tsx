@@ -42,22 +42,8 @@ function SubagentStatusGlyph({ subagent }: { subagent: SubagentSnapshot }) {
   const color = statusColor(subagent);
   if (isSubagentActive(subagent)) {
     return (
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 16 16"
-        fill="none"
-        aria-hidden="true"
-        style={{ color }}
-      >
-        <circle
-          cx="8"
-          cy="8"
-          r="5.5"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeDasharray="22 13"
-        >
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ color }}>
+        <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.8" strokeDasharray="22 13">
           <animateTransform
             attributeName="transform"
             type="rotate"
@@ -171,9 +157,7 @@ function SubagentDetail({
             ]
           : [],
       );
-      setEntries((current) =>
-        result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk],
-      );
+      setEntries((current) => (result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk]));
       nextByteRef.current = result.nextByte;
       setTranscriptError(null);
     } catch (error) {
@@ -244,8 +228,7 @@ function SubagentDetail({
   const toolResults = useMemo(() => {
     const resultMap = new Map<string, ToolResultMessage>();
     for (const entry of entries) {
-      if (entry.message.role === "toolResult")
-        resultMap.set(entry.message.toolCallId, entry.message);
+      if (entry.message.role === "toolResult") resultMap.set(entry.message.toolCallId, entry.message);
     }
     return resultMap;
   }, [entries]);
@@ -355,17 +338,13 @@ function SubagentDetail({
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        <span style={{ color }}>
-          {active ? t("subagents.running") : subagentActivity(subagent, t)}
-        </span>
+        <span style={{ color }}>{active ? t("subagents.running") : subagentActivity(subagent, t)}</span>
         <span>{formatSubagentDuration(progress?.durationMs)}</span>
         <span>{t("subagents.tools", { count: progress?.toolCount ?? 0 })}</span>
         <span>{t("subagents.tokens", { count: progress?.tokens ?? 0 })}</span>
         {progress?.resolvedModel && <span>{progress.resolvedModel}</span>}
         {progress?.currentTool && (
-          <span style={{ color: "var(--text-muted)" }}>
-            {t("subagents.usingTool", { tool: progress.currentTool })}
-          </span>
+          <span style={{ color: "var(--text-muted)" }}>{t("subagents.usingTool", { tool: progress.currentTool })}</span>
         )}
       </div>
 
@@ -373,8 +352,7 @@ function SubagentDetail({
         ref={transcriptRef}
         onScroll={(event) => {
           const element = event.currentTarget;
-          followTailRef.current =
-            element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+          followTailRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
         }}
         style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px 16px" }}
       >
@@ -468,13 +446,9 @@ function SubagentRow({
         width: "100%",
         minHeight: 47,
         padding: "6px 7px",
-        border: selected
-          ? "1px solid color-mix(in srgb, var(--accent) 38%, var(--border))"
-          : "1px solid transparent",
+        border: selected ? "1px solid color-mix(in srgb, var(--accent) 38%, var(--border))" : "1px solid transparent",
         borderRadius: 7,
-        background: selected
-          ? "color-mix(in srgb, var(--accent) 7%, var(--bg-hover))"
-          : "transparent",
+        background: selected ? "color-mix(in srgb, var(--accent) 7%, var(--bg-hover))" : "transparent",
         color: "var(--text)",
         cursor: "pointer",
         textAlign: "left",
@@ -567,9 +541,7 @@ export function SubagentPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const running = subagents.filter(isSubagentActive);
   const finished = subagents.filter((subagent) => !isSubagentActive(subagent));
-  const selected = selectedId
-    ? (subagents.find((subagent) => subagent.id === selectedId) ?? null)
-    : null;
+  const selected = selectedId ? (subagents.find((subagent) => subagent.id === selectedId) ?? null) : null;
 
   useEffect(() => {
     setSelectedId(null);
@@ -581,11 +553,7 @@ export function SubagentPanel({
 
   let body: ReactNode;
   if (!sessionId || subagents.length === 0) {
-    body = (
-      <div style={{ padding: "12px 11px", color: "var(--text-dim)", fontSize: 12 }}>
-        {t("subagents.none")}
-      </div>
-    );
+    body = <div style={{ padding: "12px 11px", color: "var(--text-dim)", fontSize: 12 }}>{t("subagents.none")}</div>;
   } else if (selected) {
     body = (
       <SubagentDetail
@@ -617,9 +585,7 @@ export function SubagentPanel({
           <span style={{ color: running.length > 0 ? "var(--accent)" : "var(--text-dim)" }}>
             {t("subagents.runningCount", { count: running.length })}
           </span>
-          <span style={{ color: "var(--text-dim)" }}>
-            {t("subagents.finishedCount", { count: finished.length })}
-          </span>
+          <span style={{ color: "var(--text-dim)" }}>{t("subagents.finishedCount", { count: finished.length })}</span>
         </div>
 
         <div style={{ minHeight: 0, overflowY: "auto", padding: "7px 6px 8px" }}>

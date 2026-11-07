@@ -5,17 +5,11 @@ import { readSourceFile } from "../test-support/source-text.ts";
 const source = await readSourceFile(new URL("./AppShell.tsx", import.meta.url));
 
 test("压缩后的会话仍可根据持久化消息数生成标题", () => {
-  assert.match(
-    source,
-    /\(sessionStats\?\.userMessages \?\? 0\) > 0 \|\| selectedSession\.messageCount > 0/,
-  );
+  assert.match(source, /\(sessionStats\?\.userMessages \?\? 0\) > 0 \|\| selectedSession\.messageCount > 0/);
 });
 
 test("尚未落盘的会话不会触发依赖 JSONL 的自动命名", () => {
-  assert.match(
-    source,
-    /const disabled = !selectedSession \|\| selectedSession\.transient \|\| !hasMessages/,
-  );
+  assert.match(source, /const disabled = !selectedSession \|\| selectedSession\.transient \|\| !hasMessages/);
 });
 
 test("会话落盘后会用服务端记录清除临时状态", () => {
@@ -36,16 +30,9 @@ test("自动命名不关闭顶栏面板，状态留在按钮上", () => {
 test("自动命名按钮在桌面顶栏与手机档会话面板复用同一份渲染", () => {
   const panelStart = source.indexOf("手机档顶栏不展示全量历史、自动命名与会话地图");
   assert.ok(panelStart >= 0, "手机档会话面板的动作区必须存在");
-  const mobilePanelSource = source.slice(
-    panelStart,
-    source.indexOf('{translate("map.open")}', panelStart),
-  );
+  const mobilePanelSource = source.slice(panelStart, source.indexOf('{translate("map.open")}', panelStart));
   assert.ok(mobilePanelSource.length > 0, "手机档会话面板的动作区必须存在");
-  assert.match(
-    mobilePanelSource,
-    /<AutoNameAction[\s\S]*?variant="mobile-panel"/,
-    "手机档入口必须复用共享渲染",
-  );
+  assert.match(mobilePanelSource, /<AutoNameAction[\s\S]*?variant="mobile-panel"/, "手机档入口必须复用共享渲染");
 
   // 两处入口各自只剩一次调用，按钮本身只有一份实现。
   assert.equal(source.match(/<AutoNameAction/g)?.length, 2, "自动命名按钮只允许两处入口调用");

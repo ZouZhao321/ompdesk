@@ -91,14 +91,10 @@ function requireTerminal(flag) {
 
 async function setPasswordInteractively(intro) {
   console.log(intro);
-  console.log(
-    `It is stored as a scrypt hash in ${webAuthFile} — ompdesk never keeps the password itself.`,
-  );
+  console.log(`It is stored as a scrypt hash in ${webAuthFile} — ompdesk never keeps the password itself.`);
   const password = await readNewPassword();
   const status = setWebPassword(password, { file: webAuthFile });
-  console.log(
-    `Password saved. ompdesk now asks for the username "${status.username}" and this password.`,
-  );
+  console.log(`Password saved. ompdesk now asks for the username "${status.username}" and this password.`);
 }
 
 /**
@@ -136,9 +132,7 @@ async function configurePasswordAccess() {
   }
 
   requireTerminal("--authenticated");
-  await setPasswordInteractively(
-    "--authenticated was requested and no ompdesk password has been set yet.",
-  );
+  await setPasswordInteractively("--authenticated was requested and no ompdesk password has been set yet.");
 }
 
 function warnAboutExposure() {

@@ -32,10 +32,7 @@ export const POST = withRequestLog("/api/models-config/test", async (req: Reques
     return NextResponse.json({ ok: false, error: "Untrusted API request" }, { status: 403 });
   }
   if (!hasJsonContentType(req)) {
-    return NextResponse.json(
-      { ok: false, error: "Content-Type must be application/json" },
-      { status: 415 },
-    );
+    return NextResponse.json({ ok: false, error: "Content-Type must be application/json" }, { status: 415 });
   }
 
   let tempDir: string | undefined;
@@ -47,16 +44,13 @@ export const POST = withRequestLog("/api/models-config/test", async (req: Reques
       model?: unknown;
     };
     const providerName = typeof body.providerName === "string" ? body.providerName.trim() : "";
-    if (!providerName)
-      return NextResponse.json({ ok: false, error: "providerName is required" }, { status: 400 });
+    if (!providerName) return NextResponse.json({ ok: false, error: "providerName is required" }, { status: 400 });
     if (!isRecord(body.provider))
       return NextResponse.json({ ok: false, error: "provider is required" }, { status: 400 });
-    if (!isRecord(body.model))
-      return NextResponse.json({ ok: false, error: "model is required" }, { status: 400 });
+    if (!isRecord(body.model)) return NextResponse.json({ ok: false, error: "model is required" }, { status: 400 });
 
     const modelId = typeof body.model.id === "string" ? body.model.id.trim() : "";
-    if (!modelId)
-      return NextResponse.json({ ok: false, error: "Model ID is required" }, { status: 400 });
+    if (!modelId) return NextResponse.json({ ok: false, error: "Model ID is required" }, { status: 400 });
 
     tempDir = mkdtempSync(join(tmpdir(), "ompdesk-model-test-"));
     const modelsPath = join(tempDir, "models.json");
@@ -86,8 +80,7 @@ export const POST = withRequestLog("/api/models-config/test", async (req: Reques
     if (loadError) return NextResponse.json({ ok: false, error: loadError.message });
 
     const model = registry.find(providerName, modelId);
-    if (!model)
-      return NextResponse.json({ ok: false, error: `Model not found: ${providerName}/${modelId}` });
+    if (!model) return NextResponse.json({ ok: false, error: `Model not found: ${providerName}/${modelId}` });
 
     const resolved = await registry.getApiKeyAndHeaders(model);
     if (!resolved.ok || !resolved.apiKey) {
@@ -133,9 +126,7 @@ export const POST = withRequestLog("/api/models-config/test", async (req: Reques
       if (message.stopReason === "error" || message.stopReason === "aborted") {
         return NextResponse.json({
           ok: false,
-          error:
-            message.errorMessage ??
-            (controller.signal.aborted ? "Test timed out" : "Model returned an error"),
+          error: message.errorMessage ?? (controller.signal.aborted ? "Test timed out" : "Model returned an error"),
           latencyMs,
           status,
         });

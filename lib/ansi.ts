@@ -5,27 +5,9 @@ const ANSI_ESCAPE_AT_START_RE = /^\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]
 const ANSI_SGR_RE = /\x1B\[([0-9;]*)m/g;
 const TUI_CURSOR_MARKER_RE = /\x1B_pi:c\x07/g;
 
-const ANSI_8_COLORS = [
-  "#1f2937",
-  "#dc2626",
-  "#16a34a",
-  "#d97706",
-  "#2563eb",
-  "#9333ea",
-  "#0891b2",
-  "#6b7280",
-];
+const ANSI_8_COLORS = ["#1f2937", "#dc2626", "#16a34a", "#d97706", "#2563eb", "#9333ea", "#0891b2", "#6b7280"];
 
-const ANSI_BRIGHT_COLORS = [
-  "#9ca3af",
-  "#ef4444",
-  "#22c55e",
-  "#f59e0b",
-  "#3b82f6",
-  "#a855f7",
-  "#06b6d4",
-  "#e5e7eb",
-];
+const ANSI_BRIGHT_COLORS = ["#9ca3af", "#ef4444", "#22c55e", "#f59e0b", "#3b82f6", "#a855f7", "#06b6d4", "#e5e7eb"];
 
 export interface AnsiSegment {
   text: string;
@@ -102,8 +84,7 @@ export function normalizeCustomPanelLines(lines: string[]): string[] {
     }
 
     const rightBorderIndex = lastNonSpaceVisibleCharIndex(line);
-    const rightBorder =
-      rightBorderIndex >= 0 ? visibleCharPositions(line)[rightBorderIndex]?.char : undefined;
+    const rightBorder = rightBorderIndex >= 0 ? visibleCharPositions(line)[rightBorderIndex]?.char : undefined;
     if (rightBorder === "│" || rightBorder === "┃") {
       line = removeVisibleCharAt(line, rightBorderIndex);
     }
@@ -112,8 +93,7 @@ export function normalizeCustomPanelLines(lines: string[]): string[] {
   }
 
   while (normalized.length > 0 && stripAnsi(normalized[0]).trim() === "") normalized.shift();
-  while (normalized.length > 0 && stripAnsi(normalized[normalized.length - 1]).trim() === "")
-    normalized.pop();
+  while (normalized.length > 0 && stripAnsi(normalized[normalized.length - 1]).trim() === "") normalized.pop();
   return normalized.length ? normalized : lines;
 }
 

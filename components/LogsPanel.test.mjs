@@ -43,11 +43,7 @@ function props(overrides = {}) {
 
 function render(overrides, initialLocale = "en") {
   return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      { initialLocale },
-      React.createElement(LogsPanelView, props(overrides)),
-    ),
+    React.createElement(I18nProvider, { initialLocale }, React.createElement(LogsPanelView, props(overrides))),
   );
 }
 
@@ -244,9 +240,6 @@ test("keeps the narrow-screen layout rules", async () => {
     css,
     /@media \(max-width: 760px\)[\s\S]*?\.entrySummary \{[\s\S]*?grid-template-columns: auto minmax\(0, 1fr\)/,
   );
-  assert.match(
-    css,
-    /@media \(max-width: 760px\)[\s\S]*?\.field, \.searchField, \.fileField \{ flex: 1 1 100%/,
-  );
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.field, \.searchField, \.fileField \{ flex: 1 1 100%/);
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.actions \{ display: grid/);
 });

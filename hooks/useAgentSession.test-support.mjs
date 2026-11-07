@@ -44,9 +44,7 @@ export function callback(name, bindings) {
   const { outputText } = ts.transpileModule(`const callback = ${implementation};`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   });
-  const fn = new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(
-    ...Object.values(bindings),
-  );
+  const fn = new Function(...Object.keys(bindings), `${outputText}\nreturn callback;`)(...Object.values(bindings));
   return (...args) => {
     try {
       return fn(...args);

@@ -104,7 +104,5 @@ export function findFirstTitleSource(messages: readonly AgentMessage[]): string 
 export function truncateTitle(value: string): string {
   const trimmed = value.replace(/\s+/g, " ").trim();
   const characters = Array.from(trimmed);
-  return characters.length > MAX_TITLE_LENGTH
-    ? characters.slice(0, MAX_TITLE_LENGTH).join("").trim()
-    : trimmed;
+  return characters.length > MAX_TITLE_LENGTH ? characters.slice(0, MAX_TITLE_LENGTH).join("").trim() : trimmed;
 }

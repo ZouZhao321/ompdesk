@@ -9,12 +9,7 @@ import type { MCPServer } from "@oh-my-pi/pi-coding-agent/capability/mcp";
 import { setMcpServerEnabled } from "@oh-my-pi/pi-coding-agent/mcp/config-writer";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { writePrivateFileAtomicSync } from "@/lib/atomic-file";
-import type {
-  McpConfigResponse,
-  McpScopeConfig,
-  McpServerConfig,
-  McpServerEntry,
-} from "@/lib/settings-api";
+import type { McpConfigResponse, McpScopeConfig, McpServerConfig, McpServerEntry } from "@/lib/settings-api";
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +58,7 @@ function redactConfig(config: McpServerConfig): McpServerConfig {
     }),
     ...(config.env && {
       env: Object.fromEntries(
-        Object.entries(config.env).map(([key, value]) => [
-          key,
-          SECRET_ENV_KEY.test(key) ? REDACTED_VALUE : value,
-        ]),
+        Object.entries(config.env).map(([key, value]) => [key, SECRET_ENV_KEY.test(key) ? REDACTED_VALUE : value]),
       ),
     }),
     ...(config.auth && { auth: redactNestedStrings(config.auth) }),
@@ -76,21 +68,16 @@ function redactConfig(config: McpServerConfig): McpServerConfig {
 
 function restoreRedactedValues(submitted: unknown, existing: unknown, path: string): unknown {
   if (submitted === REDACTED_VALUE) {
-    if (existing === undefined)
-      throw new Error(`${path}: re-enter the stored secret after renaming this server`);
+    if (existing === undefined) throw new Error(`${path}: re-enter the stored secret after renaming this server`);
     return existing;
   }
   if (Array.isArray(submitted)) {
     const previous = Array.isArray(existing) ? existing : [];
-    return submitted.map((item, index) =>
-      restoreRedactedValues(item, previous[index], `${path}[${index}]`),
-    );
+    return submitted.map((item, index) => restoreRedactedValues(item, previous[index], `${path}[${index}]`));
   }
   if (submitted && typeof submitted === "object") {
     const previous =
-      existing && typeof existing === "object" && !Array.isArray(existing)
-        ? (existing as Record<string, unknown>)
-        : {};
+      existing && typeof existing === "object" && !Array.isArray(existing) ? (existing as Record<string, unknown>) : {};
     return Object.fromEntries(
       Object.entries(submitted).map(([key, value]) => [
         key,
@@ -157,11 +144,7 @@ async function addDiscoveredServers(response: McpConfigResponse, cwd?: string): 
   });
   for (const server of discovered.items) {
     const target =
-      server._source.level === "project"
-        ? response.project
-        : server._source.level === "user"
-          ? response.user
-          : null;
+      server._source.level === "project" ? response.project : server._source.level === "user" ? response.user : null;
     if (!target || target.servers.some((entry) => entry.name === server.name)) continue;
     target.servers.push({
       name: server.name,
@@ -191,18 +174,15 @@ function applyEffectiveEnabledState(response: McpConfigResponse): void {
   const forced = new Set(document.enabledServers ?? []);
   for (const scope of [response.user, response.project]) {
     for (const server of scope?.servers ?? []) {
-      server.enabled =
-        !disabled.has(server.name) && (server.config.enabled !== false || forced.has(server.name));
+      server.enabled = !disabled.has(server.name) && (server.config.enabled !== false || forced.has(server.name));
     }
   }
 }
 
 function validateStringRecord(value: unknown, label: string): void {
   if (value === undefined) return;
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error(`${label} must be an object`);
-  if (Object.values(value).some((item) => typeof item !== "string"))
-    throw new Error(`${label} values must be strings`);
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  if (Object.values(value).some((item) => typeof item !== "string")) throw new Error(`${label} values must be strings`);
 }
 
 function validateServer(entry: McpServerEntry): McpServerEntry {
@@ -224,8 +204,7 @@ function validateServer(entry: McpServerEntry): McpServerEntry {
   if (config.command && config.url) throw new Error(`${name}: choose command or URL, not both`);
   if (!config.command && !config.url) throw new Error(`${name}: command or URL is required`);
   if (config.command) {
-    if (typeof config.command !== "string" || !config.command.trim())
-      throw new Error(`${name}: command is required`);
+    if (typeof config.command !== "string" || !config.command.trim()) throw new Error(`${name}: command is required`);
     if (config.type !== undefined && config.type !== "stdio")
       throw new Error(`${name}: command transport must be stdio`);
     if (
@@ -234,20 +213,14 @@ function validateServer(entry: McpServerEntry): McpServerEntry {
     ) {
       throw new Error(`${name}: args must be a string array`);
     }
-    if (config.cwd !== undefined && typeof config.cwd !== "string")
-      throw new Error(`${name}: cwd must be text`);
+    if (config.cwd !== undefined && typeof config.cwd !== "string") throw new Error(`${name}: cwd must be text`);
     validateStringRecord(config.env, `${name}: env`);
   } else {
-    if (typeof config.url !== "string" || !config.url.trim())
-      throw new Error(`${name}: URL is required`);
-    if (config.type !== "http" && config.type !== "sse")
-      throw new Error(`${name}: URL transport must be http or sse`);
+    if (typeof config.url !== "string" || !config.url.trim()) throw new Error(`${name}: URL is required`);
+    if (config.type !== "http" && config.type !== "sse") throw new Error(`${name}: URL transport must be http or sse`);
     validateStringRecord(config.headers, `${name}: headers`);
   }
-  if (
-    config.auth !== undefined &&
-    (!config.auth || typeof config.auth !== "object" || Array.isArray(config.auth))
-  ) {
+  if (config.auth !== undefined && (!config.auth || typeof config.auth !== "object" || Array.isArray(config.auth))) {
     throw new Error(`${name}: auth must be an object`);
   }
   if (
@@ -281,10 +254,7 @@ async function getRouteHandler(req: Request) {
     return NextResponse.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json(
-      { error: message },
-      { status: message === "Access denied" ? 403 : 500 },
-    );
+    return NextResponse.json({ error: message }, { status: message === "Access denied" ? 403 : 500 });
   }
 }
 
@@ -302,8 +272,7 @@ export const PATCH = withRequestLog("/api/mcp", async (req: Request) => {
     enabled = typeof body.enabled === "boolean" ? body.enabled : undefined;
     if (body.scope !== "user" && body.scope !== "project") throw new Error("Invalid MCP scope");
     if (body.scope === "project" && !cwd) throw new Error("cwd required for project MCP settings");
-    if (typeof body.name !== "string" || !SERVER_NAME.test(body.name))
-      throw new Error("Invalid MCP server name");
+    if (typeof body.name !== "string" || !SERVER_NAME.test(body.name)) throw new Error("Invalid MCP server name");
     if (typeof body.enabled !== "boolean") throw new Error("enabled must be a boolean");
 
     const userPath = configPath("user");

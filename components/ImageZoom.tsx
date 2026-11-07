@@ -139,12 +139,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
       // 尺寸相近的刷新保留当前比例；换成悬殊的另一张图时重新适配，否则会缩成看不见的大小。
       const previous = previousNaturalRef.current;
       if (previous && previous.w > 0 && previous.h > 0) {
-        const ratio = Math.max(
-          size.w / previous.w,
-          previous.w / size.w,
-          size.h / previous.h,
-          previous.h / size.h,
-        );
+        const ratio = Math.max(size.w / previous.w, previous.w / size.w, size.h / previous.h, previous.h / size.h);
         if (ratio > 2) adjustedRef.current = false;
       }
       previousNaturalRef.current = size;
@@ -219,8 +214,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
         naturalSizeRef.current,
         size,
       );
-      if (naturalSizeRef.current.w > 0 && next.scale !== cameraRef.current.scale)
-        adjustedRef.current = true;
+      if (naturalSizeRef.current.w > 0 && next.scale !== cameraRef.current.scale) adjustedRef.current = true;
       scheduleCamera(next);
     },
     [scheduleCamera],
@@ -311,17 +305,8 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     const dy = event.clientY - drag.y;
     if (dx === 0 && dy === 0) return;
     dragRef.current = { x: event.clientX, y: event.clientY };
-    const next = panCamera(
-      cameraRef.current,
-      dx,
-      dy,
-      naturalSizeRef.current,
-      viewportSizeRef.current,
-    );
-    if (
-      naturalSizeRef.current.w > 0 &&
-      (next.x !== cameraRef.current.x || next.y !== cameraRef.current.y)
-    ) {
+    const next = panCamera(cameraRef.current, dx, dy, naturalSizeRef.current, viewportSizeRef.current);
+    if (naturalSizeRef.current.w > 0 && (next.x !== cameraRef.current.x || next.y !== cameraRef.current.y)) {
       adjustedRef.current = true;
     }
     scheduleCamera(next);
@@ -506,13 +491,7 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   );
 }
 
-export function ImagePreviewDialog({
-  request,
-  onClose,
-}: {
-  request: ImagePreviewRequest;
-  onClose: () => void;
-}) {
+export function ImagePreviewDialog({ request, onClose }: { request: ImagePreviewRequest; onClose: () => void }) {
   const { t } = useI18n();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
 
@@ -581,9 +560,7 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   return (
     <ImagePreviewContext.Provider value={open}>
       {children}
-      {request && (
-        <ImagePreviewDialog key={request.src} request={request} onClose={() => setRequest(null)} />
-      )}
+      {request && <ImagePreviewDialog key={request.src} request={request} onClose={() => setRequest(null)} />}
     </ImagePreviewContext.Provider>
   );
 }
@@ -607,14 +584,7 @@ interface ZoomableImageProps {
  * 点击打开全屏预览的图片。
  * 位于链接内的图片、或按住修饰键时交回浏览器原有行为；行内模式补上键盘可达性。
  */
-export function ZoomableImage({
-  src,
-  alt,
-  className,
-  imgStyle,
-  thumbnail = false,
-  imgProps,
-}: ZoomableImageProps) {
+export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false, imgProps }: ZoomableImageProps) {
   const { t } = useI18n();
   const openImagePreview = useImagePreview();
   const [insideLink, setInsideLink] = useState<boolean | null>(null);
@@ -644,13 +614,7 @@ export function ZoomableImage({
     );
     if (!clickable) return thumbnailImage;
     return (
-      <button
-        type="button"
-        className="message-image-button"
-        onClick={open}
-        title={label}
-        aria-label={label}
-      >
+      <button type="button" className="message-image-button" onClick={open} title={label} aria-label={label}>
         {thumbnailImage}
       </button>
     );
@@ -669,10 +633,7 @@ export function ZoomableImage({
       src={src}
       alt={alt ?? ""}
       loading={restProps.loading ?? "lazy"}
-      className={
-        [restProps.className, clickable ? className : undefined].filter(Boolean).join(" ") ||
-        undefined
-      }
+      className={[restProps.className, clickable ? className : undefined].filter(Boolean).join(" ") || undefined}
       style={imgStyle ?? restProps.style}
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}

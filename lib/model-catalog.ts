@@ -135,8 +135,7 @@ function providerMatches(entry: ModelCatalogEntry, providerHint: string): boolea
   const normalizedHint = normalizeProvider(providerHint);
   if (!normalizedHint) return false;
   return (
-    normalizeProvider(entry.providerId) === normalizedHint ||
-    normalizeProvider(entry.providerName) === normalizedHint
+    normalizeProvider(entry.providerId) === normalizedHint || normalizeProvider(entry.providerName) === normalizedHint
   );
 }
 
@@ -164,11 +163,7 @@ function validPrice(entry: ModelCatalogEntry): entry is ModelCatalogEntry & {
   return entry.cost.input !== undefined && entry.cost.output !== undefined;
 }
 
-function modeValue<T>(
-  values: readonly T[],
-  total: number,
-  keyFor: (value: T) => string,
-): T | undefined {
+function modeValue<T>(values: readonly T[], total: number, keyFor: (value: T) => string): T | undefined {
   if (values.length === 0 || total <= 0) return undefined;
   const groups = new Map<string, { value: T; count: number }>();
   for (const value of values) {
@@ -399,8 +394,7 @@ function matchRank(entry: ModelCatalogEntry, query: string, providerHint: string
   else if (id.includes(query) || name.includes(query)) rank = 4;
   else if (fullId.includes(query) || providerName.includes(query)) rank = 5;
 
-  if (rank < 20 && providerHint && (providerId === providerHint || providerName === providerHint))
-    rank -= 0.5;
+  if (rank < 20 && providerHint && (providerId === providerHint || providerName === providerHint)) rank -= 0.5;
   return rank;
 }
 

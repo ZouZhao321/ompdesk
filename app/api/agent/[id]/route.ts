@@ -75,9 +75,7 @@ export const POST = withRequestLog(
       return NextResponse.json(
         {
           error: error instanceof Error ? error.message : String(error),
-          ...(commandType === "prompt" && !promptAccepted
-            ? { code: "prompt_rejected", accepted: false }
-            : {}),
+          ...(commandType === "prompt" && !promptAccepted ? { code: "prompt_rejected", accepted: false } : {}),
         },
         { status: 500 },
       );

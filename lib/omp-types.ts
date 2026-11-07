@@ -17,14 +17,7 @@ export interface ContextUsage {
   tokens: number | null;
 }
 
-export type SlashCommandSource =
-  | "builtin"
-  | "extension"
-  | "prompt"
-  | "skill"
-  | "custom"
-  | "mcp_prompt"
-  | "file";
+export type SlashCommandSource = "builtin" | "extension" | "prompt" | "skill" | "custom" | "mcp_prompt" | "file";
 
 export interface SlashCommandInfo {
   name: string;
@@ -222,9 +215,7 @@ export interface AgentSessionLike {
    * its id and file, and the document becomes the summary that recent history
    * is kept against. Resolves to `undefined` when the handoff is cancelled.
    */
-  handoff(
-    customInstructions?: string,
-  ): Promise<{ document: string; savedPath?: string } | undefined>;
+  handoff(customInstructions?: string): Promise<{ document: string; savedPath?: string } | undefined>;
   setThinkingLevel(level: string | undefined, persist?: boolean): void;
   configuredThinkingLevel(): string | undefined;
   compact(customInstructions?: string): Promise<unknown>;
@@ -232,14 +223,8 @@ export interface AgentSessionLike {
   getLastAssistantText(): string | undefined;
   setAutoCompactionEnabled(enabled: boolean): void;
   setAutoRetryEnabled(enabled: boolean): void;
-  steer(
-    text: string,
-    images?: Array<{ type: "image"; data: string; mimeType: string }>,
-  ): Promise<void>;
-  followUp(
-    text: string,
-    images?: Array<{ type: "image"; data: string; mimeType: string }>,
-  ): Promise<void>;
+  steer(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
+  followUp(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
   readonly queuedMessageCount: number;
   getQueuedMessages(): { steering: readonly string[]; followUp: readonly string[] };
   clearQueue(): {
@@ -301,9 +286,7 @@ export interface AgentSessionLike {
   promptCustomMessage(
     message: {
       customType: string;
-      content:
-        | string
-        | Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
+      content: string | Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
       display?: boolean;
       details?: unknown;
       attribution?: "user" | "agent";

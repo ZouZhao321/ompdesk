@@ -221,14 +221,8 @@ export function GitChangesPanel({ cwd, onOpenFile, active = true, refreshKey = 0
               <span>{t("git.changedCount", { count: files.length })}</span>
               {files.length > 0 && (
                 <>
-                  <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)" }}>
-                    +{additions}
-                  </span>
-                  <span
-                    style={{ color: GIT_STATUS_COLORS.deleted, fontFamily: "var(--font-mono)" }}
-                  >
-                    -{deletions}
-                  </span>
+                  <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)" }}>+{additions}</span>
+                  <span style={{ color: GIT_STATUS_COLORS.deleted, fontFamily: "var(--font-mono)" }}>-{deletions}</span>
                 </>
               )}
             </>
@@ -292,9 +286,7 @@ export function GitChangesPanel({ cwd, onOpenFile, active = true, refreshKey = 0
         ) : files.length === 0 ? (
           <PanelMessage>{t("git.noChanges")}</PanelMessage>
         ) : (
-          files.map((file) => (
-            <ChangeRow key={file.filePath} status={file} cwd={cwd} onOpenFile={onOpenFile} />
-          ))
+          files.map((file) => <ChangeRow key={file.filePath} status={file} cwd={cwd} onOpenFile={onOpenFile} />)
         )}
       </div>
     </div>

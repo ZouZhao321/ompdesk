@@ -78,9 +78,6 @@ async function getRouteHandler(req: Request) {
     const recommendation = recommendModelCatalogPreset(entries, query, provider, baseUrl);
     return NextResponse.json({ models, recommendation, source: MODELS_DEV_URL });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 502 });
   }
 }

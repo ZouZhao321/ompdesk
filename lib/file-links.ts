@@ -46,8 +46,7 @@ function normalizeLocalPath(filePath: string): string {
 function isPathInside(candidate: string, root: string): boolean {
   const normalizedCandidate = normalizeLocalPath(candidate).replace(/\/+$/, "");
   const normalizedRoot = normalizeLocalPath(root).replace(/\/+$/, "");
-  const useCaseInsensitive =
-    /^[a-zA-Z]:\//.test(normalizedCandidate) || /^[a-zA-Z]:\//.test(normalizedRoot);
+  const useCaseInsensitive = /^[a-zA-Z]:\//.test(normalizedCandidate) || /^[a-zA-Z]:\//.test(normalizedRoot);
   const filePath = useCaseInsensitive ? normalizedCandidate.toLowerCase() : normalizedCandidate;
   const rootPath = useCaseInsensitive ? normalizedRoot.toLowerCase() : normalizedRoot;
   return filePath === rootPath || filePath.startsWith(`${rootPath}/`);
@@ -119,16 +118,12 @@ export function resolveLocalFileHref(
   if (!candidate) return null;
 
   const filePath = stripLineSuffix(normalizeLocalPath(candidate));
-  if (candidateKind === "relative" && relativeRoot && !isPathInside(filePath, relativeRoot))
-    return null;
+  if (candidateKind === "relative" && relativeRoot && !isPathInside(filePath, relativeRoot)) return null;
   return filePath;
 }
 
 /** Resolve a filesystem path without applying URL or source-location syntax. */
-export function resolveLocalFilePath(
-  filePath: string | undefined,
-  baseDir?: string,
-): string | null {
+export function resolveLocalFilePath(filePath: string | undefined, baseDir?: string): string | null {
   if (!filePath) return null;
 
   const windowsStyle =
@@ -147,8 +142,7 @@ export function resolveLocalFilePath(
     candidate = normalizedPath;
   } else if (normalizedPath.startsWith("/")) {
     const windowsRoot =
-      normalizedBase?.match(/^([a-zA-Z]:)(?:\/|$)/)?.[1] ??
-      normalizedBase?.match(/^(\/\/[^/]+\/[^/]+)(?:\/|$)/)?.[1];
+      normalizedBase?.match(/^([a-zA-Z]:)(?:\/|$)/)?.[1] ?? normalizedBase?.match(/^(\/\/[^/]+\/[^/]+)(?:\/|$)/)?.[1];
     candidate = windowsRoot ? `${windowsRoot}${normalizedPath}` : normalizedPath;
   } else {
     if (!normalizedBase) return null;

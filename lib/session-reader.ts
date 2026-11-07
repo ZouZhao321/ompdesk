@@ -1,33 +1,16 @@
-import {
-  SessionManager,
-  buildSessionContext as ompBuildSessionContext,
-  getAgentDir,
-} from "@oh-my-pi/pi-coding-agent";
+import { SessionManager, buildSessionContext as ompBuildSessionContext, getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { Tokenizer } from "@oh-my-pi/pi-agent-core";
 import type { AgentMessage as OmpAgentMessage } from "@oh-my-pi/pi-agent-core";
 import { calculatePromptTokens, hasContextTokenUsage } from "@oh-my-pi/pi-agent-core/compaction";
 import { closeSync, existsSync, openSync, readSync } from "fs";
 import { normalize as normalizePath } from "path";
-import type {
-  AgentMessage,
-  SessionEntry,
-  SessionHeader,
-  SessionInfo,
-  SessionContext,
-} from "./types";
+import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext } from "./types";
 import type { ContextUsage } from "./omp-types";
-import type {
-  SessionEntry as OmpSessionEntry,
-  SessionInfo as OmpSessionInfo,
-} from "@oh-my-pi/pi-coding-agent";
+import type { SessionEntry as OmpSessionEntry, SessionInfo as OmpSessionInfo } from "@oh-my-pi/pi-coding-agent";
 import { getOmpRuntime } from "./omp-runtime";
 import { normalizeToolCalls } from "./normalize";
 import { sessionPathKey } from "./session-path";
-import {
-  isUserSkillPrompt,
-  skillPromptCommandLabel,
-  type SkillPromptDetailsLike,
-} from "./slash-display";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
@@ -181,10 +164,7 @@ export async function listAllSessions(options: { force?: boolean } = {}): Promis
 
   // Coalescing dedup: concurrent callers share the same in-flight promise
   // only while it belongs to the current cache generation.
-  if (
-    globalThis.__ompSessionListPromise &&
-    globalThis.__ompSessionListPromiseGeneration === generation
-  ) {
+  if (globalThis.__ompSessionListPromise && globalThis.__ompSessionListPromiseGeneration === generation) {
     return globalThis.__ompSessionListPromise;
   }
 
@@ -270,11 +250,7 @@ export function cacheSessionPath(sessionId: string, filePath: string): void {
   const previousPathKey = previousPath ? sessionPathKey(previousPath) : undefined;
   const previousSessionId = reverseCache.get(pathKey);
   const previousOwnerPath = previousSessionId ? pathCache.get(previousSessionId) : undefined;
-  if (
-    previousPathKey &&
-    previousPathKey !== pathKey &&
-    reverseCache.get(previousPathKey) === sessionId
-  ) {
+  if (previousPathKey && previousPathKey !== pathKey && reverseCache.get(previousPathKey) === sessionId) {
     reverseCache.delete(previousPathKey);
   }
   if (
@@ -406,9 +382,7 @@ function collectDisplayEntries(
 }
 
 /** `models.default` as the UI's `{ provider, modelId }` pair. */
-function parseDefaultModel(
-  models: Record<string, string>,
-): { provider: string; modelId: string } | null {
+function parseDefaultModel(models: Record<string, string>): { provider: string; modelId: string } | null {
   const selector = models.default;
   if (!selector) return null;
   const slash = selector.indexOf("/");
@@ -425,15 +399,10 @@ export function buildSessionContext(
   for (const e of entries) byId.set(e.id, e);
 
   const ompEntries = entries as unknown as OmpSessionEntry[];
-  const ompCtx = ompBuildSessionContext(
-    ompEntries,
-    leafId,
-    byId as unknown as Map<string, OmpSessionEntry>,
-    {
-      transcript: true,
-      collapseCompactedHistory: true,
-    },
-  );
+  const ompCtx = ompBuildSessionContext(ompEntries, leafId, byId as unknown as Map<string, OmpSessionEntry>, {
+    transcript: true,
+    collapseCompactedHistory: true,
+  });
 
   // Convert the branch entries and their IDs together so fork/navigation
   // targets stay aligned with what the transcript renders.
@@ -498,11 +467,7 @@ export async function getHistoricalContextUsage(
   } catch {
     return undefined;
   }
-  if (
-    typeof contextWindowValue !== "number" ||
-    !Number.isFinite(contextWindowValue) ||
-    contextWindowValue <= 0
-  ) {
+  if (typeof contextWindowValue !== "number" || !Number.isFinite(contextWindowValue) || contextWindowValue <= 0) {
     return undefined;
   }
   const contextWindow = contextWindowValue;
@@ -548,10 +513,7 @@ export async function getHistoricalContextUsage(
   let anchorIndex = -1;
   for (let index = activeMessages.length - 1; index >= 0; index -= 1) {
     const message = activeMessages[index];
-    if (
-      message === anchor ||
-      (message.role === "assistant" && message.timestamp === anchor.timestamp)
-    ) {
+    if (message === anchor || (message.role === "assistant" && message.timestamp === anchor.timestamp)) {
       anchorIndex = index;
       break;
     }
@@ -589,11 +551,7 @@ function base64ImageInfo(block: unknown): { bytes: number; mime?: string } | nul
   if (typeof block.data === "string") {
     data = block.data;
     mime = typeof block.mimeType === "string" ? block.mimeType : undefined;
-  } else if (
-    isRecord(block.source) &&
-    block.source.type === "base64" &&
-    typeof block.source.data === "string"
-  ) {
+  } else if (isRecord(block.source) && block.source.type === "base64" && typeof block.source.data === "string") {
     data = block.source.data;
     mime = typeof block.source.media_type === "string" ? block.source.media_type : undefined;
   }

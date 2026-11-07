@@ -12,9 +12,7 @@ import { getSetting } from "@/lib/omp-settings";
 
 export const dynamic = "force-dynamic";
 
-async function requireAllowedCwd(
-  rawCwd: string | null,
-): Promise<{ cwd: string } | { error: NextResponse }> {
+async function requireAllowedCwd(rawCwd: string | null): Promise<{ cwd: string } | { error: NextResponse }> {
   if (!rawCwd) return { error: NextResponse.json({ error: "cwd required" }, { status: 400 }) };
   const cwd = resolve(rawCwd);
   const allowedRoots = await getAllowedFileRoots();
@@ -41,10 +39,7 @@ async function getRouteHandler(req: Request) {
     );
     return NextResponse.json({ roles: listModelRoles(settings, [...visible]) });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
 
@@ -93,8 +88,7 @@ export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
     selector = typeof body.selector === "string" ? body.selector.trim() : undefined;
 
     const runtime = await getOmpRuntime();
-    const settingsToWrite =
-      scope === "global" ? runtime.settings : await getSettingsForCwd(result.cwd);
+    const settingsToWrite = scope === "global" ? runtime.settings : await getSettingsForCwd(result.cwd);
     writeModelRole(settingsToWrite, role, selector || undefined, scope);
     await settingsToWrite.flush();
     invalidateModelsCache();
@@ -118,9 +112,6 @@ export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
       selector: selector || null,
       error,
     });
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 });

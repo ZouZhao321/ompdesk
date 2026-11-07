@@ -63,22 +63,14 @@ export function mergeRestoredSubmissionDraft(
   };
 }
 
-export function restoreDraftSubmission(
-  key: string,
-  text: string,
-  images?: ChatDraftImage[],
-): ChatDraft {
+export function restoreDraftSubmission(key: string, text: string, images?: ChatDraftImage[]): ChatDraft {
   const current = getDraft(key) ?? { value: "", images: [] };
   const restored = mergeRestoredSubmissionDraft(text, images, current.value, current.images);
   setDraft(key, restored);
   return restored;
 }
 
-export function rekeyDraft(
-  previousKey: string,
-  nextKey: string,
-  currentDraft?: ChatDraft,
-): ChatDraft | null {
+export function rekeyDraft(previousKey: string, nextKey: string, currentDraft?: ChatDraft): ChatDraft | null {
   if (previousKey === nextKey) return currentDraft ? cloneDraft(currentDraft) : getDraft(nextKey);
 
   const storedPrevious = getDraft(previousKey);

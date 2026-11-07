@@ -18,14 +18,8 @@ const {
   getUserMessageText,
   getUserMessageDraftImages,
 } = await jiti.import("./ChatInput.tsx");
-const {
-  clearDraft,
-  getDraft,
-  mergeRestoredSubmissionDraft,
-  mergeRestoredSubmissionText,
-  rekeyDraft,
-  setDraft,
-} = await jiti.import("../lib/draft-store.ts");
+const { clearDraft, getDraft, mergeRestoredSubmissionDraft, mergeRestoredSubmissionText, rekeyDraft, setDraft } =
+  await jiti.import("../lib/draft-store.ts");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 test("renders the upstream model error", () => {
@@ -53,10 +47,7 @@ test("renders enabledModels scope warnings", () => {
 
   assert.match(html, /Model scope warning/);
   assert.match(html, /ghost-gateway/);
-  assert.equal(
-    renderToStaticMarkup(React.createElement(ModelScopeWarningBanner, { warnings: [] })),
-    "",
-  );
+  assert.equal(renderToStaticMarkup(React.createElement(ModelScopeWarningBanner, { warnings: [] })), "");
 });
 
 test("keeps the model selector visible when a model error leaves no options", () => {
@@ -150,18 +141,12 @@ test("does not restore a historical message over a pending image attachment", ()
 
 test("restores a cleared submission using the queued React state", () => {
   let value = "failed submission";
-  const updates = [
-    () => "",
-    (current) => mergeRestoredSubmissionText("failed submission", current),
-  ];
+  const updates = [() => "", (current) => mergeRestoredSubmissionText("failed submission", current)];
 
   for (const update of updates) value = update(value);
 
   assert.equal(value, "failed submission");
-  assert.equal(
-    mergeRestoredSubmissionText("failed submission", "new draft"),
-    "failed submission\n\nnew draft",
-  );
+  assert.equal(mergeRestoredSubmissionText("failed submission", "new draft"), "failed submission\n\nnew draft");
   assert.equal(
     mergeRestoredSubmissionText("failed submission", "failed submission"),
     "failed submission\n\nfailed submission",
@@ -292,10 +277,7 @@ test("hides the context indicator before usage is available", () => {
 test("draws the input column from the shared transcript geometry", async () => {
   const source = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
   // 输入列与转写行盒共用一组版心常量；外层自带的内边距用同一个数，只加一次。
-  assert.match(
-    source,
-    /import \{ RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX \} from "@\/lib\/transcript-rail";/,
-  );
+  assert.match(source, /import \{ RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX \} from "@\/lib\/transcript-rail";/);
   assert.match(source, /padding: `0 \$\{RAIL_COLUMN_PADDING_PX\}px 8px`/);
   assert.match(source, /maxWidth: RAIL_COLUMN_WIDTH_PX, margin: "0 auto"/);
   assert.doesNotMatch(source, /maxWidth: 820\b/);
@@ -328,14 +310,8 @@ test("queues image attachments while the agent is running", () => {
     return html.slice(html.lastIndexOf("<button", titleIndex), html.indexOf(">", titleIndex) + 1);
   };
 
-  assert.doesNotMatch(
-    buttonTag('title="Interrupt the current run and inject this message now"'),
-    /disabled=""/,
-  );
-  assert.doesNotMatch(
-    buttonTag('title="Queue this message after the agent finishes"'),
-    /disabled=""/,
-  );
+  assert.doesNotMatch(buttonTag('title="Interrupt the current run and inject this message now"'), /disabled=""/);
+  assert.doesNotMatch(buttonTag('title="Queue this message after the agent finishes"'), /disabled=""/);
 });
 
 test("labels an image-only queued message", () => {

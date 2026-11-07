@@ -197,10 +197,7 @@ for (const [label, identity] of [
       if (url === "/api/agent/b") {
         return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r2" });
       }
-      assert.equal(
-        url,
-        "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=old-leaf",
-      );
+      assert.equal(url, "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=old-leaf");
       return {
         ok: true,
         json: () => {
@@ -233,11 +230,7 @@ for (const [label, identity] of [
     await reopening;
     assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
     assert.equal(h.memory.getSessionContinuation("b"), "runtime:r2");
-    assert.equal(
-      h.bindings.contextRequestRef.current,
-      1,
-      "same-transcript reopening keeps the context request number",
-    );
+    assert.equal(h.bindings.contextRequestRef.current, 1, "same-transcript reopening keeps the context request number");
     assert.deepEqual(requests, [
       {
         url: "/api/sessions/runtime%3Ar1/context?deferThinking=1&deferMedia=1&leafId=old-leaf",
@@ -260,28 +253,12 @@ for (const [label, identity] of [
     assert.equal(h.bindings.sessionIdRef.current, "b");
     assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
     assert.equal(h.memory.getSessionContinuation("b"), "runtime:r2");
-    assert.deepEqual(
-      [...h.storage],
-      reopened.storage,
-      "a stale context must not touch the stored continuation",
-    );
-    assert.deepEqual(
-      h.ui.Messages,
-      reopened.ui.Messages,
-      "a stale context must not replace the transcript",
-    );
+    assert.deepEqual([...h.storage], reopened.storage, "a stale context must not touch the stored continuation");
+    assert.deepEqual(h.ui.Messages, reopened.ui.Messages, "a stale context must not replace the transcript");
     assert.equal(h.ui.ActiveLeafId, null);
     assert.equal(h.bindings.activeLeafIdRef.current, null);
-    assert.deepEqual(
-      h.effects,
-      [["ActiveLeafId", null]],
-      "the stale navigation only rolls its own leaf marker back",
-    );
-    assert.equal(
-      h.commands.length,
-      commandsBefore,
-      "a stale navigation must not move the runtime leaf",
-    );
+    assert.deepEqual(h.effects, [["ActiveLeafId", null]], "the stale navigation only rolls its own leaf marker back");
+    assert.equal(h.commands.length, commandsBefore, "a stale navigation must not move the runtime leaf");
   });
 }
 
@@ -296,10 +273,7 @@ test("an owned expired runtime still clears its continuation and applies histori
   assert.deepEqual(h.ui.EntryIds, historical.context.entryIds);
   assert.deepEqual(h.ui.ContextUsage, historical.contextUsage);
   assert.ok(
-    h.effects.some(
-      ([kind, sessionId, runtimeId]) =>
-        kind === "identity" && sessionId === "b" && runtimeId === null,
-    ),
+    h.effects.some(([kind, sessionId, runtimeId]) => kind === "identity" && sessionId === "b" && runtimeId === null),
   );
 });
 
@@ -673,8 +647,7 @@ test("a deferred reload is replayed with its agent state read", async () => {
   h.bindings.fetch = async (url, options) => {
     if (String(url).startsWith("/api/agent/")) {
       // 命令带 init，运行态读没有：只统计后者。
-      if (options)
-        return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
+      if (options) return response({ success: true, data: {}, sessionId: "b", runtimeId: "runtime:r1" });
       stateRequests.push(String(url));
       return { ok: true, json: async () => ({ running: false }) };
     }
@@ -991,8 +964,7 @@ test("sends the branch command to the session id the load migrated to", async ()
 test("a failed branch command leaves a notice instead of failing silently", async () => {
   const h = harness();
   h.bindings.fetch = async (url) => {
-    if (String(url).startsWith("/api/agent/"))
-      return response({ error: "target branch is gone" }, 500);
+    if (String(url).startsWith("/api/agent/")) return response({ error: "target branch is gone" }, 500);
     return response(context("target branch"));
   };
 

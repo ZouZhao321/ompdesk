@@ -1,14 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  closeSync,
-  lstatSync,
-  openSync,
-  readFileSync,
-  readSync,
-  readdirSync,
-  realpathSync,
-  type Stats,
-} from "node:fs";
+import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, realpathSync, type Stats } from "node:fs";
 import path from "node:path";
 import { getLogsDir } from "@oh-my-pi/pi-utils/dirs";
 import type { LogEntry, LogFileInfo, LogLevelName, LogsResponse } from "./api-types";
@@ -164,10 +155,7 @@ function resolveLogFile(directory: string, name: string, pid: number): ResolvedL
 }
 
 /** List the current PID's log file and rotations, newest write first. */
-export function listLogFiles(
-  directory: string = getLogsDir(),
-  pid: number = process.pid,
-): LogFileInfo[] {
+export function listLogFiles(directory: string = getLogsDir(), pid: number = process.pid): LogFileInfo[] {
   let entries;
   try {
     entries = readdirSync(directory, { withFileTypes: true });
@@ -206,11 +194,7 @@ export function listLogFiles(
 }
 
 /** Parse one JSONL line into the panel's record shape, preserving unparseable text. */
-export function parseLogEntry(
-  raw: string,
-  offset: number,
-  length: number = Buffer.byteLength(raw),
-): LogEntry {
+export function parseLogEntry(raw: string, offset: number, length: number = Buffer.byteLength(raw)): LogEntry {
   const base = {
     offset,
     length,
@@ -322,13 +306,10 @@ export function readLogPage(options: ReadLogPageOptions = {}): LogsResponse {
   // the same thing when the new file has already grown past the old position.
   const reset =
     cursor > resolved.size ||
-    (cursor > 0 &&
-      typeof options.fingerprint === "string" &&
-      options.fingerprint !== resolved.fingerprint);
+    (cursor > 0 && typeof options.fingerprint === "string" && options.fingerprint !== resolved.fingerprint);
   const requestedStart = reset ? 0 : cursor;
   // Tail-first only applies to a fresh read; a cursor is always a line boundary.
-  const useTail =
-    !reset && cursor === 0 && options.tail === true && resolved.size > MAX_LOG_TAIL_BYTES;
+  const useTail = !reset && cursor === 0 && options.tail === true && resolved.size > MAX_LOG_TAIL_BYTES;
   const start = useTail ? resolved.size - MAX_LOG_TAIL_BYTES : requestedStart;
   const readLength = Math.min(resolved.size - start, MAX_LOG_PAGE_BYTES);
   const fingerprint = resolved.fingerprint;
@@ -437,10 +418,7 @@ export interface LogDownload {
 }
 
 /** Read a validated log file verbatim for the download action. */
-export function readLogDownload(
-  file: unknown,
-  options: { directory?: string; pid?: number } = {},
-): LogDownload {
+export function readLogDownload(file: unknown, options: { directory?: string; pid?: number } = {}): LogDownload {
   const directory = options.directory ?? getLogsDir();
   const pid = options.pid ?? process.pid;
   const name = validateLogFileName(file, pid);
@@ -517,10 +495,7 @@ export function parseLogsQuery(params: URLSearchParams): ParsedLogsQuery {
   const download = ["1", "true"].includes((params.get("download") ?? "").toLowerCase());
   const tail = ["1", "true"].includes((params.get("tail") ?? "").toLowerCase());
   const fingerprint = params.get("fingerprint");
-  if (
-    fingerprint !== null &&
-    (fingerprint.length === 0 || fingerprint.length > MAX_FINGERPRINT_LENGTH)
-  ) {
+  if (fingerprint !== null && (fingerprint.length === 0 || fingerprint.length > MAX_FINGERPRINT_LENGTH)) {
     throw new LogQueryError(400, "Invalid fingerprint");
   }
 

@@ -30,15 +30,7 @@ import type {
 } from "@/lib/settings-api";
 import styles from "./SettingsConfig.module.css";
 
-type SettingsSection =
-  | "models"
-  | "themes"
-  | "skills"
-  | "plugins"
-  | "mcp"
-  | "access"
-  | "logs"
-  | `settings:${string}`;
+type SettingsSection = "models" | "themes" | "skills" | "plugins" | "mcp" | "access" | "logs" | `settings:${string}`;
 
 interface SettingsConfigProps {
   cwd?: string | null;
@@ -224,9 +216,7 @@ function TextSetting({
       type={field.type === "secret" ? "password" : "text"}
       value={value}
       disabled={busy}
-      placeholder={
-        field.type === "secret" && field.configured ? t("settings.secretPlaceholder") : undefined
-      }
+      placeholder={field.type === "secret" && field.configured ? t("settings.secretPlaceholder") : undefined}
       onChange={(event) => setValue(event.target.value)}
       onBlur={() => {
         if (value !== persisted && (field.type !== "secret" || value.length > 0)) onSave(value);
@@ -288,9 +278,7 @@ function MultiSelectSetting({
 }) {
   const selected = Array.isArray(field.value) ? field.value : [];
   const toggle = (value: string) =>
-    onSave(
-      selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value],
-    );
+    onSave(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
   const move = (index: number, delta: number) => {
     const target = index + delta;
     if (target < 0 || target >= selected.length) return;
@@ -303,34 +291,16 @@ function MultiSelectSetting({
       {field.options?.map((option) => {
         const index = selected.indexOf(option.value);
         return (
-          <span
-            key={option.value}
-            className={styles.choice}
-            data-selected={index >= 0}
-            title={option.description}
-          >
-            <button
-              type="button"
-              className={styles.choiceToggle}
-              disabled={busy}
-              onClick={() => toggle(option.value)}
-            >
+          <span key={option.value} className={styles.choice} data-selected={index >= 0} title={option.description}>
+            <button type="button" className={styles.choiceToggle} disabled={busy} onClick={() => toggle(option.value)}>
               {option.label}
             </button>
             {field.ordered && index >= 0 && (
               <span className={styles.reorder}>
-                <button
-                  type="button"
-                  disabled={busy || index === 0}
-                  onClick={() => move(index, -1)}
-                >
+                <button type="button" disabled={busy || index === 0} onClick={() => move(index, -1)}>
                   ←
                 </button>
-                <button
-                  type="button"
-                  disabled={busy || index === selected.length - 1}
-                  onClick={() => move(index, 1)}
-                >
+                <button type="button" disabled={busy || index === selected.length - 1} onClick={() => move(index, 1)}>
                   →
                 </button>
               </span>
@@ -376,19 +346,13 @@ function SettingControl({
           description: option.description,
         }))}
         onChange={(value) =>
-          onSave(
-            typeof field.value === "number" || typeof field.defaultValue === "number"
-              ? Number(value)
-              : value,
-          )
+          onSave(typeof field.value === "number" || typeof field.defaultValue === "number" ? Number(value) : value)
         }
       />
     );
   }
-  if (field.type === "multiselect")
-    return <MultiSelectSetting field={field} busy={busy} onSave={onSave} />;
-  if (field.type === "providerLimits")
-    return <ProviderLimitsSetting field={field} busy={busy} onSave={onSave} />;
+  if (field.type === "multiselect") return <MultiSelectSetting field={field} busy={busy} onSave={onSave} />;
+  if (field.type === "providerLimits") return <ProviderLimitsSetting field={field} busy={busy} onSave={onSave} />;
   return <TextSetting field={field} busy={busy} onSave={onSave} />;
 }
 
@@ -497,16 +461,13 @@ export function SettingsConfig({
           body: JSON.stringify({ path: field.path, value }),
         });
         const result = (await response.json()) as { value?: SettingsValue; error?: string };
-        if (!response.ok || result.error)
-          throw new Error(result.error ?? `HTTP ${response.status}`);
+        if (!response.ok || result.error) throw new Error(result.error ?? `HTTP ${response.status}`);
         setSettings((current) =>
           current
             ? {
                 ...current,
                 fields: current.fields.map((item) =>
-                  item.path === field.path
-                    ? { ...item, value: result.value ?? value, configured: true }
-                    : item,
+                  item.path === field.path ? { ...item, value: result.value ?? value, configured: true } : item,
                 ),
               }
             : current,
@@ -551,15 +512,12 @@ export function SettingsConfig({
       return filterSettingFieldsByQuery(visibleFields, query, (field) => ({
         label: tOr(settingFieldLabelKey(field.path), field.label),
         description: tOr(settingFieldDescriptionKey(field.path), field.description),
-        group: field.group
-          ? tOr(settingGroupKey(field.tab, field.group), field.group)
-          : t("settings.groupUnspecified"),
+        group: field.group ? tOr(settingGroupKey(field.tab, field.group), field.group) : t("settings.groupUnspecified"),
       }));
     }
     if (!activeTab) return [];
     return visibleFields.filter(
-      (field) =>
-        field.tab === activeTab && !(activeTab === "appearance" && field.group === "Theme"),
+      (field) => field.tab === activeTab && !(activeTab === "appearance" && field.group === "Theme"),
     );
   }, [activeTab, query, t, tOr, visibleFields]);
 
@@ -592,18 +550,14 @@ export function SettingsConfig({
     const unspecified = "General";
     const orderedGroups = [
       ...groups,
-      ...fields
-        .map((field) => field.group ?? unspecified)
-        .filter((group) => !groups.includes(group)),
+      ...fields.map((field) => field.group ?? unspecified).filter((group) => !groups.includes(group)),
     ];
     return [...new Set(orderedGroups)].map((group) => {
       const groupFields = fields.filter((field) => (field.group ?? unspecified) === group);
       if (!groupFields.length) return null;
       const groupTab = tab || groupFields[0]?.tab || "";
       const title =
-        group === unspecified
-          ? t("settings.groupUnspecified")
-          : tOr(settingGroupKey(groupTab, group), group);
+        group === unspecified ? t("settings.groupUnspecified") : tOr(settingGroupKey(groupTab, group), group);
       return (
         <section className={styles.group} key={group}>
           <h3 className={styles.groupTitle}>{title}</h3>
@@ -614,11 +568,7 @@ export function SettingsConfig({
               label={tOr(settingFieldLabelKey(field.path), field.label)}
               description={tOr(settingFieldDescriptionKey(field.path), field.description)}
               busy={saving.has(field.path)}
-              error={
-                saveErrors[field.path]
-                  ? t("settings.saveFailed", { detail: saveErrors[field.path] })
-                  : undefined
-              }
+              error={saveErrors[field.path] ? t("settings.saveFailed", { detail: saveErrors[field.path] }) : undefined}
               onSave={(value) => void saveSetting(field, value)}
             />
           ))}
@@ -659,26 +609,14 @@ export function SettingsConfig({
                   <div className={styles.themeCardBody}>
                     <div className={styles.themeCardHeader}>
                       <span className={styles.themeSlot}>
-                        {t(
-                          mode === "dark"
-                            ? "settings.themes.darkMapping"
-                            : "settings.themes.lightMapping",
-                        )}
+                        {t(mode === "dark" ? "settings.themes.darkMapping" : "settings.themes.lightMapping")}
                       </span>
-                      {theme === mode && (
-                        <span className={styles.themeActive}>
-                          {t("settings.themes.activeOnWeb")}
-                        </span>
-                      )}
+                      {theme === mode && <span className={styles.themeActive}>{t("settings.themes.activeOnWeb")}</span>}
                     </div>
                     <SearchableSelect
                       value={String(field.value)}
                       disabled={saving.has(field.path)}
-                      ariaLabel={t(
-                        mode === "dark"
-                          ? "settings.themes.darkPicker"
-                          : "settings.themes.lightPicker",
-                      )}
+                      ariaLabel={t(mode === "dark" ? "settings.themes.darkPicker" : "settings.themes.lightPicker")}
                       options={(field.options ?? []).map((option) => ({
                         value: option.value,
                         label: option.label,
@@ -693,11 +631,7 @@ export function SettingsConfig({
                         style={{ marginTop: 8 }}
                         onClick={() => toggleTheme()}
                       >
-                        {t(
-                          mode === "dark"
-                            ? "settings.themes.darkPreview"
-                            : "settings.themes.lightPreview",
-                        )}
+                        {t(mode === "dark" ? "settings.themes.darkPreview" : "settings.themes.lightPreview")}
                       </button>
                     )}
                   </div>
@@ -707,10 +641,7 @@ export function SettingsConfig({
           </div>
           {renderFields(
             settings.fields.filter(
-              (field) =>
-                field.tab === "appearance" &&
-                field.group === "Theme" &&
-                !field.path.startsWith("theme."),
+              (field) => field.tab === "appearance" && field.group === "Theme" && !field.path.startsWith("theme."),
             ),
             ["Theme"],
             "appearance",
@@ -760,9 +691,7 @@ export function SettingsConfig({
     if (query.trim()) return renderGenericSettings();
     switch (section) {
       case "models":
-        return (
-          <ModelsConfig cwd={cwd} embedded onClose={close} onModelsChanged={onModelsChanged} />
-        );
+        return <ModelsConfig cwd={cwd} embedded onClose={close} onModelsChanged={onModelsChanged} />;
       case "themes":
         return renderThemeSection();
       case "skills":
@@ -807,12 +736,7 @@ export function SettingsConfig({
         if (event.target === event.currentTarget) close();
       }}
     >
-      <div
-        className={styles.window}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("common.settings")}
-      >
+      <div className={styles.window} role="dialog" aria-modal="true" aria-label={t("common.settings")}>
         <aside className={styles.sidebar}>
           <div className={styles.brand}>
             <div className={styles.eyebrow}>omp /settings</div>
@@ -822,13 +746,7 @@ export function SettingsConfig({
             </code>
           </div>
           <div className={styles.searchWrap}>
-            <svg
-              className={styles.searchIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg className={styles.searchIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="7" />
               <path d="m20 20-4-4" />
             </svg>
@@ -850,9 +768,7 @@ export function SettingsConfig({
                   className={styles.navButton}
                   data-active={!query && section === item.id}
                   disabled={item.requiresCwd && !cwd}
-                  title={
-                    item.requiresCwd && !cwd ? t("settings.requiresProject", { label }) : label
-                  }
+                  title={item.requiresCwd && !cwd ? t("settings.requiresProject", { label }) : label}
                   onClick={() => {
                     setQuery("");
                     setSection(item.id);
@@ -935,11 +851,7 @@ function McpSettings({
   useEffect(() => {
     void load();
   }, [load]);
-  const currentScope: McpScopeConfig | null = data
-    ? scope === "user"
-      ? data.user
-      : data.project
-    : null;
+  const currentScope: McpScopeConfig | null = data ? (scope === "user" ? data.user : data.project) : null;
   const server = currentScope?.servers[selected] ?? null;
   useEffect(() => {
     setName(server?.name ?? "");
@@ -959,9 +871,7 @@ function McpSettings({
       server?.editable === false
         ? servers
         : servers.map((item, index) =>
-            index === selected
-              ? { ...item, name, config: JSON.parse(json) as McpServerConfig }
-              : item,
+            index === selected ? { ...item, name, config: JSON.parse(json) as McpServerConfig } : item,
           );
     return updated
       .filter((item) => item.editable !== false)
@@ -1017,8 +927,7 @@ function McpSettings({
     if (!currentScope) return;
     let candidate = "new-server";
     let suffix = 2;
-    while (currentScope.servers.some((item) => item.name === candidate))
-      candidate = `new-server-${suffix++}`;
+    while (currentScope.servers.some((item) => item.name === candidate)) candidate = `new-server-${suffix++}`;
     const next = [
       ...currentScope.servers,
       {
@@ -1109,18 +1018,12 @@ function McpSettings({
                             data-on={item.enabled}
                             disabled={toggling === toggleKey}
                             aria-pressed={item.enabled}
-                            aria-label={t(
-                              item.enabled
-                                ? "settings.mcp.disableServer"
-                                : "settings.mcp.enableServer",
-                              { name: item.name },
-                            )}
-                            title={t(
-                              item.enabled
-                                ? "settings.mcp.disableServer"
-                                : "settings.mcp.enableServer",
-                              { name: item.name },
-                            )}
+                            aria-label={t(item.enabled ? "settings.mcp.disableServer" : "settings.mcp.enableServer", {
+                              name: item.name,
+                            })}
+                            title={t(item.enabled ? "settings.mcp.disableServer" : "settings.mcp.enableServer", {
+                              name: item.name,
+                            })}
                             onClick={() => void toggleServer(item)}
                           >
                             {toggling === toggleKey
@@ -1180,9 +1083,7 @@ function McpSettings({
                   <div className={styles.editorActions}>
                     <div>
                       {error && <div className={styles.error}>{error}</div>}
-                      <div className={styles.saveState}>
-                        {server.source?.path ?? currentScope?.path}
-                      </div>
+                      <div className={styles.saveState}>{server.source?.path ?? currentScope?.path}</div>
                     </div>
                     {server.editable !== false && (
                       <button

@@ -24,11 +24,7 @@ function assistantText(message: AssistantMessage): string {
  */
 export async function resolveCommentTranslationModel(): Promise<CommentTranslationModel | null> {
   const { modelRegistry, settings } = await getOmpRuntime();
-  const scope = await resolveVisibleModels(
-    modelRegistry,
-    getSetting<string[]>(settings, "enabledModels"),
-    settings,
-  );
+  const scope = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
   const selection = selectInitialModelScope(scope, {
     defaultModel: readDefaultModelRole(settings),
   });
@@ -59,8 +55,7 @@ export async function resolveCommentTranslationModel(): Promise<CommentTranslati
         );
         if (message.stopReason === "error" || message.stopReason === "aborted") {
           throw new Error(
-            message.errorMessage ??
-              (controller.signal.aborted ? "Model request timed out" : "Model request failed"),
+            message.errorMessage ?? (controller.signal.aborted ? "Model request timed out" : "Model request failed"),
           );
         }
         return assistantText(message);

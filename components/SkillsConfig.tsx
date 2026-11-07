@@ -38,15 +38,7 @@ function shortVersion(version?: string): string {
   return version ? version.slice(0, 8) : "unknown";
 }
 
-function Toggle({
-  enabled,
-  loading,
-  onToggle,
-}: {
-  enabled: boolean;
-  loading: boolean;
-  onToggle: () => void;
-}) {
+function Toggle({ enabled, loading, onToggle }: { enabled: boolean; loading: boolean; onToggle: () => void }) {
   const { t } = useI18n();
   return (
     <button
@@ -164,16 +156,8 @@ function SkillDetail({
             textAlign: "right",
           }}
         >
-          {!enabled && (
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              {t("i18n.hiddenButInvocable")}
-            </span>
-          )}
-          {saveError && (
-            <span style={{ fontSize: 12, color: "#f87171", overflowWrap: "anywhere" }}>
-              {saveError}
-            </span>
-          )}
+          {!enabled && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t("i18n.hiddenButInvocable")}</span>}
+          {saveError && <span style={{ fontSize: 12, color: "#f87171", overflowWrap: "anywhere" }}>{saveError}</span>}
         </div>
       </div>
 
@@ -319,12 +303,8 @@ function SkillDetail({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-        <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>
-          Description
-        </span>
-        <span style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>
-          {skill.description}
-        </span>
+        <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>Description</span>
+        <span style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>{skill.description}</span>
       </div>
     </div>
   );
@@ -410,8 +390,7 @@ function AddSkillPanel({
     [onInstalled, scope, cwd],
   );
 
-  const installPath =
-    scope === "global" ? "~/.claude/skills/" : `${shortenPath(cwd)}/.claude/skills/`;
+  const installPath = scope === "global" ? "~/.claude/skills/" : `${shortenPath(cwd)}/.claude/skills/`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -424,9 +403,7 @@ function AddSkillPanel({
           marginBottom: 20,
         }}
       >
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
-          {t("i18n.addSkill")}
-        </div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{t("i18n.addSkill")}</div>
 
         {/* Search row */}
         <div style={{ display: "flex", gap: 8 }}>
@@ -487,11 +464,7 @@ function AddSkillPanel({
                   if (s === "global" || projectResourcesLoaded) setScope(s);
                 }}
                 disabled={s === "project" && !projectResourcesLoaded}
-                title={
-                  s === "project" && !projectResourcesLoaded
-                    ? t("trust.projectScopeUnavailable")
-                    : undefined
-                }
+                title={s === "project" && !projectResourcesLoaded ? t("trust.projectScopeUnavailable") : undefined}
                 style={{
                   padding: "3px 10px",
                   border: "none",
@@ -523,11 +496,7 @@ function AddSkillPanel({
 
         {/* Errors */}
         {searchError && <div style={{ fontSize: 12, color: "#f87171" }}>{searchError}</div>}
-        {installError && (
-          <div style={{ fontSize: 12, color: "#f87171", wordBreak: "break-word" }}>
-            {installError}
-          </div>
-        )}
+        {installError && <div style={{ fontSize: 12, color: "#f87171", wordBreak: "break-word" }}>{installError}</div>}
       </div>
 
       {/* ── Results list ── */}
@@ -535,8 +504,7 @@ function AddSkillPanel({
         <div style={{ flex: 1, overflowY: "auto" }}>
           {results.map((r) => {
             const isInstalled =
-              installedPackages[scope].has(r.package) ||
-              newlyInstalledPkgs.has(`${scope}:${r.package}`);
+              installedPackages[scope].has(r.package) || newlyInstalledPkgs.has(`${scope}:${r.package}`);
             const isInstalling = installing === r.package;
             // split "owner/repo@skill" for cleaner display
             const atIdx = r.package.indexOf("@");
@@ -618,24 +586,13 @@ function AddSkillPanel({
                     fontWeight: 500,
                     borderRadius: 5,
                     border: "1px solid var(--border)",
-                    cursor:
-                      isInstalled || isInstalling || installing !== null
-                        ? "not-allowed"
-                        : "pointer",
+                    cursor: isInstalled || isInstalling || installing !== null ? "not-allowed" : "pointer",
                     background: isInstalled ? "rgba(34,197,94,0.1)" : "none",
-                    color: isInstalled
-                      ? "#16a34a"
-                      : isInstalling
-                        ? "var(--accent)"
-                        : "var(--text-muted)",
+                    color: isInstalled ? "#16a34a" : isInstalling ? "var(--accent)" : "var(--text-muted)",
                     transition: "color 0.12s",
                   }}
                 >
-                  {isInstalled
-                    ? `✓ ${t("i18n.installed")}`
-                    : isInstalling
-                      ? t("i18n.installing")
-                      : t("i18n.install")}
+                  {isInstalled ? `✓ ${t("i18n.installed")}` : isInstalling ? t("i18n.installing") : t("i18n.install")}
                 </button>
               </div>
             );
@@ -832,9 +789,7 @@ export function SkillsConfig({
         return;
       }
       setSkills((prev) =>
-        prev.map((s) =>
-          s.filePath === skill.filePath ? { ...s, disableModelInvocation: next } : s,
-        ),
+        prev.map((s) => (s.filePath === skill.filePath ? { ...s, disableModelInvocation: next } : s)),
       );
       if (next) {
         setDormantGroupsOpen((current) => ({
@@ -899,9 +854,7 @@ export function SkillsConfig({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
-              {t("common.skills")}
-            </span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("common.skills")}</span>
             <code
               style={{
                 fontSize: 11,
@@ -1011,18 +964,15 @@ export function SkillsConfig({
                     },
                     {
                       label: "project",
-                      matches: (skill: Skill) =>
-                        sourceLabel(skill) === "project" && !skill.install?.skillsShUrl,
+                      matches: (skill: Skill) => sourceLabel(skill) === "project" && !skill.install?.skillsShUrl,
                     },
                     {
                       label: "global / skills.sh",
-                      matches: (skill: Skill) =>
-                        sourceLabel(skill) === "global" && Boolean(skill.install?.skillsShUrl),
+                      matches: (skill: Skill) => sourceLabel(skill) === "global" && Boolean(skill.install?.skillsShUrl),
                     },
                     {
                       label: "global",
-                      matches: (skill: Skill) =>
-                        sourceLabel(skill) === "global" && !skill.install?.skillsShUrl,
+                      matches: (skill: Skill) => sourceLabel(skill) === "global" && !skill.install?.skillsShUrl,
                     },
                     {
                       label: "path",
@@ -1213,14 +1163,10 @@ export function SkillsConfig({
                 projectResourcesLoaded={projectResourcesLoaded}
                 installedPackages={{
                   global: new Set(
-                    skills
-                      .filter((skill) => skill.install?.scope === "global")
-                      .map((skill) => skill.install!.package),
+                    skills.filter((skill) => skill.install?.scope === "global").map((skill) => skill.install!.package),
                   ),
                   project: new Set(
-                    skills
-                      .filter((skill) => skill.install?.scope === "project")
-                      .map((skill) => skill.install!.package),
+                    skills.filter((skill) => skill.install?.scope === "project").map((skill) => skill.install!.package),
                   ),
                 }}
                 onInstalled={() => {
@@ -1235,12 +1181,8 @@ export function SkillsConfig({
                 onToggle={toggle}
                 toggling={toggling.has(selectedSkill.filePath)}
                 saveError={saveError}
-                updateStatus={
-                  updateKey(selectedSkill) ? updateStatuses[updateKey(selectedSkill)!] : undefined
-                }
-                checkingUpdate={
-                  updateKey(selectedSkill) ? checkingUpdates.has(updateKey(selectedSkill)!) : false
-                }
+                updateStatus={updateKey(selectedSkill) ? updateStatuses[updateKey(selectedSkill)!] : undefined}
+                checkingUpdate={updateKey(selectedSkill) ? checkingUpdates.has(updateKey(selectedSkill)!) : false}
                 updating={updatingSkill === updateKey(selectedSkill)}
                 updateError={updateError}
                 onCheckUpdate={() => void checkForUpdates(selectedSkill)}
@@ -1293,17 +1235,10 @@ export function SkillsConfig({
                 {checkingAll ? t("i18n.checking") : t("i18n.checkUpdates")}
               </button>
             )}
-            {Object.values(updateStatuses).filter((status) => status.state === "update-available")
-              .length > 0 && (
+            {Object.values(updateStatuses).filter((status) => status.state === "update-available").length > 0 && (
               <span style={{ fontSize: 12, color: "#d97706" }}>
-                {
-                  Object.values(updateStatuses).filter(
-                    (status) => status.state === "update-available",
-                  ).length
-                }{" "}
-                {Object.values(updateStatuses).filter(
-                  (status) => status.state === "update-available",
-                ).length === 1
+                {Object.values(updateStatuses).filter((status) => status.state === "update-available").length}{" "}
+                {Object.values(updateStatuses).filter((status) => status.state === "update-available").length === 1
                   ? t("i18n.update")
                   : t("i18n.updates")}
               </span>

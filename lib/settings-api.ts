@@ -6,13 +6,7 @@ export interface SettingsOption {
   description?: string;
 }
 
-export type SettingsFieldType =
-  | "boolean"
-  | "select"
-  | "text"
-  | "secret"
-  | "multiselect"
-  | "providerLimits";
+export type SettingsFieldType = "boolean" | "select" | "text" | "secret" | "multiselect" | "providerLimits";
 
 export interface SettingsField {
   path: string;

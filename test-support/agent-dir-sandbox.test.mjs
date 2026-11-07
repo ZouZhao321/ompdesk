@@ -11,8 +11,7 @@ import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { interopDefault: true });
-const { SandboxDirectoryCreateError, createAgentDirSandbox } =
-  await jiti.import("./agent-dir-sandbox.ts");
+const { SandboxDirectoryCreateError, createAgentDirSandbox } = await jiti.import("./agent-dir-sandbox.ts");
 
 /** `createAgentDirSandbox` 只用到 `after`；建目录阶段失败时它不该被调用。 */
 const unusedContext = {

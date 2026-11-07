@@ -11,12 +11,7 @@ import type { Settings } from "@oh-my-pi/pi-coding-agent";
 import type { AnyUiMetadata, SettingTab } from "@oh-my-pi/pi-tui/overlays/settings-defs";
 import type { SettingsFieldType } from "./settings-api";
 
-export {
-  SETTING_TABS,
-  TAB_GROUPS,
-  TAB_METADATA,
-  type SettingTab,
-} from "@oh-my-pi/pi-tui/overlays/settings-defs";
+export { SETTING_TABS, TAB_GROUPS, TAB_METADATA, type SettingTab } from "@oh-my-pi/pi-tui/overlays/settings-defs";
 
 export type SettingPath = string;
 
@@ -94,11 +89,9 @@ export function getSettingsFieldType(path: SettingPath): SettingsFieldType | nul
   if (!ui) return null;
   if (schemaType === "boolean") return "boolean";
   if (schemaType === "enum") return "select";
-  if (schemaType === "string")
-    return isCredential(path) ? "secret" : ui.options ? "select" : "text";
+  if (schemaType === "string") return isCredential(path) ? "secret" : ui.options ? "select" : "text";
   if (schemaType === "number") return ui.options ? "select" : null;
   if (schemaType === "array") return ui.options ? "multiselect" : null;
-  if (schemaType === "record")
-    return path === "providers.maxInFlightRequests" ? "providerLimits" : "text";
+  if (schemaType === "record") return path === "providers.maxInFlightRequests" ? "providerLimits" : "text";
   return null;
 }

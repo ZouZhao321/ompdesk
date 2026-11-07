@@ -1,9 +1,6 @@
 import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import {
-  resolveModelScope,
-  type ScopedModel,
-} from "@oh-my-pi/pi-coding-agent/config/model-resolver";
+import { resolveModelScope, type ScopedModel } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 
 /**
@@ -43,10 +40,7 @@ export interface InitialModelScopeResult {
   scopedModels: ScopedModel[];
 }
 
-function matchesModel(
-  model: { provider: string; id: string },
-  ref: { provider: string; modelId: string },
-): boolean {
+function matchesModel(model: { provider: string; id: string }, ref: { provider: string; modelId: string }): boolean {
   return model.provider === ref.provider && model.id === ref.modelId;
 }
 
@@ -124,13 +118,9 @@ export function selectInitialModelScope(
 ): InitialModelScopeResult {
   const requestedRef = options.requestedModel;
   const defaultRef = options.defaultModel;
-  const requested = requestedRef
-    ? scope.visible.find((model) => matchesModel(model, requestedRef))
-    : undefined;
+  const requested = requestedRef ? scope.visible.find((model) => matchesModel(model, requestedRef)) : undefined;
   if (requestedRef && !requested) {
-    throw new Error(
-      `Model is not available in the enabled scope: ${requestedRef.provider}/${requestedRef.modelId}`,
-    );
+    throw new Error(`Model is not available in the enabled scope: ${requestedRef.provider}/${requestedRef.modelId}`);
   }
 
   const requestedScoped = requested
@@ -141,9 +131,7 @@ export function selectInitialModelScope(
       )
     : undefined;
   const defaultScoped =
-    !requested && defaultRef
-      ? scope.scopedModels.find((scoped) => matchesModel(scoped.model, defaultRef))
-      : undefined;
+    !requested && defaultRef ? scope.scopedModels.find((scoped) => matchesModel(scoped.model, defaultRef)) : undefined;
   const fallbackScoped = !requested ? (defaultScoped ?? scope.scopedModels[0]) : undefined;
   const defaultVisible =
     !requested && !fallbackScoped && defaultRef

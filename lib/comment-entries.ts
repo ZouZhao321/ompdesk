@@ -180,11 +180,7 @@ function mergeLineComments(comments: RawComment[]): RawComment[] {
   const merged: RawComment[] = [];
   for (const comment of comments) {
     const last = merged[merged.length - 1];
-    if (
-      comment.kind === "line" &&
-      last?.kind === "line" &&
-      comment.startLine === last.endLine + 1
-    ) {
+    if (comment.kind === "line" && last?.kind === "line" && comment.startLine === last.endLine + 1) {
       last.endLine = comment.endLine;
       last.body += `\n${comment.body}`;
       continue;

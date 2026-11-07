@@ -54,8 +54,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const isStaticAsset =
-    url.pathname.startsWith("/_next/static/") || PRECACHE_URLS.includes(url.pathname);
+  const isStaticAsset = url.pathname.startsWith("/_next/static/") || PRECACHE_URLS.includes(url.pathname);
 
   if (isStaticAsset) {
     event.respondWith(cacheFirst(request));
@@ -65,8 +64,7 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const requestedUrl =
-    typeof event.notification.data?.url === "string" ? event.notification.data.url : "/";
+  const requestedUrl = typeof event.notification.data?.url === "string" ? event.notification.data.url : "/";
   let targetUrl = new URL("/", self.location.origin);
   try {
     const candidate = new URL(requestedUrl, self.location.origin);
@@ -90,8 +88,7 @@ async function focusOrOpenWindow(targetUrl) {
 
   for (const client of candidates) {
     try {
-      const targetClient =
-        client.url === targetUrl ? client : ((await client.navigate(targetUrl)) ?? client);
+      const targetClient = client.url === targetUrl ? client : ((await client.navigate(targetUrl)) ?? client);
       await targetClient.focus();
       return;
     } catch {

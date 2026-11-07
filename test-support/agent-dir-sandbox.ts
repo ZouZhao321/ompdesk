@@ -138,12 +138,7 @@ function activeAgentDirWithinSandbox(root: string): boolean {
   // 由真实路径解析归一，Windows 上再折叠大小写。否则经链接写成的活动目录会被判成
   // 在沙箱之外，删掉沙箱后活动目录就指向了已删除的路径。
   try {
-    return (
-      relativePathWithinNormalizedRoot(
-        comparableDirectory(root),
-        comparableDirectory(activeAgentDir),
-      ) !== null
-    );
+    return relativePathWithinNormalizedRoot(comparableDirectory(root), comparableDirectory(activeAgentDir)) !== null;
   } catch (error) {
     // 比较本身也要读文件系统（realpath），EACCES/EPERM/ELOOP 时比不出结论。此处只能
     // 保守：保留目录只会漏删，删掉却会让后续用例写进已删除的路径；抛出还会中断
@@ -187,8 +182,7 @@ function createSandboxRoot(options: AgentDirSandboxOptions): string {
   }
 
   try {
-    for (const dir of [RUNTIME_AGENT_DIR, ...options.dirs])
-      mkdirSync(join(root, dir), { recursive: true });
+    for (const dir of [RUNTIME_AGENT_DIR, ...options.dirs]) mkdirSync(join(root, dir), { recursive: true });
     return root;
   } catch (error) {
     try {
@@ -209,10 +203,7 @@ function createSandboxRoot(options: AgentDirSandboxOptions): string {
  * 短暂报 EBUSY——history.db 的句柄是模块级的，Windows 上关闭句柄到目录可删除之间
  * 有延迟——同样只记录。
  */
-export function createAgentDirSandbox(
-  t: SandboxCleanupHost,
-  options: AgentDirSandboxOptions,
-): AgentDirSandbox {
+export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSandboxOptions): AgentDirSandbox {
   const root = createSandboxRoot(options);
   const agentDir = join(root, RUNTIME_AGENT_DIR);
 

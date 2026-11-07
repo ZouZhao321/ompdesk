@@ -69,12 +69,7 @@ export class ClientLogValidationError extends Error {
   }
 }
 
-function requireStringField(
-  body: Record<string, unknown>,
-  field: string,
-  limit: number,
-  redact = false,
-): string {
+function requireStringField(body: Record<string, unknown>, field: string, limit: number, redact = false): string {
   const value = body[field];
   if (typeof value !== "string") {
     throw new ClientLogValidationError(400, `${field} must be a string`);
@@ -237,15 +232,11 @@ export interface ClientLogHandlerOptions {
 
 /** Build the ingestion handler. Exported so tests can inject limits and a clock. */
 export function createClientLogHandler(options: ClientLogHandlerOptions = {}) {
-  const limiter =
-    options.limiter ??
-    new SlidingWindowLimiter(CLIENT_ERROR_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
+  const limiter = options.limiter ?? new SlidingWindowLimiter(CLIENT_ERROR_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
   const addressLimiter =
-    options.addressLimiter ??
-    new SlidingWindowLimiter(CLIENT_ERROR_ADDRESS_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
+    options.addressLimiter ?? new SlidingWindowLimiter(CLIENT_ERROR_ADDRESS_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS);
   const globalLimiter =
-    options.globalLimiter ??
-    new SlidingWindowLimiter(CLIENT_ERROR_GLOBAL_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS, 1);
+    options.globalLimiter ?? new SlidingWindowLimiter(CLIENT_ERROR_GLOBAL_RATE_LIMIT, CLIENT_ERROR_RATE_WINDOW_MS, 1);
   const now = options.now ?? (() => Date.now());
 
   return async function handleClientLog(request: Request): Promise<Response> {

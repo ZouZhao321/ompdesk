@@ -6,11 +6,7 @@
  * 路由层负责把它接到真实的运行时模型上。
  */
 import { commentEntryKey, normalizeCommentText, type CommentLanguage } from "./comment-entries";
-import {
-  readCommentDictionary,
-  saveCommentTranslation,
-  type CommentTranslationRecord,
-} from "./comment-dictionary";
+import { readCommentDictionary, saveCommentTranslation, type CommentTranslationRecord } from "./comment-dictionary";
 import { validateTranslation, type ProtectedFragment } from "./comment-translation-validation";
 
 /** 勾选条目的最小输入：只有键的原料与语言，不带文件内容。 */

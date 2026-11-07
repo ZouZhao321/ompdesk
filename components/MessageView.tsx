@@ -9,11 +9,7 @@ import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
-import {
-  getAssistantErrorMessage,
-  isHiddenAssistantBlock,
-  thinkingDisplayState,
-} from "@/lib/message-display";
+import { getAssistantErrorMessage, isHiddenAssistantBlock, thinkingDisplayState } from "@/lib/message-display";
 import { useDisplaySettings } from "@/hooks/useDisplaySettings";
 import {
   planDeferredContent,
@@ -25,11 +21,7 @@ import {
 } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
-import {
-  isUserSkillPrompt,
-  skillPromptCommandLabel,
-  type SkillPromptDetailsLike,
-} from "@/lib/slash-display";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import type {
@@ -78,10 +70,7 @@ function isLowSurrogate(codeUnit: number): boolean {
   return codeUnit >= 0xdc00 && codeUnit <= 0xdfff;
 }
 
-function estimateUpdatedTokens(
-  previous: TokenEstimateCacheEntry | undefined,
-  text: string,
-): number {
+function estimateUpdatedTokens(previous: TokenEstimateCacheEntry | undefined, text: string): number {
   if (!previous || !text.startsWith(previous.text)) return estimateTokens(text);
 
   let baseTokens = previous.tokens;
@@ -118,11 +107,7 @@ function formatMessageBytes(n: number): string {
  * MarkdownBody with an oversized-content guard: huge messages render as a
  * click-to-reveal plain-text <pre> instead of running the markdown pipeline.
  */
-function SafeMarkdownBody({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<typeof MarkdownBody>) {
+function SafeMarkdownBody({ children, className, ...props }: React.ComponentProps<typeof MarkdownBody>) {
   const { t } = useI18n();
   const [showRaw, setShowRaw] = useState(false);
 
@@ -157,10 +142,7 @@ function SafeMarkdownBody({
     );
   }
   return (
-    <div
-      className={className}
-      style={{ maxHeight: 420, overflow: "auto", fontSize: 12, lineHeight: 1.5 }}
-    >
+    <div className={className} style={{ maxHeight: 420, overflow: "auto", fontSize: 12, lineHeight: 1.5 }}>
       <pre
         style={{
           margin: 0,
@@ -181,11 +163,7 @@ function SafeMarkdownBody({
 // push the conversation off screen; overflow scrolls inside the bubble.
 const USER_BUBBLE_MAX_HEIGHT = 300;
 
-function loadThinkingContent(
-  sessionId: string,
-  entryId: string,
-  blockIndex: number,
-): Promise<string> {
+function loadThinkingContent(sessionId: string, entryId: string, blockIndex: number): Promise<string> {
   const key = `${sessionId}:${entryId}:${blockIndex}`;
   const cached = thinkingContentCache.get(key);
   if (cached) {
@@ -251,9 +229,7 @@ function formatTime(ts?: number): string | null {
   const d = new Date(ts);
   const now = new Date();
   const isToday =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
+    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
   const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   if (isToday) return time;
   const date = d.toLocaleDateString([], {
@@ -271,10 +247,7 @@ function haveSameRelevantToolResults(
 ): boolean {
   if (previous === next || message.role !== "assistant") return true;
   for (const block of (message as AssistantMessage).content ?? []) {
-    if (
-      block.type === "toolCall" &&
-      previous?.get(block.toolCallId) !== next?.get(block.toolCallId)
-    ) {
+    if (block.type === "toolCall" && previous?.get(block.toolCallId) !== next?.get(block.toolCallId)) {
       return false;
     }
   }
@@ -355,12 +328,7 @@ export const MessageView = memo(
         );
       }
       return (
-        <CustomMessageView
-          message={message as CustomMessage}
-          cwd={cwd}
-          onOpenFile={onOpenFile}
-          sessionId={sessionId}
-        />
+        <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />
       );
     }
     if (message.role === "bashExecution") {
@@ -432,9 +400,7 @@ function UserMessageView({
           .join("\n");
 
   const imageBlocks: ImageContent[] =
-    typeof message.content === "string"
-      ? []
-      : message.content.filter((b): b is ImageContent => b.type === "image");
+    typeof message.content === "string" ? [] : message.content.filter((b): b is ImageContent => b.type === "image");
 
   const time = formatTime(message.timestamp);
   const canFork = !!entryId && !!onFork;
@@ -471,9 +437,7 @@ function UserMessageView({
           }}
         >
           {imageBlocks.length > 0 && (
-            <div
-              style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: content ? 8 : 0 }}
-            >
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: content ? 8 : 0 }}>
               {imageBlocks.map((img, i) => {
                 // lib/types.ts ImageContent uses {source:{type,data,media_type,url}}
                 // pi-ai on-disk format uses flat {data, mimeType} — handle both
@@ -505,12 +469,7 @@ function UserMessageView({
             </div>
           )}
           {content && (
-            <SafeMarkdownBody
-              className="markdown-user-message"
-              cwd={cwd}
-              onOpenFile={onOpenFile}
-              sessionId={sessionId}
-            >
+            <SafeMarkdownBody className="markdown-user-message" cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId}>
               {content}
             </SafeMarkdownBody>
           )}
@@ -746,10 +705,7 @@ function AssistantMessageView({
     () =>
       (message.content ?? [])
         .map((block, originalIndex) => ({ block, originalIndex }))
-        .filter(
-          ({ block }) =>
-            !isHiddenAssistantBlock(block, { isStreaming, hideThinking: hideThinkingBlock }),
-        ),
+        .filter(({ block }) => !isHiddenAssistantBlock(block, { isStreaming, hideThinking: hideThinkingBlock })),
     [message.content, isStreaming, hideThinkingBlock],
   );
   const blocks = useMemo(() => blockItems.map(({ block }) => block), [blockItems]);
@@ -841,8 +797,7 @@ function AssistantMessageView({
 
       // Record start time for each block the first time we see it
       items.forEach(({ originalIndex }) => {
-        if (!blockStartTimesRef.current.has(originalIndex))
-          blockStartTimesRef.current.set(originalIndex, now);
+        if (!blockStartTimesRef.current.has(originalIndex)) blockStartTimesRef.current.set(originalIndex, now);
       });
 
       // When a non-last block has a successor already started, finalise its duration
@@ -875,11 +830,7 @@ function AssistantMessageView({
   if (blocks.length === 0 && !isStreaming && !providerError) return null;
 
   return (
-    <div
-      style={{ marginBottom: 16 }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <div style={{ marginBottom: 16 }} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       {/* Model label */}
       <div
         style={{
@@ -893,9 +844,7 @@ function AssistantMessageView({
       >
         {message.provider && (
           <span>
-            {modelNames?.[`${message.provider}:${message.model}`] ??
-              modelNames?.[message.model] ??
-              message.model}
+            {modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}
           </span>
         )}
         {isStreaming &&
@@ -934,14 +883,7 @@ function AssistantMessageView({
                     </span>
                     {tps !== null &&
                       (() => {
-                        const bg =
-                          tps >= 50
-                            ? "#53b3cb"
-                            : tps >= 30
-                              ? "#9bc53d"
-                              : tps >= 15
-                                ? "#f9c22e"
-                                : "#e01a4f";
+                        const bg = tps >= 50 ? "#53b3cb" : tps >= 30 ? "#9bc53d" : tps >= 15 ? "#f9c22e" : "#e01a4f";
                         return (
                           <span
                             style={{
@@ -1008,9 +950,7 @@ function AssistantMessageView({
         </div>
       )}
 
-      {writtenFiles && writtenFiles.length > 0 && (
-        <TurnWrittenFiles files={writtenFiles} onOpenFile={onOpenFile} />
-      )}
+      {writtenFiles && writtenFiles.length > 0 && <TurnWrittenFiles files={writtenFiles} onOpenFile={onOpenFile} />}
 
       <div
         style={{
@@ -1171,12 +1111,7 @@ function TextBlock({
   sessionId?: string;
 }) {
   return (
-    <SafeMarkdownBody
-      isStreaming={isStreaming}
-      cwd={cwd}
-      onOpenFile={onOpenFile}
-      sessionId={sessionId}
-    >
+    <SafeMarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId}>
       {block.text}
     </SafeMarkdownBody>
   );
@@ -1236,12 +1171,8 @@ function ThinkingBlock({
 }) {
   const { t } = useI18n();
   const viewKey = thinkingViewKey(sessionId, entryId, turnAnchorEntryId, blockIndex);
-  const [content, setContent] = useState<string | null>(() =>
-    block.deferred ? readThinkingContent(viewKey) : null,
-  );
-  const [loading, setLoading] = useState(
-    () => block.deferred === true && readThinkingContent(viewKey) === null,
-  );
+  const [content, setContent] = useState<string | null>(() => (block.deferred ? readThinkingContent(viewKey) : null));
+  const [loading, setLoading] = useState(() => block.deferred === true && readThinkingContent(viewKey) === null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1318,9 +1249,7 @@ function ThinkingBlock({
           <span className="markdown-thinking-status">{t("chat.thinking")}</span>
         )}
       </div>
-      {duration !== undefined && hasText && (
-        <span className="markdown-thinking-duration">{duration}s</span>
-      )}
+      {duration !== undefined && hasText && <span className="markdown-thinking-duration">{duration}s</span>}
     </div>
   );
 }
@@ -1377,11 +1306,7 @@ function ToolCallBlock({
   if (isBashTool) {
     return (
       <ConsoleOutputPreview
-        command={
-          isRecord(block.input) && typeof block.input.command === "string"
-            ? block.input.command
-            : ""
-        }
+        command={isRecord(block.input) && typeof block.input.command === "string" ? block.input.command : ""}
         output={resultText ?? ""}
         pending={!result}
         isError={isError}
@@ -1439,10 +1364,7 @@ function ToolCallCard({
   // 输入序列化与 diff 统计是整段转写里最贵的计算，按引用收住：条目因展开状态、
   // 延迟正文或其他无关状态重渲染时不再重算。
   const inputStr = useMemo(() => JSON.stringify(block.input, null, 2), [block.input]);
-  const resultDiff = useMemo(
-    () => (result && !result.isError ? getResultDiff(result) : null),
-    [result],
-  );
+  const resultDiff = useMemo(() => (result && !result.isError ? getResultDiff(result) : null), [result]);
   const diffStats = useMemo(() => {
     if (!resultDiff) return null;
     let added = 0;
@@ -1454,8 +1376,7 @@ function ToolCallCard({
     return { added, removed };
   }, [resultDiff]);
   const headerPreview = useMemo(() => getToolPreview(block), [block]);
-  const resultIsEmpty =
-    resultText === null ? false : resultText.trim() === "(no output)" || resultText.trim() === "";
+  const resultIsEmpty = resultText === null ? false : resultText.trim() === "(no output)" || resultText.trim() === "";
   const isError = result?.isError ?? false;
   const hasStructuredPreview = Boolean(resultDiff);
 
@@ -1470,9 +1391,7 @@ function ToolCallCard({
       }}
     >
       <button
-        onClick={() =>
-          transcriptViewState.toggleExpanded(sessionId, anchorEntryId, part, defaultExpanded)
-        }
+        onClick={() => transcriptViewState.toggleExpanded(sessionId, anchorEntryId, part, defaultExpanded)}
         aria-expanded={expanded}
         className="tool-call-toggle"
         style={{
@@ -1579,9 +1498,7 @@ function ToolCallCard({
         </div>
       )}
 
-      {result && isError && (
-        <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError />
-      )}
+      {result && isError && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError />}
 
       {expanded && !hasStructuredPreview && (
         <pre
@@ -1593,9 +1510,7 @@ function ToolCallCard({
             lineHeight: 1.5,
             overflow: "auto",
             background: "var(--bg-subtle)",
-            borderTop: isError
-              ? "1px solid rgba(248,113,113,0.25)"
-              : "1px solid rgba(34,197,94,0.2)",
+            borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
           }}
@@ -1676,8 +1591,7 @@ function getToolIconKind(toolName: string): ToolIconKind {
     toolNameHasPart(normalized, "fetch")
   )
     return "browser";
-  if (toolNameHasPart(normalized, "image") || toolNameHasPart(normalized, "inspect_image"))
-    return "image";
+  if (toolNameHasPart(normalized, "image") || toolNameHasPart(normalized, "inspect_image")) return "image";
   return "generic";
 }
 
@@ -1826,22 +1740,13 @@ interface TodoPreviewPhase {
   tasks: TodoPreviewTask[];
 }
 
-function getTodoPreviewPhases(
-  block: ToolCallContent,
-  result?: ToolResultMessage,
-): TodoPreviewPhase[] | null {
+function getTodoPreviewPhases(block: ToolCallContent, result?: ToolResultMessage): TodoPreviewPhase[] | null {
   const details = result?.details;
   if (isRecord(details) && Array.isArray(details.phases)) {
     const phases = details.phases.flatMap((phase): TodoPreviewPhase[] => {
-      if (!isRecord(phase) || typeof phase.name !== "string" || !Array.isArray(phase.tasks))
-        return [];
+      if (!isRecord(phase) || typeof phase.name !== "string" || !Array.isArray(phase.tasks)) return [];
       const tasks = phase.tasks.flatMap((task): TodoPreviewTask[] => {
-        if (
-          !isRecord(task) ||
-          typeof task.content !== "string" ||
-          !isTodoPreviewStatus(task.status)
-        )
-          return [];
+        if (!isRecord(task) || typeof task.content !== "string" || !isTodoPreviewStatus(task.status)) return [];
         return [
           {
             content: task.content,
@@ -1858,8 +1763,7 @@ function getTodoPreviewPhases(
   const input = block.input;
   if (!isRecord(input) || !Array.isArray(input.list)) return null;
   const phases = input.list.flatMap((phase): TodoPreviewPhase[] => {
-    if (!isRecord(phase) || typeof phase.phase !== "string" || !Array.isArray(phase.items))
-      return [];
+    if (!isRecord(phase) || typeof phase.phase !== "string" || !Array.isArray(phase.items)) return [];
     const tasks = phase.items
       .filter((item): item is string => typeof item === "string")
       .map((content) => ({ content, status: "pending" as const }));
@@ -1888,20 +1792,8 @@ function TodoChecklistPreview({ phases }: { phases: TodoPreviewPhase[] }) {
   return (
     <div className="todo-checklist-preview" role="list" aria-label={`Todo ${totalTasks} tasks`}>
       <div className="todo-checklist-header">
-        <svg
-          className="todo-checklist-icon"
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M5.5 3.25h7M5.5 7h7M5.5 10.75h7"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-          />
+        <svg className="todo-checklist-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M5.5 3.25h7M5.5 7h7M5.5 10.75h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
           <path
             d="m1.5 3.1 1 1 1.7-1.9M1.5 6.85l1 1 1.7-1.9M1.5 10.6l1 1 1.7-1.9"
             stroke="currentColor"
@@ -1951,19 +1843,13 @@ function TodoChecklistRow({ task }: { task: TodoPreviewTask }) {
           : "is-pending";
 
   return (
-    <div
-      role="listitem"
-      aria-label={`${task.status}: ${task.content}`}
-      className={`todo-checklist-row ${statusClass}`}
-    >
+    <div role="listitem" aria-label={`${task.status}: ${task.content}`} className={`todo-checklist-row ${statusClass}`}>
       <span aria-hidden="true" className="todo-checklist-marker">
         {marker}
       </span>
       <span className="todo-checklist-content">
         {task.content}
-        {blocked && task.blocker ? (
-          <span className="todo-checklist-blocker"> ({task.blocker})</span>
-        ) : null}
+        {blocked && task.blocker ? <span className="todo-checklist-blocker"> ({task.blocker})</span> : null}
       </span>
     </div>
   );
@@ -2065,17 +1951,13 @@ const ConsoleOutputPreview = memo(function ConsoleOutputPreview({
         <div className="shell-output-divider">
           <span className="shell-output-label">Output</span>
           {statusLabel && (
-            <span
-              className={`shell-output-status${isError ? " is-error" : pending ? " is-pending" : ""}`}
-            >
+            <span className={`shell-output-status${isError ? " is-error" : pending ? " is-pending" : ""}`}>
               {statusLabel}
             </span>
           )}
         </div>
         <div className="shell-output-body" aria-live={pending ? "polite" : undefined}>
-          {outputLines.length === 0 && !pending && (
-            <span className="shell-output-empty">{t("i18n.noOutput")}</span>
-          )}
+          {outputLines.length === 0 && !pending && <span className="shell-output-empty">{t("i18n.noOutput")}</span>}
           {lineElements}
           {pending && (
             <span className="shell-output-pending" aria-label={t("chat.runningCommand")}>
@@ -2191,8 +2073,7 @@ function SplitDiffCellView({ cell, side }: { cell: SplitDiffCell; side: "left" |
           ? "var(--bg-subtle)"
           : "transparent";
   const marker = cell.type === "added" ? "+" : cell.type === "removed" ? "-" : " ";
-  const markerColor =
-    cell.type === "added" ? "#22c55e" : cell.type === "removed" ? "#f87171" : "var(--text-dim)";
+  const markerColor = cell.type === "added" ? "#22c55e" : cell.type === "removed" ? "#f87171" : "var(--text-dim)";
 
   return (
     <div
@@ -2305,9 +2186,7 @@ function PatchTextView({ text }: { text: string }) {
             >
               {i + 1}
             </span>
-            <span
-              style={{ padding: "0 10px", whiteSpace: "pre-wrap", overflowWrap: "anywhere", color }}
-            >
+            <span style={{ padding: "0 10px", whiteSpace: "pre-wrap", overflowWrap: "anywhere", color }}>
               {line || "\u00a0"}
             </span>
           </div>
@@ -2334,15 +2213,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function PairedResult({
-  text,
-  isEmpty,
-  isError,
-}: {
-  text: string;
-  isEmpty: boolean;
-  isError: boolean;
-}) {
+function PairedResult({ text, isEmpty, isError }: { text: string; isEmpty: boolean; isError: boolean }) {
   const { t } = useI18n();
   return (
     <div
@@ -2400,14 +2271,8 @@ function CompactionMessageView({ message }: { message: CustomMessage }) {
             color: "var(--text-muted)",
           }}
         >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>
-            compaction
-          </span>
-          {time && (
-            <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>
-              {time}
-            </span>
-          )}
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>compaction</span>
+          {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
         </div>
 
         <div style={{ padding: "11px 13px 12px" }}>
@@ -2426,29 +2291,18 @@ function CompactionMessageView({ message }: { message: CustomMessage }) {
             {t("i18n.compactionDescription")}
           </div>
           {parsedSummary.body ? (
-            <MarkdownBody className="markdown-compaction-message">
-              {parsedSummary.body}
-            </MarkdownBody>
+            <MarkdownBody className="markdown-compaction-message">{parsedSummary.body}</MarkdownBody>
           ) : (
             <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.noSummary")}</span>
           )}
-          <CompactionFileMetadata
-            readFiles={parsedSummary.readFiles}
-            modifiedFiles={parsedSummary.modifiedFiles}
-          />
+          <CompactionFileMetadata readFiles={parsedSummary.readFiles} modifiedFiles={parsedSummary.modifiedFiles} />
         </div>
       </div>
     </div>
   );
 }
 
-function CompactionFileMetadata({
-  readFiles,
-  modifiedFiles,
-}: {
-  readFiles: string[];
-  modifiedFiles: string[];
-}) {
+function CompactionFileMetadata({ readFiles, modifiedFiles }: { readFiles: string[]; modifiedFiles: string[] }) {
   const { t } = useI18n();
   const total = readFiles.length + modifiedFiles.length;
   if (total === 0) return null;
@@ -2459,12 +2313,8 @@ function CompactionFileMetadata({
 
   return (
     <details className="compaction-file-details">
-      <summary className="compaction-file-summary">
-        {t("i18n.fileContext", { details: parts.join(", ") })}
-      </summary>
-      {modifiedFiles.length > 0 && (
-        <CompactionFileList title={t("i18n.modifiedFiles")} files={modifiedFiles} />
-      )}
+      <summary className="compaction-file-summary">{t("i18n.fileContext", { details: parts.join(", ") })}</summary>
+      {modifiedFiles.length > 0 && <CompactionFileList title={t("i18n.modifiedFiles")} files={modifiedFiles} />}
       {readFiles.length > 0 && <CompactionFileList title={t("i18n.readFiles")} files={readFiles} />}
     </details>
   );
@@ -2506,9 +2356,7 @@ function SkillPromptMessageView({
   const images = getMessageImages(message.content);
 
   return (
-    <div
-      style={{ marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}
-    >
+    <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "85%" }}>
         <div
           style={{
@@ -2605,9 +2453,7 @@ function SkillPromptMessageView({
                   {body}
                 </SafeMarkdownBody>
               ) : (
-                <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
-                  {t("i18n.noMessage")}
-                </span>
+                <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.noMessage")}</span>
               )}
             </div>
           )}
@@ -2681,23 +2527,15 @@ function CustomMessageView({
             {title}
           </span>
           {isHiddenDisplay && (
-            <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
-              {t("i18n.hiddenExtensionMessage")}
-            </span>
+            <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("i18n.hiddenExtensionMessage")}</span>
           )}
-          {time && (
-            <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>
-              {time}
-            </span>
-          )}
+          {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
         </div>
 
         {contentExpanded ? (
           <div style={{ padding: "6px 9px" }}>
             {images.length > 0 && (
-              <div
-                style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: text ? 8 : 0 }}
-              >
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: text ? 8 : 0 }}>
                 {images.map((img, i) => {
                   const src = imageSource(img);
                   if (!src) return null;
@@ -2720,12 +2558,7 @@ function CustomMessageView({
               </div>
             )}
             {text ? (
-              <MarkdownBody
-                className="markdown-custom-message"
-                cwd={cwd}
-                onOpenFile={onOpenFile}
-                sessionId={sessionId}
-              >
+              <MarkdownBody className="markdown-custom-message" cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId}>
                 {text}
               </MarkdownBody>
             ) : (
@@ -2806,27 +2639,26 @@ function CustomMessageView({
           )}
         </div>
 
-        {hasDetails &&
-          ((isHiddenDisplay && contentExpanded) || (!isHiddenDisplay && detailsExpanded)) && (
-            <pre
-              style={{
-                margin: 0,
-                padding: "9px 10px",
-                borderTop: "1px solid var(--border)",
-                background: "var(--bg)",
-                color: "var(--text-muted)",
-                fontSize: 12,
-                lineHeight: 1.5,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                maxHeight: 360,
-                overflow: "auto",
-                fontFamily: "var(--font-mono)",
-              }}
-            >
-              {detailsText}
-            </pre>
-          )}
+        {hasDetails && ((isHiddenDisplay && contentExpanded) || (!isHiddenDisplay && detailsExpanded)) && (
+          <pre
+            style={{
+              margin: 0,
+              padding: "9px 10px",
+              borderTop: "1px solid var(--border)",
+              background: "var(--bg)",
+              color: "var(--text-muted)",
+              fontSize: 12,
+              lineHeight: 1.5,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              maxHeight: 360,
+              overflow: "auto",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            {detailsText}
+          </pre>
+        )}
       </div>
     </div>
   );
@@ -2840,9 +2672,7 @@ function getMessageText(content: CustomMessage["content"] | UserMessage["content
     .join("\n");
 }
 
-function getMessageImages(
-  content: CustomMessage["content"] | UserMessage["content"],
-): ImageContent[] {
+function getMessageImages(content: CustomMessage["content"] | UserMessage["content"]): ImageContent[] {
   if (typeof content === "string") return [];
   return content.filter((b): b is ImageContent => b.type === "image");
 }
@@ -2887,9 +2717,7 @@ function getToolPreview(block: ToolCallContent): string {
     if (intent) return intent.slice(0, 120);
   }
   if (
-    (normalizedToolName === "eval" ||
-      normalizedToolName.endsWith(".eval") ||
-      normalizedToolName.endsWith("_eval")) &&
+    (normalizedToolName === "eval" || normalizedToolName.endsWith(".eval") || normalizedToolName.endsWith("_eval")) &&
     typeof input.title === "string"
   ) {
     const title = input.title.trim();
@@ -2996,12 +2824,7 @@ function BashExecutionView({
 
   return (
     <div style={{ margin: "6px 0" }}>
-      <ToolCallBlock
-        block={block}
-        result={result}
-        sessionId={sessionId}
-        turnAnchorEntryId={turnAnchorEntryId}
-      />
+      <ToolCallBlock block={block} result={result} sessionId={sessionId} turnAnchorEntryId={turnAnchorEntryId} />
       {message.truncated && fullOutputUrl && (
         <div style={{ padding: "4px 10px", fontSize: 11, marginTop: -1 }}>
           {showFullButton && (
@@ -3034,11 +2857,7 @@ function BashExecutionView({
           >
             download full output
           </a>
-          {fullError && (
-            <span style={{ marginLeft: 6, color: "var(--text-dim)", fontSize: 11 }}>
-              ({fullError})
-            </span>
-          )}
+          {fullError && <span style={{ marginLeft: 6, color: "var(--text-dim)", fontSize: 11 }}>({fullError})</span>}
         </div>
       )}
     </div>

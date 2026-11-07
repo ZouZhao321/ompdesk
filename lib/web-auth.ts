@@ -1,9 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import {
-  resolveWebAuthPolicy,
-  verifyWebPassword,
-  type WebAuthStoreOptions,
-} from "../bin/web-auth-store.js";
+import { resolveWebAuthPolicy, verifyWebPassword, type WebAuthStoreOptions } from "../bin/web-auth-store.js";
 
 export const OMPDESK_AUTH_USERNAME = "omp";
 
@@ -24,16 +20,12 @@ function secretsEqual(actual: string, expected: string): boolean {
   return timingSafeEqual(hashSecret(actual), hashSecret(expected));
 }
 
-export function isWebPasswordEnabled(
-  password: string | undefined = process.env.OMPDESK_PASSWORD,
-): password is string {
+export function isWebPasswordEnabled(password: string | undefined = process.env.OMPDESK_PASSWORD): password is string {
   return typeof password === "string" && password.length > 0;
 }
 
 /** Decode a `Basic` header, rejecting anything that is not exactly one canonical encoding. */
-export function parseBasicCredentials(
-  authorization: string | null,
-): { username: string; password: string } | null {
+export function parseBasicCredentials(authorization: string | null): { username: string; password: string } | null {
   if (!authorization) return null;
 
   const match = /^Basic\s+(\S+)$/i.exec(authorization);
@@ -76,10 +68,7 @@ export function isValidBasicAuthorization(
  * `OMPDESK_PASSWORD` environment variable, or the hashed credential written by
  * the settings panel and `ompdesk --authenticated`.
  */
-export function authorizeWebRequest(
-  authorization: string | null,
-  options: WebAuthStoreOptions = {},
-): WebAuthDecision {
+export function authorizeWebRequest(authorization: string | null, options: WebAuthStoreOptions = {}): WebAuthDecision {
   return authorizeWebRequestWithActor(authorization, options).decision;
 }
 

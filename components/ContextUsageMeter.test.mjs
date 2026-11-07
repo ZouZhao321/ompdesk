@@ -11,8 +11,7 @@ const jiti = createJiti(import.meta.url, {
 const { ContextUsageMeter } = await jiti.import("./ChatInput.tsx");
 
 const t = (key) => key;
-const render = (usage) =>
-  renderToStaticMarkup(React.createElement(ContextUsageMeter, { usage, t }));
+const render = (usage) => renderToStaticMarkup(React.createElement(ContextUsageMeter, { usage, t }));
 
 const readArcs = (html) => {
   const circles = [...html.matchAll(/<circle[^>]*>/g)].map((m) => m[0]);
@@ -35,10 +34,7 @@ test("draws a ring whose arc matches the used share", () => {
   const [, progress] = readArcs(html);
   assert.ok(progress.dasharray > 0);
   const expected = progress.dasharray * 0.5;
-  assert.ok(
-    Math.abs(progress.dashoffset - expected) < 1e-6,
-    `dashoffset ${progress.dashoffset} != ${expected}`,
-  );
+  assert.ok(Math.abs(progress.dashoffset - expected) < 1e-6, `dashoffset ${progress.dashoffset} != ${expected}`);
   assert.equal(progress.stroke, "var(--text-muted)");
 });
 

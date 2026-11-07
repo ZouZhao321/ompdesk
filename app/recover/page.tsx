@@ -72,10 +72,7 @@ export default function RecoverPage() {
   }, [code, confirmation, password, post]);
 
   const canSubmit =
-    !busy &&
-    code.trim().length > 0 &&
-    password.length >= MIN_PASSWORD_LENGTH &&
-    password === confirmation;
+    !busy && code.trim().length > 0 && password.length >= MIN_PASSWORD_LENGTH && password === confirmation;
 
   return (
     <main className={styles.page}>
@@ -86,8 +83,8 @@ export default function RecoverPage() {
         {stage === "done" ? (
           <>
             <p className={styles.lead}>
-              The password was changed and password access is on. Open ompdesk and sign in with the
-              username <code>omp</code> and your new password.
+              The password was changed and password access is on. Open ompdesk and sign in with the username{" "}
+              <code>omp</code> and your new password.
             </p>
             <Link className={styles.primary} href="/">
               Back to ompdesk
@@ -96,21 +93,15 @@ export default function RecoverPage() {
         ) : (
           <>
             <p className={styles.lead}>
-              ompdesk stores your password as a hash and cannot read it back. To set a new one, it
-              prints a one-time recovery code <strong>on its own console</strong> — the terminal
-              running ompdesk. Read the code there and enter it below.
+              ompdesk stores your password as a hash and cannot read it back. To set a new one, it prints a one-time
+              recovery code <strong>on its own console</strong> — the terminal running ompdesk. Read the code there and
+              enter it below.
             </p>
             <p className={styles.aside}>
-              No terminal at hand? Run <code>ompdesk --reset-password</code> on that machine
-              instead.
+              No terminal at hand? Run <code>ompdesk --reset-password</code> on that machine instead.
             </p>
 
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={busy}
-              onClick={() => void requestCode()}
-            >
+            <button type="button" className={styles.secondary} disabled={busy} onClick={() => void requestCode()}>
               {busy && stage === "idle"
                 ? "Requesting…"
                 : stage === "code-sent"
@@ -121,8 +112,7 @@ export default function RecoverPage() {
             {stage === "code-sent" && (
               <p className={styles.notice}>
                 A code was printed on the server console
-                {expiresAt ? ` and is valid until ${new Date(expiresAt).toLocaleTimeString()}` : ""}
-                .
+                {expiresAt ? ` and is valid until ${new Date(expiresAt).toLocaleTimeString()}` : ""}.
               </p>
             )}
 

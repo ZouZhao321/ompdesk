@@ -23,21 +23,10 @@ import { mkdir, readdir, rename, rm, stat } from "fs/promises";
 import { basename, join, resolve } from "path";
 import { setTimeout as delay } from "timers/promises";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
-import {
-  getAgentDir,
-  getBaseConfigRoot,
-  relativePathWithinNormalizedRoot,
-} from "@oh-my-pi/pi-utils/dirs";
+import { getAgentDir, getBaseConfigRoot, relativePathWithinNormalizedRoot } from "@oh-my-pi/pi-utils/dirs";
 import { comparableDirectory } from "./path-compare";
 
-export type SessionScenario =
-  | "single-turn"
-  | "empty"
-  | "branch"
-  | "subagent"
-  | "tools"
-  | "long"
-  | "skill-command";
+export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent" | "tools" | "long" | "skill-command";
 
 export interface SeedOptions {
   agentDir: string;
@@ -123,10 +112,7 @@ const SINGLE_TURN_USER_TEXT = "伪造会话 single-turn 的用户消息";
 const SINGLE_TURN_ASSISTANT_TEXT = "伪造会话 single-turn 的助手回复";
 const BRANCH_USER_TEXT = "伪造会话 branch 的用户消息";
 const BRANCH_ASSISTANT_TEXT = "伪造会话 branch 的助手回复";
-const BRANCH_FORK_USER_TEXTS = [
-  "伪造会话 branch 的第一条分支消息",
-  "伪造会话 branch 的第二条分支消息",
-];
+const BRANCH_FORK_USER_TEXTS = ["伪造会话 branch 的第一条分支消息", "伪造会话 branch 的第二条分支消息"];
 const SUBAGENT_USER_TEXT = "伪造会话 subagent 的用户消息";
 const SUBAGENT_ASSISTANT_TEXT = "伪造会话 subagent 的助手回复";
 // 子会话标题带 Sub 前缀，侧栏据此折叠子代理会话。
@@ -210,10 +196,7 @@ interface ScenarioPlan {
   extend: (scenarioDir: string) => Promise<BuiltSession[]>;
 }
 
-export async function seedSessions(
-  scenario: SessionScenario,
-  options: SeedOptions,
-): Promise<SeededSession[]> {
+export async function seedSessions(scenario: SessionScenario, options: SeedOptions): Promise<SeededSession[]> {
   const agentDir = resolveFixtureAgentDir(options?.agentDir);
   if (!Object.hasOwn(SCENARIO_TITLES, scenario)) {
     throw new Error(`session-fixtures: 未知场景 ${String(scenario)}`);
@@ -236,14 +219,8 @@ export async function seedSessions(
 
     try {
       await options.onStagingReady?.();
-      const plan = await buildScenario(
-        scenario,
-        { cwd: options.cwd, title, messageTime },
-        stagingDir,
-      );
-      const children = await replaceDirectory(stagingDir, scenarioDir, agentDir, () =>
-        plan.extend(scenarioDir),
-      );
+      const plan = await buildScenario(scenario, { cwd: options.cwd, title, messageTime }, stagingDir);
+      const children = await replaceDirectory(stagingDir, scenarioDir, agentDir, () => plan.extend(scenarioDir));
       return [...plan.sessions, ...children].map((session) => ({
         id: session.id,
         path: join(scenarioDir, basename(session.file)),
@@ -404,9 +381,7 @@ async function readAgentDirEntries(agentDir: string): Promise<string[] | null> {
  * models.yml 的是真实 agent 目录。备份由清扫删除，名字必须是我们生成的形状。
  */
 function assertOnlySessions(entries: readonly string[]): void {
-  const unexpected = entries.filter(
-    (name) => name !== SESSIONS_DIR && !name.startsWith(FIXTURE_BACKUP_PREFIX),
-  );
+  const unexpected = entries.filter((name) => name !== SESSIONS_DIR && !name.startsWith(FIXTURE_BACKUP_PREFIX));
   if (unexpected.length > 0) {
     throw new Error(
       `session-fixtures: agentDir 只能包含 ${SESSIONS_DIR} 与替换备份，实际还有 ${unexpected.join("、")}`,
@@ -507,9 +482,7 @@ async function buildScenario(
       };
     case "empty":
       return {
-        sessions: [
-          await createSession({ cwd: options.cwd, title: options.title, messages: [] }, stagingDir),
-        ],
+        sessions: [await createSession({ cwd: options.cwd, title: options.title, messages: [] }, stagingDir)],
         extend: async () => [],
       };
     case "branch":
@@ -616,18 +589,12 @@ async function buildToolsScenario(
         "toolUse",
       ),
       toolResultMessage(call, call.resultText, start + 2 * TOOLS_MESSAGE_STEP_MS),
-      assistantMessage(
-        TOOLS_REPLY_TEXTS[round],
-        start + 3 * TOOLS_MESSAGE_STEP_MS,
-        TOOLS_ASSISTANT_USAGE,
-      ),
+      assistantMessage(TOOLS_REPLY_TEXTS[round], start + 3 * TOOLS_MESSAGE_STEP_MS, TOOLS_ASSISTANT_USAGE),
     );
   }
 
   return {
-    sessions: [
-      await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir),
-    ],
+    sessions: [await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir)],
     extend: async () => [],
   };
 }
@@ -651,9 +618,7 @@ async function buildLongScenario(
   }
 
   return {
-    sessions: [
-      await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir),
-    ],
+    sessions: [await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir)],
     extend: async () => [],
   };
 }
@@ -682,9 +647,7 @@ async function buildSkillCommandScenario(
       options.messageTime,
     );
     // 助手紧接着回复：列表扫描会把这条回复当成首条消息，标题因此仍须取指令。
-    manager.appendMessage(
-      assistantMessage("已经按 demo-skill 的流程处理。", options.messageTime + 1000),
-    );
+    manager.appendMessage(assistantMessage("已经按 demo-skill 的流程处理。", options.messageTime + 1000));
     await manager.setSessionName(options.title, "user");
     await manager.ensureOnDisk();
     await manager.flush();

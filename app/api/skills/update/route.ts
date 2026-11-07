@@ -30,10 +30,7 @@ export const POST = withRequestLog("/api/skills/update", async (req: Request) =>
     };
     cwd = typeof body.cwd === "string" ? body.cwd.trim() : "";
     pkg = typeof body.package === "string" ? body.package.trim() : "";
-    skillScope =
-      body.scope === "global" || body.scope === "project"
-        ? (body.scope as SkillInstallScope)
-        : undefined;
+    skillScope = body.scope === "global" || body.scope === "project" ? (body.scope as SkillInstallScope) : undefined;
     if (!cwd || !pkg || !skillScope) {
       auditFailure("skill.update", pkg || undefined, {
         status: 400,
@@ -61,9 +58,7 @@ export const POST = withRequestLog("/api/skills/update", async (req: Request) =>
     }
 
     const { skills } = await loadSkillsWithInstallInfo(cwd);
-    const skill = skills.find(
-      (item) => item.install?.package === pkg && item.install.scope === skillScope,
-    );
+    const skill = skills.find((item) => item.install?.package === pkg && item.install.scope === skillScope);
     if (!skill?.install) {
       auditFailure("skill.update", pkg, {
         status: 404,
@@ -80,10 +75,7 @@ export const POST = withRequestLog("/api/skills/update", async (req: Request) =>
         scope: skillScope,
         reason: "not-updatable",
       });
-      return NextResponse.json(
-        { error: "This skill cannot be updated automatically" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "This skill cannot be updated automatically" }, { status: 400 });
     }
 
     const { stdout, stderr } = await runNpx(buildSkillUpdateArgs(skill.install), {

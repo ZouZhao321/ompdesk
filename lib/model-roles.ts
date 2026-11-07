@@ -56,9 +56,7 @@ function toModelRef(model: Model<Api>, thinkingLevel?: string): ModelRoleModelRe
  * Session startup uses this the way pi-web used `settings.defaultModel`: as the
  * preferred model when the browser did not pick one explicitly.
  */
-export function readDefaultModelRole(
-  settings: Settings,
-): { provider: string; modelId: string } | undefined {
+export function readDefaultModelRole(settings: Settings): { provider: string; modelId: string } | undefined {
   const selector = settings.getModelRole("default");
   if (!selector) return undefined;
   const slash = selector.indexOf("/");
@@ -73,17 +71,12 @@ export function readDefaultModelRole(
  * Every role omp knows about, with its configured selector and what that
  * selector resolves to against the currently available models.
  */
-export function listModelRoles(
-  settings: Settings,
-  availableModels: Model<Api>[],
-): ModelRoleAssignment[] {
+export function listModelRoles(settings: Settings, availableModels: Model<Api>[]): ModelRoleAssignment[] {
   const builtinIds = new Set<string>(MODEL_ROLE_IDS);
   return getKnownRoleIds(settings).map((role) => {
     const info = getRoleInfo(role, settings);
     const selector = settings.getModelRole(role);
-    const resolution = selector
-      ? resolveModelRoleValue(selector, availableModels, { settings })
-      : undefined;
+    const resolution = selector ? resolveModelRoleValue(selector, availableModels, { settings }) : undefined;
 
     return {
       role,
@@ -95,9 +88,7 @@ export function listModelRoles(
       ...(selector ? { selector } : {}),
       source: settings.getModelRoleSource(role),
       provenance: settings.getModelRoleProvenance(role),
-      ...(resolution?.model
-        ? { resolved: toModelRef(resolution.model, resolution.thinkingLevel) }
-        : {}),
+      ...(resolution?.model ? { resolved: toModelRef(resolution.model, resolution.thinkingLevel) } : {}),
       ...(resolution?.warning ? { warning: resolution.warning } : {}),
     };
   });
@@ -126,10 +117,7 @@ export function writeModelRole(
 }
 
 /** Format a model plus optional thinking level back into a role selector. */
-export function formatRoleSelector(
-  model: { provider: string; modelId: string },
-  thinkingLevel?: string,
-): string {
+export function formatRoleSelector(model: { provider: string; modelId: string }, thinkingLevel?: string): string {
   const base = `${model.provider}/${model.modelId}`;
   return thinkingLevel && thinkingLevel !== "off" ? `${base}:${thinkingLevel}` : base;
 }

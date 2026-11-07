@@ -108,9 +108,6 @@ export const PUT = withRequestLog("/api/web-access", async (req: Request) => {
     }
   } catch (error) {
     auditFailure(auditAction, "password", { status: 400, error });
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
 });

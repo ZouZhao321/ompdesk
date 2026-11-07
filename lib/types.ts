@@ -109,12 +109,7 @@ export interface BashExecutionMessage {
   timestamp?: number;
 }
 
-export type AgentMessage =
-  | UserMessage
-  | AssistantMessage
-  | ToolResultMessage
-  | CustomMessage
-  | BashExecutionMessage;
+export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage | CustomMessage | BashExecutionMessage;
 export interface ExtensionAskDialogOption {
   label: string;
   description?: string;
@@ -140,9 +135,7 @@ export interface ExtensionAskDialogResultItem {
   note?: string;
 }
 
-export type ExtensionAskDialogResult =
-  | { kind: "submit"; results: ExtensionAskDialogResultItem[] }
-  | { kind: "chat" };
+export type ExtensionAskDialogResult = { kind: "submit"; results: ExtensionAskDialogResultItem[] } | { kind: "chat" };
 
 export type SubagentStatus = "pending" | "running" | "completed" | "failed" | "aborted";
 
@@ -399,13 +392,7 @@ export interface SessionTreeNode {
 }
 
 /** omp 按会话文件末尾算出的最后状态；`unknown` 表示判断不出来。 */
-export type SessionStatus =
-  | "complete"
-  | "interrupted"
-  | "aborted"
-  | "error"
-  | "pending"
-  | "unknown";
+export type SessionStatus = "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
 
 export interface SessionInfo {
   /** Client continuation handle; never a persisted transcript ID or history alias. */

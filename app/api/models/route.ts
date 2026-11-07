@@ -39,11 +39,7 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   const modelError = modelRegistry.getError()?.message;
   // `enabledModels` supports globs and fuzzy patterns, so resolve it the same
   // way the CLI does instead of comparing pattern strings literally.
-  const scope = await resolveVisibleModels(
-    modelRegistry,
-    getSetting<string[]>(settings, "enabledModels"),
-    settings,
-  );
+  const scope = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
   const { visible, thinkingLevelPins, warnings } = scope;
   const modelList = visible
     .map((m) => ({

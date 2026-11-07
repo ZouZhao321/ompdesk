@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent,
-  PointerEvent as ReactPointerEvent,
-} from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { CARD_HEIGHT, CARD_WIDTH, layoutTurnTree } from "@/lib/map-layout";
 import type { MapTurnDetail, MapTurnNode, SessionMapPayload } from "@/lib/map-types";
@@ -387,14 +383,11 @@ export function ConversationMap({
       setActionError(null);
       setForking(true);
       try {
-        const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(
-          node.sessionId,
-          {
-            type: "fork",
-            entryId: node.forkEntryId,
-            includeEntry: true,
-          },
-        );
+        const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(node.sessionId, {
+          type: "fork",
+          entryId: node.forkEntryId,
+          includeEntry: true,
+        });
         if (!result?.newSessionId) throw new Error(t("map.forkCancelled"));
         onSessionForked(result.newSessionId);
         onClose();
@@ -454,10 +447,7 @@ export function ConversationMap({
     });
   }, []);
 
-  const sessionCount = useMemo(
-    () => new Set((payload?.nodes ?? []).map((node) => node.sessionId)).size,
-    [payload],
-  );
+  const sessionCount = useMemo(() => new Set((payload?.nodes ?? []).map((node) => node.sessionId)).size, [payload]);
   const sessionColors = useMemo(() => {
     const colors = new Map<string, string>();
     const palette = ["var(--accent)", "#f59e0b", "#10b981", "#8b5cf6", "#ef4444", "#06b6d4"];
@@ -491,9 +481,7 @@ export function ConversationMap({
           background: "var(--bg-panel)",
         }}
       >
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
-          {t("map.title")}
-        </span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{t("map.title")}</span>
         {payload && (
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
             {t("map.stats", { turns: payload.nodes.length, sessions: sessionCount })}
@@ -503,21 +491,13 @@ export function ConversationMap({
         <button type="button" style={toolbarButtonStyle} onClick={fit} title={t("map.fit")}>
           {t("map.fit")}
         </button>
-        <button
-          type="button"
-          style={toolbarButtonStyle}
-          onClick={() => setCamera({ x: 24, y: 24, scale: 1 })}
-        >
+        <button type="button" style={toolbarButtonStyle} onClick={() => setCamera({ x: 24, y: 24, scale: 1 })}>
           {t("map.resetZoom")}
         </button>
         <button type="button" style={toolbarButtonStyle} onClick={() => void load()}>
           {t("map.refresh")}
         </button>
-        <button
-          type="button"
-          style={{ ...toolbarButtonStyle, color: "var(--text)" }}
-          onClick={onClose}
-        >
+        <button type="button" style={{ ...toolbarButtonStyle, color: "var(--text)" }} onClick={onClose}>
           {t("map.close")}
         </button>
       </div>
@@ -586,13 +566,10 @@ export function ConversationMap({
               const position = positions.get(node.id);
               if (!position) return null;
               const selected = node.id === selectedId;
-              const active =
-                node.answerEntryId !== undefined && node.answerEntryId === currentLeafId;
+              const active = node.answerEntryId !== undefined && node.answerEntryId === currentLeafId;
               const childCount = childrenById.get(node.id)?.length ?? 0;
               const isCollapsed = collapsed.has(node.id);
-              const hiddenCount = isCollapsed
-                ? Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1)
-                : 0;
+              const hiddenCount = isCollapsed ? Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1) : 0;
               return (
                 <div
                   key={node.id}
@@ -830,9 +807,7 @@ export function ConversationMap({
             >
               <span>#{selectedNode.turnIndex + 1}</span>
               {selectedNode.sessionTitle && (
-                <span
-                  style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                >
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {selectedNode.sessionTitle}
                 </span>
               )}
@@ -857,15 +832,9 @@ export function ConversationMap({
                 gap: 10,
               }}
             >
-              {detailLoading && (
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {t("map.loadingTurn")}
-                </div>
-              )}
+              {detailLoading && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("map.loadingTurn")}</div>}
               <div>
-                <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>
-                  {t("map.you")}
-                </div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>{t("map.you")}</div>
                 <div
                   style={{
                     fontSize: 12,
@@ -879,9 +848,7 @@ export function ConversationMap({
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>
-                  {t("map.assistant")}
-                </div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>{t("map.assistant")}</div>
                 <div
                   style={{
                     fontSize: 12,
@@ -895,14 +862,10 @@ export function ConversationMap({
                 </div>
               </div>
               {detail?.truncated && (
-                <div style={{ fontSize: 10, color: "var(--warning)" }}>
-                  {t("map.truncatedDetail")}
-                </div>
+                <div style={{ fontSize: 10, color: "var(--warning)" }}>{t("map.truncatedDetail")}</div>
               )}
               {detail && detail.tools.length > 0 && (
-                <div
-                  style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}
-                >
+                <div style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
                   {t("map.toolsUsed")}: {detail.tools.join(", ")}
                 </div>
               )}
@@ -919,9 +882,7 @@ export function ConversationMap({
                 {actionError}
               </div>
             )}
-            <div
-              style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid var(--border)" }}
-            >
+            <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid var(--border)" }}>
               <button
                 type="button"
                 disabled={forking}
@@ -936,11 +897,7 @@ export function ConversationMap({
               >
                 {forking ? t("map.forking") : t("map.forkHere")}
               </button>
-              <button
-                type="button"
-                style={actionButtonStyle}
-                onClick={() => void handleSwitch(selectedNode)}
-              >
+              <button type="button" style={actionButtonStyle} onClick={() => void handleSwitch(selectedNode)}>
                 {t("map.switchHere")}
               </button>
             </div>

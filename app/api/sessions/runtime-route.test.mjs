@@ -5,15 +5,9 @@ import { flattenSource } from "../../../test-support/source-text.ts";
 import { readFile } from "node:fs/promises";
 
 const listRoute = flattenSource(await readFile(new URL("./route.ts", import.meta.url), "utf8"));
-const detailRoute = flattenSource(
-  await readFile(new URL("./[id]/route.ts", import.meta.url), "utf8"),
-);
-const contextRoute = flattenSource(
-  await readFile(new URL("./[id]/context/route.ts", import.meta.url), "utf8"),
-);
-const stateRoute = flattenSource(
-  await readFile(new URL("./[id]/state/route.ts", import.meta.url), "utf8"),
-);
+const detailRoute = flattenSource(await readFile(new URL("./[id]/route.ts", import.meta.url), "utf8"));
+const contextRoute = flattenSource(await readFile(new URL("./[id]/context/route.ts", import.meta.url), "utf8"));
+const stateRoute = flattenSource(await readFile(new URL("./[id]/state/route.ts", import.meta.url), "utf8"));
 const jiti = createJiti(import.meta.url, {
   alias: { "@": process.cwd() },
   interopDefault: true,

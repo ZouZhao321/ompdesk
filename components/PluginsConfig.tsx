@@ -28,15 +28,9 @@ function resourceSummary(pkg: PluginPackageInfo, t: ReturnType<typeof useI18n>["
     pkg.counts.extensions
       ? t("i18n.resourceCount", { count: pkg.counts.extensions, label: t("i18n.extensionShort") })
       : "",
-    pkg.counts.skills
-      ? t("i18n.resourceCount", { count: pkg.counts.skills, label: t("i18n.skillShort") })
-      : "",
-    pkg.counts.prompts
-      ? t("i18n.resourceCount", { count: pkg.counts.prompts, label: t("i18n.promptShort") })
-      : "",
-    pkg.counts.themes
-      ? t("i18n.resourceCount", { count: pkg.counts.themes, label: t("i18n.themeShort") })
-      : "",
+    pkg.counts.skills ? t("i18n.resourceCount", { count: pkg.counts.skills, label: t("i18n.skillShort") }) : "",
+    pkg.counts.prompts ? t("i18n.resourceCount", { count: pkg.counts.prompts, label: t("i18n.promptShort") }) : "",
+    pkg.counts.themes ? t("i18n.resourceCount", { count: pkg.counts.themes, label: t("i18n.themeShort") }) : "",
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : t("i18n.noResources");
 }
@@ -44,8 +38,7 @@ function resourceSummary(pkg: PluginPackageInfo, t: ReturnType<typeof useI18n>["
 function versionSummary(pkg: PluginPackageInfo, t: ReturnType<typeof useI18n>["t"]): string {
   const parts = [];
   if (pkg.version) parts.push(t("i18n.installedVersion", { version: pkg.version }));
-  if (pkg.configuredVersion)
-    parts.push(t("i18n.configuredVersion", { version: pkg.configuredVersion }));
+  if (pkg.configuredVersion) parts.push(t("i18n.configuredVersion", { version: pkg.configuredVersion }));
   return parts.length ? parts.join(" · ") : t("i18n.unknown");
 }
 
@@ -345,9 +338,7 @@ function AddPluginPanel({
             flexWrap: "wrap",
           }}
         >
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-            {t("i18n.addPlugin")}
-          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{t("i18n.addPlugin")}</div>
           <a
             href="https://github.com/can1357/oh-my-pi#plugins"
             target="_blank"
@@ -386,10 +377,7 @@ function AddPluginPanel({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        <label
-          htmlFor="plugin-source"
-          style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}
-        >
+        <label htmlFor="plugin-source" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
           Source
         </label>
         <input
@@ -425,11 +413,7 @@ function AddPluginPanel({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <SegmentedScope
-          value={scope}
-          projectResourcesLoaded={projectResourcesLoaded}
-          onChange={onScopeChange}
-        />
+        <SegmentedScope value={scope} projectResourcesLoaded={projectResourcesLoaded} onChange={onScopeChange} />
         <button
           type="button"
           onClick={onInstall}
@@ -481,9 +465,7 @@ function AddPluginPanel({
         </div>
       </div>
 
-      {actionError && (
-        <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>{actionError}</div>
-      )}
+      {actionError && <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>{actionError}</div>}
     </div>
   );
 }
@@ -610,13 +592,9 @@ function PackageDetail({
         }}
       >
         <div style={{ color: "var(--text-dim)" }}>{t("i18n.status")}</div>
-        <div style={{ color: statusColor(pkg.status), textTransform: "capitalize" }}>
-          {pkg.status}
-        </div>
+        <div style={{ color: statusColor(pkg.status), textTransform: "capitalize" }}>{pkg.status}</div>
         <div style={{ color: "var(--text-dim)" }}>{t("i18n.version")}</div>
-        <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-          {versionSummary(pkg, t)}
-        </div>
+        <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{versionSummary(pkg, t)}</div>
         <div style={{ color: "var(--text-dim)" }}>{t("i18n.package")}</div>
         <div
           style={{
@@ -652,16 +630,12 @@ function PackageDetail({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
-          {t("i18n.resolvedResources")}
-        </div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{t("i18n.resolvedResources")}</div>
         <ResourceList pkg={pkg} />
       </div>
 
       {actionMessage && <div style={{ fontSize: 12, color: "#16a34a" }}>{actionMessage}</div>}
-      {actionError && (
-        <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>{actionError}</div>
-      )}
+      {actionError && <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>{actionError}</div>}
     </div>
   );
 }
@@ -859,9 +833,7 @@ export function PluginsConfig({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
-              {t("common.plugins")}
-            </span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("common.plugins")}</span>
             <code
               style={{
                 fontSize: 11,
@@ -928,15 +900,11 @@ export function PluginsConfig({
           >
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>
-                  Loading...
-                </div>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>Loading...</div>
               ) : error ? (
                 <div style={{ padding: "10px 8px", fontSize: 11, color: "#ef4444" }}>{error}</div>
               ) : packages.length === 0 ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>
-                  No plugins configured
-                </div>
+                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>No plugins configured</div>
               ) : (
                 groupedPackages.map((group) => (
                   <div key={group.scope} style={{ marginBottom: 6 }}>
@@ -1036,9 +1004,7 @@ export function PluginsConfig({
                 ))
               )}
             </div>
-            <div
-              style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}
-            >
+            <div style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
               <button
                 type="button"
                 onClick={() => {

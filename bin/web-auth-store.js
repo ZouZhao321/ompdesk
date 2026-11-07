@@ -89,9 +89,7 @@ const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 function resolveAgentDir(env = process.env) {
   if (env.PI_CODING_AGENT_DIR) return resolve(env.PI_CODING_AGENT_DIR);
   const configRoot = join(homedir(), env.PI_CONFIG_DIR || ".omp");
-  const profile = normalizeProfileName(
-    env.OMP_PROFILE !== undefined ? env.OMP_PROFILE : env.PI_PROFILE,
-  );
+  const profile = normalizeProfileName(env.OMP_PROFILE !== undefined ? env.OMP_PROFILE : env.PI_PROFILE);
   return profile ? join(configRoot, "profiles", profile, "agent") : join(configRoot, "agent");
 }
 
@@ -314,9 +312,7 @@ function getWebAuthStatus(options = {}) {
   const storedPassword = isUsableDigest(config.password);
 
   return {
-    enabled:
-      Boolean(fromEnvironment) ||
-      (state.status === "ok" && config.enabled === true && storedPassword),
+    enabled: Boolean(fromEnvironment) || (state.status === "ok" && config.enabled === true && storedPassword),
     configured: Boolean(fromEnvironment) || storedPassword,
     stored: storedPassword,
     source: fromEnvironment ? "environment" : storedPassword ? "stored" : "none",
@@ -502,11 +498,7 @@ function issueRecoveryCode(options = {}) {
   const config = currentConfig(file);
   const pending = config.recovery;
 
-  if (
-    pending &&
-    typeof pending.issuedAt === "number" &&
-    now - pending.issuedAt < RECOVERY_REISSUE_INTERVAL_MS
-  ) {
+  if (pending && typeof pending.issuedAt === "number" && now - pending.issuedAt < RECOVERY_REISSUE_INTERVAL_MS) {
     return {
       ok: false,
       reason: "throttled",

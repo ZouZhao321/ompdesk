@@ -31,10 +31,7 @@ async function getOmpPackageDir(): Promise<string | null> {
 }
 
 function encodeHeaderValue(value: string): string {
-  return encodeURIComponent(value).replace(
-    /[!'()*]/g,
-    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
+  return encodeURIComponent(value).replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 function getContentDisposition(fileName: string, inline: boolean): string {
@@ -65,9 +62,7 @@ async function getOmpCliPath(): Promise<string | null> {
     // Next.js production bundles can strip import.meta.resolve.
   }
 
-  candidates.add(
-    join(process.cwd(), "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js"),
-  );
+  candidates.add(join(process.cwd(), "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js"));
 
   for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate;
@@ -94,9 +89,7 @@ async function exportSession(filePath: string, outputPath: string): Promise<void
   const packageDir = await getOmpPackageDir();
   if (!packageDir) throw new Error("pi CLI not found");
 
-  const exporterUrl = pathToFileURL(
-    join(packageDir, "dist", "core", "export-html", "index.js"),
-  ).href;
+  const exporterUrl = pathToFileURL(join(packageDir, "dist", "core", "export-html", "index.js")).href;
   const { exportFromFile } = (await import(exporterUrl)) as ExportHtmlModule;
   await exportFromFile(filePath, outputPath);
 }
@@ -113,9 +106,7 @@ async function getRouteHandler(req: Request, { params }: { params: Promise<{ id:
 
   try {
     const canonicalId =
-      getRpcSession(id)?.sessionId ??
-      getFinalRpcSessionId(id) ??
-      (id.startsWith("runtime:") ? undefined : id);
+      getRpcSession(id)?.sessionId ?? getFinalRpcSessionId(id) ?? (id.startsWith("runtime:") ? undefined : id);
     const filePath = canonicalId ? await resolveSessionPath(canonicalId) : null;
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });

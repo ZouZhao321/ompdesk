@@ -107,8 +107,7 @@ export const enLocale: LocalePlugin = {
     "subagents.tokens": "{count} tokens",
     "subagents.loadingTranscript": "Loading live transcript…",
     "subagents.noTranscript": "The subagent has not written any transcript messages yet.",
-    "subagents.transcriptUnavailable":
-      "Live transcript is not available yet. Retrying while the subagent runs.",
+    "subagents.transcriptUnavailable": "Live transcript is not available yet. Retrying while the subagent runs.",
     "comments.title": "Comments",
     "comments.summary": "{files} TS files · {total} entries · {excluded} excluded",
     "comments.scope":
@@ -137,8 +136,7 @@ export const enLocale: LocalePlugin = {
     "comments.previewEmpty": "This comment has no saved translation yet",
     "comments.previewLoading": "Loading file…",
     "comments.previewFailed": "Failed to load the file",
-    "comments.previewHidden":
-      "Comment translations are off in the viewer, so the preview hides them",
+    "comments.previewHidden": "Comment translations are off in the viewer, so the preview hides them",
     "comments.selectAll": "Select all on page",
     "comments.selectFile": "Select all in this file",
     "comments.selectEntry": "Select entry",
@@ -195,8 +193,7 @@ export const enLocale: LocalePlugin = {
     "sidebar.switchBranch": "Switch branch",
     "sidebar.hasCheckout": "Checkout",
     "sidebar.branchNoCheckout": "No checkout",
-    "sidebar.branchNoCheckoutTitle":
-      "Branch {branch} has no checkout yet; selecting it creates one",
+    "sidebar.branchNoCheckoutTitle": "Branch {branch} has no checkout yet; selecting it creates one",
     "sidebar.mainCheckout": "Main checkout",
     "sidebar.detachedCheckout": "Detached",
     "sidebar.forceRemoveCheckout": "Uncommitted changes. Force remove checkout?",
@@ -268,8 +265,7 @@ export const enLocale: LocalePlugin = {
     "git.refresh": "Refresh Git status",
     "files.noProject": "No project directory selected",
     "files.changedCount": "{count} files",
-    "files.changeStats":
-      "{count} changed files, {additions} lines added, {deletions} lines deleted",
+    "files.changeStats": "{count} changed files, {additions} lines added, {deletions} lines deleted",
     "files.conflictSummary": "{count} file{countSuffix} already exist: {files}",
     "files.cannotReplace": "Cannot replace: {files}",
     "files.replace": "Replace",
@@ -317,8 +313,7 @@ export const enLocale: LocalePlugin = {
     "chat.close": "Close",
     "chat.queued": "Queued · {count}",
     "chat.recall": "Recall to input",
-    "chat.recallTitle":
-      "Remove all queued messages and put them back into the input box for editing",
+    "chat.recallTitle": "Remove all queued messages and put them back into the input box for editing",
     "chat.retrying": "Retrying ({attempt}/{max})…",
     "chat.loadingCommands": "Loading commands...",
     "chat.slashCommands": "Slash commands · {label}",
@@ -344,8 +339,7 @@ export const enLocale: LocalePlugin = {
     "chat.queuedImage": "Image attachment",
     "chat.steerTitle": "Interrupt the current run and inject this message now",
     "chat.followUpTitle": "Queue this message after the agent finishes",
-    "chat.recallDropped":
-      "Recalled queued messages, but {count} image(s) did not fit in the input box",
+    "chat.recallDropped": "Recalled queued messages, but {count} image(s) did not fit in the input box",
     "chat.filterModels": "Filter models…",
     "chat.noMatchingModels": "No matching models",
     "chat.modelRoles": "Roles",
@@ -418,10 +412,8 @@ export const enLocale: LocalePlugin = {
     "chat.branchSwitchFailed": "Failed to switch branch",
     "chat.skillCommandDisabled": "Skill commands are disabled; this was sent as a normal message",
     "chat.skillCommandUnknown": "No skill named {skill}; this was sent as a normal message",
-    "chat.skillCommandUnreadable":
-      "The {skill} skill could not be read; this was sent as a normal message",
-    "chat.skillCommandDropped":
-      "The {skill} command was not delivered because the session was busy; send it again",
+    "chat.skillCommandUnreadable": "The {skill} skill could not be read; this was sent as a normal message",
+    "chat.skillCommandDropped": "The {skill} command was not delivered because the session was busy; send it again",
     "chat.transcriptRail": "Prompt navigation",
     "chat.previousPrompt": "Previous prompt",
     "chat.nextPrompt": "Next prompt",
@@ -476,12 +468,10 @@ export const enLocale: LocalePlugin = {
     "trust.trusting": "Trusting...",
     "trust.cancel": "Cancel",
     "trust.dialogTitle": "Trust this project?",
-    "trust.dialogBody":
-      "Project resources can run local code. Trust only projects whose contents you know.",
+    "trust.dialogBody": "Project resources can run local code. Trust only projects whose contents you know.",
     "trust.skillsNotLoaded": "Project skills are not loaded because this project is not trusted.",
     "trust.pluginsNotLoaded": "Project plugins are not loaded because this project is not trusted.",
-    "trust.projectScopeUnavailable":
-      "Project installs are unavailable while project resources are not loaded.",
+    "trust.projectScopeUnavailable": "Project installs are unavailable while project resources are not loaded.",
     "i18n.creatingSession": "Creating new session…",
     "i18n.creating": "Creating…",
     "i18n.subscription": "Subscription",

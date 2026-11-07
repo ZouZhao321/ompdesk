@@ -6,10 +6,7 @@ import {
   isValidSessionId,
 } from "./session-file-references-core";
 
-export async function isFilePathReferencedBySession(
-  filePath: string,
-  sessionId: string | null,
-): Promise<boolean> {
+export async function isFilePathReferencedBySession(filePath: string, sessionId: string | null): Promise<boolean> {
   if (!isValidSessionId(sessionId)) return false;
   try {
     const sessionPath = await resolveSessionPath(sessionId);

@@ -8,12 +8,7 @@ import { useI18n } from "@/hooks/useI18n";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
 import type { DiscoveredModel } from "@/lib/model-discovery";
 import { openExternal } from "@/lib/open-external";
-import {
-  serializeHeaderRows,
-  setCompatBool,
-  updateHeaderRow,
-  type HeaderRow,
-} from "./models-config-helpers";
+import { serializeHeaderRows, setCompatBool, updateHeaderRow, type HeaderRow } from "./models-config-helpers";
 // Color icons (have their own fill colors — no background needed)
 import AnthropicIcon from "@lobehub/icons/es/Anthropic/components/Mono";
 import OpenAIIcon from "@lobehub/icons/es/OpenAI/components/Mono";
@@ -185,12 +180,7 @@ type Selection =
   | { type: "oauth"; providerId: string }
   | { type: "apikey"; providerId: string };
 
-const API_OPTIONS = [
-  "openai-completions",
-  "openai-responses",
-  "anthropic-messages",
-  "google-generative-ai",
-] as const;
+const API_OPTIONS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
 
 // ── Form field helpers ────────────────────────────────────────────────────────
 
@@ -380,15 +370,7 @@ function Select({
   );
 }
 
-function Check({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
+function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label
       style={{
@@ -453,8 +435,7 @@ function ProviderDetail({
   const discoveryRequestIdRef = useRef(0);
   const selectShownRef = useRef<HTMLInputElement>(null);
   useEffect(() => setEditingName(name), [name]);
-  const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) =>
-    onChange({ ...provider, [k]: v });
+  const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
 
   useEffect(() => {
     if (!provider.api) onChange({ ...provider, api: "openai-completions" });
@@ -518,10 +499,8 @@ function ProviderDetail({
     .map((model) => model.id);
   const selectedCount = selectedModelIds.filter((id) => !existingModelIds.has(id)).length;
   const allShownSelected =
-    selectableShownIds.length > 0 &&
-    selectableShownIds.every((id) => selectedModelIds.includes(id));
-  const someShownSelected =
-    !allShownSelected && selectableShownIds.some((id) => selectedModelIds.includes(id));
+    selectableShownIds.length > 0 && selectableShownIds.every((id) => selectedModelIds.includes(id));
+  const someShownSelected = !allShownSelected && selectableShownIds.some((id) => selectedModelIds.includes(id));
 
   useEffect(() => {
     if (selectShownRef.current) selectShownRef.current.indeterminate = someShownSelected;
@@ -612,8 +591,8 @@ function ProviderDetail({
           mono
         />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell
-          command, or use an env var name
+          Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell command, or use an env
+          var name
         </span>
       </Field>
 
@@ -627,13 +606,9 @@ function ProviderDetail({
       </Field>
 
       <Field label="Headers">
-        <HeaderListEditor
-          headers={provider.headers}
-          onChange={(headers) => set("headers", headers)}
-        />
+        <HeaderListEditor headers={provider.headers} onChange={(headers) => set("headers", headers)} />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Added to every request from this provider (e.g. User-Agent). Useful for gateways with bot
-          detection.
+          Added to every request from this provider (e.g. User-Agent). Useful for gateways with bot detection.
         </span>
       </Field>
 
@@ -661,16 +636,11 @@ function ProviderDetail({
                 !provider.baseUrl?.trim() || discoveryState.phase === "loading"
                   ? "var(--text-dim)"
                   : "var(--text-muted)",
-              cursor:
-                !provider.baseUrl?.trim() || discoveryState.phase === "loading"
-                  ? "not-allowed"
-                  : "pointer",
+              cursor: !provider.baseUrl?.trim() || discoveryState.phase === "loading" ? "not-allowed" : "pointer",
               fontSize: 11,
             }}
           >
-            {discoveryState.phase === "loading"
-              ? t("models.discoveryFetching")
-              : t("models.discoveryFetch")}
+            {discoveryState.phase === "loading" ? t("models.discoveryFetching") : t("models.discoveryFetch")}
           </button>
         )}
 
@@ -802,9 +772,7 @@ function ProviderDetail({
                         )}
                       </span>
                       {alreadyAdded && (
-                        <span style={{ color: "var(--text-dim)", fontSize: 10 }}>
-                          {t("models.discoveryAdded")}
-                        </span>
+                        <span style={{ color: "var(--text-dim)", fontSize: 10 }}>{t("models.discoveryAdded")}</span>
                       )}
                     </label>
                   );
@@ -904,11 +872,7 @@ function ThinkingLevelMapEditor({
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {THINKING_LEVELS.map((level) => {
         const raw = map[level];
-        const state: "omit" | "null" | "string" = !(level in map)
-          ? "omit"
-          : raw === null
-            ? "null"
-            : "string";
+        const state: "omit" | "null" | "string" = !(level in map) ? "omit" : raw === null ? "null" : "string";
         const strVal = typeof raw === "string" ? raw : "";
         const color = LEVEL_COLORS[level];
 
@@ -948,9 +912,7 @@ function ThinkingLevelMapEditor({
             }}
           >
             {/* Level badge */}
-            <div
-              style={{ display: "flex", alignItems: "center", gap: 5, width: 68, flexShrink: 0 }}
-            >
+            <div style={{ display: "flex", alignItems: "center", gap: 5, width: 68, flexShrink: 0 }}>
               <span
                 style={{
                   width: 6,
@@ -1136,9 +1098,7 @@ function HeaderListEditor({
         </div>
       ))}
       <button
-        onClick={() =>
-          setRows((current) => [...current, { id: nextRowIdRef.current++, name: "", value: "" }])
-        }
+        onClick={() => setRows((current) => [...current, { id: nextRowIdRef.current++, name: "", value: "" }])}
         style={{
           padding: "5px 9px",
           background: "none",
@@ -1220,8 +1180,7 @@ function ModelDetail({
   const [catalogState, setCatalogState] = useState<ModelCatalogState>({ phase: "idle" });
   const catalogRequestIdRef = useRef(0);
   const catalogUndoRef = useRef<ModelEntry | null>(null);
-  const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) =>
-    onChange({ ...model, [k]: v });
+  const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) => onChange({ ...model, [k]: v });
   const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) =>
     model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
   const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: string) => {
@@ -1236,9 +1195,7 @@ function ModelDetail({
       testState.status !== undefined ? `HTTP ${testState.status}` : null,
     ].filter(Boolean);
     if (testState.phase === "success") {
-      return [t("i18n.connected"), ...meta, testState.responseText || null]
-        .filter(Boolean)
-        .join(" · ");
+      return [t("i18n.connected"), ...meta, testState.responseText || null].filter(Boolean).join(" · ");
     }
     return [t("i18n.failed"), ...meta, testState.message].filter(Boolean).join(" · ");
   })();
@@ -1338,9 +1295,7 @@ function ModelDetail({
     if (catalogState.phase !== "success") return null;
     const { recommendation, appliedCount } = catalogState;
     const applied =
-      appliedCount > 0
-        ? t("models.catalogFilled", { count: appliedCount })
-        : t("models.catalogNoEmptyFields");
+      appliedCount > 0 ? t("models.catalogFilled", { count: appliedCount }) : t("models.catalogNoEmptyFields");
     if (recommendation.price.status === "unreliable") {
       const price =
         recommendation.price.reason === "no-exact-match"
@@ -1351,15 +1306,11 @@ function ModelDetail({
     const price =
       recommendation.price.method === "provider"
         ? t("models.catalogPriceProvider", {
-            provider:
-              recommendation.price.providerName ?? recommendation.price.providerId ?? providerName,
+            provider: recommendation.price.providerName ?? recommendation.price.providerId ?? providerName,
           })
         : recommendation.price.method === "base-url"
           ? t("models.catalogPriceBaseUrl", {
-              provider:
-                recommendation.price.providerName ??
-                recommendation.price.providerId ??
-                providerName,
+              provider: recommendation.price.providerName ?? recommendation.price.providerId ?? providerName,
             })
           : t("models.catalogPriceConsensus", {
               support: recommendation.price.support,
@@ -1367,13 +1318,11 @@ function ModelDetail({
             });
     return `${applied} · ${price}`;
   })();
-  const catalogStatusText =
-    catalogState.phase === "error" ? catalogState.message : catalogResultSummary;
+  const catalogStatusText = catalogState.phase === "error" ? catalogState.message : catalogResultSummary;
   const catalogStatusColor =
     catalogState.phase === "error"
       ? "#ef4444"
-      : catalogState.phase === "success" &&
-          catalogState.recommendation.price.status === "unreliable"
+      : catalogState.phase === "success" && catalogState.recommendation.price.status === "unreliable"
         ? "#d97706"
         : "var(--text-dim)";
 
@@ -1392,11 +1341,7 @@ function ModelDetail({
                 border: `1px solid ${testState.phase === "error" ? "#fecaca" : testState.phase === "success" ? "#bbf7d0" : "var(--border)"}`,
                 borderRadius: 4,
                 background:
-                  testState.phase === "error"
-                    ? "#fee2e2"
-                    : testState.phase === "success"
-                      ? "#dcfce7"
-                      : "#e5e7eb",
+                  testState.phase === "error" ? "#fee2e2" : testState.phase === "success" ? "#dcfce7" : "#e5e7eb",
                 color: "#111827",
                 fontSize: 11,
                 display: "inline-flex",
@@ -1504,18 +1449,12 @@ function ModelDetail({
               border: "1px solid var(--border)",
               borderRadius: 5,
               background: "var(--bg-panel)",
-              color:
-                !model.id.trim() || catalogState.phase === "loading"
-                  ? "var(--text-dim)"
-                  : "var(--text-muted)",
-              cursor:
-                !model.id.trim() || catalogState.phase === "loading" ? "not-allowed" : "pointer",
+              color: !model.id.trim() || catalogState.phase === "loading" ? "var(--text-dim)" : "var(--text-muted)",
+              cursor: !model.id.trim() || catalogState.phase === "loading" ? "not-allowed" : "pointer",
               fontSize: 11,
             }}
           >
-            {catalogState.phase === "loading"
-              ? t("models.catalogFilling")
-              : t("models.catalogFill")}
+            {catalogState.phase === "loading" ? t("models.catalogFilling") : t("models.catalogFill")}
           </button>
           <a
             href="https://github.com/anomalyco/models.dev"
@@ -1576,11 +1515,7 @@ function ModelDetail({
       </div>
 
       <Field label="API override">
-        <Select
-          value={model.api ?? ""}
-          onChange={(v) => set("api", v || undefined)}
-          options={API_OPTIONS}
-        />
+        <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
       </Field>
 
       <Field label="Headers">
@@ -1642,10 +1577,7 @@ function ModelDetail({
                 </button>
               )}
             </div>
-            <ThinkingLevelMapEditor
-              value={model.thinkingLevelMap}
-              onChange={(v) => set("thinkingLevelMap", v)}
-            />
+            <ThinkingLevelMapEditor value={model.thinkingLevelMap} onChange={(v) => set("thinkingLevelMap", v)} />
           </div>
         </>
       )}
@@ -1669,9 +1601,7 @@ function ModelDetail({
 
       <div>
         <SectionTitle>Cost (per million tokens)</SectionTitle>
-        <div
-          style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}
-        >
+        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
           {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
             <Field key={k} label={k}>
               <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
@@ -1781,9 +1711,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
     };
     es.onerror = () => {
       es.close();
-      setLoginState((prev) =>
-        prev.phase === "success" ? prev : { phase: "error", message: "Connection lost" },
-      );
+      setLoginState((prev) => (prev.phase === "success" ? prev : { phase: "error", message: "Connection lost" }));
     };
   }, [provider.id, onRefresh]);
 
@@ -1881,15 +1809,11 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           </p>
         )}
         {loginState.phase === "connecting" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-            {t("i18n.openingBrowser")}
-          </p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("i18n.openingBrowser")}</p>
         )}
         {loginState.phase === "select" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              {loginState.message}
-            </p>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{loginState.message}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {loginState.options.map((option) => (
                 <button
@@ -2008,21 +1932,15 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
               >
                 {loginState.verificationUri}
               </a>
-              {loginState.expiresInSeconds
-                ? ` Expires in ${Math.ceil(loginState.expiresInSeconds / 60)} minutes.`
-                : ""}
+              {loginState.expiresInSeconds ? ` Expires in ${Math.ceil(loginState.expiresInSeconds / 60)} minutes.` : ""}
             </p>
           </div>
         )}
         {loginState.phase === "progress" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-            {loginState.message}
-          </p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>
-            {t("i18n.connectedSuccessfully")}
-          </p>
+          <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>{t("i18n.connectedSuccessfully")}</p>
         )}
         {loginState.phase === "error" && (
           <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{loginState.message}</p>
@@ -2091,13 +2009,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
 
 // ── API Key detail ────────────────────────────────────────────────────────────
 
-function ApiKeyDetail({
-  provider,
-  onRefresh,
-}: {
-  provider: ApiKeyProvider;
-  onRefresh: () => void;
-}) {
+function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRefresh: () => void }) {
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -2170,9 +2082,7 @@ function ApiKeyDetail({
               display: "inline-block",
             }}
           />
-          <span
-            style={{ fontSize: 11, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}
-          >
+          <span style={{ fontSize: 11, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}>
             {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
           </span>
         </div>
@@ -2329,19 +2239,12 @@ function AddProviderPicker({
 
   const q = search.trim().toLowerCase();
 
-  const availableOAuth = oauthProviders.filter(
-    (p) => !p.loggedIn && (!q || p.name.toLowerCase().includes(q)),
-  );
+  const availableOAuth = oauthProviders.filter((p) => !p.loggedIn && (!q || p.name.toLowerCase().includes(q)));
   const availableApiKey = apiKeyProviders.filter(
-    (p) =>
-      !p.configured &&
-      (!q || p.displayName.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)),
+    (p) => !p.configured && (!q || p.displayName.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)),
   );
   const showCustom =
-    !q ||
-    "custom".includes(q) ||
-    "openai-compatible".includes(q) ||
-    "anthropic-compatible".includes(q);
+    !q || "custom".includes(q) || "openai-compatible".includes(q) || "anthropic-compatible".includes(q);
 
   const totalCount = availableOAuth.length + availableApiKey.length + (showCustom ? 1 : 0);
 
@@ -2582,9 +2485,7 @@ function AddProviderPicker({
                     >
                       {p.name}
                     </div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-                      OAuth
-                    </div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>OAuth</div>
                   </div>
                   <ProviderIcon id={p.id} size={28} />
                 </button>
@@ -2636,9 +2537,7 @@ function AddProviderPicker({
                     >
                       {p.displayName}
                     </div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-                      {p.modelCount} models
-                    </div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount} models</div>
                   </div>
                   <ProviderIcon id={p.id} size={28} />
                 </button>
@@ -2735,10 +2634,8 @@ export function ModelsConfig({
     });
     setSelection((prev) => {
       if (!prev) return prev;
-      if (prev.type === "provider" && prev.name === oldName)
-        return { type: "provider", name: newName };
-      if (prev.type === "model" && prev.providerName === oldName)
-        return { ...prev, providerName: newName };
+      if (prev.type === "provider" && prev.name === oldName) return { type: "provider", name: newName };
+      if (prev.type === "model" && prev.providerName === oldName) return { ...prev, providerName: newName };
       return prev;
     });
   }, []);
@@ -2936,12 +2833,8 @@ export function ModelsConfig({
             }}
           >
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
-                {t("common.models")}
-              </span>
-              <code
-                style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}
-              >
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("common.models")}</span>
+              <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 ~/.omp/agent/models.yml
               </code>
             </div>
@@ -2997,8 +2890,7 @@ export function ModelsConfig({
                     background: selection?.type === "roles" ? "var(--bg-selected)" : "none",
                   }}
                   onMouseEnter={(e) => {
-                    if (selection?.type !== "roles")
-                      e.currentTarget.style.background = "var(--bg-hover)";
+                    if (selection?.type !== "roles") e.currentTarget.style.background = "var(--bg-hover)";
                   }}
                   onMouseLeave={(e) => {
                     if (selection?.type !== "roles") e.currentTarget.style.background = "none";
@@ -3020,9 +2912,7 @@ export function ModelsConfig({
                     <line x1="4" y1="17" x2="20" y2="17" />
                     <circle cx="15" cy="17" r="2.2" />
                   </svg>
-                  <span style={{ fontSize: 12, color: "var(--text)", flex: 1 }}>
-                    {t("roles.title")}
-                  </span>
+                  <span style={{ fontSize: 12, color: "var(--text)", flex: 1 }}>{t("roles.title")}</span>
                 </div>
                 <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
 
@@ -3118,8 +3008,7 @@ export function ModelsConfig({
                   </div>
                 ) : (
                   providers.map(([pName, pData]) => {
-                    const isProviderSelected =
-                      selection?.type === "provider" && selection.name === pName;
+                    const isProviderSelected = selection?.type === "provider" && selection.name === pName;
                     const models = pData.models ?? [];
                     return (
                       <div key={pName} style={{ marginBottom: 2 }}>
@@ -3136,8 +3025,7 @@ export function ModelsConfig({
                             background: isProviderSelected ? "var(--bg-selected)" : "none",
                           }}
                           onMouseEnter={(e) => {
-                            if (!isProviderSelected)
-                              e.currentTarget.style.background = "var(--bg-hover)";
+                            if (!isProviderSelected) e.currentTarget.style.background = "var(--bg-hover)";
                           }}
                           onMouseLeave={(e) => {
                             if (!isProviderSelected) e.currentTarget.style.background = "none";
@@ -3184,15 +3072,11 @@ export function ModelsConfig({
                         {/* Model rows */}
                         {models.map((m, i) => {
                           const isModelSelected =
-                            selection?.type === "model" &&
-                            selection.providerName === pName &&
-                            selection.index === i;
+                            selection?.type === "model" && selection.providerName === pName && selection.index === i;
                           return (
                             <div
                               key={i}
-                              onClick={() =>
-                                setSelection({ type: "model", providerName: pName, index: i })
-                              }
+                              onClick={() => setSelection({ type: "model", providerName: pName, index: i })}
                               style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -3203,8 +3087,7 @@ export function ModelsConfig({
                                 background: isModelSelected ? "var(--bg-selected)" : "none",
                               }}
                               onMouseEnter={(e) => {
-                                if (!isModelSelected)
-                                  e.currentTarget.style.background = "var(--bg-hover)";
+                                if (!isModelSelected) e.currentTarget.style.background = "var(--bg-hover)";
                               }}
                               onMouseLeave={(e) => {
                                 if (!isModelSelected) e.currentTarget.style.background = "none";
@@ -3338,9 +3221,7 @@ export function ModelsConfig({
               flexShrink: 0,
             }}
           >
-            {saveError && (
-              <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>
-            )}
+            {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
             <button
               onClick={onClose}
               style={{

@@ -129,18 +129,12 @@ for (const [label, state] of [
 
 test("accepts owned expiry, reopening and same-runtime relocation", () => {
   const h = harness();
-  assert.equal(
-    h.bindings.followRuntimeState({ sessionId: "c", runtimeId: "runtime:r1" }, "b", "runtime:r1"),
-    false,
-  );
+  assert.equal(h.bindings.followRuntimeState({ sessionId: "c", runtimeId: "runtime:r1" }, "b", "runtime:r1"), false);
   assert.equal(h.bindings.sessionIdRef.current, "c");
   assert.equal(h.bindings.followRuntimeState({ sessionId: "c" }, "c", "runtime:r1"), false);
   assert.equal(h.bindings.runtimeIdRef.current, null);
   assert.equal(h.continuation.current, null);
-  assert.equal(
-    h.bindings.followRuntimeState({ sessionId: "c", runtimeId: "runtime:r2" }, "c", null),
-    false,
-  );
+  assert.equal(h.bindings.followRuntimeState({ sessionId: "c", runtimeId: "runtime:r2" }, "c", null), false);
   assert.deepEqual(h.continuation.current, { sessionId: "c", runtimeId: "runtime:r2" });
 });
 
@@ -301,11 +295,7 @@ for (const name of ["waitForPromptSettlement", "waitForBashSettlement"]) {
     await settling;
     assertNewRuntime(h);
     assert.deepEqual(requests, ["/api/agent/runtime%3Ar1", "/api/agent/runtime%3Ar2"]);
-    assert.ok(
-      h.effects.some(
-        ([kind]) => kind === (name === "waitForPromptSettlement" ? "finish" : "history"),
-      ),
-    );
+    assert.ok(h.effects.some(([kind]) => kind === (name === "waitForPromptSettlement" ? "finish" : "history")));
   });
 
   for (const superseded of ["unmounted", "new run"]) {

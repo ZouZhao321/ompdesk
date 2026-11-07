@@ -29,9 +29,7 @@ function mixHex(from: string, to: string, amount: number): string {
   const fromRgb = parseHex(from);
   const toRgb = parseHex(to);
   if (!fromRgb || !toRgb) return from;
-  const mixed = fromRgb.map((channel, index) =>
-    Math.round(channel + (toRgb[index] - channel) * amount),
-  );
+  const mixed = fromRgb.map((channel, index) => Math.round(channel + (toRgb[index] - channel) * amount));
   return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
@@ -54,12 +52,7 @@ function contrastRatio(foreground: string, background: string): number | null {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function ensureContrast(
-  color: string,
-  target: string,
-  backgrounds: string[],
-  minimum: number,
-): string {
+function ensureContrast(color: string, target: string, backgrounds: string[], minimum: number): string {
   const hasContrast = (candidate: string) =>
     backgrounds.every((background) => {
       const ratio = contrastRatio(candidate, background);
@@ -79,16 +72,9 @@ function ensureContrast(
 }
 
 export async function getWebThemePalette(name: string): Promise<WebThemePalette> {
-  const [colors, exported] = await Promise.all([
-    getResolvedThemeColors(name),
-    getThemeExportColors(name),
-  ]);
+  const [colors, exported] = await Promise.all([getResolvedThemeColors(name), getThemeExportColors(name)]);
   const colorScheme = isLightTheme(name) ? "light" : "dark";
-  const pageBg = firstColor(
-    exported.pageBg,
-    colors.userMessageBg,
-    colorScheme === "light" ? "#ffffff" : "#111318",
-  );
+  const pageBg = firstColor(exported.pageBg, colors.userMessageBg, colorScheme === "light" ? "#ffffff" : "#111318");
   const panelBg = firstColor(exported.cardBg, colors.statusLineBg, colors.toolPendingBg, pageBg);
   const hoverBg = firstColor(colors.borderMuted, colors.border, panelBg);
   const selectedBg = firstColor(colors.selectedBg, colors.borderAccent, hoverBg);
@@ -130,19 +116,14 @@ export async function getWebThemePalette(name: string): Promise<WebThemePalette>
 export async function getWebThemeConfig(settings: Settings): Promise<WebThemeConfig> {
   const dark = getSetting<string>(settings, "theme.dark") ?? "titanium";
   const light = getSetting<string>(settings, "theme.light") ?? "light";
-  const [darkPalette, lightPalette] = await Promise.all([
-    getWebThemePalette(dark),
-    getWebThemePalette(light),
-  ]);
+  const [darkPalette, lightPalette] = await Promise.all([getWebThemePalette(dark), getWebThemePalette(light)]);
   return {
     names: { dark, light },
     palettes: { dark: darkPalette, light: lightPalette },
   };
 }
 
-export async function getAvailableWebThemes(): Promise<
-  Array<{ name: string; colorScheme: "dark" | "light" }>
-> {
+export async function getAvailableWebThemes(): Promise<Array<{ name: string; colorScheme: "dark" | "light" }>> {
   const names = await getAvailableThemes();
   return names.map((name) => ({ name, colorScheme: isLightTheme(name) ? "light" : "dark" }));
 }
