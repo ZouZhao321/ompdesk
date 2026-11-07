@@ -2,6 +2,7 @@ import type {
   AgentSessionEvent,
   SessionManager,
   Settings,
+  SkillsSettings,
   SlashCommandInfo as OmpSlashCommandInfo,
   Theme,
 } from "@oh-my-pi/pi-coding-agent";
@@ -82,7 +83,8 @@ interface SkillLike {
   name: string;
   description?: string;
   source?: string;
-  filePath?: string;
+  filePath: string;
+  baseDir: string;
 }
 
 interface ExtensionRunnerLike {
@@ -164,6 +166,8 @@ export interface AgentSessionLike {
   readonly extensionRunner: ExtensionRunnerLike | undefined;
   readonly promptTemplates: readonly PromptTemplateLike[];
   readonly skills: readonly SkillLike[];
+  /** Resolved `skills.*` settings; absent when the SDK was built without them. */
+  readonly skillsSettings?: SkillsSettings;
 
   readonly bindExtensions?: unknown;
   reload(options?: { beforeSessionStart?: () => void | Promise<void> }): Promise<void>;
@@ -241,9 +245,21 @@ export interface AgentSessionLike {
   setGoalModeState?(state: GoalModeState | undefined): void;
   sendGoalModeContext(options?: { deliverAs?: "steer" | "followUp" | "nextTurn" }): Promise<void>;
   promptCustomMessage(
-    message: { customType: string; content: string; display?: boolean; attribution?: "user" | "agent" },
-    options?: { streamingBehavior?: "steer" | "followUp" },
-  ): Promise<void>;
+    message: {
+      customType: string;
+      content: string | Array<
+        { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
+      >;
+      display?: boolean;
+      details?: unknown;
+      attribution?: "user" | "agent";
+    },
+    options?: {
+      streamingBehavior?: "steer" | "followUp";
+      queueChipText?: string;
+      queueOnly?: boolean;
+    },
+  ): Promise<boolean>;
 }
 
 /** The subset of omp's `GoalRuntime` ompdesk drives. */

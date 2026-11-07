@@ -14,6 +14,7 @@ import type { SessionEntry as OmpSessionEntry, SessionInfo as OmpSessionInfo } f
 import { getOmpRuntime } from "./omp-runtime";
 import { normalizeToolCalls } from "./normalize";
 import { sessionPathKey } from "./session-path";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
@@ -46,6 +47,75 @@ export function mergeSessionLists(
   return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
 }
 
+/** 首条消息扫描的上限：技能正文可能很长，按块读满这个额度为止。 */
+const FIRST_MESSAGE_SCAN_BYTES = 1024 * 1024;
+const FIRST_MESSAGE_SCAN_CHUNK = 64 * 1024;
+
+/**
+ * `/skill:name args` when a session opens with a user-invoked skill command.
+ *
+ * omp 的列表只认 `message` 条目：技能指令落盘为 `custom_message`，要么被读成
+ * 「没有消息」，要么被下一条助手回复顶替，两种都不该拿来当标题。这里按行读到
+ * 第一条用户回合为止，不按固定字节窗口截断（技能正文常常超过窗口）。
+ * 坏文件只丢一个标题：读取或解析失败一律按「没有首条消息」处理。
+ */
+function readLeadingSkillCommand(filePath: string): string | undefined {
+  if (!existsSync(filePath)) return undefined;
+  let handle: number;
+  try {
+    handle = openSync(filePath, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const chunk = Buffer.allocUnsafe(FIRST_MESSAGE_SCAN_CHUNK);
+    let carry = "";
+    let offset = 0;
+    while (offset < FIRST_MESSAGE_SCAN_BYTES) {
+      const bytesRead = readSync(handle, chunk, 0, chunk.length, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+      const lines = (carry + chunk.subarray(0, bytesRead).toString("utf8")).split("\n");
+      carry = lines.pop() ?? "";
+      const verdict = inspectLeadingLines(lines);
+      if (verdict !== undefined) return verdict ?? undefined;
+    }
+    return inspectLeadingLines([carry]) ?? undefined;
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(handle);
+  }
+}
+
+/**
+ * `undefined`：还没遇到用户回合，继续读；`null`：遇到用户或助手消息，停止；
+ * 字符串：命令行标签。
+ */
+function inspectLeadingLines(lines: readonly string[]): string | null | undefined {
+  for (const line of lines) {
+    if (!line.includes('"type"')) continue;
+    let entry: {
+      type?: string;
+      customType?: string;
+      attribution?: string;
+      details?: unknown;
+      message?: { role?: string };
+    };
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      // 半条记录或外部生成的历史文件：跳过这一行，不影响其它会话。
+      continue;
+    }
+    if (entry.type === "custom_message" && isUserSkillPrompt(entry)) {
+      return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+    }
+    if (entry.type === "message" && entry.message?.role !== "bashExecution") return null;
+  }
+  return undefined;
+}
+
 async function loadAllSessions(): Promise<SessionInfo[]> {
   // Property access (not a bound import) so tests can stub SessionManager.listAll.
   const ompSessions: OmpSessionInfo[] = await SessionManager.listAll();
@@ -55,8 +125,10 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   // stores an absolute path. Both forms must resolve to a parent row.
   const idSet = new Set(ompSessions.map((s) => s.id));
 
-  const sessions = ompSessions.map((s) => {
+  const sessions = await Promise.all(ompSessions.map(async (s) => {
     cacheSessionPath(s.id, s.path);
+    const listedFirstMessage = s.firstMessage || "(no messages)";
+    const skillCommand = readLeadingSkillCommand(s.path);
     return {
       path: s.path,
       id: s.id,
@@ -65,7 +137,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
       modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
       messageCount: s.messageCount,
-      firstMessage: s.firstMessage || "(no messages)",
+      firstMessage: skillCommand ?? listedFirstMessage,
       parentSessionId: s.parentSessionPath
         ? pathToId.get(sessionPathKey(s.parentSessionPath))
           ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
@@ -73,7 +145,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       transient: false,
       ...(s.status ? { status: s.status } : {}),
     };
-  });
+  }));
   return attachSessionProjectInfo(sessions);
 }
 
@@ -568,6 +640,7 @@ function entryToUiMessage(
         customType: entry.customType,
         content: entry.content,
         display: entry.display,
+        attribution: entry.attribution,
         details: entry.details,
         timestamp: parseEntryTimestamp(entry.timestamp),
       };

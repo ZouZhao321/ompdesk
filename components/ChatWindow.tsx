@@ -5,6 +5,7 @@ import type {
   AgentMessage,
   BashExecutionMessage,
   BlockingExtensionUiRequest,
+  CustomMessage,
   ExtensionUiRequest,
   SessionInfo,
   SessionTreeNode,
@@ -17,6 +18,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { buildRewindEntries } from "@/lib/rewind";
 import type { DisplayOptions } from "@/lib/message-display";
 import type { WrittenFile } from "@/lib/turn-written-files";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { buildTranscriptItems } from "@/lib/transcript-items";
 import {
   buildTranscriptRailDots,
@@ -157,6 +159,13 @@ const TRANSCRIPT_SLOTS: Components<TranscriptListItem, TranscriptSlotsContext> =
 };
 
 function getUserInputText(message: AgentMessage): string | null {
+  // 技能指令是用户回合，跳转条与输入历史都要把它算进来。
+  if (message.role === "custom" && isUserSkillPrompt(message as CustomMessage)) {
+    const label = skillPromptCommandLabel(
+      (message as CustomMessage).details as SkillPromptDetailsLike | undefined,
+    );
+    return label.trim().length > 0 ? label.trim() : null;
+  }
   if (message.role !== "user") return null;
   if (typeof message.content === "string") {
     const text = message.content.trim();
