@@ -57,13 +57,16 @@ jobs:
       - name: Verify (typecheck, tests, build, dev smoke)
         run: bun run ci
 
-      # `bun run build` 的产物留在工作区，这里直接用它打 tgz 并装进空项目：
-      # 走用户下载安装的路径，`files` 漏项、bin 路径写错才会暴露。
-      - name: Verify the packed tarball installs and serves
-        run: bun run verify:package
+      # `bun run build` 的产物留在工作区，这里打 tgz 并交给三个平台的冒烟作业：
+      # `npm pack` 决定 `files` 清单，打包本身也在这一层验证。
+      - name: Pack the tarball
+        shell: bash
+        run: |
+          mkdir -p .tmp/pack-check/tarball
+          npm pack --pack-destination .tmp/pack-check/tarball
 
-      # 发布出去的就是这一个 tgz：Windows 与 macOS 作业装它，而不是各平台
-      # 重新构建一份永远不会发布的产物。
+      # 发布出去的就是这一个 tgz：三个平台装它，而不是各自重新构建一份
+      # 永远不会发布的产物。
       - name: Upload the packed tarball
         uses: actions/upload-artifact@v4
         with:
@@ -78,17 +81,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # 三个支持平台各装一遍同一个 tgz：Linux 既是生产者也要按消费者验，
+        # 否则「本机构建能起」与「下载安装能起」两条路径只有后两条被覆盖。
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -101,8 +101,9 @@ jobs:
           name: ompdesk-tarball
           path: .tmp/pack-tarball
 
-      # 安装、启动与首页探测都与 Linux 那一份相同，差别只在运行平台：
-      # npm 的 sh 包装、Bun 可执行文件解析、路径分隔符与端口绑定都要按各平台真实走一遍。
+      # 安装、启动与首页探测与本地命令完全相同，差别只在运行平台：
+      # 依赖解包、Bun 可执行文件解析、路径分隔符、进程树收尾与端口绑定
+      # 都要按各平台真实走一遍。
       - name: Install the tarball and serve the homepage
         env:
           OMPDESK_PACK_TARBALL: ${{ github.workspace }}/.tmp/pack-tarball
