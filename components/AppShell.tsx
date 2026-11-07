@@ -955,8 +955,8 @@ export function AppShell() {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
 
-  const handleOpenLinkedFile = useCallback((filePath: string) => {
-    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
+  const handleOpenLinkedFile = useCallback((filePath: string, options?: { modeHint?: "diff" }) => {
+    handleOpenFile(filePath, getFileName(filePath), { ...options, sourceSessionId: selectedSession?.id ?? null });
   }, [handleOpenFile, selectedSession?.id]);
 
   // 文件标签打开的链接沿用该标签的 sourceSessionId；身份稳定，标签正文才能用 memo。

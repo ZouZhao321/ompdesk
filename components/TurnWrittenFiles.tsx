@@ -6,13 +6,13 @@ import type { WrittenFile } from "@/lib/turn-written-files";
 import { getFileIcon } from "./FileIcons";
 
 /**
- * Lists the files a turn actually wrote, as buttons that open each one in the
- * preview pane. Entries come from the turn's successful `write`/`edit` tool
- * calls — the reply text is never scanned for paths.
+ * Lists the files a turn actually wrote, as buttons that open each one's diff
+ * in the preview pane. Entries come from the turn's successful `write`/`edit`
+ * tool calls — the reply text is never scanned for paths.
  */
 export function TurnWrittenFiles({ files, onOpenFile }: {
   files: WrittenFile[];
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: { modeHint?: "diff" }) => void;
 }) {
   const { t } = useI18n();
   if (files.length === 0) return null;
@@ -28,7 +28,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
             className="file-chip-button"
             title={filePath}
             aria-label={t("chat.openWrittenFile", { name })}
-            onClick={() => onOpenFile?.(filePath)}
+            onClick={() => onOpenFile?.(filePath, { modeHint: "diff" })}
             style={{
               display: "inline-flex",
               alignItems: "center",
