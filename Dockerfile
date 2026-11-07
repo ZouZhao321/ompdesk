@@ -34,12 +34,18 @@ RUN apt-get update \
 # usual first human account on Linux; override for anything else:
 #   docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) .
 # Docker Desktop on macOS and Windows remaps ownership itself and needs neither.
+# The Bun base image already uses GID 1000, so both the group and the user are
+# created only when the requested ids are still free; the final `USER` is
+# numeric so it works either way.
 ARG UID=1000
 ARG GID=1000
-RUN groupadd --gid "${GID}" omp \
- && useradd --uid "${UID}" --gid "${GID}" --create-home --home-dir /home/omp omp \
- && mkdir -p /home/omp/.omp/agent /workspace \
- && chown -R omp:omp /home/omp /workspace
+RUN set -eux; \
+    if ! getent group "${GID}" > /dev/null; then groupadd --gid "${GID}" omp; fi; \
+    if ! getent passwd "${UID}" > /dev/null; then \
+      useradd --uid "${UID}" --gid "${GID}" --create-home --home-dir /home/omp omp; \
+    fi; \
+    mkdir -p /home/omp/.omp/agent /workspace; \
+    chown -R "${UID}:${GID}" /home/omp /workspace
 
 WORKDIR /app
 
@@ -70,7 +76,7 @@ ENV HOME=/home/omp \
 VOLUME ["/home/omp/.omp"]
 EXPOSE 30141
 
-USER omp
+USER ${UID}:${GID}
 # Not /app: the launcher records its own cwd as OMPDESK_LAUNCH_CWD so relative
 # project paths in the browser resolve against it.
 WORKDIR /workspace
