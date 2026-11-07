@@ -12,7 +12,10 @@ import {
 } from "@oh-my-pi/pi-coding-agent";
 import { buildAvailableSlashCommands } from "@oh-my-pi/pi-coding-agent/slash-commands/available-commands";
 import { BUILTIN_SLASH_COMMAND_DEFS } from "@oh-my-pi/pi-coding-agent/slash-commands/builtin-registry";
-import { executeAcpBuiltinSlashCommand, type AcpBuiltinSlashCommandResult } from "@oh-my-pi/pi-coding-agent/slash-commands/acp-builtins";
+import {
+  executeAcpBuiltinSlashCommand,
+  type AcpBuiltinSlashCommandResult,
+} from "@oh-my-pi/pi-coding-agent/slash-commands/acp-builtins";
 import { discoverCustomToolPaths } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
 import { initializeExtensions } from "@oh-my-pi/pi-coding-agent/modes/runtime-init";
 import { readPlanFile } from "@oh-my-pi/pi-coding-agent/plan-mode/plan-files";
@@ -173,19 +176,39 @@ class PlainTextTheme extends Theme {
     );
   }
 
-  override fg(...[, text]: Parameters<Theme["fg"]>): string { return text; }
-  override bg(...[, text]: Parameters<Theme["bg"]>): string { return text; }
-  override bold(text: string): string { return text; }
-  override italic(text: string): string { return text; }
-  override underline(text: string): string { return text; }
-  override inverse(text: string): string { return text; }
-  override strikethrough(text: string): string { return text; }
-  override getFgAnsi(): string { return ""; }
-  override getBgAnsi(): string { return ""; }
+  override fg(...[, text]: Parameters<Theme["fg"]>): string {
+    return text;
+  }
+  override bg(...[, text]: Parameters<Theme["bg"]>): string {
+    return text;
+  }
+  override bold(text: string): string {
+    return text;
+  }
+  override italic(text: string): string {
+    return text;
+  }
+  override underline(text: string): string {
+    return text;
+  }
+  override inverse(text: string): string {
+    return text;
+  }
+  override strikethrough(text: string): string {
+    return text;
+  }
+  override getFgAnsi(): string {
+    return "";
+  }
+  override getBgAnsi(): string {
+    return "";
+  }
   override getThinkingBorderColor(): (text: string) => string {
     return (text) => text;
   }
-  override getBashModeBorderColor(): (text: string) => string { return (text) => text; }
+  override getBashModeBorderColor(): (text: string) => string {
+    return (text) => text;
+  }
 }
 
 const PLAIN_TEXT_THEME = new PlainTextTheme();
@@ -235,7 +258,9 @@ export const BROWSER_NATIVE_SLASH_COMMANDS = ["fork", "goal"] as const;
  * /fork pane/window/tab subcommands that open the fork in a terminal
  * multiplexer; the browser fork ignores them, so it keeps its own description.
  */
-const BROWSER_NATIVE_DESCRIPTIONS: Partial<Record<(typeof BROWSER_NATIVE_SLASH_COMMANDS)[number], string>> = {
+const BROWSER_NATIVE_DESCRIPTIONS: Partial<
+  Record<(typeof BROWSER_NATIVE_SLASH_COMMANDS)[number], string>
+> = {
   fork: "Create a new fork from a previous message",
 };
 
@@ -247,11 +272,15 @@ const BROWSER_NATIVE_DESCRIPTIONS: Partial<Record<(typeof BROWSER_NATIVE_SLASH_C
  * because it has no shared SDK handler yet. /handoff gained one in omp 18, so
  * it now arrives through discovery like every other shared builtin.
  */
-export async function getAvailableSlashCommands(session: AgentSessionLike): Promise<SlashCommandInfo[]> {
+export async function getAvailableSlashCommands(
+  session: AgentSessionLike,
+): Promise<SlashCommandInfo[]> {
   const commands: SlashCommandInfo[] = [];
   const seenNames = new Set<string>();
 
-  const discovered = await buildAvailableSlashCommands(session as unknown as AvailableCommandsSession);
+  const discovered = await buildAvailableSlashCommands(
+    session as unknown as AvailableCommandsSession,
+  );
   for (const command of discovered) {
     appendSlashCommand(commands, seenNames, command);
   }
@@ -360,28 +389,32 @@ export class AgentSessionWrapper {
       return;
     }
     if (event.type !== "subagent_lifecycle") return;
-    const payload = event.payload as {
-      id?: string;
-      index?: number;
-      agent?: string;
-      agentSource?: "bundled" | "user" | "project";
-      description?: string;
-      status?: "started" | "completed" | "failed" | "aborted";
-      sessionFile?: string;
-      parentToolCallId?: string;
-    } | undefined;
+    const payload = event.payload as
+      | {
+          id?: string;
+          index?: number;
+          agent?: string;
+          agentSource?: "bundled" | "user" | "project";
+          description?: string;
+          status?: "started" | "completed" | "failed" | "aborted";
+          sessionFile?: string;
+          parentToolCallId?: string;
+        }
+      | undefined;
     if (!payload?.id || !payload.status) return;
     const live = this.subagents.getSubagents().find((entry) => entry.id === payload.id);
     if (payload.status === "started") {
       if (live) this.rememberSubagentSnapshot(live as unknown as SubagentSnapshot);
       return;
     }
-    const previous = (live as unknown as SubagentSnapshot | undefined) ?? this.subagentHistory.get(payload.id);
-    const terminalStatus: SubagentSnapshot["status"] = payload.status === "failed"
-      ? "failed"
-      : payload.status === "aborted"
-        ? "aborted"
-        : "completed";
+    const previous =
+      (live as unknown as SubagentSnapshot | undefined) ?? this.subagentHistory.get(payload.id);
+    const terminalStatus: SubagentSnapshot["status"] =
+      payload.status === "failed"
+        ? "failed"
+        : payload.status === "aborted"
+          ? "aborted"
+          : "completed";
     this.rememberSubagentSnapshot({
       id: payload.id,
       index: payload.index ?? previous?.index ?? 0,
@@ -394,9 +427,7 @@ export class AgentSessionWrapper {
       sessionFile: payload.sessionFile ?? previous?.sessionFile,
       lastUpdate: Date.now(),
       parentToolCallId: payload.parentToolCallId ?? previous?.parentToolCallId,
-      progress: previous?.progress
-        ? { ...previous.progress, status: terminalStatus }
-        : undefined,
+      progress: previous?.progress ? { ...previous.progress, status: terminalStatus } : undefined,
     });
   }
 
@@ -436,13 +467,14 @@ export class AgentSessionWrapper {
   }
 
   isRunning(): boolean {
-    return this._alive && (
-      this.promptRunning
-      || this.handoffRunning
-      || this.inner.isStreaming
-      || this.inner.isCompacting
-      || this.inner.isBashRunning
-      || this.subagents.getSubagents().length > 0
+    return (
+      this._alive &&
+      (this.promptRunning ||
+        this.handoffRunning ||
+        this.inner.isStreaming ||
+        this.inner.isCompacting ||
+        this.inner.isBashRunning ||
+        this.subagents.getSubagents().length > 0)
     );
   }
 
@@ -458,7 +490,6 @@ export class AgentSessionWrapper {
   bindToolUiContext(setter: (uiContext: ExtensionUiContextLike, hasUI: boolean) => void): void {
     setter(this.createExtensionUiContext(), true);
   }
-
 
   start(): void {
     this.syncPlanModeFromSession();
@@ -496,7 +527,10 @@ export class AgentSessionWrapper {
 
   beginExtensionBinding(options: ExtensionBindingOptions = {}): void {
     void this.ensureExtensionsBound(options).catch((err) => {
-      console.error("[ompdesk] failed to dispatch session_start to extensions:", err instanceof Error ? err.message : err);
+      console.error(
+        "[ompdesk] failed to dispatch session_start to extensions:",
+        err instanceof Error ? err.message : err,
+      );
     });
   }
 
@@ -520,29 +554,34 @@ export class AgentSessionWrapper {
       // `omp --mode rpc` does, then layer our browser-backed UI context on top.
       await initializeExtensions(this.inner as never, {
         uiContext: this.createExtensionUiContext() as never,
-        reportSendError: (action, error) => this.emit({
-          type: "extension_error",
-          extensionPath: action,
-          event: "send",
-          error: error.message,
-        }),
-        reportRuntimeError: (error) => this.emit({
-          type: "extension_error",
-          extensionPath: error.extensionPath,
-          event: error.event,
-          error: error.error,
-        }),
-        onShutdown: () => this.emit({
-          type: "extension_ui_request",
-          id: randomUUID(),
-          method: "notify",
-          notifyType: "warning",
-          message: "Extension requested shutdown, but shutdown is not supported in ompdesk.",
-        } as ExtensionUiRequest as AgentEvent),
+        reportSendError: (action, error) =>
+          this.emit({
+            type: "extension_error",
+            extensionPath: action,
+            event: "send",
+            error: error.message,
+          }),
+        reportRuntimeError: (error) =>
+          this.emit({
+            type: "extension_error",
+            extensionPath: error.extensionPath,
+            event: error.event,
+            error: error.error,
+          }),
+        onShutdown: () =>
+          this.emit({
+            type: "extension_ui_request",
+            id: randomUUID(),
+            method: "notify",
+            notifyType: "warning",
+            message: "Extension requested shutdown, but shutdown is not supported in ompdesk.",
+          } as ExtensionUiRequest as AgentEvent),
       });
       this.extensionsBound = true;
       this.applyForcedEmptySystemPrompt();
-      console.log(`[ompdesk] session_start dispatched to extensions for session ${this.inner.sessionId}`);
+      console.log(
+        `[ompdesk] session_start dispatched to extensions for session ${this.inner.sessionId}`,
+      );
     })().catch((err) => {
       this.extensionBindingError = err;
       throw err;
@@ -565,13 +604,15 @@ export class AgentSessionWrapper {
   }
 
   private shouldWaitForExtensions(type: string): boolean {
-    return type === "prompt"
-      || type === "steer"
-      || type === "follow_up"
-      || type === "handoff"
-      || type === "get_commands"
-      || type === "execute_slash_command"
-      || type === "goal";
+    return (
+      type === "prompt" ||
+      type === "steer" ||
+      type === "follow_up" ||
+      type === "handoff" ||
+      type === "get_commands" ||
+      type === "execute_slash_command" ||
+      type === "goal"
+    );
   }
 
   private async withFinalRunningNotification<T>(operation: () => Promise<T>): Promise<T> {
@@ -593,17 +634,21 @@ export class AgentSessionWrapper {
     const startedAt = performance.now();
     try {
       const result = await operation();
-      writeAgentRunRecords(this.runLog.command(command, {
-        ok: true,
-        durationMs: performance.now() - startedAt,
-      }));
+      writeAgentRunRecords(
+        this.runLog.command(command, {
+          ok: true,
+          durationMs: performance.now() - startedAt,
+        }),
+      );
       return result;
     } catch (error) {
-      writeAgentRunRecords(this.runLog.command(command, {
-        ok: false,
-        durationMs: performance.now() - startedAt,
-        error,
-      }));
+      writeAgentRunRecords(
+        this.runLog.command(command, {
+          ok: false,
+          durationMs: performance.now() - startedAt,
+          error,
+        }),
+      );
       throw error;
     }
   }
@@ -633,11 +678,12 @@ export class AgentSessionWrapper {
   private get goalMode(): GoalModeController {
     if (!this.goalModeController) {
       this.goalModeController = new GoalModeController(this.inner, {
-        isBusy: () => this.promptRunning
-          || this.handoffRunning
-          || this.inner.isStreaming
-          || this.inner.isCompacting
-          || this.inner.isBashRunning,
+        isBusy: () =>
+          this.promptRunning ||
+          this.handoffRunning ||
+          this.inner.isStreaming ||
+          this.inner.isCompacting ||
+          this.inner.isBashRunning,
         runContinuation: (prompt) => this.runGoalContinuation(prompt),
         onStatusChange: (status) => this.emit({ type: "goal_status", status }),
       });
@@ -690,7 +736,11 @@ export class AgentSessionWrapper {
         break;
       }
       const planFilePath = persistedMode?.data?.planFilePath;
-      if (persistedMode?.mode === "plan" && typeof planFilePath === "string" && planFilePath.length > 0) {
+      if (
+        persistedMode?.mode === "plan" &&
+        typeof planFilePath === "string" &&
+        planFilePath.length > 0
+      ) {
         state = {
           enabled: true,
           planFilePath,
@@ -736,7 +786,7 @@ export class AgentSessionWrapper {
     const responseValue = await this.requestExtensionUi(
       { method: "plan_review", title: resolvedTitle, planFilePath, planContent },
       JSON.stringify({ action: "refine" }),
-      (response) => "value" in response ? response.value : JSON.stringify({ action: "refine" }),
+      (response) => ("value" in response ? response.value : JSON.stringify({ action: "refine" })),
     );
     let choice: { action?: unknown; feedback?: unknown } = {};
     try {
@@ -752,10 +802,12 @@ export class AgentSessionWrapper {
       this.inner.setPlanModeState?.(undefined);
       this.inner.sessionManager.appendModeChange("none");
       return {
-        content: [{
-          type: "text",
-          text: `Plan approved at ${planFilePath}. Plan mode exited; proceed with the implementation.`,
-        }],
+        content: [
+          {
+            type: "text",
+            text: `Plan approved at ${planFilePath}. Plan mode exited; proceed with the implementation.`,
+          },
+        ],
         details,
       };
     }
@@ -766,18 +818,21 @@ export class AgentSessionWrapper {
     }
     const feedback = typeof choice.feedback === "string" ? choice.feedback.trim() : "";
     return {
-      content: [{
-        type: "text",
-        text: [
-          "Plan refinement requested.",
-          feedback ? `User feedback:\n${feedback}` : "",
-          `Update the plan file, then write ${resolvedTitle} to xd://propose again when ready.`,
-        ].filter(Boolean).join("\n\n"),
-      }],
+      content: [
+        {
+          type: "text",
+          text: [
+            "Plan refinement requested.",
+            feedback ? `User feedback:\n${feedback}` : "",
+            `Update the plan file, then write ${resolvedTitle} to xd://propose again when ready.`,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      ],
       details,
     };
   }
-
 
   syncSessionIdentity(): void {
     const registry = globalThis.__ompSessions;
@@ -794,7 +849,8 @@ export class AgentSessionWrapper {
     if (this.sessionFile) cacheSessionPath(currentId, this.sessionFile);
     invalidateSessionListCache();
     // Existing streams still hold this wrapper after its registry key moves.
-    for (const listener of this.listeners) listener({ type: "session_changed", sessionId: currentId, runtimeId: this.runtimeId });
+    for (const listener of this.listeners)
+      listener({ type: "session_changed", sessionId: currentId, runtimeId: this.runtimeId });
   }
 
   private emit(event: AgentEvent): void {
@@ -821,15 +877,21 @@ export class AgentSessionWrapper {
 
   private resetIdleTimer(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => {
-      if (this.isRunning()) {
-        this.resetIdleTimer();
-        return;
-      }
-      void this.shutdown().catch((error) => {
-        console.error("[pi-web] failed to shut down idle session:", error instanceof Error ? error.message : error);
-      });
-    }, 10 * 60 * 1000);
+    this.idleTimer = setTimeout(
+      () => {
+        if (this.isRunning()) {
+          this.resetIdleTimer();
+          return;
+        }
+        void this.shutdown().catch((error) => {
+          console.error(
+            "[pi-web] failed to shut down idle session:",
+            error instanceof Error ? error.message : error,
+          );
+        });
+      },
+      10 * 60 * 1000,
+    );
   }
 
   private persistBashOnlySession(): void {
@@ -840,9 +902,8 @@ export class AgentSessionWrapper {
     const header = manager.getHeader();
     if (!header) return;
 
-    const content = [header, ...manager.getEntries()]
-      .map((entry) => JSON.stringify(entry))
-      .join("\n") + "\n";
+    const content =
+      [header, ...manager.getEntries()].map((entry) => JSON.stringify(entry)).join("\n") + "\n";
     writeFileSync(sessionFile, content, { encoding: "utf8", flag: "wx" });
 
     // omp normally delays the first flush until an assistant message exists.
@@ -890,12 +951,17 @@ export class AgentSessionWrapper {
         // and supersedes one already scheduled.
         this.goalMode.onUserPrompt();
         // Fire and forget — events come via subscribe
-        const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
+        const promptImages = command.images as
+          | Array<{ type: "image"; data: string; mimeType: string }>
+          | undefined;
         const streamingBehavior = command.streamingBehavior as "steer" | "followUp" | undefined;
         // 只排入当前轮次的 prompt 属于这次运行，记为 steer/follow_up 结果，不再另开 run。
-        const queuedCommand = streamingBehavior === "steer"
-          ? "steer"
-          : streamingBehavior === "followUp" ? "follow_up" : undefined;
+        const queuedCommand =
+          streamingBehavior === "steer"
+            ? "steer"
+            : streamingBehavior === "followUp"
+              ? "follow_up"
+              : undefined;
         const startedAt = performance.now();
         this.promptRunning = true;
         notifyRunningChange();
@@ -907,13 +973,15 @@ export class AgentSessionWrapper {
           this.promptRunning = false;
           this.resetIdleTimer();
           invalidateSessionListCache();
-          writeAgentRunRecords(queuedCommand
-            ? this.runLog.command(queuedCommand, {
-              ok: false,
-              durationMs: performance.now() - startedAt,
-              error,
-            })
-            : this.runLog.finish({ stopReason: "error", error }));
+          writeAgentRunRecords(
+            queuedCommand
+              ? this.runLog.command(queuedCommand, {
+                  ok: false,
+                  durationMs: performance.now() - startedAt,
+                  error,
+                })
+              : this.runLog.finish({ stopReason: "error", error }),
+          );
           this.emit({
             type: "prompt_error",
             errorMessage: error instanceof Error ? error.message : String(error),
@@ -938,18 +1006,25 @@ export class AgentSessionWrapper {
           failPrompt(error);
           throw error;
         }
-        running.then(() => {
-          this.promptRunning = false;
-          this.resetIdleTimer();
-          writeAgentRunRecords(queuedCommand
-            ? this.runLog.command(queuedCommand, { ok: true, durationMs: performance.now() - startedAt })
-            : this.runLog.finish());
-          if (!streamingBehavior) {
-            this.emit({ type: "prompt_done" });
-            void flushSessionTelemetry();
-          }
-          notifyRunningChange();
-        }).catch(failPrompt);
+        running
+          .then(() => {
+            this.promptRunning = false;
+            this.resetIdleTimer();
+            writeAgentRunRecords(
+              queuedCommand
+                ? this.runLog.command(queuedCommand, {
+                    ok: true,
+                    durationMs: performance.now() - startedAt,
+                  })
+                : this.runLog.finish(),
+            );
+            if (!streamingBehavior) {
+              this.emit({ type: "prompt_done" });
+              void flushSessionTelemetry();
+            }
+            notifyRunningChange();
+          })
+          .catch(failPrompt);
         return null;
       }
 
@@ -961,7 +1036,7 @@ export class AgentSessionWrapper {
         const hadRun = this.promptRunning;
         try {
           await this.withRunCommand("abort", () =>
-            this.withFinalRunningNotification(() => this.inner.abort())
+            this.withFinalRunningNotification(() => this.inner.abort()),
           );
         } finally {
           // A failing `abort()` still ends the run it targeted, or that run
@@ -993,7 +1068,11 @@ export class AgentSessionWrapper {
             followUp: [...this.inner.getQueuedMessages().followUp],
           },
           contextUsage: contextUsage
-            ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
+            ? {
+                percent: contextUsage.percent,
+                contextWindow: contextUsage.contextWindow,
+                tokens: contextUsage.tokens,
+              }
             : null,
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           configuredThinkingLevel: this.inner.configuredThinkingLevel() ?? "off",
@@ -1016,9 +1095,12 @@ export class AgentSessionWrapper {
         return readRpcSubagentTranscript(transcriptFile, selector.fromByte);
       }
 
-
       case "set_model": {
-        const { provider, modelId, role } = command as { provider: string; modelId: string; role?: string };
+        const { provider, modelId, role } = command as {
+          provider: string;
+          modelId: string;
+          role?: string;
+        };
         // modelRegistry.find() takes (provider, modelId) as two arguments — passing a
         // pre-joined "provider/modelId" selector leaves modelId undefined and throws
         // inside the SDK before we ever get a chance to report "model not found".
@@ -1062,11 +1144,13 @@ export class AgentSessionWrapper {
           const currentSessionFile = this.inner.sessionFile;
 
           if (!currentSessionFile) {
-            writeAgentRunRecords(this.runLog.command("fork", {
-              ok: true,
-              cancelled: true,
-              durationMs: performance.now() - startedAt,
-            }));
+            writeAgentRunRecords(
+              this.runLog.command("fork", {
+                ok: true,
+                cancelled: true,
+                durationMs: performance.now() - startedAt,
+              }),
+            );
             return { cancelled: true };
           }
 
@@ -1076,43 +1160,47 @@ export class AgentSessionWrapper {
           const sessionDir = sessionManager.getSessionDir();
           let newSessionFile: string;
 
-        // The map forks after a whole turn (includeEntry), the chat Fork button
-        // before the selected message (entry.parentId).
-        const cutEntryId = command.includeEntry === true ? entryId : entry.parentId;
-        if (!cutEntryId) {
-          // Fork before the first message: create an empty session linked to this one
-          const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
-          await newManager.newSession({ parentSession: currentSessionFile });
-          await newManager.ensureOnDisk();
-          newSessionFile = newManager.getSessionFile() as string;
-        } else {
-          // Copy the path up to and including the cut entry.
-          const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
-          const forkedPath = sourceManager.createBranchedSession(cutEntryId);
-          if (!forkedPath) throw new Error("Failed to create forked session");
-          newSessionFile = forkedPath;
-        }
+          // The map forks after a whole turn (includeEntry), the chat Fork button
+          // before the selected message (entry.parentId).
+          const cutEntryId = command.includeEntry === true ? entryId : entry.parentId;
+          if (!cutEntryId) {
+            // Fork before the first message: create an empty session linked to this one
+            const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
+            await newManager.newSession({ parentSession: currentSessionFile });
+            await newManager.ensureOnDisk();
+            newSessionFile = newManager.getSessionFile() as string;
+          } else {
+            // Copy the path up to and including the cut entry.
+            const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
+            const forkedPath = sourceManager.createBranchedSession(cutEntryId);
+            if (!forkedPath) throw new Error("Failed to create forked session");
+            newSessionFile = forkedPath;
+          }
 
-        newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
-        cacheSessionPath(newSessionId, newSessionFile);
-        invalidateSessionListCache();
-      } catch (error) {
-        writeAgentRunRecords(this.runLog.command("fork", {
-          ok: false,
-          durationMs: performance.now() - startedAt,
-          error,
-        }));
-        throw error;
+          newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
+          cacheSessionPath(newSessionId, newSessionFile);
+          invalidateSessionListCache();
+        } catch (error) {
+          writeAgentRunRecords(
+            this.runLog.command("fork", {
+              ok: false,
+              durationMs: performance.now() - startedAt,
+              error,
+            }),
+          );
+          throw error;
         }
 
         // The fork is committed from here on: its result is recorded before the
         // wrapper teardown, so a shutdown failure can never turn the same fork
         // into a contradictory failure record.
-        writeAgentRunRecords(this.runLog.command("fork", {
-          ok: true,
-          durationMs: performance.now() - startedAt,
-          newSessionId,
-        }));
+        writeAgentRunRecords(
+          this.runLog.command("fork", {
+            ok: true,
+            durationMs: performance.now() - startedAt,
+            newSessionId,
+          }),
+        );
         // 旧包装器正在关闭，它仍持有的运行无法继续。
         writeAgentRunRecords(this.runLog.finish({ stopReason: "fork" }));
         await this.shutdownAfterCommittedFork(newSessionId);
@@ -1125,7 +1213,13 @@ export class AgentSessionWrapper {
         // instead of minting a replacement session. It still rewrites history
         // behind a oneshot model call, so it must not run while a prompt is
         // streaming or any other work owns the session.
-        if (this.handoffRunning || this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning) {
+        if (
+          this.handoffRunning ||
+          this.promptRunning ||
+          this.inner.isStreaming ||
+          this.inner.isCompacting ||
+          this.inner.isBashRunning
+        ) {
           throw new Error("Cannot hand off while the session is busy");
         }
         const customInstructions = command.customInstructions as string | undefined;
@@ -1168,7 +1262,12 @@ export class AgentSessionWrapper {
         // setThinkingLevel clamps xhigh→high for models where supportsXhigh()===false.
         // If the model has DeepSeek thinking compat (reasoningEffortMap maps xhigh→max),
         // force the state back so the compat layer can use it correctly.
-        if (level === "xhigh" && (this.inner.model as { compat?: { thinkingFormat?: string } } | null)?.compat?.thinkingFormat === "deepseek" && this.inner.agent?.state) {
+        if (
+          level === "xhigh" &&
+          (this.inner.model as { compat?: { thinkingFormat?: string } } | null)?.compat
+            ?.thinkingFormat === "deepseek" &&
+          this.inner.agent?.state
+        ) {
           this.inner.agent.state.thinkingLevel = "xhigh";
         }
         invalidateSessionListCache();
@@ -1179,8 +1278,8 @@ export class AgentSessionWrapper {
         try {
           return await this.withRunCommand("compact", () =>
             this.withFinalRunningNotification(() =>
-              this.inner.compact(command.customInstructions as string | undefined)
-            )
+              this.inner.compact(command.customInstructions as string | undefined),
+            ),
           );
         } finally {
           invalidateSessionListCache();
@@ -1216,7 +1315,9 @@ export class AgentSessionWrapper {
         // races against the agent loop pulling messages mid-flight.
         const cleared = this.inner.clearQueue();
         const toText = (message: unknown): string =>
-          typeof message === "string" ? message : String((message as { text?: string })?.text ?? "");
+          typeof message === "string"
+            ? message
+            : String((message as { text?: string })?.text ?? "");
         return {
           steering: cleared.steering.map(toText),
           followUp: cleared.followUp.map(toText),
@@ -1224,17 +1325,27 @@ export class AgentSessionWrapper {
       }
 
       case "steer": {
-        const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
+        const steerImages = command.images as
+          | Array<{ type: "image"; data: string; mimeType: string }>
+          | undefined;
         await this.withRunCommand("steer", () =>
-          this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined)
+          this.inner.steer(
+            command.message as string,
+            steerImages?.length ? steerImages : undefined,
+          ),
         );
         return null;
       }
 
       case "follow_up": {
-        const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
+        const followImages = command.images as
+          | Array<{ type: "image"; data: string; mimeType: string }>
+          | undefined;
         await this.withRunCommand("follow_up", () =>
-          this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined)
+          this.inner.followUp(
+            command.message as string,
+            followImages?.length ? followImages : undefined,
+          ),
         );
         return null;
       }
@@ -1258,25 +1369,28 @@ export class AgentSessionWrapper {
 
       case "execute_slash_command": {
         const output: string[] = [];
-        const result: AcpBuiltinSlashCommandResult = await executeAcpBuiltinSlashCommand(command.message as string, {
-          session: this.inner as never,
-          sessionManager: this.inner.sessionManager,
-          settings: this.inner.settings,
-          cwd: this.cwd,
-          output: (text) => {
-            output.push(text);
+        const result: AcpBuiltinSlashCommandResult = await executeAcpBuiltinSlashCommand(
+          command.message as string,
+          {
+            session: this.inner as never,
+            sessionManager: this.inner.sessionManager,
+            settings: this.inner.settings,
+            cwd: this.cwd,
+            output: (text) => {
+              output.push(text);
+            },
+            refreshCommands: () => {},
+            reloadPlugins: async () => {
+              await this.waitForExtensionsBound();
+              this.extensionStatuses.clear();
+              this.extensionWidgets.clear();
+              await this.inner.reload();
+              await this.inner.refreshSkills?.();
+              this.applyForcedEmptySystemPrompt();
+              invalidateModelsCache();
+            },
           },
-          refreshCommands: () => {},
-          reloadPlugins: async () => {
-            await this.waitForExtensionsBound();
-            this.extensionStatuses.clear();
-            this.extensionWidgets.clear();
-            await this.inner.reload();
-            await this.inner.refreshSkills?.();
-            this.applyForcedEmptySystemPrompt();
-            invalidateModelsCache();
-          },
-        });
+        );
         if (result === false) return { handled: false, output };
         return {
           handled: true,
@@ -1284,7 +1398,6 @@ export class AgentSessionWrapper {
           ...("prompt" in result ? { prompt: result.prompt } : {}),
         };
       }
-
 
       case "set_tools": {
         const toolNames = command.toolNames as string[];
@@ -1328,14 +1441,17 @@ export class AgentSessionWrapper {
       }
 
       case "bash": {
-        if (this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning) {
+        if (
+          this.promptRunning ||
+          this.inner.isStreaming ||
+          this.inner.isCompacting ||
+          this.inner.isBashRunning
+        ) {
           throw new Error("Cannot run a shell command while the session is busy");
         }
-        const execution = this.inner.executeBash(
-          command.command as string,
-          undefined,
-          { excludeFromContext: command.excludeFromContext as boolean | undefined },
-        );
+        const execution = this.inner.executeBash(command.command as string, undefined, {
+          excludeFromContext: command.excludeFromContext as boolean | undefined,
+        });
         notifyRunningChange();
         try {
           const result = await execution;
@@ -1361,7 +1477,7 @@ export class AgentSessionWrapper {
   destroy(): void {
     if (!this._alive) return;
     this._alive = false;
-    const finalIds = globalThis.__ompFinalSessionIds ??= new Map<string, string>();
+    const finalIds = (globalThis.__ompFinalSessionIds ??= new Map<string, string>());
     finalIds.set(this.runtimeId, this.sessionId);
     // A bounded continuation record, never a historical-session alias.
     while (finalIds.size > 1024) finalIds.delete(finalIds.keys().next().value!);
@@ -1449,7 +1565,9 @@ export class AgentSessionWrapper {
     try {
       lines = custom.component.render(custom.width);
     } catch (error) {
-      lines = [`Extension custom UI render failed: ${error instanceof Error ? error.message : String(error)}`];
+      lines = [
+        `Extension custom UI render failed: ${error instanceof Error ? error.message : String(error)}`,
+      ];
     }
     const event = {
       type: "extension_ui_request",
@@ -1503,10 +1621,7 @@ export class AgentSessionWrapper {
     }
   }
 
-  private requestExtensionCustomUi<T>(
-    factory: unknown,
-    options?: unknown,
-  ): Promise<T> {
+  private requestExtensionCustomUi<T>(factory: unknown, options?: unknown): Promise<T> {
     if (typeof factory !== "function") return Promise.resolve(undefined as T);
 
     const id = randomUUID();
@@ -1514,13 +1629,10 @@ export class AgentSessionWrapper {
 
     return new Promise<T>((resolve) => {
       let completed = false;
-      const tui = createHeadlessCustomUiTui(
-        () => {
-          const custom = this.activeCustomUis.get(id);
-          if (custom) this.emitCustomUiRender(id, custom);
-        },
-        width,
-      );
+      const tui = createHeadlessCustomUiTui(() => {
+        const custom = this.activeCustomUis.get(id);
+        if (custom) this.emitCustomUiRender(id, custom);
+      }, width);
       const finish = (value: T) => {
         if (completed) return;
         completed = true;
@@ -1545,7 +1657,11 @@ export class AgentSessionWrapper {
             }
             return;
           }
-          if (!component || typeof component !== "object" || typeof (component as CustomUiComponent).render !== "function") {
+          if (
+            !component ||
+            typeof component !== "object" ||
+            typeof (component as CustomUiComponent).render !== "function"
+          ) {
             finish(undefined as T);
             return;
           }
@@ -1619,48 +1735,68 @@ export class AgentSessionWrapper {
   private createExtensionUiContext(): ExtensionUiContextLike {
     return {
       timeoutStartsOnPresentation: false,
-      askDialog: (questions, opts) => this.requestExtensionUi(
-        { method: "ask", questions, ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
-        undefined,
-        (response) => {
-          if (!("value" in response)) return undefined;
-          try {
-            return JSON.parse(response.value) as ExtensionAskDialogResult;
-          } catch {
-            return undefined;
-          }
-        },
-        opts?.timeout,
-        opts?.signal,
-      ),
-      select: (title, options, opts) => this.requestExtensionUi(
-        { method: "select", title, options, ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
-        undefined,
-        (response) => "value" in response ? response.value : undefined,
-        opts?.timeout,
-        opts?.signal,
-      ),
-      confirm: (title, message, opts) => this.requestExtensionUi(
-        { method: "confirm", title, message, ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
-        false,
-        (response) => "confirmed" in response ? response.confirmed : false,
-        opts?.timeout,
-        opts?.signal,
-      ),
-      input: (title, placeholder, opts) => this.requestExtensionUi(
-        { method: "input", title, ...(placeholder !== undefined ? { placeholder } : {}), ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
-        undefined,
-        (response) => "value" in response ? response.value : undefined,
-        opts?.timeout,
-        opts?.signal,
-      ),
-      editor: (title, prefill, opts) => this.requestExtensionUi(
-        { method: "editor", title, ...(prefill !== undefined ? { prefill } : {}), ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
-        undefined,
-        (response) => "value" in response ? response.value : undefined,
-        opts?.timeout,
-        opts?.signal,
-      ),
+      askDialog: (questions, opts) =>
+        this.requestExtensionUi(
+          { method: "ask", questions, ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
+          undefined,
+          (response) => {
+            if (!("value" in response)) return undefined;
+            try {
+              return JSON.parse(response.value) as ExtensionAskDialogResult;
+            } catch {
+              return undefined;
+            }
+          },
+          opts?.timeout,
+          opts?.signal,
+        ),
+      select: (title, options, opts) =>
+        this.requestExtensionUi(
+          { method: "select", title, options, ...(opts?.timeout ? { timeout: opts.timeout } : {}) },
+          undefined,
+          (response) => ("value" in response ? response.value : undefined),
+          opts?.timeout,
+          opts?.signal,
+        ),
+      confirm: (title, message, opts) =>
+        this.requestExtensionUi(
+          {
+            method: "confirm",
+            title,
+            message,
+            ...(opts?.timeout ? { timeout: opts.timeout } : {}),
+          },
+          false,
+          (response) => ("confirmed" in response ? response.confirmed : false),
+          opts?.timeout,
+          opts?.signal,
+        ),
+      input: (title, placeholder, opts) =>
+        this.requestExtensionUi(
+          {
+            method: "input",
+            title,
+            ...(placeholder !== undefined ? { placeholder } : {}),
+            ...(opts?.timeout ? { timeout: opts.timeout } : {}),
+          },
+          undefined,
+          (response) => ("value" in response ? response.value : undefined),
+          opts?.timeout,
+          opts?.signal,
+        ),
+      editor: (title, prefill, opts) =>
+        this.requestExtensionUi(
+          {
+            method: "editor",
+            title,
+            ...(prefill !== undefined ? { prefill } : {}),
+            ...(opts?.timeout ? { timeout: opts.timeout } : {}),
+          },
+          undefined,
+          (response) => ("value" in response ? response.value : undefined),
+          opts?.timeout,
+          opts?.signal,
+        ),
       notify: (message, type) => {
         this.emit({
           type: "extension_ui_request",
@@ -1716,7 +1852,8 @@ export class AgentSessionWrapper {
           title,
         } as ExtensionUiRequest as AgentEvent);
       },
-      custom: <T = unknown>(factory: unknown, options?: unknown) => this.requestExtensionCustomUi<T>(factory, options),
+      custom: <T = unknown>(factory: unknown, options?: unknown) =>
+        this.requestExtensionCustomUi<T>(factory, options),
       pasteToEditor: (text) => {
         this.emit({
           type: "extension_ui_request",
@@ -1737,10 +1874,15 @@ export class AgentSessionWrapper {
       addAutocompleteProvider: () => {},
       setEditorComponent: () => {},
       getEditorComponent: () => undefined,
-      get theme() { return PLAIN_TEXT_THEME; },
+      get theme() {
+        return PLAIN_TEXT_THEME;
+      },
       getAllThemes: () => [],
       getTheme: () => undefined,
-      setTheme: () => ({ success: false, error: "Theme switching is not supported in ompdesk extension UI yet" }),
+      setTheme: () => ({
+        success: false,
+        error: "Theme switching is not supported in ompdesk extension UI yet",
+      }),
       getToolsExpanded: () => false,
       setToolsExpanded: () => {},
     };
@@ -1754,7 +1896,9 @@ export class AgentSessionWrapper {
 declare global {
   var __ompSessions: Map<string, AgentSessionWrapper> | undefined;
   var __ompFinalSessionIds: Map<string, string> | undefined;
-  var __ompStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
+  var __ompStartLocks:
+    | Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>>
+    | undefined;
   var __ompStartingSessionCwds: Map<string, number> | undefined;
   var __ompRunningListeners: Set<(activity: SessionActivitySnapshot) => void> | undefined;
 }
@@ -1772,7 +1916,8 @@ function getRegistry(): Map<string, AgentSessionWrapper> {
     // HMR retains pre-identity wrappers, including their SDK run and listeners.
     // Upgrade only wrapper instances carrying the existing private state.
     if (!Array.isArray(Reflect.get(session, "listeners"))) continue;
-    if (!session.runtimeId) Object.defineProperty(session, "runtimeId", { value: `runtime:${randomUUID()}` });
+    if (!session.runtimeId)
+      Object.defineProperty(session, "runtimeId", { value: `runtime:${randomUUID()}` });
     // The old manager callback deleted the startup ID even after relocation.
     // Current destroy() removes entries by wrapper identity instead.
     Reflect.set(session, "onDestroyCallback", null);
@@ -1825,7 +1970,9 @@ export function getRpcSession(sessionId: string): AgentSessionWrapper | undefine
   const registered = registry.get(sessionId);
   if (registered?.isAlive() && registered.sessionId === sessionId) return registered;
   return [...registry.values()].find(
-    (candidate) => candidate.isAlive() && (candidate.sessionId === sessionId || candidate.runtimeId === sessionId),
+    (candidate) =>
+      candidate.isAlive() &&
+      (candidate.sessionId === sessionId || candidate.runtimeId === sessionId),
   );
 }
 
@@ -1834,7 +1981,7 @@ function runtimeMessageText(entry: SessionMessageEntry): string {
   const content = entry.message.content;
   if (typeof content === "string") return content;
   return content
-    .map((block) => block.type === "text" ? block.text : "")
+    .map((block) => (block.type === "text" ? block.text : ""))
     .filter(Boolean)
     .join(" ");
 }
@@ -1861,7 +2008,9 @@ export function getRpcSessionInfos(): SessionInfo[] {
     const entries = manager.getEntries() as unknown as Array<
       { type: string; timestamp: string } | SessionMessageEntry
     >;
-    const messages = entries.filter((entry): entry is SessionMessageEntry => entry.type === "message");
+    const messages = entries.filter(
+      (entry): entry is SessionMessageEntry => entry.type === "message",
+    );
     const firstUserMessage = messages.find((entry) => entry.message.role === "user");
     const sessionFile = manager.getSessionFile() ?? session.sessionFile;
     const persisted = Boolean(sessionFile && existsSync(sessionFile));
@@ -1870,9 +2019,7 @@ export function getRpcSessionInfos(): SessionInfo[] {
     // loads commands. Do not leak it into history before a prompt is accepted.
     if (!persisted && (!session.isRunning() || !firstUserMessage)) continue;
 
-    const created = header?.timestamp
-      ?? entries[0]?.timestamp
-      ?? new Date().toISOString();
+    const created = header?.timestamp ?? entries[0]?.timestamp ?? new Date().toISOString();
     const headerTimestamp = new Date(created).getTime();
     let lastActivityMs = Number.isNaN(headerTimestamp) ? Date.now() : headerTimestamp;
     for (const message of messages) {
@@ -1888,7 +2035,9 @@ export function getRpcSessionInfos(): SessionInfo[] {
       created,
       modified: new Date(lastActivityMs).toISOString(),
       messageCount: messages.length,
-      firstMessage: firstUserMessage ? runtimeMessageText(firstUserMessage) || "(no messages)" : "(no messages)",
+      firstMessage: firstUserMessage
+        ? runtimeMessageText(firstUserMessage) || "(no messages)"
+        : "(no messages)",
       transient: !persisted,
     });
   }
@@ -1917,7 +2066,9 @@ export async function destroyRpcSessionsForCwd(cwd: string): Promise<number> {
 export function getRpcSessionActivitySnapshot(): SessionActivitySnapshot {
   const runningSessionIds = new Set<string>();
   const waitingSessionIds = new Set<string>();
-  const sessionIdsByRuntimeId: Record<string, string> = Object.fromEntries(globalThis.__ompFinalSessionIds ?? []);
+  const sessionIdsByRuntimeId: Record<string, string> = Object.fromEntries(
+    globalThis.__ompFinalSessionIds ?? [],
+  );
   for (const session of getRegistry().values()) {
     if (!session.isAlive()) continue;
     sessionIdsByRuntimeId[session.runtimeId] = session.sessionId;
@@ -1947,10 +2098,14 @@ function getRunningListeners(): Set<(activity: SessionActivitySnapshot) => void>
 }
 
 /** Subscribe to running/waiting changes. Returns an unsubscribe function. */
-export function subscribeRunningSessions(listener: (activity: SessionActivitySnapshot) => void): () => void {
+export function subscribeRunningSessions(
+  listener: (activity: SessionActivitySnapshot) => void,
+): () => void {
   const listeners = getRunningListeners();
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 let lastRunningSnapshot = "";
@@ -1976,7 +2131,11 @@ export function notifyRunningChange(): void {
   if (snapshot === lastRunningSnapshot) return;
   lastRunningSnapshot = snapshot;
   for (const listener of listeners) {
-    try { listener(activity); } catch { /* ignore listener errors */ }
+    try {
+      listener(activity);
+    } catch {
+      /* ignore listener errors */
+    }
   }
 }
 
@@ -2010,9 +2169,9 @@ export async function startRpcSession(
     const sessionManager = sessionFile
       ? await SessionManager.open(sessionFile, undefined)
       : (() => {
-        if (!cwd) throw new Error("cwd is required for a new session");
-        return SessionManager.create(cwd, undefined);
-      })();
+          if (!cwd) throw new Error("cwd is required for a new session");
+          return SessionManager.create(cwd, undefined);
+        })();
     const sessionCwd = sessionManager.getCwd();
     const finishStartingSession = trackStartingSession(sessionCwd);
 
@@ -2041,7 +2200,10 @@ export async function startRpcSession(
         discoverSessionExtensionPaths({}, sessionCwd, settings),
         discoverCustomToolPaths([], sessionCwd),
       ]);
-      const untrusted = untrustedProjectSessionOptions(sessionCwd, agentDir, { extensionPaths, customToolPaths });
+      const untrusted = untrustedProjectSessionOptions(sessionCwd, agentDir, {
+        extensionPaths,
+        customToolPaths,
+      });
 
       // `SYSTEM.md` / `APPEND_SYSTEM.md`, resolved against this session's cwd the
       // way the CLI resolves them against its own (lib/session-system-prompt.ts).
@@ -2054,17 +2216,21 @@ export async function startRpcSession(
       // instance rather than this session's project-scoped clone.
       const [telemetry, scope] = await Promise.all([
         sessionTelemetry(runtime.settings, modelRegistry),
-        resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings),
+        resolveVisibleModels(
+          modelRegistry,
+          getSetting<string[]>(settings, "enabledModels"),
+          settings,
+        ),
       ]);
       const defaultRole = readDefaultModelRole(settings);
       const hasExistingMessages = sessionManager.buildSessionContext().messages.length > 0;
       const initial = hasExistingMessages
         ? { scopedModels: [...scope.scopedModels], model: undefined, thinkingLevel: undefined }
         : selectInitialModelScope(scope, {
-          ...(initialModel ? { requestedModel: initialModel } : {}),
-          ...(defaultRole ? { defaultModel: defaultRole } : {}),
-          ...(thinkingLevel ? { thinkingLevel } : {}),
-        });
+            ...(initialModel ? { requestedModel: initialModel } : {}),
+            ...(defaultRole ? { defaultModel: defaultRole } : {}),
+            ...(thinkingLevel ? { thinkingLevel } : {}),
+          });
       const sessionOptions: CreateAgentSessionOptions = {
         cwd: sessionCwd,
         agentDir,
@@ -2083,8 +2249,16 @@ export async function startRpcSession(
       if (telemetry) sessionOptions.telemetry = telemetry;
       // omp's own applier, so a prompt file goes through the same templates the
       // CLI renders it with instead of overwriting the whole system prompt.
-      applyResolvedSystemPromptInputs(sessionOptions, systemPrompts.systemPrompt, systemPrompts.appendPrompt);
-      const { session: inner, eventBus, setToolUIContext } = await createAgentSession(sessionOptions);
+      applyResolvedSystemPromptInputs(
+        sessionOptions,
+        systemPrompts.systemPrompt,
+        systemPrompts.appendPrompt,
+      );
+      const {
+        session: inner,
+        eventBus,
+        setToolUIContext,
+      } = await createAgentSession(sessionOptions);
 
       const persistedPreferences = await persistExplicitStartupPreferences(
         runtime.settings,

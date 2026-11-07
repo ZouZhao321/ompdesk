@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { readSourceFile } from "../test-support/source-text.ts";
 
-const source = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
-const hookSource = await readFile(new URL("../hooks/useAgentSession.ts", import.meta.url), "utf8");
+const source = await readSourceFile(new URL("./ChatWindow.tsx", import.meta.url));
+const hookSource = await readSourceFile(new URL("../hooks/useAgentSession.ts", import.meta.url));
 
 test("hands the scroll element over to the virtual list", () => {
   assert.match(source, /scrollerRef=\{handleTranscriptScrollerRef\}/);
-  assert.match(source, /scrollContainerRef\.current = element instanceof HTMLDivElement \? element : null/);
+  assert.match(
+    source,
+    /scrollContainerRef\.current = element instanceof HTMLDivElement \? element : null/,
+  );
   assert.match(source, /initialTopMostItemIndex=\{virtualTranscript\.initialTopMostItemIndex\}/);
 });
 
@@ -22,37 +25,49 @@ test("renders the parts outside the list through its header and footer slots", (
   assert.match(source, /const transcriptFooter = useMemo\(/);
   assert.match(
     source,
-    /const transcriptSlots = useMemo<TranscriptSlotsContext>\(\s*\(\) => \(\{ header: transcriptHeader, footer: transcriptFooter \}\),\s*\[transcriptHeader, transcriptFooter\],\s*\);/,
+    /const transcriptSlots = useMemo<TranscriptSlotsContext>\(\(\) => \(\{ header: transcriptHeader, footer: transcriptFooter \}\), \[transcriptHeader, transcriptFooter\]\);/,
   );
   // 页首的内容来自派生数组：同一份 extensionWidgets 下它们也必须保持同一引用，否则
   // 页首每帧重建，transcriptSlots 跟着换引用，整份 itemContent 全量重跑。
   assert.match(
     source,
-    /const aboveEditorWidgets = useMemo\(\s*\(\) => extensionWidgets\.filter\(\(widget\) => widget\.placement !== "belowEditor"\),\s*\[extensionWidgets\],\s*\);/,
+    /const aboveEditorWidgets = useMemo\(\(\) => extensionWidgets\.filter\(\(widget\) => widget\.placement !== "belowEditor"\), \[extensionWidgets\]\);/,
   );
   assert.match(
     source,
-    /const belowEditorWidgets = useMemo\(\s*\(\) => extensionWidgets\.filter\(\(widget\) => widget\.placement === "belowEditor"\),\s*\[extensionWidgets\],\s*\);/,
+    /const belowEditorWidgets = useMemo\(\(\) => extensionWidgets\.filter\(\(widget\) => widget\.placement === "belowEditor"\), \[extensionWidgets\]\);/,
   );
   assert.doesNotMatch(source, /const aboveEditorWidgets = extensionWidgets\.filter/);
   assert.doesNotMatch(source, /const belowEditorWidgets = extensionWidgets\.filter/);
   // 依赖链闭合：extensionWidgets 不变 → 派生数组不变 → 页首不变 → slots 不变。
-  assert.match(source, /const transcriptHeader = useMemo\([\s\S]*?\n  \), \[aboveEditorWidgets\]\);/);
+  assert.match(source, /const transcriptHeader = useMemo\([\s\S]*?\[aboveEditorWidgets\]\);/);
   assert.match(source, /context=\{transcriptSlots\}/);
-  assert.doesNotMatch(source, /context=\{\{ header: transcriptHeader, footer: transcriptFooter \}\}/);
+  assert.doesNotMatch(
+    source,
+    /context=\{\{ header: transcriptHeader, footer: transcriptFooter \}\}/,
+  );
   // 没有第二个滚动锚点：滚动位置只归列表管。
   assert.doesNotMatch(source, /messagesEndRef/);
 });
 
 test("parks the streaming message as the last list item", () => {
   // 数据表与键表共用同一条判据：流式已开始但消息还空时两表都不加合成项。
-  assert.match(source, /withTranscriptLiveTail\(groupedTranscriptItems, streamingTranscriptMessage\)/);
-  assert.match(source, /const transcriptLiveTailKey = hasTranscriptLiveTail\(streamingTranscriptMessage\)/);
+  assert.match(
+    source,
+    /withTranscriptLiveTail\(groupedTranscriptItems, streamingTranscriptMessage\)/,
+  );
+  assert.match(
+    source,
+    /const transcriptLiveTailKey = hasTranscriptLiveTail\(streamingTranscriptMessage\)/,
+  );
   assert.match(source, /itemContent=\{renderTranscriptRow\}/);
   // 行组件按项记忆，流式数据块只重绘末尾这一项。
   assert.match(source, /const TranscriptRow = memo\(function TranscriptRow\(/);
   // 页尾不再渲染流式气泡，它已经是列表最后一项。
-  const footerSource = source.slice(source.indexOf("const transcriptFooter = useMemo("), source.indexOf("if (loading) {"));
+  const footerSource = source.slice(
+    source.indexOf("const transcriptFooter = useMemo("),
+    source.indexOf("if (loading) {"),
+  );
   // 锚点一旦找不到切片就是空串，下面的否定断言会静默通过。
   assert.ok(footerSource.length > 0, "the transcript footer slice is empty");
   assert.doesNotMatch(footerSource, /streamingMessage as AgentMessage/);
@@ -64,17 +79,26 @@ test("hands follow and the jump to the list", () => {
   assert.match(source, /atBottomThreshold=\{FOLLOW_BOTTOM_THRESHOLD_PX\}/);
   assert.match(source, /import \{ FOLLOW_BOTTOM_THRESHOLD_PX \} from "@\/lib\/transcript-follow"/);
   assert.match(source, /ref=\{virtuosoRef\}/);
-  assert.match(source, /list\.scrollToIndex\(\{ index: "LAST", align: "end", behavior: resolved \}\)/);
-  assert.match(source, /scrollTranscriptToEnd,$/m);
+  assert.match(
+    source,
+    /list\.scrollToIndex\(\{ index: "LAST", align: "end", behavior: resolved \}\)/,
+  );
+  assert.match(source, /scrollTranscriptToEnd,/);
 });
 
 test("lands the transcript on the real bottom after aligning the last item", () => {
   // 「对齐到末端」只把最后一条数据项的底边对上视口底，页脚插槽在它之后；定位后
   // 再补一次滚动元素自身的底部滚动，页脚晚一帧出现也能算进去。
-  const target = source.slice(source.indexOf("const scrollTranscriptToEnd = useCallback("), source.indexOf("const {", source.indexOf("const scrollTranscriptToEnd = useCallback(")));
+  const target = source.slice(
+    source.indexOf("const scrollTranscriptToEnd = useCallback("),
+    source.indexOf("const {", source.indexOf("const scrollTranscriptToEnd = useCallback(")),
+  );
   // 空切片会让下面的断言失去对象，先确认切到了东西。
   assert.ok(target.length > 0, "the scrollTranscriptToEnd slice is empty");
-  assert.match(target, /requestAnimationFrame\(\(\) => \{\s*virtuosoRef\.current\?\.scrollTo\(\{ top: Number\.MAX_SAFE_INTEGER, behavior: resolved \}\);/);
+  assert.match(
+    target,
+    /requestAnimationFrame\(\(\) => \{\s*virtuosoRef\.current\?\.scrollTo\(\{ top: Number\.MAX_SAFE_INTEGER, behavior: resolved \}\);/,
+  );
   // 首屏同样补一次：会话加载完成后落到底部，不差页脚那一截。
   assert.match(source, /initialBottomLandedRef[\s\S]*?scrollTranscriptToEnd\("auto"\)/);
 });
@@ -117,7 +141,10 @@ test("clears a rail jump once, whether or not the list scrolled", () => {
     source,
     /const handleRailJump = useCallback\(\(itemIndex: number\) => \{[\s\S]*?pauseAutoFollow\(\);[\s\S]*?railJumpRef\.current = \{ pending: itemIndex \};/,
   );
-  assert.match(source, /railJumpTimerRef\.current = window\.setTimeout\(settleRailJumpNow, RAIL_JUMP_SETTLE_MS\)/);
+  assert.match(
+    source,
+    /railJumpTimerRef\.current = window\.setTimeout\(settleRailJumpNow, RAIL_JUMP_SETTLE_MS\)/,
+  );
   assert.match(
     source,
     /const handleTranscriptScrollingChange = useCallback\(\(scrolling: boolean\) => \{\s*if \(scrolling\) return;\s*settleRailJumpNow\(\);/,
@@ -144,7 +171,7 @@ test("offers a jump-to-bottom entry whenever the list is not at the bottom", () 
   assert.doesNotMatch(source, /transcriptAtBottomRef/);
   assert.match(
     source,
-    /const measureTranscriptAtBottom = useCallback\(\(\) => \{\s*const scroller = scrollContainerRef\.current;\s*if \(!scroller\) return null;\s*return scroller\.scrollHeight - scroller\.scrollTop - scroller\.clientHeight <= FOLLOW_BOTTOM_THRESHOLD_PX;/,
+    /const measureTranscriptAtBottom = useCallback\(\(\) => \{ const scroller = scrollContainerRef\.current; if \(!scroller\) return null; return \(scroller\.scrollHeight - scroller\.scrollTop - scroller\.clientHeight <= FOLLOW_BOTTOM_THRESHOLD_PX\);/,
   );
   assert.match(
     source,
@@ -157,14 +184,20 @@ test("offers a jump-to-bottom entry whenever the list is not at the bottom", () 
 test("skips the rail measurement while the rail is hidden", () => {
   // 单轮、移动档、窄转写区都不显示跳转条：可见性由跳转条自己量，不可见时不读尺寸、
   // 滚动帧里也不写状态。
-  assert.match(source, /const syncRailTopItem = useCallback\(\(\) => \{\s*if \(!railVisibleRef\.current\) return;/);
+  assert.match(
+    source,
+    /const syncRailTopItem = useCallback\(\(\) => \{\s*if \(!railVisibleRef\.current\) return;/,
+  );
   assert.match(source, /onVisibilityChange=\{handleRailVisibilityChange\}/);
 });
 
 test("gives every user turn a dot even when the prompt has no text", () => {
   // 只有图片或附件的提问仍然是一轮：没有文本时退回占位文案，圆点数才不会少于
   // 提问数；压缩摘要这类非提问锚点依旧不出圆点。
-  assert.match(source, /const text = getUserInputText\(anchor\);\s*if \(text !== null\) return text;/);
+  assert.match(
+    source,
+    /const text = getUserInputText\(anchor\);\s*if \(text !== null\) return text;/,
+  );
   assert.match(source, /return anchor\.role === "user" \? t\("chat\.promptWithoutText"\) : null;/);
 });
 
@@ -185,9 +218,15 @@ test("measures the rail once per frame instead of per streamed chunk", () => {
   assert.doesNotMatch(itemsRenderedSource, /syncRailTopItem\(/);
   // 顶部可见条目直接读已挂载的行：列表报告的渲染窗口比滚动晚一拍，按报告算
   // 高亮在快速滚动时总落后一轮。
-  assert.match(source, /for \(const row of list\.querySelectorAll<HTMLElement>\("\[data-index\]"\)\)/);
+  assert.match(
+    source,
+    /for \(const row of list\.querySelectorAll<HTMLElement>\("\[data-index\]"\)\)/,
+  );
   // 滚动路径不再自带一个 rAF，两条来源合成同一个调度。
-  assert.match(source, /element\.addEventListener\("scroll", scheduleRailMeasure, \{ passive: true \}\);/);
+  assert.match(
+    source,
+    /element\.addEventListener\("scroll", scheduleRailMeasure, \{ passive: true \}\);/,
+  );
   assert.match(source, /element\.removeEventListener\("scroll", scheduleRailMeasure\)/);
   const scrollerSource = source.slice(
     source.indexOf("const handleTranscriptScrollerRef = useCallback("),
@@ -204,11 +243,11 @@ test("rebuilds the item keys only when the grouping changes", () => {
   // itemKeys 与 computeItemKey 保持同一份引用。
   assert.match(
     source,
-    /const virtualTranscript = useMemo\(\s*\(\) => buildVirtualTranscriptModel\(groupedTranscriptItems, transcriptLiveTailKey\),\s*\[groupedTranscriptItems, transcriptLiveTailKey\],\s*\);/,
+    /const virtualTranscript = useMemo\(\(\) => buildVirtualTranscriptModel\(groupedTranscriptItems, transcriptLiveTailKey\), \[groupedTranscriptItems, transcriptLiveTailKey\]\);/,
   );
   assert.match(
     source,
-    /const computeTranscriptItemKey = useCallback\(\s*\(index: number\) => virtualTranscript\.itemKeys\[index\],\s*\[virtualTranscript\],\s*\)/,
+    /const computeTranscriptItemKey = useCallback\(\(index: number\) => virtualTranscript\.itemKeys\[index\], \[virtualTranscript\]\)/,
   );
   assert.doesNotMatch(source, /buildVirtualTranscriptModel\(transcriptItems\)/);
 });

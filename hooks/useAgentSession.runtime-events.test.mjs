@@ -6,19 +6,29 @@ import { normalizeToolCalls } from "../lib/normalize.ts";
 import { callbacks, declarations } from "./useAgentSession.test-support.mjs";
 
 const callbackNames = [
-  "closeEvents", "followSessionIdentity", "followRuntimeState", "cancelEventStreamGrace",
-  "handleExtensionUiRequest", "handleAgentEvent", "connectEvents", "ensureEventsConnected", "refreshContextUsage",
+  "closeEvents",
+  "followSessionIdentity",
+  "followRuntimeState",
+  "cancelEventStreamGrace",
+  "handleExtensionUiRequest",
+  "handleAgentEvent",
+  "connectEvents",
+  "ensureEventsConnected",
+  "refreshContextUsage",
 ];
 const helperNames = ["streamReducer", "EventStreamConnectionError"];
 for (const name of callbackNames) assert.ok(callbacks.has(name), `Missing callback: ${name}`);
 for (const name of helperNames) assert.ok(declarations.has(name), `Missing declaration: ${name}`);
 // Compile the real callbacks together so their cross-callback calls, ordering and
 // ownership guards stay production code. Only browser/network/React effects are doubles.
-const { outputText } = ts.transpileModule([
-  ...helperNames.map((name) => declarations.get(name)),
-  ...callbackNames.map((name) => `const ${name} = ${callbacks.get(name)};`),
-  `return { ${[...callbackNames, ...helperNames].join(", ")} };`,
-].join("\n"), { compilerOptions: { target: ts.ScriptTarget.ES2022 } });
+const { outputText } = ts.transpileModule(
+  [
+    ...helperNames.map((name) => declarations.get(name)),
+    ...callbackNames.map((name) => `const ${name} = ${callbacks.get(name)};`),
+    `return { ${[...callbackNames, ...helperNames].join(", ")} };`,
+  ].join("\n"),
+  { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+);
 
 const response = (data) => ({ ok: true, json: async () => data });
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -45,10 +55,20 @@ function harness({ sessionId = "a", runtimeId = "runtime:r1" } = {}) {
     static CLOSED = 2;
     readyState = FakeEventSource.CONNECTING;
     closeCount = 0;
-    constructor(url) { this.url = url; sources.push(this); }
-    open() { this.readyState = FakeEventSource.OPEN; }
-    frame(event) { this.onmessage?.({ data: JSON.stringify(event) }); }
-    close() { this.closeCount += 1; this.readyState = FakeEventSource.CLOSED; }
+    constructor(url) {
+      this.url = url;
+      sources.push(this);
+    }
+    open() {
+      this.readyState = FakeEventSource.OPEN;
+    }
+    frame(event) {
+      this.onmessage?.({ data: JSON.stringify(event) });
+    }
+    close() {
+      this.closeCount += 1;
+      this.readyState = FakeEventSource.CLOSED;
+    }
   }
   const bindings = {
     EventSource: FakeEventSource,
@@ -78,22 +98,39 @@ function harness({ sessionId = "a", runtimeId = "runtime:r1" } = {}) {
     rememberSessionContinuation: (...args) => effects.push(["remember", ...args]),
     clearSessionContinuation: (...args) => effects.push(["clear", ...args]),
     onAttentionNeeded: (request) => effects.push(["attention", request]),
-    setTimeout: (fn, delay) => { const id = ++nextTimer; timers.set(id, { fn, delay }); return id; },
+    setTimeout: (fn, delay) => {
+      const id = ++nextTimer;
+      timers.set(id, { fn, delay });
+      return id;
+    },
     clearTimeout: (id) => timers.delete(id),
     fetch: async (url) => {
       requests.push(url);
-      return replies.length ? replies.shift() : response({
-        running: true,
-        state: { sessionId: bindings.sessionIdRef.current, runtimeId: bindings.runtimeIdRef.current },
-      });
+      return replies.length
+        ? replies.shift()
+        : response({
+            running: true,
+            state: {
+              sessionId: bindings.sessionIdRef.current,
+              runtimeId: bindings.runtimeIdRef.current,
+            },
+          });
     },
     dispatch: (action) => {
       effects.push(["dispatch", action]);
       state.stream = api.streamReducer(state.stream, action);
     },
   };
-  for (const name of ["AgentRunning", "AgentPhase", "ExtensionDialog", "ExtensionCustomUi",
-    "ExtensionStatuses", "ExtensionWidgets", "CurrentModelOverride", "ContextUsage"]) {
+  for (const name of [
+    "AgentRunning",
+    "AgentPhase",
+    "ExtensionDialog",
+    "ExtensionCustomUi",
+    "ExtensionStatuses",
+    "ExtensionWidgets",
+    "CurrentModelOverride",
+    "ContextUsage",
+  ]) {
     bindings[`set${name}`] = (value) => {
       state[name] = typeof value === "function" ? value(state[name]) : value;
       effects.push([name, state[name]]);
@@ -102,11 +139,21 @@ function harness({ sessionId = "a", runtimeId = "runtime:r1" } = {}) {
   const api = new Function(...Object.keys(bindings), outputText)(...Object.values(bindings));
   bindings.handleAgentEventRef.current = api.handleAgentEvent;
   return {
-    ...api, bindings, sources, effects, requests, replies, timers, state,
+    ...api,
+    bindings,
+    sources,
+    effects,
+    requests,
+    replies,
+    timers,
+    state,
     runTimers(delay) {
       const selected = [...timers].filter(([, timer]) => timer.delay === delay);
       assert.ok(selected.length, `No timer scheduled for ${delay}ms`);
-      for (const [id, timer] of selected) { timers.delete(id); timer.fn(); }
+      for (const [id, timer] of selected) {
+        timers.delete(id);
+        timer.fn();
+      }
     },
   };
 }
@@ -124,15 +171,27 @@ async function openRuntime(h, sessionId = "a", runtimeId = "runtime:r1") {
 }
 
 function assertOutputAndDialog(h, stream) {
-  const message = { role: "assistant", content: [{ type: "text", text: "Replacement runtime is streaming" }] };
-  const request = { type: "extension_ui_request", method: "confirm", id: "approval:r2", title: "Continue?", message: "Approve this step" };
+  const message = {
+    role: "assistant",
+    content: [{ type: "text", text: "Replacement runtime is streaming" }],
+  };
+  const request = {
+    type: "extension_ui_request",
+    method: "confirm",
+    id: "approval:r2",
+    title: "Continue?",
+    message: "Approve this step",
+  };
   stream.frame({ type: "agent_start" });
   stream.frame({ type: "message_update", message });
   stream.frame(request);
   assert.equal(h.state.stream.isStreaming, true);
   assert.deepEqual(h.state.stream.streamingMessage, message);
   assert.deepEqual(h.state.ExtensionDialog, request);
-  assert.deepEqual(h.effects.filter(([kind]) => kind === "attention"), [["attention", request]]);
+  assert.deepEqual(
+    h.effects.filter(([kind]) => kind === "attention"),
+    [["attention", request]],
+  );
 }
 
 for (const initialId of ["a", "b"]) {
@@ -141,7 +200,11 @@ for (const initialId of ["a", "b"]) {
     const old = await openRuntime(h, initialId);
     h.replies.push(response({ running: false, state: { sessionId: "b" } }));
     let promptStarted = false;
-    const sending = track(h.ensureEventsConnected(initialId).then(() => { promptStarted = true; }));
+    const sending = track(
+      h.ensureEventsConnected(initialId).then(() => {
+        promptStarted = true;
+      }),
+    );
     await tick();
     assert.equal(old.readyState, 2, "expiry must close the old source even if it was OPEN");
     assert.equal(h.sources.length, 2, "expiry must reconnect instead of reusing old OPEN source");
@@ -170,7 +233,11 @@ for (const initialId of ["a", "b"]) {
     const old = h.sources[0];
     h.followSessionIdentity("b", null);
     await tick();
-    assert.equal(oldAttempt.status, "fulfilled", "cancellation must not wait for the five-second timeout");
+    assert.equal(
+      oldAttempt.status,
+      "fulfilled",
+      "cancellation must not wait for the five-second timeout",
+    );
     assert.equal(oldAttempt.value.status, "closed");
     assert.equal(old.readyState, 2);
     assert.equal(h.timers.size, 0, "cancelled attempt must clear its timeout");
@@ -256,7 +323,10 @@ test("queued messages from a superseded source cannot change identity, stream ou
   old.frame({ type: "connected", sessionId: "a", runtimeId: "runtime:r1" });
   old.frame({ type: "session_changed", sessionId: "stale", runtimeId: "runtime:r1" });
   old.frame({ type: "agent_start" });
-  old.frame({ type: "message_update", message: { role: "assistant", content: [{ type: "text", text: "stale" }] } });
+  old.frame({
+    type: "message_update",
+    message: { role: "assistant", content: [{ type: "text", text: "stale" }] },
+  });
   old.frame({ type: "extension_ui_request", method: "confirm", id: "stale", title: "Stale?" });
   assert.deepEqual(h.effects, []);
   assert.deepEqual(h.state, before);
@@ -290,7 +360,11 @@ for (const existingAttempt of [false, true]) {
     current.open();
     h.runTimers(5_000);
     await tick();
-    assert.notEqual(ensuring.status, "fulfilled", "OPEN without a connected frame cannot permit prompting");
+    assert.notEqual(
+      ensuring.status,
+      "fulfilled",
+      "OPEN without a connected frame cannot permit prompting",
+    );
     // A reused failed attempt may be retried once; that replacement must also
     // complete its own handshake rather than inheriting OPEN from the old one.
     if (ensuring.status === "pending") {
@@ -327,7 +401,10 @@ test("frames delivered after unmount are ignored even before source cleanup", as
   h.effects.length = 0;
   h.bindings.mountedRef.current = false;
   current.frame({ type: "agent_start" });
-  current.frame({ type: "message_update", message: { role: "assistant", content: [{ type: "text", text: "late" }] } });
+  current.frame({
+    type: "message_update",
+    message: { role: "assistant", content: [{ type: "text", text: "late" }] },
+  });
   current.frame({ type: "extension_ui_request", method: "confirm", id: "late", title: "Late?" });
   assert.deepEqual(h.effects, []);
   assert.equal(h.state.stream.isStreaming, false);
@@ -402,7 +479,8 @@ for (const connectedAgain of [false, true]) {
     original.readyState = 0;
     original.onerror();
     original.open();
-    if (connectedAgain) original.frame({ type: "connected", sessionId: "b", runtimeId: "runtime:r1" });
+    if (connectedAgain)
+      original.frame({ type: "connected", sessionId: "b", runtimeId: "runtime:r1" });
     const ensuring = track(h.ensureEventsConnected("b"));
     await tick();
     if (connectedAgain) {
@@ -410,7 +488,11 @@ for (const connectedAgain of [false, true]) {
       assert.equal(h.sources.length, 1);
       assert.equal(original.closeCount, 0);
     } else {
-      assert.equal(ensuring.status, "pending", "a reconnect must establish a fresh connected handshake");
+      assert.equal(
+        ensuring.status,
+        "pending",
+        "a reconnect must establish a fresh connected handshake",
+      );
       assert.equal(h.sources.length, 2);
       assert.equal(original.readyState, 2);
       const current = h.sources[1];
@@ -426,24 +508,40 @@ for (const transportOpen of [false, true]) {
   test(`state polling adopts its own ${transportOpen ? "OPEN" : "CONNECTING"} canonical stream and still waits for connected`, async () => {
     const h = harness({ sessionId: "b", runtimeId: null });
     let promptStarted = false;
-    const sending = track(h.ensureEventsConnected("b").then(() => { promptStarted = true; }));
+    const sending = track(
+      h.ensureEventsConnected("b").then(() => {
+        promptStarted = true;
+      }),
+    );
     const current = h.sources[0];
     if (transportOpen) current.open();
     const contextUsage = { percent: 20, contextWindow: 1000, tokens: 200 };
-    h.replies.push(response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2", contextUsage } }));
+    h.replies.push(
+      response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2", contextUsage } }),
+    );
     await h.refreshContextUsage("b");
     await tick();
-    assert.equal(current.closeCount, 0, "the state poll must not cancel its own canonical connection");
+    assert.equal(
+      current.closeCount,
+      0,
+      "the state poll must not cancel its own canonical connection",
+    );
     assert.equal(h.bindings.eventSourceRef.current, current);
     assert.equal(h.bindings.eventSourceRuntimeIdRef.current, "runtime:r2");
     assert.equal(h.bindings.runtimeIdRef.current, "runtime:r2");
-    assert.deepEqual(h.state.ContextUsage, contextUsage, "the actual refresh callback must apply the state");
+    assert.deepEqual(
+      h.state.ContextUsage,
+      contextUsage,
+      "the actual refresh callback must apply the state",
+    );
     assert.equal(sending.status, "pending");
     assert.equal(promptStarted, false);
 
     // A second poll is now addressed by R2. It must neither replace the source
     // nor count runtime discovery as a completed SSE handshake.
-    h.replies.push(response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2", contextUsage } }));
+    h.replies.push(
+      response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2", contextUsage } }),
+    );
     await h.refreshContextUsage("b");
     await tick();
     assert.deepEqual(h.requests, ["/api/agent/b", "/api/agent/runtime%3Ar2"]);
@@ -474,7 +572,9 @@ for (const [label, sourceId, selectedId, incomingId] of [
     const connection = track(h.connectEvents(sourceId));
     const current = h.sources[0];
     h.bindings.sessionIdRef.current = selectedId;
-    h.replies.push(response({ running: true, state: { sessionId: incomingId, runtimeId: "runtime:r2" } }));
+    h.replies.push(
+      response({ running: true, state: { sessionId: incomingId, runtimeId: "runtime:r2" } }),
+    );
     await h.refreshContextUsage(selectedId);
     await tick();
     assert.equal(connection.status, "fulfilled");
@@ -528,12 +628,20 @@ test("state discovery cannot adopt an unbound source whose pending handshake alr
 test("a conflicting first handshake after R2 adoption cannot roll back identity or admit a prompt", async () => {
   const h = harness({ sessionId: "b", runtimeId: null });
   let promptStarted = false;
-  const sending = track(h.ensureEventsConnected("b").then(() => { promptStarted = true; }));
+  const sending = track(
+    h.ensureEventsConnected("b").then(() => {
+      promptStarted = true;
+    }),
+  );
   const current = h.sources[0];
   h.replies.push(response({ running: true, state: { sessionId: "b", runtimeId: "runtime:r2" } }));
   await h.refreshContextUsage("b");
   await tick();
-  assert.equal(h.bindings.eventSourceRef.current, current, "R2 discovery must preserve the pending source");
+  assert.equal(
+    h.bindings.eventSourceRef.current,
+    current,
+    "R2 discovery must preserve the pending source",
+  );
   assert.equal(sending.status, "pending");
   h.effects.length = 0;
   current.open();
@@ -549,7 +657,11 @@ test("a conflicting first handshake after R2 adoption cannot roll back identity 
 test("a source initially bound to R2 also rejects a conflicting first R1 handshake", async () => {
   const h = harness({ sessionId: "b", runtimeId: "runtime:r2" });
   let promptStarted = false;
-  const sending = track(h.ensureEventsConnected("b").then(() => { promptStarted = true; }));
+  const sending = track(
+    h.ensureEventsConnected("b").then(() => {
+      promptStarted = true;
+    }),
+  );
   await tick();
   const current = h.sources[0];
   assert.equal(current.url, "/api/agent/runtime%3Ar2/events");

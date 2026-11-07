@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { readSourceFile } from "../test-support/source-text.ts";
 
-const source = await readFile(new URL("./TranscriptRail.tsx", import.meta.url), "utf8");
+const source = await readSourceFile(new URL("./TranscriptRail.tsx", import.meta.url));
 const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-const chatWindow = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
+const chatWindow = await readSourceFile(new URL("./ChatWindow.tsx", import.meta.url));
 
 /** 取一条 CSS 规则的声明块；规则不存在时返回 null。 */
 function declarations(selector) {
   // 按行首找规则本身：注释里提到同一个选择器时不会截到注释后面的那条规则上。
-  const start = styles.search(new RegExp(`^${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "m"));
+  const start = styles.search(
+    new RegExp(`^${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "m"),
+  );
   if (start === -1) return null;
   const open = styles.indexOf("{", start);
   const close = styles.indexOf("}", open);
@@ -25,7 +28,10 @@ function customPixel(block, name) {
 }
 
 test("opens the prompt tip on keyboard focus, not only on hover", () => {
-  assert.match(source, /onMouseEnter=\{\(event\) => showTip\(event\.currentTarget, dot\.prompt\)\}/);
+  assert.match(
+    source,
+    /onMouseEnter=\{\(event\) => showTip\(event\.currentTarget, dot\.prompt\)\}/,
+  );
   assert.match(source, /onFocus=\{\(event\) => showTip\(event\.currentTarget, dot\.prompt\)\}/);
   assert.match(source, /onMouseLeave=\{hideTip\}/);
   assert.match(source, /onBlur=\{hideTip\}/);
@@ -34,7 +40,10 @@ test("opens the prompt tip on keyboard focus, not only on hover", () => {
     styles,
     /\.transcript-rail-dot:hover \.transcript-rail-dot-mark,\s*\.transcript-rail-dot:focus-visible \.transcript-rail-dot-mark \{[^}]*width: min\(12px, calc\(var\(--rail-dot-mark, 6px\) \* 2\)\);[^}]*background: var\(--accent-hover\);/,
   );
-  assert.match(declarations(".transcript-rail-dot:focus-visible"), /outline: 2px solid var\(--accent\);/);
+  assert.match(
+    declarations(".transcript-rail-dot:focus-visible"),
+    /outline: 2px solid var\(--accent\);/,
+  );
 });
 
 test("follows layout changes while the tip is showing", () => {
@@ -60,7 +69,10 @@ test("repositions the tip without listening to transcript scrolls", () => {
     /const observer = new ResizeObserver\(\(\) => \{\s*if \(anchorIsVisible\(\)\) positionTip\(\);\s*\}\);/,
   );
   // 锚点只在圆点被卸载或跳转条被收起时失效。
-  assert.match(source, /if \(!anchor \|\| !isTipAnchorVisible\(anchor\.element, dotsRef\.current\)\) \{/);
+  assert.match(
+    source,
+    /if \(!anchor \|\| !isTipAnchorVisible\(anchor\.element, dotsRef\.current\)\) \{/,
+  );
   assert.match(source, /if \(!element\.isConnected\) return false;/);
   assert.match(source, /if \(rect\.width === 0 \|\| rect\.height === 0\) return false;/);
   assert.match(source, /return rect\.bottom > columnRect\.top && rect\.top < columnRect\.bottom;/);
@@ -78,7 +90,9 @@ const GAP_PX = 6;
 const MARGIN_PX = 4;
 
 test("derives the rail geometry from the region constants", async () => {
-  const { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } = await import("../lib/transcript-rail.ts");
+  const { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } = await import(
+    "../lib/transcript-rail.ts"
+  );
   const insetPx = RAIL_COLUMN_WIDTH_PX / 2 + RAIL_COLUMN_PADDING_PX + GAP_PX;
   const minRegionPx = 2 * (insetPx + LANE_PX + MARGIN_PX);
   const laneQueryMaxPx = minRegionPx - 1;
@@ -89,8 +103,14 @@ test("derives the rail geometry from the region constants", async () => {
   assert.match(region, /position: relative;/);
   assert.doesNotMatch(chatWindow, /chat-transcript-region relative/);
   // 版心与内边距来自 ChatWindow 的行盒常量，由它内联注入；CSS 不再保留第二份取值。
-  assert.match(chatWindow, new RegExp(`"--chat-column-width": \`\\$\\{RAIL_COLUMN_WIDTH_PX\\}px\``));
-  assert.match(chatWindow, new RegExp(`"--chat-column-padding": \`\\$\\{RAIL_COLUMN_PADDING_PX\\}px\``));
+  assert.match(
+    chatWindow,
+    new RegExp(`"--chat-column-width": \`\\$\\{RAIL_COLUMN_WIDTH_PX\\}px\``),
+  );
+  assert.match(
+    chatWindow,
+    new RegExp(`"--chat-column-padding": \`\\$\\{RAIL_COLUMN_PADDING_PX\\}px\``),
+  );
   assert.doesNotMatch(region, /--chat-column-width:/);
   assert.doesNotMatch(region, /--chat-column-padding:/);
   assert.match(region, new RegExp(`--transcript-rail-lane: ${LANE_PX}px;`));
@@ -129,14 +149,15 @@ test("derives the rail geometry from the region constants", async () => {
     /--transcript-rail-min-region: calc\(\s*2 \* \(var\(--transcript-rail-inset\) \+ var\(--transcript-rail-lane\) \+ var\(--transcript-rail-margin\)\)\s*\);/,
   );
   // 阈值把内边距与缝隙一起算进去：版心一半 + 内边距 + 缝隙 = 432，最小宽度 944。
-  const inset = RAIL_COLUMN_WIDTH_PX / 2
-    + RAIL_COLUMN_PADDING_PX
-    + customPixel(region, "transcript-rail-gap");
+  const inset =
+    RAIL_COLUMN_WIDTH_PX / 2 + RAIL_COLUMN_PADDING_PX + customPixel(region, "transcript-rail-gap");
   assert.equal(inset, insetPx);
   assert.equal(inset, 432);
-  const minRegion = 2 * (
-    inset + customPixel(region, "transcript-rail-lane") + customPixel(region, "transcript-rail-margin")
-  );
+  const minRegion =
+    2 *
+    (inset +
+      customPixel(region, "transcript-rail-lane") +
+      customPixel(region, "transcript-rail-margin"));
   assert.equal(minRegion, minRegionPx);
   assert.equal(minRegion, 944);
   // 车道容器铺满转写区，只承载隐藏判定；容器查询写不了 calc，阈值照最小宽度减一。
@@ -144,7 +165,10 @@ test("derives the rail geometry from the region constants", async () => {
   assert.ok(lane, "missing .transcript-rail-lane");
   assert.match(lane, /container: transcript-rail-lane \/ inline-size;/);
   assert.doesNotMatch(lane, /width:/);
-  assert.match(styles, new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\)`));
+  assert.match(
+    styles,
+    new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\)`),
+  );
   assert.equal(laneQueryMaxPx, 943);
   const rail = declarations(".transcript-rail {");
   assert.ok(rail, "missing .transcript-rail");
@@ -210,17 +234,19 @@ test("keeps a disabled step visually out of reach", () => {
 });
 
 test("keeps the rail out of the tab order while it is hidden", async () => {
-  const { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } = await import("../lib/transcript-rail.ts");
+  const { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } = await import(
+    "../lib/transcript-rail.ts"
+  );
   const region = declarations(".chat-transcript-region");
   assert.ok(region, "missing .chat-transcript-region");
-  const inset = RAIL_COLUMN_WIDTH_PX / 2
-    + RAIL_COLUMN_PADDING_PX
-    + GAP_PX;
+  const inset = RAIL_COLUMN_WIDTH_PX / 2 + RAIL_COLUMN_PADDING_PX + GAP_PX;
   const laneQueryMaxPx = 2 * (inset + LANE_PX + MARGIN_PX) - 1;
   // 放不下整条车道就是放不下：整条 display: none 收起，隐藏时元素不可聚焦。
   assert.match(
     styles,
-    new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`),
+    new RegExp(
+      `@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`,
+    ),
   );
   // 不支持内联尺寸容器查询的浏览器读不到那条规则：回退按同一选择器收起，跳转条不会
   // 一直显示、在 769–943px 的转写区压住正文右缘。
@@ -230,8 +256,13 @@ test("keeps the rail out of the tab order while it is hidden", async () => {
   );
   // 移动档与桌面档是同一个选择器、都在未分层样式里，优先级相同，靠后声明即可覆盖。
   const baseRule = styles.indexOf(".transcript-rail {");
-  const mobileMedia = styles.lastIndexOf("@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px)");
-  assert.ok(baseRule > 0 && mobileMedia > baseRule, "the mobile rule must be declared after the desktop rule");
+  const mobileMedia = styles.lastIndexOf(
+    "@media (max-width: 768px), (pointer: coarse) and (max-width: 1023px)",
+  );
+  assert.ok(
+    baseRule > 0 && mobileMedia > baseRule,
+    "the mobile rule must be declared after the desktop rule",
+  );
   assert.match(styles.slice(mobileMedia), /\.transcript-rail \{\s*display: none;\s*\}/);
   // 只有一轮提问时干脆不渲染，圆点与按钮都不存在。
   assert.match(chatWindow, /shouldShowTranscriptRail\(railDots\.length\) && \(\s*<TranscriptRail/);
@@ -272,13 +303,22 @@ test("compresses the dot column instead of scrolling it", () => {
   // 车道连按钮块都放不下时整条收起，不把圆点压到按钮与正文上。
   assert.match(source, /if \(laneHeight <= block\) \{\s*setDotPitch\(null\);\s*return;\s*\}/);
   assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
-  assert.match(source, /style=\{\{\s*height: pitch \* dots\.length,\s*"--rail-dot-mark": `\$\{dotMarkPx\}px`,\s*\} as CSSProperties\}/);
+  assert.match(
+    source,
+    /style=\{ \{ height: pitch \* dots\.length, "--rail-dot-mark": `\$\{dotMarkPx\}px` \} as CSSProperties \}/,
+  );
   // 节距低于可用下限时整条收起；车道仍在布局里，窗口缩放后能重新判断。
-  assert.match(source, /style=\{\{ gap: RAIL_ROW_GAP_PX, display: railHidden \? "none" : undefined \}\}/);
+  assert.match(
+    source,
+    /style=\{\{ gap: RAIL_ROW_GAP_PX, display: railHidden \? "none" : undefined \}\}/,
+  );
   // 按钮块高度由常量给出，跳转条收起时不需要依赖上一次的测量。
   assert.match(source, /style=\{\{ height: RAIL_STEP_HEIGHT_PX \}\}/);
   // 窗口缩放改变高度时重算，不必等圆点数量变化。
-  assert.match(source, /const observer = new ResizeObserver\(apply\);\s*observer\.observe\(lane\);/);
+  assert.match(
+    source,
+    /const observer = new ResizeObserver\(apply\);\s*observer\.observe\(lane\);/,
+  );
   assert.doesNotMatch(source, /railScrollTop/);
   assert.doesNotMatch(styles, /overflow-y: auto/);
 });
@@ -298,7 +338,10 @@ test("describes each dot with the prompt it jumps to", () => {
   // 悬停提示是 aria-hidden 的浮层，圆点的可访问名之外还要把提问内容交给读屏。
   assert.match(source, /aria-describedby=\{promptId\}/);
   assert.match(source, /className="transcript-rail-prompt"/);
-  assert.match(source, /t\("chat\.jumpToPromptDescription", \{ index: index \+ 1, prompt: dot\.prompt \}\)/);
+  assert.match(
+    source,
+    /t\("chat\.jumpToPromptDescription", \{ index: index \+ 1, prompt: dot\.prompt \}\)/,
+  );
   assert.match(declarations(".transcript-rail-prompt"), /clip-path: inset\(50%\);/);
   // 当前圆的语义不变：仍然只有一个 aria-current。
   assert.equal(source.match(/aria-current/g)?.length, 1);

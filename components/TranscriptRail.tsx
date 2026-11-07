@@ -1,6 +1,15 @@
 "use client";
 
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
 import {
   RAIL_ROW_GAP_PX,
   RAIL_ROW_PX,
@@ -47,7 +56,17 @@ function isTipAnchorVisible(element: HTMLElement, column: HTMLElement | null): b
 
 function Chevron({ direction }: { direction: "up" | "down" }) {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       {direction === "up" ? <path d="m6 15 6-6 6 6" /> : <path d="m6 9 6 6 6-6" />}
     </svg>
   );
@@ -61,7 +80,14 @@ function Chevron({ direction }: { direction: "up" | "down" }) {
  * 节距，全部圆点始终露出；节距会小到失去可用命中区时整条收起。移动档与没有
  * 多余车道时由 CSS 隐藏，首帧不会闪现。
  */
-export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotIndex, onJump, onVisibilityChange, onWheelScroll, t }: Props) {
+export const TranscriptRail = memo(function TranscriptRail({
+  dots,
+  currentDotIndex,
+  onJump,
+  onVisibilityChange,
+  onWheelScroll,
+  t,
+}: Props) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const dotsRef = useRef<HTMLDivElement | null>(null);
   const tipRef = useRef<HTMLDivElement | null>(null);
@@ -108,27 +134,32 @@ export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotInd
   const [keyboardDotIndex, setKeyboardDotIndex] = useState<number | null>(null);
   useEffect(() => {
     // 圆点可能变少（切分支、rewind 截断），停靠点要跟着收回合法范围。
-    setKeyboardDotIndex((current) => (
-      current === null || current === currentDotIndex || current >= dots.length ? null : current
-    ));
+    setKeyboardDotIndex((current) =>
+      current === null || current === currentDotIndex || current >= dots.length ? null : current,
+    );
   }, [currentDotIndex, dots.length]);
   const activeDotIndex = Math.min(
     keyboardDotIndex ?? Math.max(currentDotIndex, 0),
     Math.max(dots.length - 1, 0),
   );
-  const handleDotKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    let target = index;
-    if (event.key === "ArrowUp") target = index - 1;
-    else if (event.key === "ArrowDown") target = index + 1;
-    else if (event.key === "Home") target = 0;
-    else if (event.key === "End") target = dots.length - 1;
-    else return;
-    event.preventDefault();
-    const clamped = Math.min(Math.max(target, 0), dots.length - 1);
-    if (clamped === index) return;
-    setKeyboardDotIndex(clamped);
-    dotsRef.current?.querySelectorAll<HTMLButtonElement>(".transcript-rail-dot")[clamped]?.focus();
-  }, [dots.length]);
+  const handleDotKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+      let target = index;
+      if (event.key === "ArrowUp") target = index - 1;
+      else if (event.key === "ArrowDown") target = index + 1;
+      else if (event.key === "Home") target = 0;
+      else if (event.key === "End") target = dots.length - 1;
+      else return;
+      event.preventDefault();
+      const clamped = Math.min(Math.max(target, 0), dots.length - 1);
+      if (clamped === index) return;
+      setKeyboardDotIndex(clamped);
+      dotsRef.current
+        ?.querySelectorAll<HTMLButtonElement>(".transcript-rail-dot")
+        [clamped]?.focus();
+    },
+    [dots.length],
+  );
 
   // 移动档与窄转写区都用 display: none 收起，量到零尺寸即不可见。
   const visibilityListenerRef = useRef(onVisibilityChange);
@@ -232,10 +263,12 @@ export const TranscriptRail = memo(function TranscriptRail({ dots, currentDotInd
         <div
           ref={dotsRef}
           className="transcript-rail-dots"
-          style={{
-            height: pitch * dots.length,
-            "--rail-dot-mark": `${dotMarkPx}px`,
-          } as CSSProperties}
+          style={
+            {
+              height: pitch * dots.length,
+              "--rail-dot-mark": `${dotMarkPx}px`,
+            } as CSSProperties
+          }
         >
           {dots.map((dot, index) => {
             const promptId = `transcript-rail-prompt-${dot.itemIndex}`;
