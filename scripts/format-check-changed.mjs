@@ -6,8 +6,9 @@
  * 分支的合并基点为参照，只检查本分支改动过的文件。基线取 `GITHUB_BASE_REF`，本地运行
  * 时取 `main`。
  *
- * git 调用一律显式传 `env: createGitEnv()`：钩子里注入的 `GIT_DIR` 一类变量会盖过
- * `-C`，让这些命令读到钩子所在仓库。
+ * 需要能取到合并基点：流水线里 checkout 的 fetch-depth 必须足够（0 或完整历史）。
+ * 钩子里注入的 `GIT_DIR` 一类变量会盖过 `-C`，因此 git 调用一律显式传
+ * `env: createGitEnv()`。
  */
 import { spawnSync } from "node:child_process";
 import { createGitEnv } from "../lib/git-env";
@@ -28,23 +29,19 @@ let base = mergeBase();
 if (!base) {
   spawnSync(
     "git",
-    [
-      "fetch",
-      "--no-tags",
-      "--depth=1",
-      "origin",
-      `+refs/heads/${baseRef}:refs/remotes/${remoteRef}`,
-    ],
-    {
-      stdio: "inherit",
-      env: createGitEnv(),
-    },
+    ["fetch", "--no-tags", "origin", `+refs/heads/${baseRef}:refs/remotes/${remoteRef}`],
+    { stdio: "inherit", env: createGitEnv() },
   );
   base = mergeBase();
 }
 
 if (!base) {
-  process.stderr.write(`[格式校验] 取不到基线 ${remoteRef} 的合并基点\n`);
+  const shallow = spawnSync("git", ["rev-parse", "--is-shallow-repository"], {
+    encoding: "utf8",
+    env: createGitEnv(),
+  }).stdout.trim();
+  const hint = shallow === "true" ? "（当前是浅克隆，需要完整历史）" : "";
+  process.stderr.write(`[格式校验] 取不到基线 ${remoteRef} 的合并基点${hint}\n`);
   process.exit(1);
 }
 
