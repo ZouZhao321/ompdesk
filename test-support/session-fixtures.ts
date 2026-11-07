@@ -26,7 +26,14 @@ import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDir, getBaseConfigRoot, relativePathWithinNormalizedRoot } from "@oh-my-pi/pi-utils/dirs";
 import { comparableDirectory } from "./path-compare";
 
-export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent" | "tools" | "long";
+export type SessionScenario =
+  | "single-turn"
+  | "empty"
+  | "branch"
+  | "subagent"
+  | "tools"
+  | "long"
+  | "skill-command";
 
 export interface SeedOptions {
   agentDir: string;
@@ -105,6 +112,7 @@ const SCENARIO_TITLES: Record<SessionScenario, string> = {
   subagent: "伪造会话 subagent",
   tools: "伪造会话 tools",
   long: "伪造会话 long",
+  "skill-command": "伪造会话 skill-command",
 };
 
 const SINGLE_TURN_USER_TEXT = "伪造会话 single-turn 的用户消息";
@@ -118,6 +126,11 @@ const BRANCH_FORK_USER_TEXTS = [
 const SUBAGENT_USER_TEXT = "伪造会话 subagent 的用户消息";
 const SUBAGENT_ASSISTANT_TEXT = "伪造会话 subagent 的助手回复";
 // 子会话标题带 Sub 前缀，侧栏据此折叠子代理会话。
+const SKILL_COMMAND_NAME = "demo-skill";
+const SKILL_COMMAND_ARGS = "只回复第一句";
+const SKILL_COMMAND_PROMPT = `/skill:${SKILL_COMMAND_NAME} ${SKILL_COMMAND_ARGS}`;
+// 技能正文只存在于 custom_message 里，标题与预览要显示用户敲的指令。
+const SKILL_COMMAND_BODY = "用户调用了 demo-skill，照它写的流程执行。";
 const SUBAGENT_TITLE_PREFIX = "Sub ";
 // 子会话消息相对父会话逐条递增，读回时顺序不依赖文件写入时序。
 const CHILD_MESSAGE_OFFSET_MS = 1000;
@@ -495,6 +508,8 @@ async function buildScenario(
       return buildToolsScenario(options, stagingDir);
     case "long":
       return buildLongScenario(options, stagingDir);
+    case "skill-command":
+      return buildSkillCommandScenario(options, stagingDir);
   }
 }
 
@@ -621,6 +636,38 @@ async function buildLongScenario(
     sessions: [await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir)],
     extend: async () => [],
   };
+}
+
+/**
+ * 首条消息是用户手动调用的技能指令：落盘为 custom_message，没有用户消息。
+ * 标题与列表预览因此只能从 details 里取指令，正文不能漏到标题上。
+ */
+async function buildSkillCommandScenario(
+  options: { cwd: string; title: string; messageTime: number },
+  stagingDir: string,
+): Promise<ScenarioPlan> {
+  const manager = SessionManager.create(options.cwd, stagingDir);
+  try {
+    manager.appendCustomMessageEntry(
+      "skill-prompt",
+      SKILL_COMMAND_BODY,
+      true,
+      {
+        name: SKILL_COMMAND_NAME,
+        args: SKILL_COMMAND_ARGS,
+        prompt: SKILL_COMMAND_PROMPT,
+        lineCount: 1,
+      },
+      "user",
+      options.messageTime,
+    );
+    await manager.setSessionName(options.title, "user");
+    await manager.ensureOnDisk();
+    await manager.flush();
+    return { sessions: [snapshotSession(manager, options.title)], extend: async () => [] };
+  } finally {
+    await manager.close();
+  }
 }
 
 function publishedSession(session: BuiltSession, scenarioDir: string): BuiltSession {
