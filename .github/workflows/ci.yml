@@ -43,9 +43,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # 流水线只在 package.json 的 `ci` 脚本里定义一次（typecheck → test → build →
-      # smoke:dev）；本地 `bun run verify` 与推送前钩子用的是同一份定义，改流程只改
-      # 那一处，CI 与本地不会再分叉。
+      # 流水线只在 package.json 的 `ci` 脚本里定义一次（format → typecheck → test →
+      # build → smoke:dev）；本地 `bun run verify` 与推送前钩子用的是同一份定义，改流程
+      # 只改那一处，CI 与本地不会再分叉。
+      #
+      # 第一步排版是写入模式：只改写不判定，排版差异不会让 CI 失败。需要单独的判定用
+      # `bun run format:check`。
       #
       # eslint 不进这道门禁：全仓 `bun run lint` 现有存量 error（React 编译器的
       # memoization 检查，落在 components/ 与 hooks/），加进来必然红。复现命令
