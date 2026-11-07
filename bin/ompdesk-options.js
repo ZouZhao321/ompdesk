@@ -38,8 +38,23 @@ function loopbackBindingError(hostname, env = process.env) {
   ].join("\n");
 }
 
+const COMMANDS = new Set(["start", "status", "stop", "foreground"]);
+
+/**
+ * First positional argument selects the command. `__daemon-run` is the same
+ * launcher re-entering itself as the detached server process; it is not part of
+ * the user-facing vocabulary.
+ */
+function readCommand(positionals) {
+  const first = positionals[0];
+  if (!first) return "start";
+  if (first === "__daemon-run") return first;
+  if (COMMANDS.has(first)) return first;
+  return { error: `Unknown command: ${first}. Use start, status, stop or foreground.` };
+}
+
 function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
-  const { values: cliArgs } = parseArgs({
+  const { values: cliArgs, positionals } = parseArgs({
     args,
     options: {
       port:      { type: "string", short: "p" },
@@ -51,11 +66,20 @@ function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
       // Recovery from the machine itself: replaces the stored password without
       // needing the old one.
       "reset-password": { type: "boolean" },
+      // `stop --force` interrupts running tasks instead of refusing.
+      force: { type: "boolean", short: "f" },
     },
     strict: false,
+    allowPositionals: true,
   });
 
   return {
+    command: readCommand(positionals),
+    force: Boolean(cliArgs.force),
+    // Naming a port with `--port` selects one instance; `status` and `stop`
+    // otherwise cover every recorded instance. An inherited `PORT` sets the
+    // default port for `start`, not which instances the other commands look at.
+    portExplicit: cliArgs.port !== undefined,
     port: cliArgs.port ?? env.PORT ?? "30141",
     hostname: cliArgs.hostname ?? env.OMPDESK_HOSTNAME ?? "127.0.0.1",
     openBrowser: !cliArgs["no-open"] && !isEnabled(env.OMPDESK_NO_OPEN),

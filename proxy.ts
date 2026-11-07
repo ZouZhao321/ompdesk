@@ -11,6 +11,7 @@ import {
   resolveForwardedAddress,
   type RequestActor,
 } from "@/lib/request-headers";
+import { CONTROL_API_PREFIX, CONTROL_TOKEN_HEADER, controlTokensMatch } from "@/lib/control-token";
 import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 
 /**
@@ -114,6 +115,21 @@ export function proxy(request: NextRequest) {
       return new NextResponse("Untrusted request", { status: 403, headers: SECURITY_HEADERS });
     }
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403, headers: SECURITY_HEADERS });
+  }
+
+  // The launcher's control channel answers without the web password, because
+  // the CLI only ever holds a one-way digest of it. A per-start token, stored
+  // owner-only next to the instance record, takes its place; anything without
+  // it gets a 404 so the route does not advertise itself.
+  if (pathname.startsWith(CONTROL_API_PREFIX)) {
+    if (!controlTokensMatch(request.headers.get(CONTROL_TOKEN_HEADER), process.env.OMPDESK_CONTROL_TOKEN)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404, headers: SECURITY_HEADERS });
+    }
+    logEvent("info", "security", "security.control.access", {
+      ...securityFields,
+      reason: "control-token",
+    });
+    return continueWithRequestHeaders(request, requestId, "local");
   }
 
   // Recovery stays reachable while locked out — that is the whole point of it —

@@ -26,6 +26,7 @@ agent/[id]/events/route.ts      GET SSE 流
 agent/[id]/bash-output/route.ts GET 命令输出
 agent/running/route.ts          GET 运行中与等待输入的会话 id
 agent/running/events/route.ts   GET 同一份活动快照的 SSE 流
+control/activity/route.ts       GET 后台实例的活动视图，供 ompdesk status 与 stop 读取；只认启动时下发的控制令牌
 auth/all-providers/route.ts     GET API-key 提供方列表
 auth/api-key/[provider]/route.ts GET/POST/DELETE 提供方 API key 状态与存储
 auth/login/[provider]/route.ts  GET OAuth 登录 SSE | POST 手动 code
@@ -203,10 +204,10 @@ useTheme.ts         主题状态
 不在上述四组里、但改代码时会碰到的入口与配置。
 
 ```
-proxy.ts            访问控制：密码校验、主机与跨站检查
+proxy.ts            访问控制：密码校验、主机与跨站检查；控制令牌通道在这里放行
 instrumentation.ts  启动时接线（代理、日志）
 next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
-bin/                启动器、密码存储、Bun 定位
+bin/                启动器（start/status/stop/foreground）、实例记录、密码存储、Bun 定位
 scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息）
 test-support/       测试样本：会话夹具经 SessionManager 生成，测试与手工验证共用同一入口
 ```

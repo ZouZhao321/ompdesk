@@ -46,6 +46,16 @@ bunx ompdesk@latest
 
 Open [http://127.0.0.1:30141](http://127.0.0.1:30141). The launcher opens the browser for you once the server is ready.
 
+`ompdesk` starts in the background and returns to the prompt, so closing the terminal does not stop the server or the agent turns it is running. Ask it for its state and stop it with the same command:
+
+```bash
+ompdesk status    # running or not, the address, and what each project is doing
+ompdesk stop      # refuses while a task is running
+ompdesk stop --force
+```
+
+`status` and `stop` cover every instance recorded for the current agent directory; `--port <port>` narrows them to one. Each instance records itself and its run log in that directory, so a second `ompdesk` on the same port reports the address of the running one instead of failing on the port. `ompdesk foreground` runs the server attached to the terminal instead — that is the form a container or a service manager wants.
+
 Install it globally instead:
 
 ```bash
@@ -55,12 +65,22 @@ ompdesk
 
 The `ompdesk` entrypoint runs under Node or Bun, locates a Bun runtime, and re-executes the server there. Pin a specific Bun build with `OMPDESK_BUN=/path/to/bun`.
 
+### Commands
+
+| Command | Effect |
+| --- | --- |
+| `ompdesk` / `ompdesk start` | Start in the background and return to the prompt. |
+| `ompdesk status` | Report each recorded instance: running or not, address, pid, and per-project session counts. |
+| `ompdesk stop` | Stop the recorded instances. Refuses while a session is mid-turn; `--force` interrupts it. |
+| `ompdesk foreground` | Run the server attached to this terminal, for containers and service managers. |
+
 ### Options
 
 | Option | Effect |
 | --- | --- |
-| `-p, --port <port>` | Listen port. Defaults to `30141`; `PORT` also works. |
+| `-p, --port <port>` | Listen port. Defaults to `30141`; `PORT` also works. Also selects one instance for `status` and `stop`. |
 | `-H, --hostname <host>` | Listen address. Non-loopback values are refused unless `OMPDESK_ALLOW_NON_LOOPBACK` is set for a container. |
+| `-f, --force` | With `stop`: interrupt running tasks instead of refusing. |
 | `--no-open` | Do not open the browser automatically. |
 | `--authenticated` | Turn the password lock on for this run and later ones. Asks for a password when none exists and the terminal is interactive. |
 | `--reset-password` | Replace the stored password without knowing the old one. Requires a shell on the server. |

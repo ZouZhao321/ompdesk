@@ -29,9 +29,10 @@ password is already stored, the flag just switches the lock back on.
 
 `OMPDESK_AUTHENTICATED=1` does the same thing from the environment.
 
-Non-interactive launches — systemd, Docker, `ompdesk &` — cannot answer a
-prompt, so `--authenticated` fails there with a message instead of hanging. Set
-the password once interactively, or use the environment variable below.
+Non-interactive launches — systemd, Docker, `ompdesk foreground` under a service
+manager — cannot answer a prompt, so `--authenticated` fails there with a message
+instead of hanging. Set the password once interactively, or use the environment
+variable below.
 
 **From the environment.**
 
