@@ -532,7 +532,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 观测自己收回，最坏也只是这段窗口内的位置不参与判定。
   const followObservationHoldUntilRef = useRef(0);
   // Forward reference: handleSend/executeBash are declared above applyFollow.
-  const applyFollowRef = useRef<(event: FollowEvent) => void>(() => {});
+  const applyFollowRef = useRef<(event: FollowEvent) => void>(() => { });
   // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
   const scrollTranscriptToEndRef = useRef(opts.scrollTranscriptToEnd);
   scrollTranscriptToEndRef.current = opts.scrollTranscriptToEnd;
@@ -965,7 +965,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     eventSourceSessionIdRef.current = sid;
     eventSourceRuntimeIdRef.current = runtimeIdRef.current;
 
-    let cancel = () => {};
+    let cancel = () => { };
     const promise = new Promise<EventStreamConnectionResult>((resolve) => {
       let settled = false;
       let receivedConnected = false;
@@ -1178,10 +1178,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const rest = prev.filter((item) => item.key !== request.widgetKey);
           return request.widgetLines
             ? [...rest, {
-                key: request.widgetKey,
-                lines: request.widgetLines,
-                placement: request.widgetPlacement ?? "aboveEditor",
-              }]
+              key: request.widgetKey,
+              lines: request.widgetLines,
+              placement: request.widgetPlacement ?? "aboveEditor",
+            }]
             : rest;
         });
         break;
@@ -1530,7 +1530,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               // next turn); dead wrapper (no state) means the queue is gone.
               setQueuedMessages(normalizeQueuedMessages(d.state?.queuedMessages));
             })
-            .catch(() => {});
+            .catch(() => { });
         }
         break;
       case "goal_status":
@@ -1574,6 +1574,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "prompt_error":
         addNotice({ type: "error", message: (event.errorMessage as string | undefined) ?? "Command failed" });
         break;
+      case "skill_command_unavailable": {
+        const reason = event.reason as string | undefined;
+        const messageKey = reason === "disabled"
+          ? "chat.skillCommandDisabled"
+          : reason === "unreadable"
+            ? "chat.skillCommandUnreadable"
+            : "chat.skillCommandUnknown";
+        addNotice({
+          type: "warning",
+          message: t(messageKey, { skill: (event.skill as string | undefined) ?? "" }),
+        });
+        break;
+      }
       case "extension_error":
         addNotice({
           type: "error",
@@ -1768,7 +1781,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage, t]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
