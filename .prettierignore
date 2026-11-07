@@ -11,4 +11,3 @@ build
 bun.lock
 next-env.d.ts
 *.tsbuildinfo
-biome.json

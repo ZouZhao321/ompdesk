@@ -44,7 +44,7 @@ bun run dev   # port 30141
 类型检查：`bun run typecheck`
 Lint：`bun run lint`
 测试：`bun test`
-排版：`bun run format`（ts/tsx/mjs/js/cjs 用 Biome，css/json 用 Prettier）；只检查：`bun run format:check`
+排版：`bun run format`（代码、CSS、JSON 三组配置，见 `prettier/`）；只检查：`bun run format:check`
 
 真实模型冒烟默认跳过，只有 `OMPDESK_LIVE_SMOKE=1 bun test lib/live-model-smoke.test.mjs`
 才发出真实请求；`OMPDESK_LIVE_MODEL` 可选，用 omp 选择器语法（`provider/modelId`
