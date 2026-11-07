@@ -12,7 +12,7 @@ export const RAIL_JUMP_SETTLE_MS = 300;
 
 /** 一次跳转的状态：`pending` 是还没重新对齐的条目下标。 */
 export interface RailJumpState {
-	readonly pending: number | null;
+  readonly pending: number | null;
 }
 
 /** 没有待清算目标的初始状态。 */
@@ -20,14 +20,14 @@ export const RAIL_JUMP_IDLE: RailJumpState = { pending: null };
 
 /** 清算结果：需要重新对齐的条目下标，以及清算之后的状态。 */
 export interface RailJumpSettlement {
-	/** 需要按实测高度重新对齐的条目下标；没有待清算目标时为 null。 */
-	readonly realign: number | null;
-	/** 写回调用方保存的下一次状态。 */
-	readonly state: RailJumpState;
+  /** 需要按实测高度重新对齐的条目下标；没有待清算目标时为 null。 */
+  readonly realign: number | null;
+  /** 写回调用方保存的下一次状态。 */
+  readonly state: RailJumpState;
 }
 
 /** 清算一次跳转：同一次跳转只会给出一次重新对齐。 */
 export function settleRailJump(state: RailJumpState): RailJumpSettlement {
-	if (state.pending === null) return { realign: null, state: RAIL_JUMP_IDLE };
-	return { realign: state.pending, state: RAIL_JUMP_IDLE };
+  if (state.pending === null) return { realign: null, state: RAIL_JUMP_IDLE };
+  return { realign: state.pending, state: RAIL_JUMP_IDLE };
 }

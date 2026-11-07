@@ -5,5 +5,5 @@ import { homedir } from "os";
 export const GET = withRequestLog("/api/home", getRouteHandler);
 
 async function getRouteHandler() {
-	return NextResponse.json({ home: homedir() });
+  return NextResponse.json({ home: homedir() });
 }

@@ -1,48 +1,65 @@
-import { SessionManager, buildSessionContext as ompBuildSessionContext, getAgentDir } from "@oh-my-pi/pi-coding-agent";
+import {
+  SessionManager,
+  buildSessionContext as ompBuildSessionContext,
+  getAgentDir,
+} from "@oh-my-pi/pi-coding-agent";
 import { Tokenizer } from "@oh-my-pi/pi-agent-core";
 import type { AgentMessage as OmpAgentMessage } from "@oh-my-pi/pi-agent-core";
 import { calculatePromptTokens, hasContextTokenUsage } from "@oh-my-pi/pi-agent-core/compaction";
 import { closeSync, existsSync, openSync, readSync } from "fs";
 import { normalize as normalizePath } from "path";
-import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext } from "./types";
+import type {
+  AgentMessage,
+  SessionEntry,
+  SessionHeader,
+  SessionInfo,
+  SessionContext,
+} from "./types";
 import type { ContextUsage } from "./omp-types";
-import type { SessionEntry as OmpSessionEntry, SessionInfo as OmpSessionInfo } from "@oh-my-pi/pi-coding-agent";
+import type {
+  SessionEntry as OmpSessionEntry,
+  SessionInfo as OmpSessionInfo,
+} from "@oh-my-pi/pi-coding-agent";
 import { getOmpRuntime } from "./omp-runtime";
 import { normalizeToolCalls } from "./normalize";
 import { sessionPathKey } from "./session-path";
-import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
+import {
+  isUserSkillPrompt,
+  skillPromptCommandLabel,
+  type SkillPromptDetailsLike,
+} from "./slash-display";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
 
 export async function attachSessionProjectInfo(sessions: SessionInfo[]): Promise<SessionInfo[]> {
-	const uniqueCwds = [...new Set(sessions.map((s) => s.cwd).filter(Boolean))];
-	const projectByCwd = new Map<string, ProjectInfo>();
-	await Promise.all(
-		uniqueCwds.map(async (cwd) => {
-			projectByCwd.set(cwd, await resolveProject(cwd));
-		}),
-	);
+  const uniqueCwds = [...new Set(sessions.map((s) => s.cwd).filter(Boolean))];
+  const projectByCwd = new Map<string, ProjectInfo>();
+  await Promise.all(
+    uniqueCwds.map(async (cwd) => {
+      projectByCwd.set(cwd, await resolveProject(cwd));
+    }),
+  );
 
-	return sessions.map((session) => {
-		const project = session.cwd ? projectByCwd.get(session.cwd) : undefined;
-		return {
-			...session,
-			projectRoot: project?.projectRoot ?? session.cwd,
-			...(project?.isWorktree && project.branch ? { worktreeBranch: project.branch } : {}),
-		};
-	});
+  return sessions.map((session) => {
+    const project = session.cwd ? projectByCwd.get(session.cwd) : undefined;
+    return {
+      ...session,
+      projectRoot: project?.projectRoot ?? session.cwd,
+      ...(project?.isWorktree && project.branch ? { worktreeBranch: project.branch } : {}),
+    };
+  });
 }
 
 export function mergeSessionLists(
-	persistedSessions: SessionInfo[],
-	supplementalSessions: SessionInfo[],
+  persistedSessions: SessionInfo[],
+  supplementalSessions: SessionInfo[],
 ): SessionInfo[] {
-	const byId = new Map(supplementalSessions.map((session) => [session.id, session]));
-	// A disk scan is authoritative once the JSONL exists. In particular, this
-	// replaces a transient registry snapshot without briefly rendering two rows.
-	for (const session of persistedSessions) byId.set(session.id, session);
-	return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
+  const byId = new Map(supplementalSessions.map((session) => [session.id, session]));
+  // A disk scan is authoritative once the JSONL exists. In particular, this
+  // replaces a transient registry snapshot without briefly rendering two rows.
+  for (const session of persistedSessions) byId.set(session.id, session);
+  return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
 }
 
 /** 首条消息扫描的上限：技能正文可能很长，按块读满这个额度为止。 */
@@ -58,32 +75,32 @@ const FIRST_MESSAGE_SCAN_CHUNK = 64 * 1024;
  * 坏文件只丢一个标题：读取或解析失败一律按「没有首条消息」处理。
  */
 function readLeadingSkillCommand(filePath: string): string | undefined {
-	if (!existsSync(filePath)) return undefined;
-	let handle: number;
-	try {
-		handle = openSync(filePath, "r");
-	} catch {
-		return undefined;
-	}
-	try {
-		const chunk = Buffer.allocUnsafe(FIRST_MESSAGE_SCAN_CHUNK);
-		let carry = "";
-		let offset = 0;
-		while (offset < FIRST_MESSAGE_SCAN_BYTES) {
-			const bytesRead = readSync(handle, chunk, 0, chunk.length, offset);
-			if (bytesRead === 0) break;
-			offset += bytesRead;
-			const lines = (carry + chunk.subarray(0, bytesRead).toString("utf8")).split("\n");
-			carry = lines.pop() ?? "";
-			const verdict = inspectLeadingLines(lines);
-			if (verdict !== undefined) return verdict ?? undefined;
-		}
-		return inspectLeadingLines([carry]) ?? undefined;
-	} catch {
-		return undefined;
-	} finally {
-		closeSync(handle);
-	}
+  if (!existsSync(filePath)) return undefined;
+  let handle: number;
+  try {
+    handle = openSync(filePath, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const chunk = Buffer.allocUnsafe(FIRST_MESSAGE_SCAN_CHUNK);
+    let carry = "";
+    let offset = 0;
+    while (offset < FIRST_MESSAGE_SCAN_BYTES) {
+      const bytesRead = readSync(handle, chunk, 0, chunk.length, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+      const lines = (carry + chunk.subarray(0, bytesRead).toString("utf8")).split("\n");
+      carry = lines.pop() ?? "";
+      const verdict = inspectLeadingLines(lines);
+      if (verdict !== undefined) return verdict ?? undefined;
+    }
+    return inspectLeadingLines([carry]) ?? undefined;
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(handle);
+  }
 }
 
 /**
@@ -91,227 +108,234 @@ function readLeadingSkillCommand(filePath: string): string | undefined {
  * 字符串：命令行标签。
  */
 function inspectLeadingLines(lines: readonly string[]): string | null | undefined {
-	for (const line of lines) {
-		if (!line.includes('"type"')) continue;
-		let entry: {
-			type?: string;
-			customType?: string;
-			attribution?: string;
-			details?: unknown;
-			message?: { role?: string };
-		};
-		try {
-			entry = JSON.parse(line);
-		} catch {
-			// 半条记录或外部生成的历史文件：跳过这一行，不影响其它会话。
-			continue;
-		}
-		if (entry.type === "custom_message" && isUserSkillPrompt(entry)) {
-			return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
-		}
-		if (entry.type === "message" && entry.message?.role !== "bashExecution") return null;
-	}
-	return undefined;
+  for (const line of lines) {
+    if (!line.includes('"type"')) continue;
+    let entry: {
+      type?: string;
+      customType?: string;
+      attribution?: string;
+      details?: unknown;
+      message?: { role?: string };
+    };
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      // 半条记录或外部生成的历史文件：跳过这一行，不影响其它会话。
+      continue;
+    }
+    if (entry.type === "custom_message" && isUserSkillPrompt(entry)) {
+      return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+    }
+    if (entry.type === "message" && entry.message?.role !== "bashExecution") return null;
+  }
+  return undefined;
 }
 
 async function loadAllSessions(): Promise<SessionInfo[]> {
-	// Property access (not a bound import) so tests can stub SessionManager.listAll.
-	const ompSessions: OmpSessionInfo[] = await SessionManager.listAll();
-	const pathToId = new Map<string, string>();
-	for (const s of ompSessions) pathToId.set(sessionPathKey(s.path), s.id);
-	// `fork()` stores the parent as a bare session id; `createBranchedSession()`
-	// stores an absolute path. Both forms must resolve to a parent row.
-	const idSet = new Set(ompSessions.map((s) => s.id));
+  // Property access (not a bound import) so tests can stub SessionManager.listAll.
+  const ompSessions: OmpSessionInfo[] = await SessionManager.listAll();
+  const pathToId = new Map<string, string>();
+  for (const s of ompSessions) pathToId.set(sessionPathKey(s.path), s.id);
+  // `fork()` stores the parent as a bare session id; `createBranchedSession()`
+  // stores an absolute path. Both forms must resolve to a parent row.
+  const idSet = new Set(ompSessions.map((s) => s.id));
 
-	const sessions = await Promise.all(
-		ompSessions.map(async (s) => {
-			cacheSessionPath(s.id, s.path);
-			const listedFirstMessage = s.firstMessage || "(no messages)";
-			const skillCommand = readLeadingSkillCommand(s.path);
-			return {
-				path: s.path,
-				id: s.id,
-				cwd: s.cwd,
-				name: s.title,
-				created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
-				modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
-				messageCount: s.messageCount,
-				firstMessage: skillCommand ?? listedFirstMessage,
-				parentSessionId: s.parentSessionPath
-					? (pathToId.get(sessionPathKey(s.parentSessionPath)) ??
-						(idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined))
-					: undefined,
-				transient: false,
-				...(s.status ? { status: s.status } : {}),
-			};
-		}),
-	);
-	return attachSessionProjectInfo(sessions);
+  const sessions = await Promise.all(
+    ompSessions.map(async (s) => {
+      cacheSessionPath(s.id, s.path);
+      const listedFirstMessage = s.firstMessage || "(no messages)";
+      const skillCommand = readLeadingSkillCommand(s.path);
+      return {
+        path: s.path,
+        id: s.id,
+        cwd: s.cwd,
+        name: s.title,
+        created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
+        modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
+        messageCount: s.messageCount,
+        firstMessage: skillCommand ?? listedFirstMessage,
+        parentSessionId: s.parentSessionPath
+          ? (pathToId.get(sessionPathKey(s.parentSessionPath)) ??
+            (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined))
+          : undefined,
+        transient: false,
+        ...(s.status ? { status: s.status } : {}),
+      };
+    }),
+  );
+  return attachSessionProjectInfo(sessions);
 }
 
 export async function listAllSessions(options: { force?: boolean } = {}): Promise<SessionInfo[]> {
-	if (options.force) invalidateSessionListCache();
-	const generation = globalThis.__ompSessionListGeneration ?? 0;
+  if (options.force) invalidateSessionListCache();
+  const generation = globalThis.__ompSessionListGeneration ?? 0;
 
-	// Return cached result if still fresh (avoids re-scanning session files
-	// and re-spawning git processes on every page load).
-	if (
-		globalThis.__ompSessionListCache &&
-		Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS
-	) {
-		return globalThis.__ompSessionListCache.data;
-	}
+  // Return cached result if still fresh (avoids re-scanning session files
+  // and re-spawning git processes on every page load).
+  if (
+    globalThis.__ompSessionListCache &&
+    Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS
+  ) {
+    return globalThis.__ompSessionListCache.data;
+  }
 
-	// Coalescing dedup: concurrent callers share the same in-flight promise
-	// only while it belongs to the current cache generation.
-	if (globalThis.__ompSessionListPromise && globalThis.__ompSessionListPromiseGeneration === generation) {
-		return globalThis.__ompSessionListPromise;
-	}
+  // Coalescing dedup: concurrent callers share the same in-flight promise
+  // only while it belongs to the current cache generation.
+  if (
+    globalThis.__ompSessionListPromise &&
+    globalThis.__ompSessionListPromiseGeneration === generation
+  ) {
+    return globalThis.__ompSessionListPromise;
+  }
 
-	const loadPromise = loadAllSessions().then((data) => {
-		// If a mutation invalidated this scan, make this caller join (or start) a
-		// scan for the current generation. Returning the stale result here made a
-		// refresh race indistinguishable from a successful refresh.
-		if ((globalThis.__ompSessionListGeneration ?? 0) !== generation) {
-			return listAllSessions();
-		}
-		globalThis.__ompSessionListCache = { data, ts: Date.now() };
-		return data;
-	});
-	const trackedPromise = loadPromise.finally(() => {
-		if (globalThis.__ompSessionListPromise === trackedPromise) {
-			globalThis.__ompSessionListPromise = undefined;
-			globalThis.__ompSessionListPromiseGeneration = undefined;
-		}
-	});
+  const loadPromise = loadAllSessions().then((data) => {
+    // If a mutation invalidated this scan, make this caller join (or start) a
+    // scan for the current generation. Returning the stale result here made a
+    // refresh race indistinguishable from a successful refresh.
+    if ((globalThis.__ompSessionListGeneration ?? 0) !== generation) {
+      return listAllSessions();
+    }
+    globalThis.__ompSessionListCache = { data, ts: Date.now() };
+    return data;
+  });
+  const trackedPromise = loadPromise.finally(() => {
+    if (globalThis.__ompSessionListPromise === trackedPromise) {
+      globalThis.__ompSessionListPromise = undefined;
+      globalThis.__ompSessionListPromiseGeneration = undefined;
+    }
+  });
 
-	globalThis.__ompSessionListPromise = trackedPromise;
-	globalThis.__ompSessionListPromiseGeneration = generation;
-	return trackedPromise;
+  globalThis.__ompSessionListPromise = trackedPromise;
+  globalThis.__ompSessionListPromiseGeneration = generation;
+  return trackedPromise;
 }
 
 // ============================================================================
 // Session path caches, stored in globalThis for hot-reload safety.
 // ============================================================================
 declare global {
-	var __ompSessionPathCache: Map<string, string> | undefined;
-	var __ompPathToSessionIdCache: Map<string, string> | undefined;
-	var __ompSessionListPromise: Promise<SessionInfo[]> | undefined;
-	var __ompSessionListPromiseGeneration: number | undefined;
-	var __ompSessionListGeneration: number | undefined;
-	var __ompSessionListCache: { data: SessionInfo[]; ts: number } | undefined;
+  var __ompSessionPathCache: Map<string, string> | undefined;
+  var __ompPathToSessionIdCache: Map<string, string> | undefined;
+  var __ompSessionListPromise: Promise<SessionInfo[]> | undefined;
+  var __ompSessionListPromiseGeneration: number | undefined;
+  var __ompSessionListGeneration: number | undefined;
+  var __ompSessionListCache: { data: SessionInfo[]; ts: number } | undefined;
 }
 
 const SESSION_LIST_CACHE_TTL_MS = 30_000;
 
 export function invalidateSessionListCache(): void {
-	globalThis.__ompSessionListGeneration = (globalThis.__ompSessionListGeneration ?? 0) + 1;
-	globalThis.__ompSessionListCache = undefined;
+  globalThis.__ompSessionListGeneration = (globalThis.__ompSessionListGeneration ?? 0) + 1;
+  globalThis.__ompSessionListCache = undefined;
 }
 
 function getPathCache(): Map<string, string> {
-	if (!globalThis.__ompSessionPathCache) globalThis.__ompSessionPathCache = new Map();
-	return globalThis.__ompSessionPathCache;
+  if (!globalThis.__ompSessionPathCache) globalThis.__ompSessionPathCache = new Map();
+  return globalThis.__ompSessionPathCache;
 }
 
 function getPathToIdCache(): Map<string, string> {
-	if (!globalThis.__ompPathToSessionIdCache) globalThis.__ompPathToSessionIdCache = new Map();
-	return globalThis.__ompPathToSessionIdCache;
+  if (!globalThis.__ompPathToSessionIdCache) globalThis.__ompPathToSessionIdCache = new Map();
+  return globalThis.__ompPathToSessionIdCache;
 }
 
 export async function resolveSessionPath(sessionId: string): Promise<string | null> {
-	const cached = getPathCache().get(sessionId);
-	// A cached path can outlive its file: a transient session that was never
-	// persisted, or one deleted behind our back. Trust the cache only while the
-	// file is still there, and fall through to a rescan otherwise.
-	if (cached && existsSync(cached)) return cached;
-	if (cached) invalidateSessionPathCache(sessionId);
+  const cached = getPathCache().get(sessionId);
+  // A cached path can outlive its file: a transient session that was never
+  // persisted, or one deleted behind our back. Trust the cache only while the
+  // file is still there, and fall through to a rescan otherwise.
+  if (cached && existsSync(cached)) return cached;
+  if (cached) invalidateSessionPathCache(sessionId);
 
-	// Cache miss: scan all sessions to populate cache, then retry
-	await listAllSessions();
-	return getPathCache().get(sessionId) ?? null;
+  // Cache miss: scan all sessions to populate cache, then retry
+  await listAllSessions();
+  return getPathCache().get(sessionId) ?? null;
 }
 
 export async function resolveSessionIdByPath(filePath: string): Promise<string | undefined> {
-	const pathKey = sessionPathKey(filePath);
-	const cached = getPathToIdCache().get(pathKey);
-	if (cached) return cached;
+  const pathKey = sessionPathKey(filePath);
+  const cached = getPathToIdCache().get(pathKey);
+  if (cached) return cached;
 
-	await listAllSessions();
-	return getPathToIdCache().get(pathKey);
+  await listAllSessions();
+  return getPathToIdCache().get(pathKey);
 }
 
 export function cacheSessionPath(sessionId: string, filePath: string): void {
-	const normalizedPath = normalizePath(filePath);
-	const pathKey = sessionPathKey(normalizedPath);
-	const pathCache = getPathCache();
-	const reverseCache = getPathToIdCache();
-	const previousPath = pathCache.get(sessionId);
-	const previousPathKey = previousPath ? sessionPathKey(previousPath) : undefined;
-	const previousSessionId = reverseCache.get(pathKey);
-	const previousOwnerPath = previousSessionId ? pathCache.get(previousSessionId) : undefined;
-	if (previousPathKey && previousPathKey !== pathKey && reverseCache.get(previousPathKey) === sessionId) {
-		reverseCache.delete(previousPathKey);
-	}
-	if (
-		previousSessionId &&
-		previousSessionId !== sessionId &&
-		previousOwnerPath &&
-		sessionPathKey(previousOwnerPath) === pathKey
-	) {
-		pathCache.delete(previousSessionId);
-	}
-	pathCache.set(sessionId, normalizedPath);
-	reverseCache.set(pathKey, sessionId);
+  const normalizedPath = normalizePath(filePath);
+  const pathKey = sessionPathKey(normalizedPath);
+  const pathCache = getPathCache();
+  const reverseCache = getPathToIdCache();
+  const previousPath = pathCache.get(sessionId);
+  const previousPathKey = previousPath ? sessionPathKey(previousPath) : undefined;
+  const previousSessionId = reverseCache.get(pathKey);
+  const previousOwnerPath = previousSessionId ? pathCache.get(previousSessionId) : undefined;
+  if (
+    previousPathKey &&
+    previousPathKey !== pathKey &&
+    reverseCache.get(previousPathKey) === sessionId
+  ) {
+    reverseCache.delete(previousPathKey);
+  }
+  if (
+    previousSessionId &&
+    previousSessionId !== sessionId &&
+    previousOwnerPath &&
+    sessionPathKey(previousOwnerPath) === pathKey
+  ) {
+    pathCache.delete(previousSessionId);
+  }
+  pathCache.set(sessionId, normalizedPath);
+  reverseCache.set(pathKey, sessionId);
 }
 
 export function invalidateSessionPathCache(sessionId: string): void {
-	const pathCache = getPathCache();
-	const reverseCache = getPathToIdCache();
-	const filePath = pathCache.get(sessionId);
-	pathCache.delete(sessionId);
-	const pathKey = filePath ? sessionPathKey(filePath) : undefined;
-	if (pathKey && reverseCache.get(pathKey) === sessionId) {
-		reverseCache.delete(pathKey);
-	}
+  const pathCache = getPathCache();
+  const reverseCache = getPathToIdCache();
+  const filePath = pathCache.get(sessionId);
+  pathCache.delete(sessionId);
+  const pathKey = filePath ? sessionPathKey(filePath) : undefined;
+  if (pathKey && reverseCache.get(pathKey) === sessionId) {
+    reverseCache.delete(pathKey);
+  }
 }
 
 export function readSessionHeader(filePath: string): SessionHeader | null {
-	const fd = openSync(filePath, "r");
-	try {
-		const chunks: Buffer[] = [];
-		const maxHeaderBytes = 64 * 1024;
-		let position = 0;
-		let foundNewline = false;
+  const fd = openSync(filePath, "r");
+  try {
+    const chunks: Buffer[] = [];
+    const maxHeaderBytes = 64 * 1024;
+    let position = 0;
+    let foundNewline = false;
 
-		while (position < maxHeaderBytes && !foundNewline) {
-			const buffer = Buffer.allocUnsafe(Math.min(4096, maxHeaderBytes - position));
-			const bytesRead = readSync(fd, buffer, 0, buffer.length, position);
-			if (bytesRead === 0) break;
-			const data = buffer.subarray(0, bytesRead);
-			const newlineIndex = data.indexOf(0x0a);
-			chunks.push(newlineIndex === -1 ? data : data.subarray(0, newlineIndex));
-			position += bytesRead;
-			foundNewline = newlineIndex !== -1;
-		}
+    while (position < maxHeaderBytes && !foundNewline) {
+      const buffer = Buffer.allocUnsafe(Math.min(4096, maxHeaderBytes - position));
+      const bytesRead = readSync(fd, buffer, 0, buffer.length, position);
+      if (bytesRead === 0) break;
+      const data = buffer.subarray(0, bytesRead);
+      const newlineIndex = data.indexOf(0x0a);
+      chunks.push(newlineIndex === -1 ? data : data.subarray(0, newlineIndex));
+      position += bytesRead;
+      foundNewline = newlineIndex !== -1;
+    }
 
-		if (!foundNewline && position >= maxHeaderBytes) return null;
-		const firstLine = Buffer.concat(chunks).toString("utf8").trimEnd();
-		if (!firstLine) return null;
-		try {
-			const header = JSON.parse(firstLine) as SessionHeader;
-			return header.type === "session" ? header : null;
-		} catch {
-			return null;
-		}
-	} finally {
-		closeSync(fd);
-	}
+    if (!foundNewline && position >= maxHeaderBytes) return null;
+    const firstLine = Buffer.concat(chunks).toString("utf8").trimEnd();
+    if (!firstLine) return null;
+    try {
+      const header = JSON.parse(firstLine) as SessionHeader;
+      return header.type === "session" ? header : null;
+    } catch {
+      return null;
+    }
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export async function getSessionEntries(filePath: string): Promise<SessionEntry[]> {
-	const manager = await SessionManager.open(filePath);
-	return manager.getEntries() as unknown as SessionEntry[];
+  const manager = await SessionManager.open(filePath);
+  return manager.getEntries() as unknown as SessionEntry[];
 }
 
 /**
@@ -321,24 +345,24 @@ export async function getSessionEntries(filePath: string): Promise<SessionEntry[
  * so loading a session is bounded.
  */
 function collectBranchPath(
-	entries: SessionEntry[],
-	byId: Map<string, SessionEntry>,
-	leafId?: string | null,
+  entries: SessionEntry[],
+  byId: Map<string, SessionEntry>,
+  leafId?: string | null,
 ): SessionEntry[] {
-	if (leafId === null) return [];
+  if (leafId === null) return [];
 
-	const leaf = (leafId ? byId.get(leafId) : undefined) ?? entries[entries.length - 1];
-	if (!leaf) return [];
+  const leaf = (leafId ? byId.get(leafId) : undefined) ?? entries[entries.length - 1];
+  if (!leaf) return [];
 
-	const path: SessionEntry[] = [];
-	const seen = new Set<string>();
-	let current: SessionEntry | undefined = leaf;
-	while (current && !seen.has(current.id)) {
-		seen.add(current.id);
-		path.push(current);
-		current = current.parentId ? byId.get(current.parentId) : undefined;
-	}
-	return path.reverse();
+  const path: SessionEntry[] = [];
+  const seen = new Set<string>();
+  let current: SessionEntry | undefined = leaf;
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.push(current);
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  return path.reverse();
 }
 
 /**
@@ -353,83 +377,90 @@ function collectBranchPath(
  * newer follows.
  */
 function collectDisplayEntries(
-	entries: SessionEntry[],
-	byId: Map<string, SessionEntry>,
-	leafId?: string | null,
+  entries: SessionEntry[],
+  byId: Map<string, SessionEntry>,
+  leafId?: string | null,
 ): SessionEntry[] {
-	const path = collectBranchPath(entries, byId, leafId);
+  const path = collectBranchPath(entries, byId, leafId);
 
-	// Only the latest compaction on the path is active; earlier ones were
-	// themselves superseded.
-	let compactionIdx = -1;
-	for (let i = path.length - 1; i >= 0; i--) {
-		if (path[i].type === "compaction") {
-			compactionIdx = i;
-			break;
-		}
-	}
-	if (compactionIdx === -1) return path;
+  // Only the latest compaction on the path is active; earlier ones were
+  // themselves superseded.
+  let compactionIdx = -1;
+  for (let i = path.length - 1; i >= 0; i--) {
+    if (path[i].type === "compaction") {
+      compactionIdx = i;
+      break;
+    }
+  }
+  if (compactionIdx === -1) return path;
 
-	const compaction = path[compactionIdx] as Extract<SessionEntry, { type: "compaction" }>;
-	const kept: SessionEntry[] = [];
-	let foundFirstKept = false;
-	for (let i = 0; i < compactionIdx; i++) {
-		if (path[i].id === compaction.firstKeptEntryId) foundFirstKept = true;
-		if (foundFirstKept) kept.push(path[i]);
-	}
+  const compaction = path[compactionIdx] as Extract<SessionEntry, { type: "compaction" }>;
+  const kept: SessionEntry[] = [];
+  let foundFirstKept = false;
+  for (let i = 0; i < compactionIdx; i++) {
+    if (path[i].id === compaction.firstKeptEntryId) foundFirstKept = true;
+    if (foundFirstKept) kept.push(path[i]);
+  }
 
-	return [...kept, compaction, ...path.slice(compactionIdx + 1)];
+  return [...kept, compaction, ...path.slice(compactionIdx + 1)];
 }
 
 /** `models.default` as the UI's `{ provider, modelId }` pair. */
-function parseDefaultModel(models: Record<string, string>): { provider: string; modelId: string } | null {
-	const selector = models.default;
-	if (!selector) return null;
-	const slash = selector.indexOf("/");
-	if (slash <= 0) return null;
-	return { provider: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
+function parseDefaultModel(
+  models: Record<string, string>,
+): { provider: string; modelId: string } | null {
+  const selector = models.default;
+  if (!selector) return null;
+  const slash = selector.indexOf("/");
+  if (slash <= 0) return null;
+  return { provider: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
 }
 
 export function buildSessionContext(
-	entries: SessionEntry[],
-	leafId?: string | null,
-	options: { deferThinking?: boolean; deferToolResultImages?: boolean } = {},
+  entries: SessionEntry[],
+  leafId?: string | null,
+  options: { deferThinking?: boolean; deferToolResultImages?: boolean } = {},
 ): SessionContext {
-	const byId = new Map<string, SessionEntry>();
-	for (const e of entries) byId.set(e.id, e);
+  const byId = new Map<string, SessionEntry>();
+  for (const e of entries) byId.set(e.id, e);
 
-	const ompEntries = entries as unknown as OmpSessionEntry[];
-	const ompCtx = ompBuildSessionContext(ompEntries, leafId, byId as unknown as Map<string, OmpSessionEntry>, {
-		transcript: true,
-		collapseCompactedHistory: true,
-	});
+  const ompEntries = entries as unknown as OmpSessionEntry[];
+  const ompCtx = ompBuildSessionContext(
+    ompEntries,
+    leafId,
+    byId as unknown as Map<string, OmpSessionEntry>,
+    {
+      transcript: true,
+      collapseCompactedHistory: true,
+    },
+  );
 
-	// Convert the branch entries and their IDs together so fork/navigation
-	// targets stay aligned with what the transcript renders.
-	const messages: AgentMessage[] = [];
-	const entryIds: string[] = [];
-	for (const entry of collectDisplayEntries(entries, byId, leafId)) {
-		const m = entryToUiMessage(entry, options);
-		if (m) {
-			messages.push(m);
-			entryIds.push(entry.id);
-		}
-	}
+  // Convert the branch entries and their IDs together so fork/navigation
+  // targets stay aligned with what the transcript renders.
+  const messages: AgentMessage[] = [];
+  const entryIds: string[] = [];
+  for (const entry of collectDisplayEntries(entries, byId, leafId)) {
+    const m = entryToUiMessage(entry, options);
+    if (m) {
+      messages.push(m);
+      entryIds.push(entry.id);
+    }
+  }
 
-	return {
-		messages,
-		entryIds,
-		thinkingLevel: ompCtx.thinkingLevel ?? "off",
-		configuredThinkingLevel: ompCtx.configuredThinkingLevel ?? ompCtx.thinkingLevel ?? "off",
-		model: parseDefaultModel(ompCtx.models),
-	};
+  return {
+    messages,
+    entryIds,
+    thinkingLevel: ompCtx.thinkingLevel ?? "off",
+    configuredThinkingLevel: ompCtx.configuredThinkingLevel ?? ompCtx.thinkingLevel ?? "off",
+    model: parseDefaultModel(ompCtx.models),
+  };
 }
 
 type HistoricalAssistantMessage = Extract<OmpAgentMessage, { role: "assistant" }>;
 
 function readContextSnapshot(message: OmpAgentMessage): Record<string, unknown> | undefined {
-	if (!isRecord(message) || !("contextSnapshot" in message)) return undefined;
-	return isRecord(message.contextSnapshot) ? message.contextSnapshot : undefined;
+  if (!isRecord(message) || !("contextSnapshot" in message)) return undefined;
+  return isRecord(message.contextSnapshot) ? message.contextSnapshot : undefined;
 }
 
 /**
@@ -441,206 +472,217 @@ function readContextSnapshot(message: OmpAgentMessage): Record<string, unknown> 
  * messages appended after that response (for example, a pending tool result).
  */
 export async function getHistoricalContextUsage(
-	entries: SessionEntry[],
-	leafId?: string | null,
+  entries: SessionEntry[],
+  leafId?: string | null,
 ): Promise<ContextUsage | undefined> {
-	const byId = new Map<string, SessionEntry>();
-	for (const entry of entries) byId.set(entry.id, entry);
+  const byId = new Map<string, SessionEntry>();
+  for (const entry of entries) byId.set(entry.id, entry);
 
-	const ompEntries = entries as unknown as OmpSessionEntry[];
-	const ompById = byId as unknown as Map<string, OmpSessionEntry>;
-	const ompContext = ompBuildSessionContext(ompEntries, leafId, ompById);
-	const modelSelector = parseDefaultModel(ompContext.models);
-	if (!modelSelector) return undefined;
+  const ompEntries = entries as unknown as OmpSessionEntry[];
+  const ompById = byId as unknown as Map<string, OmpSessionEntry>;
+  const ompContext = ompBuildSessionContext(ompEntries, leafId, ompById);
+  const modelSelector = parseDefaultModel(ompContext.models);
+  if (!modelSelector) return undefined;
 
-	let contextWindowValue: number | null | undefined;
-	let tokenizer: Tokenizer;
-	try {
-		const { modelRegistry } = await getOmpRuntime();
-		const model = modelRegistry.find(modelSelector.provider, modelSelector.modelId);
-		contextWindowValue = model?.contextWindow;
-		// omp 18 replaced the global token estimator with model-scoped `Tokenizer`
-		// instances, so the tail below is counted with the catalog model's own
-		// encoding. An unresolved model still yields the byte-based estimate the
-		// global helper used to apply.
-		tokenizer = new Tokenizer(model);
-	} catch {
-		return undefined;
-	}
-	if (typeof contextWindowValue !== "number" || !Number.isFinite(contextWindowValue) || contextWindowValue <= 0) {
-		return undefined;
-	}
-	const contextWindow = contextWindowValue;
+  let contextWindowValue: number | null | undefined;
+  let tokenizer: Tokenizer;
+  try {
+    const { modelRegistry } = await getOmpRuntime();
+    const model = modelRegistry.find(modelSelector.provider, modelSelector.modelId);
+    contextWindowValue = model?.contextWindow;
+    // omp 18 replaced the global token estimator with model-scoped `Tokenizer`
+    // instances, so the tail below is counted with the catalog model's own
+    // encoding. An unresolved model still yields the byte-based estimate the
+    // global helper used to apply.
+    tokenizer = new Tokenizer(model);
+  } catch {
+    return undefined;
+  }
+  if (
+    typeof contextWindowValue !== "number" ||
+    !Number.isFinite(contextWindowValue) ||
+    contextWindowValue <= 0
+  ) {
+    return undefined;
+  }
+  const contextWindow = contextWindowValue;
 
-	const branch = collectBranchPath(entries, byId, leafId);
-	let latestCompactionIndex = -1;
-	for (let index = branch.length - 1; index >= 0; index -= 1) {
-		if (branch[index].type === "compaction") {
-			latestCompactionIndex = index;
-			break;
-		}
-	}
+  const branch = collectBranchPath(entries, byId, leafId);
+  let latestCompactionIndex = -1;
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    if (branch[index].type === "compaction") {
+      latestCompactionIndex = index;
+      break;
+    }
+  }
 
-	let anchor: HistoricalAssistantMessage | undefined;
-	for (let index = branch.length - 1; index > latestCompactionIndex; index -= 1) {
-		const entry = branch[index];
-		if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-		const assistant = entry.message as unknown as HistoricalAssistantMessage;
-		const snapshot = readContextSnapshot(assistant);
-		if (
-			assistant.stopReason === "aborted" ||
-			assistant.stopReason === "error" ||
-			!assistant.usage ||
-			(!snapshot && !hasContextTokenUsage(assistant.usage))
-		) {
-			continue;
-		}
-		anchor = assistant;
-		break;
-	}
-	if (!anchor) return undefined;
+  let anchor: HistoricalAssistantMessage | undefined;
+  for (let index = branch.length - 1; index > latestCompactionIndex; index -= 1) {
+    const entry = branch[index];
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const assistant = entry.message as unknown as HistoricalAssistantMessage;
+    const snapshot = readContextSnapshot(assistant);
+    if (
+      assistant.stopReason === "aborted" ||
+      assistant.stopReason === "error" ||
+      !assistant.usage ||
+      (!snapshot && !hasContextTokenUsage(assistant.usage))
+    ) {
+      continue;
+    }
+    anchor = assistant;
+    break;
+  }
+  if (!anchor) return undefined;
 
-	const snapshot = readContextSnapshot(anchor);
-	const snapshotPromptTokens = snapshot?.promptTokens;
-	const promptTokens =
-		typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
-			? snapshotPromptTokens
-			: calculatePromptTokens(anchor.usage);
+  const snapshot = readContextSnapshot(anchor);
+  const snapshotPromptTokens = snapshot?.promptTokens;
+  const promptTokens =
+    typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
+      ? snapshotPromptTokens
+      : calculatePromptTokens(anchor.usage);
 
-	if (!Number.isFinite(promptTokens) || promptTokens < 0) return undefined;
+  if (!Number.isFinite(promptTokens) || promptTokens < 0) return undefined;
 
-	const activeMessages = ompContext.messages as OmpAgentMessage[];
-	let anchorIndex = -1;
-	for (let index = activeMessages.length - 1; index >= 0; index -= 1) {
-		const message = activeMessages[index];
-		if (message === anchor || (message.role === "assistant" && message.timestamp === anchor.timestamp)) {
-			anchorIndex = index;
-			break;
-		}
-	}
+  const activeMessages = ompContext.messages as OmpAgentMessage[];
+  let anchorIndex = -1;
+  for (let index = activeMessages.length - 1; index >= 0; index -= 1) {
+    const message = activeMessages[index];
+    if (
+      message === anchor ||
+      (message.role === "assistant" && message.timestamp === anchor.timestamp)
+    ) {
+      anchorIndex = index;
+      break;
+    }
+  }
 
-	let tailTokens = 0;
-	if (anchorIndex >= 0) {
-		for (let index = anchorIndex + 1; index < activeMessages.length; index += 1) {
-			tailTokens += tokenizer.countMessage(activeMessages[index]);
-		}
-	}
+  let tailTokens = 0;
+  if (anchorIndex >= 0) {
+    for (let index = anchorIndex + 1; index < activeMessages.length; index += 1) {
+      tailTokens += tokenizer.countMessage(activeMessages[index]);
+    }
+  }
 
-	const tokens = Math.max(0, promptTokens + tailTokens);
-	return {
-		tokens,
-		contextWindow,
-		percent: (tokens / contextWindow) * 100,
-	};
+  const tokens = Math.max(0, promptTokens + tailTokens);
+  return {
+    tokens,
+    contextWindow,
+    percent: (tokens / contextWindow) * 100,
+  };
 }
 
 function parseEntryTimestamp(timestamp: string): number | undefined {
-	const parsed = Date.parse(timestamp);
-	return Number.isNaN(parsed) ? undefined : parsed;
+  const parsed = Date.parse(timestamp);
+  return Number.isNaN(parsed) ? undefined : parsed;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function base64ImageInfo(block: unknown): { bytes: number; mime?: string } | null {
-	if (!isRecord(block) || block.type !== "image") return null;
+  if (!isRecord(block) || block.type !== "image") return null;
 
-	let data: string | undefined;
-	let mime: string | undefined;
-	if (typeof block.data === "string") {
-		data = block.data;
-		mime = typeof block.mimeType === "string" ? block.mimeType : undefined;
-	} else if (isRecord(block.source) && block.source.type === "base64" && typeof block.source.data === "string") {
-		data = block.source.data;
-		mime = typeof block.source.media_type === "string" ? block.source.media_type : undefined;
-	}
-	if (!data) return null;
+  let data: string | undefined;
+  let mime: string | undefined;
+  if (typeof block.data === "string") {
+    data = block.data;
+    mime = typeof block.mimeType === "string" ? block.mimeType : undefined;
+  } else if (
+    isRecord(block.source) &&
+    block.source.type === "base64" &&
+    typeof block.source.data === "string"
+  ) {
+    data = block.source.data;
+    mime = typeof block.source.media_type === "string" ? block.source.media_type : undefined;
+  }
+  if (!data) return null;
 
-	const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-	return { bytes: Math.max(0, Math.floor((data.length * 3) / 4) - padding), mime };
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  return { bytes: Math.max(0, Math.floor((data.length * 3) / 4) - padding), mime };
 }
 
 function omitToolResultBase64Images(message: AgentMessage): AgentMessage {
-	if (message.role !== "toolResult") return message;
+  if (message.role !== "toolResult") return message;
 
-	let omitted = 0;
-	let bytes = 0;
-	const mimes = new Set<string>();
-	const content = message.content.filter((block) => {
-		const image = base64ImageInfo(block);
-		if (!image) return true;
-		omitted += 1;
-		bytes += image.bytes;
-		if (image.mime) mimes.add(image.mime);
-		return false;
-	});
-	if (omitted === 0) return message;
+  let omitted = 0;
+  let bytes = 0;
+  const mimes = new Set<string>();
+  const content = message.content.filter((block) => {
+    const image = base64ImageInfo(block);
+    if (!image) return true;
+    omitted += 1;
+    bytes += image.bytes;
+    if (image.mime) mimes.add(image.mime);
+    return false;
+  });
+  if (omitted === 0) return message;
 
-	const mimeText = mimes.size > 0 ? `: ${[...mimes].join(", ")}` : "";
-	content.push({
-		type: "text",
-		text: `[${omitted} tool result image${omitted === 1 ? "" : "s"} omitted from initial history payload${mimeText}, ~${bytes} bytes]`,
-	});
-	return { ...message, content };
+  const mimeText = mimes.size > 0 ? `: ${[...mimes].join(", ")}` : "";
+  content.push({
+    type: "text",
+    text: `[${omitted} tool result image${omitted === 1 ? "" : "s"} omitted from initial history payload${mimeText}, ~${bytes} bytes]`,
+  });
+  return { ...message, content };
 }
 
 // Convert a session entry on the active branch into a UI message.
 // Returns null for entries that do not map to chat history (metadata, non-message types).
 function entryToUiMessage(
-	entry: SessionEntry,
-	options: { deferThinking?: boolean; deferToolResultImages?: boolean },
+  entry: SessionEntry,
+  options: { deferThinking?: boolean; deferToolResultImages?: boolean },
 ): AgentMessage | null {
-	// Supported message roles: user, assistant, toolResult, bashExecution.
-	// bashExecution messages enter the case "message" branch (entry.type === "message").
-	// The early return at line below ("!options.deferThinking || message.role !== "assistant"")
-	// passes non-assistant messages — including bashExecution — through unchanged.
-	// normalizeToolCalls is a secondary guard (returns non-assistant messages as-is).
-	switch (entry.type) {
-		case "message": {
-			const message = options.deferToolResultImages
-				? omitToolResultBase64Images(normalizeToolCalls(entry.message))
-				: normalizeToolCalls(entry.message);
-			if (!options.deferThinking || message.role !== "assistant") return message;
-			return {
-				...message,
-				content: message.content.map((block) =>
-					block.type === "thinking" && block.thinking.trim() !== ""
-						? { ...block, thinking: "", deferred: true }
-						: block,
-				),
-			};
-		}
-		case "compaction":
-			return {
-				role: "custom",
-				customType: "compaction",
-				content: entry.summary,
-				display: true,
-				details: {
-					tokensBefore: entry.tokensBefore,
-					firstKeptEntryId: entry.firstKeptEntryId,
-				},
-				timestamp: parseEntryTimestamp(entry.timestamp),
-			};
-		case "branch_summary":
-			if (!entry.summary) return null;
-			return {
-				role: "user",
-				content: `*The conversation briefly explored another branch and returned with this summary:*\n\n${entry.summary}`,
-				timestamp: parseEntryTimestamp(entry.timestamp),
-			};
-		case "custom_message":
-			return {
-				role: "custom",
-				customType: entry.customType,
-				content: entry.content,
-				display: entry.display,
-				attribution: entry.attribution,
-				details: entry.details,
-				timestamp: parseEntryTimestamp(entry.timestamp),
-			};
-		default:
-			return null;
-	}
+  // Supported message roles: user, assistant, toolResult, bashExecution.
+  // bashExecution messages enter the case "message" branch (entry.type === "message").
+  // The early return at line below ("!options.deferThinking || message.role !== "assistant"")
+  // passes non-assistant messages — including bashExecution — through unchanged.
+  // normalizeToolCalls is a secondary guard (returns non-assistant messages as-is).
+  switch (entry.type) {
+    case "message": {
+      const message = options.deferToolResultImages
+        ? omitToolResultBase64Images(normalizeToolCalls(entry.message))
+        : normalizeToolCalls(entry.message);
+      if (!options.deferThinking || message.role !== "assistant") return message;
+      return {
+        ...message,
+        content: message.content.map((block) =>
+          block.type === "thinking" && block.thinking.trim() !== ""
+            ? { ...block, thinking: "", deferred: true }
+            : block,
+        ),
+      };
+    }
+    case "compaction":
+      return {
+        role: "custom",
+        customType: "compaction",
+        content: entry.summary,
+        display: true,
+        details: {
+          tokensBefore: entry.tokensBefore,
+          firstKeptEntryId: entry.firstKeptEntryId,
+        },
+        timestamp: parseEntryTimestamp(entry.timestamp),
+      };
+    case "branch_summary":
+      if (!entry.summary) return null;
+      return {
+        role: "user",
+        content: `*The conversation briefly explored another branch and returned with this summary:*\n\n${entry.summary}`,
+        timestamp: parseEntryTimestamp(entry.timestamp),
+      };
+    case "custom_message":
+      return {
+        role: "custom",
+        customType: entry.customType,
+        content: entry.content,
+        display: entry.display,
+        attribution: entry.attribution,
+        details: entry.details,
+        timestamp: parseEntryTimestamp(entry.timestamp),
+      };
+    default:
+      return null;
+  }
 }

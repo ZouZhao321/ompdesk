@@ -12,38 +12,38 @@ export const dynamic = "force-dynamic";
 // The request wrapper completes when the response headers return; the stream
 // itself logs http.stream.* for as long as the connection stays open.
 export const GET = withRequestLog("/api/agent/running/events", async (req: Request) => {
-	let streamSession: SseStreamSession | undefined;
-	const stream = new ReadableStream({
-		start(controller) {
-			streamSession = openSseStream({
-				controller,
-				request: req,
-				route: "/api/agent/running/events",
-				connect: (send, registerCleanup) => {
-					// Subscribe BEFORE taking the initial snapshot so no state change can slip
-					// through the gap between snapshot and subscription.
-					registerCleanup(
-						subscribeRunningSessions((activity) => {
-							send({ type: "running", ...activity });
-						}),
-					);
+  let streamSession: SseStreamSession | undefined;
+  const stream = new ReadableStream({
+    start(controller) {
+      streamSession = openSseStream({
+        controller,
+        request: req,
+        route: "/api/agent/running/events",
+        connect: (send, registerCleanup) => {
+          // Subscribe BEFORE taking the initial snapshot so no state change can slip
+          // through the gap between snapshot and subscription.
+          registerCleanup(
+            subscribeRunningSessions((activity) => {
+              send({ type: "running", ...activity });
+            }),
+          );
 
-					// Initial snapshot so the client renders the correct state immediately.
-					// (A duplicate frame here is harmless: the client just sets the same set.)
-					send({ type: "running", ...getRpcSessionActivitySnapshot() });
-				},
-			});
-		},
-		cancel() {
-			streamSession?.cancel();
-		},
-	});
+          // Initial snapshot so the client renders the correct state immediately.
+          // (A duplicate frame here is harmless: the client just sets the same set.)
+          send({ type: "running", ...getRpcSessionActivitySnapshot() });
+        },
+      });
+    },
+    cancel() {
+      streamSession?.cancel();
+    },
+  });
 
-	return new Response(stream, {
-		headers: {
-			"Content-Type": "text/event-stream",
-			"Cache-Control": "no-cache",
-			Connection: "keep-alive",
-		},
-	});
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 });

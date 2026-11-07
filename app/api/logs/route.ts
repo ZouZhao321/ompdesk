@@ -17,39 +17,42 @@ const NO_STORE = { "Cache-Control": "no-store" };
 export const GET = withRequestLog("/api/logs", getRouteHandler);
 
 async function getRouteHandler(request: Request) {
-	try {
-		const url = new URL(request.url);
-		const query = parseLogsQuery(url.searchParams);
+  try {
+    const url = new URL(request.url);
+    const query = parseLogsQuery(url.searchParams);
 
-		if (query.download) {
-			if (!query.file) throw new LogQueryError(400, "A log file is required for download");
-			const download = readLogDownload(query.file);
-			return new NextResponse(new Uint8Array(download.data), {
-				headers: {
-					...NO_STORE,
-					"Content-Type": "text/plain; charset=utf-8",
-					"Content-Disposition": `attachment; filename="${download.file.name}"`,
-					"Content-Length": String(download.data.length),
-				},
-			});
-		}
+    if (query.download) {
+      if (!query.file) throw new LogQueryError(400, "A log file is required for download");
+      const download = readLogDownload(query.file);
+      return new NextResponse(new Uint8Array(download.data), {
+        headers: {
+          ...NO_STORE,
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${download.file.name}"`,
+          "Content-Length": String(download.data.length),
+        },
+      });
+    }
 
-		return NextResponse.json(
-			readLogPage({
-				file: query.file,
-				cursor: query.cursor,
-				limit: query.limit,
-				level: query.level,
-				keyword: query.keyword,
-				tail: query.tail,
-				fingerprint: query.fingerprint,
-			}),
-			{ headers: NO_STORE },
-		);
-	} catch (error) {
-		if (error instanceof LogQueryError) {
-			return NextResponse.json({ error: error.message }, { status: error.status, headers: NO_STORE });
-		}
-		return NextResponse.json({ error: "Unable to read logs" }, { status: 500, headers: NO_STORE });
-	}
+    return NextResponse.json(
+      readLogPage({
+        file: query.file,
+        cursor: query.cursor,
+        limit: query.limit,
+        level: query.level,
+        keyword: query.keyword,
+        tail: query.tail,
+        fingerprint: query.fingerprint,
+      }),
+      { headers: NO_STORE },
+    );
+  } catch (error) {
+    if (error instanceof LogQueryError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status, headers: NO_STORE },
+      );
+    }
+    return NextResponse.json({ error: "Unable to read logs" }, { status: 500, headers: NO_STORE });
+  }
 }

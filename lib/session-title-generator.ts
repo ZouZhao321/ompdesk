@@ -15,25 +15,27 @@ import { findFirstTitleSource, truncateTitle, type GeneratedSessionTitle } from 
  * bundle, so the pure helpers live in `session-title.ts` and this module is
  * imported only by API routes.
  */
-export async function generateSessionTitle(session: AgentSessionLike): Promise<GeneratedSessionTitle | null> {
-	const context = session.sessionManager.buildSessionContext();
-	const firstMessage = findFirstTitleSource(context.messages);
-	if (!firstMessage) {
-		throw new Error("The session has no user messages to name");
-	}
+export async function generateSessionTitle(
+  session: AgentSessionLike,
+): Promise<GeneratedSessionTitle | null> {
+  const context = session.sessionManager.buildSessionContext();
+  const firstMessage = findFirstTitleSource(context.messages);
+  if (!firstMessage) {
+    throw new Error("The session has no user messages to name");
+  }
 
-	const title = await generateOmpSessionTitle(
-		firstMessage,
-		session.modelRegistry as never,
-		session.settings,
-		session.sessionId,
-		session.model as never,
-	);
-	if (!title) return null;
+  const title = await generateOmpSessionTitle(
+    firstMessage,
+    session.modelRegistry as never,
+    session.settings,
+    session.sessionId,
+    session.model as never,
+  );
+  if (!title) return null;
 
-	const cleaned = truncateTitle(title);
-	if (!/[\p{L}\p{N}]/u.test(cleaned)) {
-		throw new Error("The model did not return a usable session title");
-	}
-	return { title: cleaned };
+  const cleaned = truncateTitle(title);
+  if (!/[\p{L}\p{N}]/u.test(cleaned)) {
+    throw new Error("The model did not return a usable session title");
+  }
+  return { title: cleaned };
 }

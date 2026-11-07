@@ -15,42 +15,45 @@ const MAX_KEYS = 5000;
 export const POST = withRequestLog("/api/comment-dictionary/lookup", lookupHandler);
 
 async function lookupHandler(req: Request) {
-	if (!isApiRequestAllowed(req)) {
-		return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
-	}
+  if (!isApiRequestAllowed(req)) {
+    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+  }
 
-	let body: unknown;
-	try {
-		body = await req.json();
-	} catch {
-		return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-	}
-	if (typeof body !== "object" || body === null || !("keys" in body) || !Array.isArray(body.keys)) {
-		return NextResponse.json({ error: "keys must be an array" }, { status: 400 });
-	}
-	if (body.keys.length > MAX_KEYS) {
-		return NextResponse.json({ error: `At most ${MAX_KEYS} keys per request` }, { status: 400 });
-	}
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  if (typeof body !== "object" || body === null || !("keys" in body) || !Array.isArray(body.keys)) {
+    return NextResponse.json({ error: "keys must be an array" }, { status: 400 });
+  }
+  if (body.keys.length > MAX_KEYS) {
+    return NextResponse.json({ error: `At most ${MAX_KEYS} keys per request` }, { status: 400 });
+  }
 
-	const keys: string[] = [];
-	for (const key of body.keys) {
-		if (typeof key !== "string") {
-			return NextResponse.json({ error: "keys must be strings" }, { status: 400 });
-		}
-		keys.push(key);
-	}
+  const keys: string[] = [];
+  for (const key of body.keys) {
+    if (typeof key !== "string") {
+      return NextResponse.json({ error: "keys must be strings" }, { status: 400 });
+    }
+    keys.push(key);
+  }
 
-	let dictionary: CommentDictionary;
-	try {
-		dictionary = readCommentDictionary(getAgentDir());
-	} catch (error) {
-		return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
-	}
+  let dictionary: CommentDictionary;
+  try {
+    dictionary = readCommentDictionary(getAgentDir());
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
+  }
 
-	const translations: Record<string, string> = {};
-	for (const key of keys) {
-		const record = dictionary.translations[key];
-		if (record) translations[key] = record.translation;
-	}
-	return NextResponse.json({ translations });
+  const translations: Record<string, string> = {};
+  for (const key of keys) {
+    const record = dictionary.translations[key];
+    if (record) translations[key] = record.translation;
+  }
+  return NextResponse.json({ translations });
 }

@@ -22,105 +22,110 @@ const CANONICAL_FILE = "models.yml";
 const READ_CANDIDATES = ["models.yml", "models.yaml", "models.json"] as const;
 
 function getModelsPath(): string {
-	const agentDir = getAgentDir();
-	for (const candidate of READ_CANDIDATES) {
-		const path = join(agentDir, candidate);
-		if (existsSync(path)) return path;
-	}
-	return join(agentDir, CANONICAL_FILE);
+  const agentDir = getAgentDir();
+  for (const candidate of READ_CANDIDATES) {
+    const path = join(agentDir, candidate);
+    if (existsSync(path)) return path;
+  }
+  return join(agentDir, CANONICAL_FILE);
 }
 
 function getWritePath(): string {
-	return join(getAgentDir(), CANONICAL_FILE);
+  return join(getAgentDir(), CANONICAL_FILE);
 }
 
 function readModelsConfig(): Record<string, unknown> {
-	const path = getModelsPath();
-	if (!existsSync(path)) return { providers: {} };
-	try {
-		// `parse` handles JSON too — it is a subset of YAML — so a not-yet-migrated
-		// `models.json` still loads.
-		const parsed: unknown = parseYaml(readFileSync(path, "utf8"));
-		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return { providers: {} };
-		return parsed as Record<string, unknown>;
-	} catch {
-		return { providers: {} };
-	}
+  const path = getModelsPath();
+  if (!existsSync(path)) return { providers: {} };
+  try {
+    // `parse` handles JSON too — it is a subset of YAML — so a not-yet-migrated
+    // `models.json` still loads.
+    const parsed: unknown = parseYaml(readFileSync(path, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+      return { providers: {} };
+    return parsed as Record<string, unknown>;
+  } catch {
+    return { providers: {} };
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // Drop blank model rows (empty/whitespace string ids) before persisting, but
 // keep non-string ids and non-object entries so schema errors elsewhere stay
 // visible to the user instead of being silently rewritten.
 function sanitizeModelsConfig(data: Record<string, unknown>): Record<string, unknown> {
-	if (!isRecord(data.providers)) return data;
+  if (!isRecord(data.providers)) return data;
 
-	const providers = Object.fromEntries(
-		Object.entries(data.providers).map(([providerId, provider]) => {
-			if (!isRecord(provider) || !Array.isArray(provider.models)) return [providerId, provider];
-			const models = provider.models.filter(
-				(model) => !isRecord(model) || typeof model.id !== "string" || model.id.trim().length > 0,
-			);
-			return [providerId, { ...provider, models }];
-		}),
-	);
+  const providers = Object.fromEntries(
+    Object.entries(data.providers).map(([providerId, provider]) => {
+      if (!isRecord(provider) || !Array.isArray(provider.models)) return [providerId, provider];
+      const models = provider.models.filter(
+        (model) => !isRecord(model) || typeof model.id !== "string" || model.id.trim().length > 0,
+      );
+      return [providerId, { ...provider, models }];
+    }),
+  );
 
-	return { ...data, providers };
+  return { ...data, providers };
 }
 
 function writeModelsConfig(data: Record<string, unknown>): void {
-	const path = getWritePath();
-	const dir = dirname(path);
-	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-	writePrivateFileAtomicSync(path, stringifyYaml(sanitizeModelsConfig(data), { lineWidth: 0 }));
+  const path = getWritePath();
+  const dir = dirname(path);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writePrivateFileAtomicSync(path, stringifyYaml(sanitizeModelsConfig(data), { lineWidth: 0 }));
 }
 
 export const GET = withRequestLog("/api/models-config", getRouteHandler);
 
 async function getRouteHandler(req: Request) {
-	if (!isApiRequestAllowed(req)) {
-		return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
-	}
-	return NextResponse.json(readModelsConfig());
+  if (!isApiRequestAllowed(req)) {
+    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+  }
+  return NextResponse.json(readModelsConfig());
 }
 
 export const PUT = withRequestLog("/api/models-config", async (req: Request) => {
-	if (!isApiRequestAllowed(req)) {
-		return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
-	}
-	if (!hasJsonContentType(req)) {
-		return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
-	}
+  if (!isApiRequestAllowed(req)) {
+    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+  }
+  if (!hasJsonContentType(req)) {
+    return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
+  }
 
-	const target = getWritePath();
-	try {
-		const body = (await req.json()) as unknown;
-		if (typeof body !== "object" || body === null || Array.isArray(body)) {
-			auditFailure("models.config.write", target, { status: 400, reason: "not-an-object" });
-			return NextResponse.json({ error: "models config must be an object" }, { status: 400 });
-		}
-		const config = body as Record<string, unknown>;
-		if (
-			"providers" in config &&
-			(typeof config.providers !== "object" || config.providers === null || Array.isArray(config.providers))
-		) {
-			auditFailure("models.config.write", target, { status: 400, reason: "invalid-providers" });
-			return NextResponse.json({ error: "providers must be an object" }, { status: 400 });
-		}
-		writeModelsConfig(config);
-		invalidateModelsCache();
-		// The registry caches models.yml at construction; drop it so the next
-		// request rebuilds against the edited providers.
-		invalidateOmpRuntime();
-		const providers =
-			config.providers && typeof config.providers === "object" ? Object.keys(config.providers).length : 0;
-		auditSuccess("models.config.write", target, { providers });
-		return NextResponse.json({ success: true });
-	} catch (error) {
-		auditFailure("models.config.write", target, { status: 500, error });
-		return NextResponse.json({ error: "Unable to save models config" }, { status: 500 });
-	}
+  const target = getWritePath();
+  try {
+    const body = (await req.json()) as unknown;
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      auditFailure("models.config.write", target, { status: 400, reason: "not-an-object" });
+      return NextResponse.json({ error: "models config must be an object" }, { status: 400 });
+    }
+    const config = body as Record<string, unknown>;
+    if (
+      "providers" in config &&
+      (typeof config.providers !== "object" ||
+        config.providers === null ||
+        Array.isArray(config.providers))
+    ) {
+      auditFailure("models.config.write", target, { status: 400, reason: "invalid-providers" });
+      return NextResponse.json({ error: "providers must be an object" }, { status: 400 });
+    }
+    writeModelsConfig(config);
+    invalidateModelsCache();
+    // The registry caches models.yml at construction; drop it so the next
+    // request rebuilds against the edited providers.
+    invalidateOmpRuntime();
+    const providers =
+      config.providers && typeof config.providers === "object"
+        ? Object.keys(config.providers).length
+        : 0;
+    auditSuccess("models.config.write", target, { providers });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    auditFailure("models.config.write", target, { status: 500, error });
+    return NextResponse.json({ error: "Unable to save models config" }, { status: 500 });
+  }
 });

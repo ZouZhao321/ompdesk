@@ -1,6 +1,9 @@
 import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
-import { resolveModelScope, type ScopedModel } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
+import {
+  resolveModelScope,
+  type ScopedModel,
+} from "@oh-my-pi/pi-coding-agent/config/model-resolver";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 
 /**
@@ -18,30 +21,33 @@ import type { Api, Model } from "@oh-my-pi/pi-ai";
 export type ModelScopeRegistry = Pick<ModelRegistry, "getAvailable">;
 
 export interface ModelScopeResult {
-	/** Models the UI should offer, in resolver order (all available when unscoped). */
-	visible: readonly Model<Api>[];
-	/** SDK-native scope retained for AgentSession model cycling and extensions. */
-	scopedModels: readonly ScopedModel[];
-	/** `provider/modelId` → thinking level pinned with a `:level` pattern suffix. */
-	thinkingLevelPins: Record<string, string>;
-	/** Resolver diagnostics, e.g. a pattern that matched no model. */
-	warnings: string[];
+  /** Models the UI should offer, in resolver order (all available when unscoped). */
+  visible: readonly Model<Api>[];
+  /** SDK-native scope retained for AgentSession model cycling and extensions. */
+  scopedModels: readonly ScopedModel[];
+  /** `provider/modelId` → thinking level pinned with a `:level` pattern suffix. */
+  thinkingLevelPins: Record<string, string>;
+  /** Resolver diagnostics, e.g. a pattern that matched no model. */
+  warnings: string[];
 }
 
 export interface InitialModelScopeOptions {
-	requestedModel?: { provider: string; modelId: string };
-	defaultModel?: { provider: string; modelId: string };
-	thinkingLevel?: ConfiguredThinkingLevel;
+  requestedModel?: { provider: string; modelId: string };
+  defaultModel?: { provider: string; modelId: string };
+  thinkingLevel?: ConfiguredThinkingLevel;
 }
 
 export interface InitialModelScopeResult {
-	model?: Model<Api>;
-	thinkingLevel?: ConfiguredThinkingLevel;
-	scopedModels: ScopedModel[];
+  model?: Model<Api>;
+  thinkingLevel?: ConfiguredThinkingLevel;
+  scopedModels: ScopedModel[];
 }
 
-function matchesModel(model: { provider: string; id: string }, ref: { provider: string; modelId: string }): boolean {
-	return model.provider === ref.provider && model.id === ref.modelId;
+function matchesModel(
+  model: { provider: string; id: string },
+  ref: { provider: string; modelId: string },
+): boolean {
+  return model.provider === ref.provider && model.id === ref.modelId;
 }
 
 /**
@@ -52,56 +58,56 @@ function matchesModel(model: { provider: string; id: string }, ref: { provider: 
  * the UI without any selectable model.
  */
 export async function resolveVisibleModels(
-	modelRegistry: ModelScopeRegistry,
-	patterns: readonly string[] | undefined,
-	settings?: Settings,
+  modelRegistry: ModelScopeRegistry,
+  patterns: readonly string[] | undefined,
+  settings?: Settings,
 ): Promise<ModelScopeResult> {
-	const cleaned = (patterns ?? []).map((pattern) => pattern.trim()).filter(Boolean);
-	if (cleaned.length === 0) {
-		return {
-			visible: modelRegistry.getAvailable(),
-			scopedModels: [],
-			thinkingLevelPins: {},
-			warnings: [],
-		};
-	}
+  const cleaned = (patterns ?? []).map((pattern) => pattern.trim()).filter(Boolean);
+  if (cleaned.length === 0) {
+    return {
+      visible: modelRegistry.getAvailable(),
+      scopedModels: [],
+      thinkingLevelPins: {},
+      warnings: [],
+    };
+  }
 
-	const scopedModels = await resolveModelScope(cleaned, modelRegistry, undefined, settings);
+  const scopedModels = await resolveModelScope(cleaned, modelRegistry, undefined, settings);
 
-	// omp's resolver drops unmatched patterns silently. Re-resolve each pattern on
-	// its own so a typo surfaces in the UI instead of quietly shrinking the list.
-	const warnings: string[] = [];
-	await Promise.all(
-		cleaned.map(async (pattern) => {
-			const matched = await resolveModelScope([pattern], modelRegistry, undefined, settings);
-			if (matched.length === 0) warnings.push(`No model matches "${pattern}" in enabledModels.`);
-		}),
-	);
+  // omp's resolver drops unmatched patterns silently. Re-resolve each pattern on
+  // its own so a typo surfaces in the UI instead of quietly shrinking the list.
+  const warnings: string[] = [];
+  await Promise.all(
+    cleaned.map(async (pattern) => {
+      const matched = await resolveModelScope([pattern], modelRegistry, undefined, settings);
+      if (matched.length === 0) warnings.push(`No model matches "${pattern}" in enabledModels.`);
+    }),
+  );
 
-	if (scopedModels.length === 0) {
-		return {
-			visible: modelRegistry.getAvailable(),
-			scopedModels: [],
-			thinkingLevelPins: {},
-			warnings,
-		};
-	}
+  if (scopedModels.length === 0) {
+    return {
+      visible: modelRegistry.getAvailable(),
+      scopedModels: [],
+      thinkingLevelPins: {},
+      warnings,
+    };
+  }
 
-	// `anthropic/*:high` pins a thinking level on every model the glob matched.
-	// omp applies the pin of the model a new session starts with; report them all
-	// so the client can look up whichever model it pre-selects.
-	const thinkingLevelPins: Record<string, string> = {};
-	for (const scoped of scopedModels) {
-		if (scoped.thinkingLevel) {
-			thinkingLevelPins[`${scoped.model.provider}/${scoped.model.id}`] = scoped.thinkingLevel;
-		}
-	}
-	return {
-		visible: scopedModels.map((scoped) => scoped.model),
-		scopedModels,
-		thinkingLevelPins,
-		warnings,
-	};
+  // `anthropic/*:high` pins a thinking level on every model the glob matched.
+  // omp applies the pin of the model a new session starts with; report them all
+  // so the client can look up whichever model it pre-selects.
+  const thinkingLevelPins: Record<string, string> = {};
+  for (const scoped of scopedModels) {
+    if (scoped.thinkingLevel) {
+      thinkingLevelPins[`${scoped.model.provider}/${scoped.model.id}`] = scoped.thinkingLevel;
+    }
+  }
+  return {
+    visible: scopedModels.map((scoped) => scoped.model),
+    scopedModels,
+    thinkingLevelPins,
+    warnings,
+  };
 }
 
 /**
@@ -113,39 +119,43 @@ export async function resolveVisibleModels(
  * explicit thinking level.
  */
 export function selectInitialModelScope(
-	scope: ModelScopeResult,
-	options: InitialModelScopeOptions = {},
+  scope: ModelScopeResult,
+  options: InitialModelScopeOptions = {},
 ): InitialModelScopeResult {
-	const requestedRef = options.requestedModel;
-	const defaultRef = options.defaultModel;
-	const requested = requestedRef ? scope.visible.find((model) => matchesModel(model, requestedRef)) : undefined;
-	if (requestedRef && !requested) {
-		throw new Error(`Model is not available in the enabled scope: ${requestedRef.provider}/${requestedRef.modelId}`);
-	}
+  const requestedRef = options.requestedModel;
+  const defaultRef = options.defaultModel;
+  const requested = requestedRef
+    ? scope.visible.find((model) => matchesModel(model, requestedRef))
+    : undefined;
+  if (requestedRef && !requested) {
+    throw new Error(
+      `Model is not available in the enabled scope: ${requestedRef.provider}/${requestedRef.modelId}`,
+    );
+  }
 
-	const requestedScoped = requested
-		? scope.scopedModels.find(
-				(scoped) =>
-					scoped.model === requested ||
-					matchesModel(scoped.model, { provider: requested.provider, modelId: requested.id }),
-			)
-		: undefined;
-	const defaultScoped =
-		!requested && defaultRef
-			? scope.scopedModels.find((scoped) => matchesModel(scoped.model, defaultRef))
-			: undefined;
-	const fallbackScoped = !requested ? (defaultScoped ?? scope.scopedModels[0]) : undefined;
-	const defaultVisible =
-		!requested && !fallbackScoped && defaultRef
-			? scope.visible.find((model) => matchesModel(model, defaultRef))
-			: undefined;
-	const selectedModel = requested ?? fallbackScoped?.model ?? defaultVisible;
-	const scopedSelection = requestedScoped ?? fallbackScoped;
-	const thinkingLevel = options.thinkingLevel ?? scopedSelection?.thinkingLevel;
+  const requestedScoped = requested
+    ? scope.scopedModels.find(
+        (scoped) =>
+          scoped.model === requested ||
+          matchesModel(scoped.model, { provider: requested.provider, modelId: requested.id }),
+      )
+    : undefined;
+  const defaultScoped =
+    !requested && defaultRef
+      ? scope.scopedModels.find((scoped) => matchesModel(scoped.model, defaultRef))
+      : undefined;
+  const fallbackScoped = !requested ? (defaultScoped ?? scope.scopedModels[0]) : undefined;
+  const defaultVisible =
+    !requested && !fallbackScoped && defaultRef
+      ? scope.visible.find((model) => matchesModel(model, defaultRef))
+      : undefined;
+  const selectedModel = requested ?? fallbackScoped?.model ?? defaultVisible;
+  const scopedSelection = requestedScoped ?? fallbackScoped;
+  const thinkingLevel = options.thinkingLevel ?? scopedSelection?.thinkingLevel;
 
-	return {
-		...(selectedModel ? { model: selectedModel } : {}),
-		...(thinkingLevel ? { thinkingLevel } : {}),
-		scopedModels: [...scope.scopedModels],
-	};
+  return {
+    ...(selectedModel ? { model: selectedModel } : {}),
+    ...(thinkingLevel ? { thinkingLevel } : {}),
+    scopedModels: [...scope.scopedModels],
+  };
 }

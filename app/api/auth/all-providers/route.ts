@@ -9,6 +9,6 @@ export const dynamic = "force-dynamic";
 export const GET = withRequestLog("/api/auth/all-providers", getRouteHandler);
 
 async function getRouteHandler() {
-	const providers = buildApiKeyProviderList(await collectProviderListingInputs());
-	return Response.json({ providers });
+  const providers = buildApiKeyProviderList(await collectProviderListingInputs());
+  return Response.json({ providers });
 }

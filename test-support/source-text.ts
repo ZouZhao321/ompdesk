@@ -13,27 +13,27 @@ import { readFile } from "node:fs/promises";
  * 只处理结构性的空白，字符串字面量里的内容保持原样（单行字符串不会跨行）。
  */
 export function flattenSource(text: string): string {
-	return (
-		text
-			.replace(/\s+/g, " ")
-			// 尾逗号：多行调用、数组、对象收尾时补出的那一颗
-			.replace(/,\s*\)/g, ")")
-			.replace(/,\s*\]/g, "]")
-			.replace(/,\s*\}/g, " }")
-			// 开括号后的空白
-			.replace(/\(\s+/g, "(")
-			.replace(/\[\s+/g, "[")
-			// 闭括号、逗号、分号前的空白
-			.replace(/\s+\)/g, ")")
-			.replace(/\s+\]/g, "]")
-			.replace(/\s+,/g, ",")
-			.replace(/\s+;/g, ";")
-	);
+  return (
+    text
+      .replace(/\s+/g, " ")
+      // 尾逗号：多行调用、数组、对象收尾时补出的那一颗
+      .replace(/,\s*\)/g, ")")
+      .replace(/,\s*\]/g, "]")
+      .replace(/,\s*\}/g, " }")
+      // 开括号后的空白
+      .replace(/\(\s+/g, "(")
+      .replace(/\[\s+/g, "[")
+      // 闭括号、逗号、分号前的空白
+      .replace(/\s+\)/g, ")")
+      .replace(/\s+\]/g, "]")
+      .replace(/\s+,/g, ",")
+      .replace(/\s+;/g, ";")
+  );
 }
 
 /** 读取源码文件并返回压平排版后的文本。 */
 export async function readSourceFile(path: string | URL): Promise<string> {
-	return flattenSource(await readFile(path, "utf8"));
+  return flattenSource(await readFile(path, "utf8"));
 }
 
 /**
@@ -43,17 +43,17 @@ export async function readSourceFile(path: string | URL): Promise<string> {
  * 会切到文件末尾或空串。
  */
 export function extractBlock(text: string, marker: string): string {
-	const start = text.lastIndexOf(marker);
-	if (start < 0) throw new Error(`源码缺少锚点：${marker}`);
-	const open = text.indexOf("{", start);
-	if (open < 0) throw new Error(`锚点后面没有块：${marker}`);
-	let depth = 0;
-	for (let index = open; index < text.length; index += 1) {
-		if (text[index] === "{") depth += 1;
-		if (text[index] === "}") {
-			depth -= 1;
-			if (depth === 0) return text.slice(start, index + 1);
-		}
-	}
-	throw new Error(`块没有闭合：${marker}`);
+  const start = text.lastIndexOf(marker);
+  if (start < 0) throw new Error(`源码缺少锚点：${marker}`);
+  const open = text.indexOf("{", start);
+  if (open < 0) throw new Error(`锚点后面没有块：${marker}`);
+  let depth = 0;
+  for (let index = open; index < text.length; index += 1) {
+    if (text[index] === "{") depth += 1;
+    if (text[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+  throw new Error(`块没有闭合：${marker}`);
 }

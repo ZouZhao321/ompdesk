@@ -2,10 +2,10 @@ import type { AgentTelemetryConfig } from "@oh-my-pi/pi-agent-core";
 import { getModelPricingStatus } from "@oh-my-pi/pi-catalog/models";
 import type { ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
 import {
-	createTelemetryExportConfig,
-	flushTelemetryExport,
-	initTelemetryExport,
-	isTelemetryExportEnabled,
+  createTelemetryExportConfig,
+  flushTelemetryExport,
+  initTelemetryExport,
+  isTelemetryExportEnabled,
 } from "@oh-my-pi/pi-coding-agent/telemetry-export";
 import { cfgTelemetryOtlpExportEnabled } from "@oh-my-pi/pi-coding-agent/telemetry-settings";
 
@@ -23,32 +23,40 @@ import { cfgTelemetryOtlpExportEnabled } from "@oh-my-pi/pi-coding-agent/telemet
  * effect on the next launch.
  */
 declare global {
-	var __ompTelemetryStarted: Promise<void> | undefined;
-	var __ompTelemetryInitTimedOut: boolean | undefined;
+  var __ompTelemetryStarted: Promise<void> | undefined;
+  var __ompTelemetryInitTimedOut: boolean | undefined;
 }
 
 const INIT_TIMEOUT_MS = 3_000;
 
 function startTelemetryExport(settings: Settings): Promise<boolean> {
-	// Telemetry is optional observability: an init failure or a stalled module
-	// load must not fail or block session creation. omp caches its own rejected
-	// init promise, so a retry would replay the same error — this one attempt
-	// stands for the process, and a failure keeps sessions running without export.
-	globalThis.__ompTelemetryStarted ??= initTelemetryExport(cfgTelemetryOtlpExportEnabled.get(settings)).catch(
-		(error: unknown) => {
-			console.error("[ompdesk] telemetry export init failed:", error instanceof Error ? error.message : error);
-		},
-	);
+  // Telemetry is optional observability: an init failure or a stalled module
+  // load must not fail or block session creation. omp caches its own rejected
+  // init promise, so a retry would replay the same error — this one attempt
+  // stands for the process, and a failure keeps sessions running without export.
+  globalThis.__ompTelemetryStarted ??= initTelemetryExport(
+    cfgTelemetryOtlpExportEnabled.get(settings),
+  ).catch((error: unknown) => {
+    console.error(
+      "[ompdesk] telemetry export init failed:",
+      error instanceof Error ? error.message : error,
+    );
+  });
 
-	// After a timeout, stop blocking new sessions but keep asking the SDK whether
-	// the late init finished: caching `false` here would contradict providers that
-	// registered anyway.
-	if (globalThis.__ompTelemetryInitTimedOut) return Promise.resolve(isTelemetryExportEnabled());
+  // After a timeout, stop blocking new sessions but keep asking the SDK whether
+  // the late init finished: caching `false` here would contradict providers that
+  // registered anyway.
+  if (globalThis.__ompTelemetryInitTimedOut) return Promise.resolve(isTelemetryExportEnabled());
 
-	return settleTelemetryInit(globalThis.__ompTelemetryStarted, isTelemetryExportEnabled, INIT_TIMEOUT_MS, () => {
-		globalThis.__ompTelemetryInitTimedOut = true;
-		console.error("[ompdesk] telemetry export init timed out; sessions continue without export");
-	});
+  return settleTelemetryInit(
+    globalThis.__ompTelemetryStarted,
+    isTelemetryExportEnabled,
+    INIT_TIMEOUT_MS,
+    () => {
+      globalThis.__ompTelemetryInitTimedOut = true;
+      console.error("[ompdesk] telemetry export init timed out; sessions continue without export");
+    },
+  );
 }
 
 /**
@@ -57,19 +65,19 @@ function startTelemetryExport(settings: Settings): Promise<boolean> {
  * faking the OTel SDK.
  */
 export function settleTelemetryInit(
-	init: Promise<void>,
-	isActive: () => boolean,
-	timeoutMs: number,
-	onTimeout: () => void,
+  init: Promise<void>,
+  isActive: () => boolean,
+  timeoutMs: number,
+  onTimeout: () => void,
 ): Promise<boolean> {
-	return withTimeout(
-		init.then(() => isActive()),
-		timeoutMs,
-		() => {
-			onTimeout();
-			return false;
-		},
-	);
+  return withTimeout(
+    init.then(() => isActive()),
+    timeoutMs,
+    () => {
+      onTimeout();
+      return false;
+    },
+  );
 }
 
 /**
@@ -77,23 +85,26 @@ export function settleTelemetryInit(
  * configured — omp then never loads its exporter module at all.
  */
 export async function sessionTelemetry(
-	settings: Settings,
-	modelRegistry: ModelRegistry,
+  settings: Settings,
+  modelRegistry: ModelRegistry,
 ): Promise<AgentTelemetryConfig | undefined> {
-	try {
-		if (!(await startTelemetryExport(settings))) return undefined;
-		// Same rule as the CLI: report the provider-computed cost only for models
-		// whose rate card is known, instead of exporting a bogus $0.
-		return createTelemetryExportConfig(undefined, (providerId, modelId) => {
-			const model = modelRegistry.find(providerId, modelId);
-			return model !== undefined && getModelPricingStatus(model) !== "unknown";
-		});
-	} catch (error) {
-		// Optional observability again: the enable check and a broken export config
-		// must not fail the session that was about to start.
-		console.error("[ompdesk] telemetry config failed:", error instanceof Error ? error.message : error);
-		return undefined;
-	}
+  try {
+    if (!(await startTelemetryExport(settings))) return undefined;
+    // Same rule as the CLI: report the provider-computed cost only for models
+    // whose rate card is known, instead of exporting a bogus $0.
+    return createTelemetryExportConfig(undefined, (providerId, modelId) => {
+      const model = modelRegistry.find(providerId, modelId);
+      return model !== undefined && getModelPricingStatus(model) !== "unknown";
+    });
+  } catch (error) {
+    // Optional observability again: the enable check and a broken export config
+    // must not fail the session that was about to start.
+    console.error(
+      "[ompdesk] telemetry config failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return undefined;
+  }
 }
 
 /**
@@ -104,19 +115,22 @@ export async function sessionTelemetry(
  * the exporter's own timeout.
  */
 export async function flushSessionTelemetry(timeoutMs?: number): Promise<void> {
-	try {
-		const flushing = flushTelemetryExport();
-		await (timeoutMs === undefined ? flushing : withTimeout(flushing, timeoutMs, () => undefined));
-	} catch (error) {
-		console.error("[ompdesk] telemetry flush failed:", error instanceof Error ? error.message : error);
-	}
+  try {
+    const flushing = flushTelemetryExport();
+    await (timeoutMs === undefined ? flushing : withTimeout(flushing, timeoutMs, () => undefined));
+  } catch (error) {
+    console.error(
+      "[ompdesk] telemetry flush failed:",
+      error instanceof Error ? error.message : error,
+    );
+  }
 }
 
 function withTimeout<T>(work: Promise<T>, timeoutMs: number, onTimeout: () => T): Promise<T> {
-	// A late settle after the deadline must not surface as an unhandled rejection.
-	void work.catch(() => {});
-	const expired = Promise.withResolvers<T>();
-	const timer = setTimeout(() => expired.resolve(onTimeout()), timeoutMs);
-	timer.unref?.();
-	return Promise.race([work, expired.promise]).finally(() => clearTimeout(timer));
+  // A late settle after the deadline must not surface as an unhandled rejection.
+  void work.catch(() => {});
+  const expired = Promise.withResolvers<T>();
+  const timer = setTimeout(() => expired.resolve(onTimeout()), timeoutMs);
+  timer.unref?.();
+  return Promise.race([work, expired.promise]).finally(() => clearTimeout(timer));
 }

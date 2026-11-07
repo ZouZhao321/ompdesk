@@ -30,25 +30,25 @@
  * 条目连原文一起保留。`GIT_CONFIG`（配置文件路径）只给路径，内容不读也不改。
  */
 export const REPO_LOCATION_ENV_KEYS: readonly string[] = [
-	"GIT_DIR",
-	"GIT_WORK_TREE",
-	"GIT_IMPLICIT_WORK_TREE",
-	"GIT_INDEX_FILE",
-	"GIT_COMMON_DIR",
-	"GIT_PREFIX",
-	"GIT_OBJECT_DIRECTORY",
-	"GIT_ALTERNATE_OBJECT_DIRECTORIES",
-	"GIT_NAMESPACE",
-	"GIT_QUARANTINE_PATH",
-	"GIT_CEILING_DIRECTORIES",
-	"GIT_DISCOVERY_ACROSS_FILESYSTEM",
-	"GIT_SHALLOW_FILE",
-	"GIT_REPLACE_REF_BASE",
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_IMPLICIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_COMMON_DIR",
+  "GIT_PREFIX",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_NAMESPACE",
+  "GIT_QUARANTINE_PATH",
+  "GIT_CEILING_DIRECTORIES",
+  "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+  "GIT_SHALLOW_FILE",
+  "GIT_REPLACE_REF_BASE",
 ];
 
 /** 同一份清单的查表形式：环境变量逐个键名都要比一次，数组线性查找不划算。 */
 const REPO_LOCATION_ENV_KEY_FLAGS: Record<string, true> = Object.fromEntries(
-	REPO_LOCATION_ENV_KEYS.map((key) => [key, true]),
+  REPO_LOCATION_ENV_KEYS.map((key) => [key, true]),
 );
 
 /**
@@ -61,7 +61,7 @@ export const REPO_LOCATION_CONFIG_KEYS: readonly string[] = ["core.worktree", "c
 
 /** 键名的比较口径：去掉两端空白后转小写，再查这份表。 */
 const REPO_LOCATION_CONFIG_KEY_FLAGS: Record<string, true> = Object.fromEntries(
-	REPO_LOCATION_CONFIG_KEYS.map((key) => [key, true]),
+  REPO_LOCATION_CONFIG_KEYS.map((key) => [key, true]),
 );
 
 /**
@@ -73,8 +73,8 @@ const REPO_LOCATION_CONFIG_KEY_FLAGS: Record<string, true> = Object.fromEntries(
  * 处理，遇到读不齐就整组删掉。
  */
 function findEnvKeys(env: NodeJS.ProcessEnv, name: string): string[] {
-	const upperCaseName = name.toUpperCase();
-	return Object.keys(env).filter((key) => key.toUpperCase() === upperCaseName);
+  const upperCaseName = name.toUpperCase();
+  return Object.keys(env).filter((key) => key.toUpperCase() === upperCaseName);
 }
 
 /**
@@ -84,9 +84,9 @@ function findEnvKeys(env: NodeJS.ProcessEnv, name: string): string[] {
  * 就是这样传的），别把它当成通用的反斜杠转义。
  */
 function quotedEscapeLength(raw: string, index: number): number {
-	if (raw[index] !== "'" || raw[index + 1] !== "\\" || raw[index + 3] !== "'") return 0;
-	const escaped = raw[index + 2];
-	return escaped === "'" || escaped === "!" ? 4 : 0;
+  if (raw[index] !== "'" || raw[index + 1] !== "\\" || raw[index + 3] !== "'") return 0;
+  const escaped = raw[index + 2];
+  return escaped === "'" || escaped === "!" ? 4 : 0;
 }
 
 /**
@@ -94,28 +94,28 @@ function quotedEscapeLength(raw: string, index: number): number {
  * 引号没闭合时返回 null，交给调用方把整条变量丢掉。
  */
 function readQuotedSegment(raw: string, start: number): { text: string; end: number } | null {
-	if (raw[start] !== "'") return null;
-	let text = "";
-	let index = start + 1;
-	while (index < raw.length) {
-		const escape = quotedEscapeLength(raw, index);
-		if (escape > 0) {
-			text += raw[index + 2];
-			index += escape;
-			continue;
-		}
-		if (raw[index] === "'") return { text, end: index + 1 };
-		text += raw[index];
-		index += 1;
-	}
-	return null;
+  if (raw[start] !== "'") return null;
+  let text = "";
+  let index = start + 1;
+  while (index < raw.length) {
+    const escape = quotedEscapeLength(raw, index);
+    if (escape > 0) {
+      text += raw[index + 2];
+      index += escape;
+      continue;
+    }
+    if (raw[index] === "'") return { text, end: index + 1 };
+    text += raw[index];
+    index += 1;
+  }
+  return null;
 }
 
 interface ConfigParameter {
-	key: string;
-	/** 该条参数在原始串里的起止位置：保留时按原文切片拼回，值不必解码再编码。 */
-	start: number;
-	end: number;
+  key: string;
+  /** 该条参数在原始串里的起止位置：保留时按原文切片拼回，值不必解码再编码。 */
+  start: number;
+  end: number;
 }
 
 /**
@@ -126,34 +126,34 @@ interface ConfigParameter {
  * `'键=值'` 只有一段引号，git 去引号后在第一个 `=` 处切键，键名是 `=` 之前的部分。
  */
 function parseConfigParameters(raw: string): ConfigParameter[] | null {
-	const parameters: ConfigParameter[] = [];
-	let index = 0;
-	while (index < raw.length) {
-		if (raw[index] === " ") {
-			index += 1;
-			continue;
-		}
-		const start = index;
-		const key = readQuotedSegment(raw, index);
-		if (!key) return null;
-		index = key.end;
-		if (raw[index] === "=") {
-			const value = readQuotedSegment(raw, index + 1);
-			if (!value) return null;
-			index = value.end;
-			parameters.push({ key: key.text, start, end: index });
-			continue;
-		}
-		// 单段写法 `'键=值'`：`=` 落在引号里面，键名取去引号后第一个 `=` 之前的部分。
-		// 写回仍用原切片，值不必解码再编码。
-		const separator = key.text.indexOf("=");
-		parameters.push({
-			key: separator === -1 ? key.text : key.text.slice(0, separator),
-			start,
-			end: index,
-		});
-	}
-	return parameters;
+  const parameters: ConfigParameter[] = [];
+  let index = 0;
+  while (index < raw.length) {
+    if (raw[index] === " ") {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    const key = readQuotedSegment(raw, index);
+    if (!key) return null;
+    index = key.end;
+    if (raw[index] === "=") {
+      const value = readQuotedSegment(raw, index + 1);
+      if (!value) return null;
+      index = value.end;
+      parameters.push({ key: key.text, start, end: index });
+      continue;
+    }
+    // 单段写法 `'键=值'`：`=` 落在引号里面，键名取去引号后第一个 `=` 之前的部分。
+    // 写回仍用原切片，值不必解码再编码。
+    const separator = key.text.indexOf("=");
+    parameters.push({
+      key: separator === -1 ? key.text : key.text.slice(0, separator),
+      start,
+      end: index,
+    });
+  }
+  return parameters;
 }
 
 /**
@@ -161,18 +161,18 @@ function parseConfigParameters(raw: string): ConfigParameter[] | null {
  * 的格式 git 自己也读不了，调用方应当整条丢掉。
  */
 function stripRepoLocationParameters(raw: string): string | null {
-	const parameters = parseConfigParameters(raw);
-	if (!parameters) return null;
-	const kept = parameters.filter(
-		(parameter) => REPO_LOCATION_CONFIG_KEY_FLAGS[parameter.key.trim().toLowerCase()] !== true,
-	);
-	if (kept.length === parameters.length) return raw;
-	return kept.map((parameter) => raw.slice(parameter.start, parameter.end)).join(" ");
+  const parameters = parseConfigParameters(raw);
+  if (!parameters) return null;
+  const kept = parameters.filter(
+    (parameter) => REPO_LOCATION_CONFIG_KEY_FLAGS[parameter.key.trim().toLowerCase()] !== true,
+  );
+  if (kept.length === parameters.length) return raw;
+  return kept.map((parameter) => raw.slice(parameter.start, parameter.end)).join(" ");
 }
 
 interface CountedConfigEntry {
-	key: string;
-	value: string | undefined;
+  key: string;
+  value: string | undefined;
 }
 
 /** `GIT_CONFIG_COUNT` 只认十进制整数：`Number.parseInt` 会把 `3abc` 读成 3、把 `1.5` 读成 1。 */
@@ -183,9 +183,9 @@ const COUNTED_CONFIG_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_[0-9]+|VALUE_[0-9]+)$/i;
 
 /** 删掉三件套的全部变量，包括按索引编号的键值。 */
 function deleteCountedConfig(env: NodeJS.ProcessEnv): void {
-	for (const key of Object.keys(env)) {
-		if (COUNTED_CONFIG_KEY_RE.test(key)) delete env[key];
-	}
+  for (const key of Object.keys(env)) {
+    if (COUNTED_CONFIG_KEY_RE.test(key)) delete env[key];
+  }
 }
 
 /**
@@ -194,31 +194,31 @@ function deleteCountedConfig(env: NodeJS.ProcessEnv): void {
  * 完整内容——没读到的条目里可能正藏着仓库定位键，调用方必须整组丢掉。
  */
 function readCountedConfig(env: NodeJS.ProcessEnv, rawCount: string): CountedConfigEntry[] | null {
-	if (!CONFIG_COUNT_RE.test(rawCount)) return null;
-	const count = Number(rawCount);
-	if (!Number.isSafeInteger(count)) return null;
-	// 先数现有键：count 比键还多就必然缺号，不必按 count 循环（它的取值可以很大）。
-	const keyIndexes = new Set<number>();
-	for (const key of Object.keys(env)) {
-		const match = /^GIT_CONFIG_KEY_([0-9]+)$/i.exec(key);
-		if (match) keyIndexes.add(Number(match[1]));
-	}
-	if (count > keyIndexes.size) return null;
+  if (!CONFIG_COUNT_RE.test(rawCount)) return null;
+  const count = Number(rawCount);
+  if (!Number.isSafeInteger(count)) return null;
+  // 先数现有键：count 比键还多就必然缺号，不必按 count 循环（它的取值可以很大）。
+  const keyIndexes = new Set<number>();
+  for (const key of Object.keys(env)) {
+    const match = /^GIT_CONFIG_KEY_([0-9]+)$/i.exec(key);
+    if (match) keyIndexes.add(Number(match[1]));
+  }
+  if (count > keyIndexes.size) return null;
 
-	const entries: CountedConfigEntry[] = [];
-	for (let index = 0; index < count; index += 1) {
-		// 同一个索引出现大小写不同的多份时读不出 git 实际启用的那份（它只认精确大小写）：
-		// 按读不齐处理，整组丢掉。值缺失是合法的，多份则不合法。
-		const keyNames = findEnvKeys(env, `GIT_CONFIG_KEY_${index}`);
-		if (keyNames.length !== 1) return null;
-		const valueNames = findEnvKeys(env, `GIT_CONFIG_VALUE_${index}`);
-		if (valueNames.length > 1) return null;
-		entries.push({
-			key: env[keyNames[0]] ?? "",
-			value: valueNames.length === 1 ? env[valueNames[0]] : undefined,
-		});
-	}
-	return entries;
+  const entries: CountedConfigEntry[] = [];
+  for (let index = 0; index < count; index += 1) {
+    // 同一个索引出现大小写不同的多份时读不出 git 实际启用的那份（它只认精确大小写）：
+    // 按读不齐处理，整组丢掉。值缺失是合法的，多份则不合法。
+    const keyNames = findEnvKeys(env, `GIT_CONFIG_KEY_${index}`);
+    if (keyNames.length !== 1) return null;
+    const valueNames = findEnvKeys(env, `GIT_CONFIG_VALUE_${index}`);
+    if (valueNames.length > 1) return null;
+    entries.push({
+      key: env[keyNames[0]] ?? "",
+      value: valueNames.length === 1 ? env[valueNames[0]] : undefined,
+    });
+  }
+  return entries;
 }
 
 /**
@@ -229,30 +229,32 @@ function readCountedConfig(env: NodeJS.ProcessEnv, rawCount: string): CountedCon
  * 原样交给子进程，与 `GIT_CONFIG_PARAMETERS` 解析失败时整条丢掉的 fail-closed 口径一致。
  */
 function stripRepoLocationCountedConfig(env: NodeJS.ProcessEnv): void {
-	const countNames = findEnvKeys(env, "GIT_CONFIG_COUNT");
-	if (countNames.length === 0) return;
-	// 多份 count 变体并存时不知道 git 实际读的是哪一组，逐组过滤会留下未检查的条目：
-	// 与读不齐时同一口径，整组丢掉。
-	if (countNames.length > 1) {
-		deleteCountedConfig(env);
-		return;
-	}
-	const countName = countNames[0];
+  const countNames = findEnvKeys(env, "GIT_CONFIG_COUNT");
+  if (countNames.length === 0) return;
+  // 多份 count 变体并存时不知道 git 实际读的是哪一组，逐组过滤会留下未检查的条目：
+  // 与读不齐时同一口径，整组丢掉。
+  if (countNames.length > 1) {
+    deleteCountedConfig(env);
+    return;
+  }
+  const countName = countNames[0];
 
-	const entries = readCountedConfig(env, env[countName] ?? "");
-	if (!entries) {
-		deleteCountedConfig(env);
-		return;
-	}
-	const kept = entries.filter((entry) => REPO_LOCATION_CONFIG_KEY_FLAGS[entry.key.trim().toLowerCase()] !== true);
-	if (kept.length === entries.length) return;
+  const entries = readCountedConfig(env, env[countName] ?? "");
+  if (!entries) {
+    deleteCountedConfig(env);
+    return;
+  }
+  const kept = entries.filter(
+    (entry) => REPO_LOCATION_CONFIG_KEY_FLAGS[entry.key.trim().toLowerCase()] !== true,
+  );
+  if (kept.length === entries.length) return;
 
-	deleteCountedConfig(env);
-	kept.forEach((entry, index) => {
-		env[`GIT_CONFIG_KEY_${index}`] = entry.key;
-		if (entry.value !== undefined) env[`GIT_CONFIG_VALUE_${index}`] = entry.value;
-	});
-	env[countName] = String(kept.length);
+  deleteCountedConfig(env);
+  kept.forEach((entry, index) => {
+    env[`GIT_CONFIG_KEY_${index}`] = entry.key;
+    if (entry.value !== undefined) env[`GIT_CONFIG_VALUE_${index}`] = entry.value;
+  });
+  env[countName] = String(kept.length);
 }
 
 /**
@@ -267,18 +269,18 @@ function stripRepoLocationCountedConfig(env: NodeJS.ProcessEnv): void {
  * 的变量、可以并存，git 只读精确大小写的那个：配置来源变量对全部变体逐个过滤。
  */
 export function stripRepoLocationEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-	const stripped: NodeJS.ProcessEnv = { ...env };
-	for (const key of Object.keys(stripped)) {
-		if (REPO_LOCATION_ENV_KEY_FLAGS[key.toUpperCase()]) delete stripped[key];
-	}
+  const stripped: NodeJS.ProcessEnv = { ...env };
+  for (const key of Object.keys(stripped)) {
+    if (REPO_LOCATION_ENV_KEY_FLAGS[key.toUpperCase()]) delete stripped[key];
+  }
 
-	for (const parametersName of findEnvKeys(stripped, "GIT_CONFIG_PARAMETERS")) {
-		const filtered = stripRepoLocationParameters(stripped[parametersName] ?? "");
-		if (filtered === null) delete stripped[parametersName];
-		else stripped[parametersName] = filtered;
-	}
-	stripRepoLocationCountedConfig(stripped);
-	return stripped;
+  for (const parametersName of findEnvKeys(stripped, "GIT_CONFIG_PARAMETERS")) {
+    const filtered = stripRepoLocationParameters(stripped[parametersName] ?? "");
+    if (filtered === null) delete stripped[parametersName];
+    else stripped[parametersName] = filtered;
+  }
+  stripRepoLocationCountedConfig(stripped);
+  return stripped;
 }
 
 /**
@@ -286,5 +288,5 @@ export function stripRepoLocationEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv 
  * 与系统语言无关。
  */
 export function createGitEnv(): NodeJS.ProcessEnv {
-	return stripRepoLocationEnv({ ...process.env, LC_ALL: "C" });
+  return stripRepoLocationEnv({ ...process.env, LC_ALL: "C" });
 }

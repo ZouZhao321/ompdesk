@@ -8,12 +8,12 @@ import type { TranscriptItem } from "./transcript-items";
  * 键与定位，否则流式气泡会落在列表外面，跟随、首屏定位都管不到它。
  */
 export interface TranscriptLiveTailItem {
-	/** 与 TranscriptItem 的判别字段区分开。 */
-	kind: "live-tail";
-	/** 列表键，固定值，与会话记录的 entryId 不同源。 */
-	key: string;
-	/** 流式消息；内容随后续数据块增长。 */
-	message: Partial<AgentMessage>;
+  /** 与 TranscriptItem 的判别字段区分开。 */
+  kind: "live-tail";
+  /** 列表键，固定值，与会话记录的 entryId 不同源。 */
+  key: string;
+  /** 流式消息；内容随后续数据块增长。 */
+  message: Partial<AgentMessage>;
 }
 
 /** 列表消费的项：分组得到的条目，加上流式期间末尾的合成项。 */
@@ -23,7 +23,7 @@ export type TranscriptListItem = TranscriptItem | TranscriptLiveTailItem;
 export const TRANSCRIPT_LIVE_TAIL_KEY = "transcript-live-tail";
 
 export function isTranscriptLiveTailItem(item: TranscriptListItem): item is TranscriptLiveTailItem {
-	return "kind" in item && item.kind === "live-tail";
+  return "kind" in item && item.kind === "live-tail";
 }
 
 /**
@@ -33,9 +33,9 @@ export function isTranscriptLiveTailItem(item: TranscriptListItem): item is Tran
  * 一种判据，键表就会比数据表多一项，虚拟列表按下标取键随之错位。
  */
 export function hasTranscriptLiveTail(
-	streamingMessage: Partial<AgentMessage> | null | undefined,
+  streamingMessage: Partial<AgentMessage> | null | undefined,
 ): streamingMessage is Partial<AgentMessage> {
-	return streamingMessage != null;
+  return streamingMessage != null;
 }
 
 /**
@@ -45,9 +45,12 @@ export function hasTranscriptLiveTail(
  * 一项，前面的条目保持原对象，重绘范围由此收窄到这一项。
  */
 export function withTranscriptLiveTail(
-	items: readonly TranscriptItem[],
-	streamingMessage: Partial<AgentMessage> | null,
+  items: readonly TranscriptItem[],
+  streamingMessage: Partial<AgentMessage> | null,
 ): readonly TranscriptListItem[] {
-	if (!hasTranscriptLiveTail(streamingMessage)) return items;
-	return [...items, { kind: "live-tail", key: TRANSCRIPT_LIVE_TAIL_KEY, message: streamingMessage }];
+  if (!hasTranscriptLiveTail(streamingMessage)) return items;
+  return [
+    ...items,
+    { kind: "live-tail", key: TRANSCRIPT_LIVE_TAIL_KEY, message: streamingMessage },
+  ];
 }

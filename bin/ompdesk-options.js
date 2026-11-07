@@ -8,13 +8,13 @@ const { isIP } = require("net");
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 function isEnabled(value) {
-	return typeof value === "string" && TRUE_VALUES.has(value.trim().toLowerCase());
+  return typeof value === "string" && TRUE_VALUES.has(value.trim().toLowerCase());
 }
 
 function isLoopbackHostname(hostname) {
-	const value = String(hostname).trim().toLowerCase();
-	if (value === "localhost" || value === "::1" || value === "[::1]") return true;
-	return isIP(value) === 4 && value.startsWith("127.");
+  const value = String(hostname).trim().toLowerCase();
+  if (value === "localhost" || value === "::1" || value === "[::1]") return true;
+  return isIP(value) === 4 && value.startsWith("127.");
 }
 
 /**
@@ -29,39 +29,39 @@ function isLoopbackHostname(hostname) {
  * Returns the message to print instead of starting, or null when allowed.
  */
 function loopbackBindingError(hostname, env = process.env) {
-	if (isLoopbackHostname(hostname)) return null;
-	if (isEnabled(env.OMPDESK_ALLOW_NON_LOOPBACK)) return null;
-	return [
-		`ompdesk only listens on the loopback interface; refusing to bind ${hostname}.`,
-		"Drop --hostname / OMPDESK_HOSTNAME, or use the address 127.0.0.1.",
-		"Reach it from another device through Tailscale: docs/deployment.md.",
-	].join("\n");
+  if (isLoopbackHostname(hostname)) return null;
+  if (isEnabled(env.OMPDESK_ALLOW_NON_LOOPBACK)) return null;
+  return [
+    `ompdesk only listens on the loopback interface; refusing to bind ${hostname}.`,
+    "Drop --hostname / OMPDESK_HOSTNAME, or use the address 127.0.0.1.",
+    "Reach it from another device through Tailscale: docs/deployment.md.",
+  ].join("\n");
 }
 
 function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
-	const { values: cliArgs } = parseArgs({
-		args,
-		options: {
-			port: { type: "string", short: "p" },
-			hostname: { type: "string", short: "H" },
-			"no-open": { type: "boolean" },
-			// Turns the password lock on for this run and every later one, asking for
-			// a password on the terminal when none has been set yet.
-			authenticated: { type: "boolean" },
-			// Recovery from the machine itself: replaces the stored password without
-			// needing the old one.
-			"reset-password": { type: "boolean" },
-		},
-		strict: false,
-	});
+  const { values: cliArgs } = parseArgs({
+    args,
+    options: {
+      port: { type: "string", short: "p" },
+      hostname: { type: "string", short: "H" },
+      "no-open": { type: "boolean" },
+      // Turns the password lock on for this run and every later one, asking for
+      // a password on the terminal when none has been set yet.
+      authenticated: { type: "boolean" },
+      // Recovery from the machine itself: replaces the stored password without
+      // needing the old one.
+      "reset-password": { type: "boolean" },
+    },
+    strict: false,
+  });
 
-	return {
-		port: cliArgs.port ?? env.PORT ?? "30141",
-		hostname: cliArgs.hostname ?? env.OMPDESK_HOSTNAME ?? "127.0.0.1",
-		openBrowser: !cliArgs["no-open"] && !isEnabled(env.OMPDESK_NO_OPEN),
-		authenticated: Boolean(cliArgs.authenticated) || isEnabled(env.OMPDESK_AUTHENTICATED),
-		resetPassword: Boolean(cliArgs["reset-password"]),
-	};
+  return {
+    port: cliArgs.port ?? env.PORT ?? "30141",
+    hostname: cliArgs.hostname ?? env.OMPDESK_HOSTNAME ?? "127.0.0.1",
+    openBrowser: !cliArgs["no-open"] && !isEnabled(env.OMPDESK_NO_OPEN),
+    authenticated: Boolean(cliArgs.authenticated) || isEnabled(env.OMPDESK_AUTHENTICATED),
+    resetPassword: Boolean(cliArgs["reset-password"]),
+  };
 }
 
 module.exports = { parseLaunchOptions, loopbackBindingError };

@@ -15,31 +15,31 @@ import { getSkillsSettings } from "@/lib/omp-settings";
  * and `.agents/skills` with omp's own precedence and collision warnings.
  */
 export async function loadSkillsWithInstallInfo(cwd: string): Promise<SkillsResponse> {
-	const agentDir = getAgentDir();
-	const settings = await getSettingsForCwd(cwd);
-	const { skills, warnings } = await loadSkills({ cwd, ...getSkillsSettings(settings) });
+  const agentDir = getAgentDir();
+  const settings = await getSettingsForCwd(cwd);
+  const { skills, warnings } = await loadSkills({ cwd, ...getSkillsSettings(settings) });
 
-	const infos: SkillInfo[] = skills.map((skill) => ({
-		name: skill.name,
-		description: skill.description,
-		filePath: skill.filePath,
-		baseDir: skill.baseDir,
-		disableModelInvocation: readDisableModelInvocation(skill.filePath),
-		sourceInfo: {
-			...(skill.source ? { source: skill.source } : {}),
-			...(skill._source?.level ? { scope: skill._source.level } : {}),
-		},
-	}));
+  const infos: SkillInfo[] = skills.map((skill) => ({
+    name: skill.name,
+    description: skill.description,
+    filePath: skill.filePath,
+    baseDir: skill.baseDir,
+    disableModelInvocation: readDisableModelInvocation(skill.filePath),
+    sourceInfo: {
+      ...(skill.source ? { source: skill.source } : {}),
+      ...(skill._source?.level ? { scope: skill._source.level } : {}),
+    },
+  }));
 
-	return {
-		skills: annotateSkillsWithInstallInfo(infos, { cwd, agentDir }),
-		diagnostics: warnings.map((warning) => ({
-			type: "warning" as const,
-			message: warning.message,
-			path: warning.skillPath,
-		})),
-		projectResourcesLoaded: getProjectTrustStatus(cwd, agentDir).trusted,
-	};
+  return {
+    skills: annotateSkillsWithInstallInfo(infos, { cwd, agentDir }),
+    diagnostics: warnings.map((warning) => ({
+      type: "warning" as const,
+      message: warning.message,
+      path: warning.skillPath,
+    })),
+    projectResourcesLoaded: getProjectTrustStatus(cwd, agentDir).trusted,
+  };
 }
 
 /**
@@ -47,10 +47,10 @@ export async function loadSkillsWithInstallInfo(cwd: string): Promise<SkillsResp
  * edits exactly one key, so read it back from the file the skill came from.
  */
 function readDisableModelInvocation(filePath: string): boolean {
-	try {
-		const { frontmatter } = parseFrontmatter(readFileSync(filePath, "utf8"));
-		return Boolean(frontmatter["disable-model-invocation"]);
-	} catch {
-		return false;
-	}
+  try {
+    const { frontmatter } = parseFrontmatter(readFileSync(filePath, "utf8"));
+    return Boolean(frontmatter["disable-model-invocation"]);
+  } catch {
+    return false;
+  }
 }

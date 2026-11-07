@@ -5,10 +5,10 @@ import { extractCommentEntries } from "@/lib/comment-entries";
 import { readCommentSourceFiles } from "@/lib/comment-sources";
 import { readCommentDictionary, translationsForEntries } from "@/lib/comment-dictionary";
 import {
-	getAllowedFileRoots,
-	isExistingFilePathAllowed,
-	isFilePathAllowed,
-	isWindowsAbsolutePath,
+  getAllowedFileRoots,
+  isExistingFilePathAllowed,
+  isFilePathAllowed,
+  isWindowsAbsolutePath,
 } from "@/lib/file-access";
 import { isApiRequestAllowed } from "@/lib/request-security";
 import fs from "fs";
@@ -23,37 +23,37 @@ import fs from "fs";
 export const GET = withRequestLog("/api/comment-entries", getRouteHandler);
 
 async function getRouteHandler(req: NextRequest) {
-	if (!isApiRequestAllowed(req)) {
-		return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
-	}
+  if (!isApiRequestAllowed(req)) {
+    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+  }
 
-	const cwd = req.nextUrl.searchParams.get("cwd")?.trim() ?? "";
-	if (!cwd || (!cwd.startsWith("/") && !isWindowsAbsolutePath(cwd))) {
-		return NextResponse.json({ error: "cwd must be an absolute path" }, { status: 400 });
-	}
+  const cwd = req.nextUrl.searchParams.get("cwd")?.trim() ?? "";
+  if (!cwd || (!cwd.startsWith("/") && !isWindowsAbsolutePath(cwd))) {
+    return NextResponse.json({ error: "cwd must be an absolute path" }, { status: 400 });
+  }
 
-	const allowedRoots = await getAllowedFileRoots();
-	if (!isFilePathAllowed(cwd, allowedRoots)) {
-		return NextResponse.json({ error: "Access denied" }, { status: 403 });
-	}
+  const allowedRoots = await getAllowedFileRoots();
+  if (!isFilePathAllowed(cwd, allowedRoots)) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  }
 
-	let stat: fs.Stats;
-	try {
-		stat = fs.statSync(cwd);
-	} catch {
-		return NextResponse.json({ error: "Directory not found" }, { status: 404 });
-	}
-	if (!stat.isDirectory()) {
-		return NextResponse.json({ error: "Not a directory" }, { status: 400 });
-	}
-	if (!isExistingFilePathAllowed(cwd, allowedRoots)) {
-		return NextResponse.json({ error: "Access denied" }, { status: 403 });
-	}
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(cwd);
+  } catch {
+    return NextResponse.json({ error: "Directory not found" }, { status: 404 });
+  }
+  if (!stat.isDirectory()) {
+    return NextResponse.json({ error: "Not a directory" }, { status: 400 });
+  }
+  if (!isExistingFilePathAllowed(cwd, allowedRoots)) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  }
 
-	const extraction = extractCommentEntries(await readCommentSourceFiles(cwd));
-	const dictionary = readCommentDictionary(getAgentDir());
-	return NextResponse.json({
-		...extraction,
-		translations: translationsForEntries(extraction.entries, dictionary),
-	});
+  const extraction = extractCommentEntries(await readCommentSourceFiles(cwd));
+  const dictionary = readCommentDictionary(getAgentDir());
+  return NextResponse.json({
+    ...extraction,
+    translations: translationsForEntries(extraction.entries, dictionary),
+  });
 }

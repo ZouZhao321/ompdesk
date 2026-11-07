@@ -6,17 +6,17 @@ let version = 0;
 const listeners = new Set<() => void>();
 
 export function getCommentDictionaryVersion(): number {
-	return version;
+  return version;
 }
 
 export function notifyCommentDictionaryChanged(): void {
-	version += 1;
-	for (const listener of [...listeners]) listener();
+  version += 1;
+  for (const listener of [...listeners]) listener();
 }
 
 export function subscribeCommentDictionary(listener: () => void): () => void {
-	listeners.add(listener);
-	return () => {
-		listeners.delete(listener);
-	};
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

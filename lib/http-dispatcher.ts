@@ -5,8 +5,8 @@ export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 type UndiciModule = typeof Undici;
 
 type DispatcherGlobal = typeof globalThis & {
-	__ompdeskHttpDispatcherConfigured?: boolean;
-	__ompdeskHttpDispatcherConfiguring?: Promise<void>;
+  __ompdeskHttpDispatcherConfigured?: boolean;
+  __ompdeskHttpDispatcherConfiguring?: Promise<void>;
 };
 
 const dispatcherGlobal = globalThis as DispatcherGlobal;
@@ -14,45 +14,54 @@ const originalGlobalFetch = globalThis.fetch;
 const ignoreUndiciDispatcherError = (): void => {};
 
 function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
-	if (typeof value === "string") {
-		const trimmed = value.trim();
-		if (trimmed.toLowerCase() === "disabled") return 0;
-		if (trimmed.length === 0) return undefined;
-		return parseHttpIdleTimeoutMs(Number(trimmed));
-	}
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.toLowerCase() === "disabled") return 0;
+    if (trimmed.length === 0) return undefined;
+    return parseHttpIdleTimeoutMs(Number(trimmed));
+  }
 
-	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-		return undefined;
-	}
-	return Math.floor(value);
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return Math.floor(value);
 }
 
 // Undici can emit an internal Client error while terminating a response body.
 // The body stream still rejects; this prevents the EventEmitter error from
 // terminating the Next.js process first.
 function withUndiciErrorListener<T extends Undici.Dispatcher>(dispatcher: T): T {
-	if (dispatcher instanceof EventEmitter) {
-		EventEmitter.prototype.on.call(dispatcher, "error", ignoreUndiciDispatcherError);
-	}
-	return dispatcher;
+  if (dispatcher instanceof EventEmitter) {
+    EventEmitter.prototype.on.call(dispatcher, "error", ignoreUndiciDispatcherError);
+  }
+  return dispatcher;
 }
 
-function createUndiciClient(undici: UndiciModule, origin: string | URL, options: object): Undici.Dispatcher {
-	return withUndiciErrorListener(new undici.Client(origin, options as Undici.Client.Options));
+function createUndiciClient(
+  undici: UndiciModule,
+  origin: string | URL,
+  options: object,
+): Undici.Dispatcher {
+  return withUndiciErrorListener(new undici.Client(origin, options as Undici.Client.Options));
 }
 
-function createUndiciOriginDispatcher(undici: UndiciModule, origin: string | URL, options: object): Undici.Dispatcher {
-	const dispatcherOptions = options as Undici.Pool.Options;
-	if (dispatcherOptions.connections === 1) {
-		return createUndiciClient(undici, origin, dispatcherOptions);
-	}
+function createUndiciOriginDispatcher(
+  undici: UndiciModule,
+  origin: string | URL,
+  options: object,
+): Undici.Dispatcher {
+  const dispatcherOptions = options as Undici.Pool.Options;
+  if (dispatcherOptions.connections === 1) {
+    return createUndiciClient(undici, origin, dispatcherOptions);
+  }
 
-	return withUndiciErrorListener(
-		new undici.Pool(origin, {
-			...dispatcherOptions,
-			factory: (factoryOrigin, factoryOptions) => createUndiciClient(undici, factoryOrigin, factoryOptions),
-		}),
-	);
+  return withUndiciErrorListener(
+    new undici.Pool(origin, {
+      ...dispatcherOptions,
+      factory: (factoryOrigin, factoryOptions) =>
+        createUndiciClient(undici, factoryOrigin, factoryOptions),
+    }),
+  );
 }
 
 /**
@@ -65,50 +74,52 @@ function createUndiciOriginDispatcher(undici: UndiciModule, origin: string | URL
  * runtime `ompdesk` actually serves on.
  */
 export function isBunRuntime(): boolean {
-	return typeof process.versions.bun === "string";
+  return typeof process.versions.bun === "string";
 }
 
-export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void | Promise<void> {
-	if (dispatcherGlobal.__ompdeskHttpDispatcherConfigured) return;
+export function configureHttpDispatcher(
+  timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS,
+): void | Promise<void> {
+  if (dispatcherGlobal.__ompdeskHttpDispatcherConfigured) return;
 
-	const normalizedTimeoutMs = parseHttpIdleTimeoutMs(timeoutMs);
-	if (normalizedTimeoutMs === undefined) {
-		throw new Error(`Invalid HTTP idle timeout: ${String(timeoutMs)}`);
-	}
+  const normalizedTimeoutMs = parseHttpIdleTimeoutMs(timeoutMs);
+  if (normalizedTimeoutMs === undefined) {
+    throw new Error(`Invalid HTTP idle timeout: ${String(timeoutMs)}`);
+  }
 
-	if (isBunRuntime()) {
-		dispatcherGlobal.__ompdeskHttpDispatcherConfigured = true;
-		return;
-	}
+  if (isBunRuntime()) {
+    dispatcherGlobal.__ompdeskHttpDispatcherConfigured = true;
+    return;
+  }
 
-	if (dispatcherGlobal.__ompdeskHttpDispatcherConfiguring) {
-		return dispatcherGlobal.__ompdeskHttpDispatcherConfiguring;
-	}
+  if (dispatcherGlobal.__ompdeskHttpDispatcherConfiguring) {
+    return dispatcherGlobal.__ompdeskHttpDispatcherConfiguring;
+  }
 
-	const configuring = import("undici")
-		.then((undici) => {
-			const dispatcher = withUndiciErrorListener(
-				new undici.EnvHttpProxyAgent({
-					allowH2: false,
-					bodyTimeout: normalizedTimeoutMs,
-					headersTimeout: normalizedTimeoutMs,
-					clientFactory: (origin, options) => createUndiciClient(undici, origin, options),
-					factory: (origin, options) => createUndiciOriginDispatcher(undici, origin, options),
-				}),
-			);
-			undici.setGlobalDispatcher(dispatcher);
+  const configuring = import("undici")
+    .then((undici) => {
+      const dispatcher = withUndiciErrorListener(
+        new undici.EnvHttpProxyAgent({
+          allowH2: false,
+          bodyTimeout: normalizedTimeoutMs,
+          headersTimeout: normalizedTimeoutMs,
+          clientFactory: (origin, options) => createUndiciClient(undici, origin, options),
+          factory: (origin, options) => createUndiciOriginDispatcher(undici, origin, options),
+        }),
+      );
+      undici.setGlobalDispatcher(dispatcher);
 
-			// Keep fetch and the dispatcher on the same undici implementation.
-			// Preserve an intentional fetch override installed after module load.
-			if (globalThis.fetch === originalGlobalFetch) {
-				undici.install?.();
-			}
+      // Keep fetch and the dispatcher on the same undici implementation.
+      // Preserve an intentional fetch override installed after module load.
+      if (globalThis.fetch === originalGlobalFetch) {
+        undici.install?.();
+      }
 
-			dispatcherGlobal.__ompdeskHttpDispatcherConfigured = true;
-		})
-		.finally(() => {
-			delete dispatcherGlobal.__ompdeskHttpDispatcherConfiguring;
-		});
-	dispatcherGlobal.__ompdeskHttpDispatcherConfiguring = configuring;
-	return configuring;
+      dispatcherGlobal.__ompdeskHttpDispatcherConfigured = true;
+    })
+    .finally(() => {
+      delete dispatcherGlobal.__ompdeskHttpDispatcherConfiguring;
+    });
+  dispatcherGlobal.__ompdeskHttpDispatcherConfiguring = configuring;
+  return configuring;
 }

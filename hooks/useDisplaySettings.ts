@@ -10,22 +10,22 @@ let state: DisplaySettings = DEFAULTS;
 let requestId = 0;
 
 function emit(): void {
-	listeners.forEach((cb) => cb());
+  listeners.forEach((cb) => cb());
 }
 
 function subscribe(cb: () => void): () => void {
-	listeners.add(cb);
-	return () => {
-		listeners.delete(cb);
-	};
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
 }
 
 function getSnapshot(): DisplaySettings {
-	return state;
+  return state;
 }
 
 function getServerSnapshot(): DisplaySettings {
-	return DEFAULTS;
+  return DEFAULTS;
 }
 
 /**
@@ -34,21 +34,21 @@ function getServerSnapshot(): DisplaySettings {
  * the open transcript instead of waiting for a reload.
  */
 export async function refreshDisplaySettings(cwd?: string | null): Promise<void> {
-	const id = ++requestId;
-	const query = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-	const response = await fetch(`/api/display-settings${query}`, { cache: "no-store" });
-	if (!response.ok) throw new Error(`Display settings request failed (${response.status})`);
-	const next = (await response.json()) as DisplaySettings;
-	// A slower earlier request must not overwrite a newer answer.
-	if (id !== requestId) return;
-	if (next.hideThinkingBlock === state.hideThinkingBlock) return;
-	state = { hideThinkingBlock: next.hideThinkingBlock === true };
-	emit();
+  const id = ++requestId;
+  const query = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
+  const response = await fetch(`/api/display-settings${query}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Display settings request failed (${response.status})`);
+  const next = (await response.json()) as DisplaySettings;
+  // A slower earlier request must not overwrite a newer answer.
+  if (id !== requestId) return;
+  if (next.hideThinkingBlock === state.hideThinkingBlock) return;
+  state = { hideThinkingBlock: next.hideThinkingBlock === true };
+  emit();
 }
 
 /** Read the current values. Every consumer re-renders when they change. */
 export function useDisplaySettings(): DisplaySettings {
-	return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 /**
@@ -57,12 +57,12 @@ export function useDisplaySettings(): DisplaySettings {
  * read-only hook without each one issuing a request.
  */
 export function useSyncedDisplaySettings(cwd?: string | null): DisplaySettings {
-	const snapshot = useDisplaySettings();
+  const snapshot = useDisplaySettings();
 
-	useEffect(() => {
-		// Keep the last known values when the read fails; they are only cosmetic.
-		void refreshDisplaySettings(cwd).catch(() => {});
-	}, [cwd]);
+  useEffect(() => {
+    // Keep the last known values when the read fails; they are only cosmetic.
+    void refreshDisplaySettings(cwd).catch(() => {});
+  }, [cwd]);
 
-	return snapshot;
+  return snapshot;
 }

@@ -18,17 +18,17 @@ const RAIL_PROMPT_CHARS = 160;
 
 /** 跳转条上的一个圆点。 */
 export interface TranscriptRailDot {
-	/** 条目下标：点击时直接交给列表定位，不换算成像素。 */
-	itemIndex: number;
-	/** 悬停提示文本：该轮提问的开头。 */
-	prompt: string;
+  /** 条目下标：点击时直接交给列表定位，不换算成像素。 */
+  itemIndex: number;
+  /** 悬停提示文本：该轮提问的开头。 */
+  prompt: string;
 }
 
 /** 列表报告的已渲染条目：下标、距条目数组顶部的偏移与测量高度。 */
 export interface RailRenderedItem {
-	index: number;
-	offset: number;
-	size: number;
+  index: number;
+  offset: number;
+  size: number;
 }
 
 /**
@@ -38,24 +38,24 @@ export interface RailRenderedItem {
  * 轮次。取不到提问文本的锚点不出圆点：压缩摘要顶替了原提问，那不是用户的提问。
  */
 export function buildTranscriptRailDots(
-	items: readonly TranscriptItem[],
-	promptOf: (item: TranscriptItem) => string | null,
+  items: readonly TranscriptItem[],
+  promptOf: (item: TranscriptItem) => string | null,
 ): TranscriptRailDot[] {
-	const dots: TranscriptRailDot[] = [];
-	for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
-		const item = items[itemIndex];
-		if (!item.isAnchor || item.anchorIndex < 0) continue;
-		const prompt = previewPrompt(promptOf(item));
-		if (prompt === null) continue;
-		dots.push({ itemIndex, prompt });
-	}
-	return dots;
+  const dots: TranscriptRailDot[] = [];
+  for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+    const item = items[itemIndex];
+    if (!item.isAnchor || item.anchorIndex < 0) continue;
+    const prompt = previewPrompt(promptOf(item));
+    if (prompt === null) continue;
+    dots.push({ itemIndex, prompt });
+  }
+  return dots;
 }
 
 function previewPrompt(prompt: string | null): string | null {
-	const text = prompt?.trim();
-	if (!text) return null;
-	return Array.from(text).slice(0, RAIL_PROMPT_CHARS).join("");
+  const text = prompt?.trim();
+  if (!text) return null;
+  return Array.from(text).slice(0, RAIL_PROMPT_CHARS).join("");
 }
 
 /**
@@ -70,18 +70,18 @@ function previewPrompt(prompt: string | null): string | null {
  * 列表顶部没有被隐藏的提问。
  */
 export function railCurrentDotIndex(
-	dots: readonly TranscriptRailDot[],
-	topItemIndex: number,
-	atBottom: boolean,
+  dots: readonly TranscriptRailDot[],
+  topItemIndex: number,
+  atBottom: boolean,
 ): number {
-	if (dots.length === 0) return -1;
-	if (atBottom) return dots.length - 1;
-	let current = -1;
-	for (let index = 0; index < dots.length; index += 1) {
-		if (dots[index].itemIndex > topItemIndex) break;
-		current = index;
-	}
-	return current;
+  if (dots.length === 0) return -1;
+  if (atBottom) return dots.length - 1;
+  let current = -1;
+  for (let index = 0; index < dots.length; index += 1) {
+    if (dots[index].itemIndex > topItemIndex) break;
+    current = index;
+  }
+  return current;
 }
 
 /**
@@ -92,9 +92,9 @@ export function railCurrentDotIndex(
  * 圆点也会叠成一条实线。
  */
 export function railDotPitch(availableHeight: number, dotCount: number): number | null {
-	if (dotCount <= 0 || availableHeight <= 0) return RAIL_ROW_PX;
-	const pitch = Math.min(RAIL_ROW_PX, availableHeight / dotCount);
-	return pitch < RAIL_MIN_PITCH_PX ? null : pitch;
+  if (dotCount <= 0 || availableHeight <= 0) return RAIL_ROW_PX;
+  const pitch = Math.min(RAIL_ROW_PX, availableHeight / dotCount);
+  return pitch < RAIL_MIN_PITCH_PX ? null : pitch;
 }
 
 /** 圆点列能接受的最小节距（px）：再小就没有可用的命中区，跳转条整体收起。 */
@@ -110,21 +110,21 @@ export type RailStepDirection = -1 | 1;
  * 顶部落在两轮之间时，两侧取当前这一轮前后最近的圆点。
  */
 export function railStepItemIndex(
-	dots: readonly TranscriptRailDot[],
-	currentDotIndex: number,
-	direction: RailStepDirection,
+  dots: readonly TranscriptRailDot[],
+  currentDotIndex: number,
+  direction: RailStepDirection,
 ): number | null {
-	if (dots.length === 0) return null;
-	if (direction > 0) {
-		const next = currentDotIndex < 0 ? 0 : currentDotIndex + 1;
-		return next < dots.length ? dots[next].itemIndex : null;
-	}
-	return currentDotIndex > 0 ? dots[currentDotIndex - 1].itemIndex : null;
+  if (dots.length === 0) return null;
+  if (direction > 0) {
+    const next = currentDotIndex < 0 ? 0 : currentDotIndex + 1;
+    return next < dots.length ? dots[next].itemIndex : null;
+  }
+  return currentDotIndex > 0 ? dots[currentDotIndex - 1].itemIndex : null;
 }
 
 /** 只有一轮提问时不显示跳转条。 */
 export function shouldShowTranscriptRail(dotCount: number): boolean {
-	return dotCount > 1;
+  return dotCount > 1;
 }
 
 /** 顶部判定容差（px）：行顶落在视口顶边下方一行以内时仍算顶部可见。 */
@@ -143,12 +143,15 @@ export const RAIL_ROW_GAP_PX = 4;
  * 已渲染条目，不按平均高度估算。可见顶边落在第一条之上（页首插槽可见）时返回
  * 第一条；列表还没渲染任何条目时返回 null。
  */
-export function railTopVisibleItemIndex(items: readonly RailRenderedItem[], visibleTop: number): number | null {
-	if (items.length === 0) return null;
-	let top = items[0].index;
-	for (const item of items) {
-		if (item.offset > visibleTop) break;
-		top = item.index;
-	}
-	return top;
+export function railTopVisibleItemIndex(
+  items: readonly RailRenderedItem[],
+  visibleTop: number,
+): number | null {
+  if (items.length === 0) return null;
+  let top = items[0].index;
+  for (const item of items) {
+    if (item.offset > visibleTop) break;
+    top = item.index;
+  }
+  return top;
 }

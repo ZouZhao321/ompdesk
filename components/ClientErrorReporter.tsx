@@ -10,6 +10,6 @@ const BUILD_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
  * the cleanup returned by the installer removes both listeners on unmount.
  */
 export function ClientErrorReporter() {
-	useEffect(() => installClientErrorReporter({ buildVersion: BUILD_VERSION }), []);
-	return null;
+  useEffect(() => installClientErrorReporter({ buildVersion: BUILD_VERSION }), []);
+  return null;
 }

@@ -27,8 +27,8 @@ export type RequestActor = "local" | "password" | "recovery";
  * client rotate its rate-limit bucket on every request.
  */
 export function trustsForwardedAddress(env: NodeJS.ProcessEnv = process.env): boolean {
-	const requested = env.OMPDESK_TRUST_PROXY?.trim().toLowerCase();
-	return requested === "1" || requested === "true" || requested === "yes" || requested === "on";
+  const requested = env.OMPDESK_TRUST_PROXY?.trim().toLowerCase();
+  return requested === "1" || requested === "true" || requested === "yes" || requested === "on";
 }
 
 /**
@@ -37,15 +37,18 @@ export function trustsForwardedAddress(env: NodeJS.ProcessEnv = process.env): bo
  * each proxy appends to, so the last entry is the one closest to this server;
  * the first entry is whatever the client chose to send.
  */
-export function resolveForwardedAddress(headers: Headers, env: NodeJS.ProcessEnv = process.env): string {
-	if (!trustsForwardedAddress(env)) return "local";
-	const forwarded = headers.get("x-forwarded-for")?.split(",");
-	const last = forwarded?.[forwarded.length - 1]?.trim();
-	return (last || headers.get("x-real-ip")?.trim() || "local").slice(0, 64);
+export function resolveForwardedAddress(
+  headers: Headers,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (!trustsForwardedAddress(env)) return "local";
+  const forwarded = headers.get("x-forwarded-for")?.split(",");
+  const last = forwarded?.[forwarded.length - 1]?.trim();
+  return (last || headers.get("x-real-ip")?.trim() || "local").slice(0, 64);
 }
 
 /** Narrow an actor value read from a header, ignoring anything this app did not write. */
 export function parseRequestActor(value: string | null | undefined): RequestActor | undefined {
-	if (value === "local" || value === "password" || value === "recovery") return value;
-	return undefined;
+  if (value === "local" || value === "password" || value === "recovery") return value;
+  return undefined;
 }

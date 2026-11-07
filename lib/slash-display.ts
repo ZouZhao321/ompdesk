@@ -7,7 +7,7 @@
  * 两者都要还原成 `/skill:<名> <参数>` 再显示。
  */
 const SKILL_EXPANSION_RE =
-	/^<skill name="([^"\n]+)" location="([^"\n]+)">\nReferences are relative to [^\n]+\.\n\n([\s\S]*)\n<\/skill>(?:\n\n([\s\S]+))?$/;
+  /^<skill name="([^"\n]+)" location="([^"\n]+)">\nReferences are relative to [^\n]+\.\n\n([\s\S]*)\n<\/skill>(?:\n\n([\s\S]+))?$/;
 
 /**
  * Restore a complete SDK skill expansion to its compact command form.
@@ -19,11 +19,11 @@ const SKILL_EXPANSION_RE =
  * when a skill body contains an example `</skill>` tag.
  */
 export function skillExpansionToCommand(text: string): string | null {
-	const match = text.match(SKILL_EXPANSION_RE);
-	if (!match) return null;
+  const match = text.match(SKILL_EXPANSION_RE);
+  if (!match) return null;
 
-	const [, name, , , args] = match;
-	return args ? `/skill:${name} ${args}` : `/skill:${name}`;
+  const [, name, , , args] = match;
+  return args ? `/skill:${name} ${args}` : `/skill:${name}`;
 }
 
 /** `/skill-prompt` 消息的类型标签，与 SDK 的 `SKILL_PROMPT_MESSAGE_TYPE` 同值。 */
@@ -31,10 +31,10 @@ const SKILL_PROMPT_MESSAGE_TYPE = "skill-prompt";
 
 /** The `SkillPromptDetails` fields that identify what the user asked for. */
 export interface SkillPromptDetailsLike {
-	name?: string;
-	args?: string;
-	/** The draft as submitted, `/skill:<name>` token in place. */
-	prompt?: string;
+  name?: string;
+  args?: string;
+  /** The draft as submitted, `/skill:<name>` token in place. */
+  prompt?: string;
 }
 
 /**
@@ -44,7 +44,7 @@ export interface SkillPromptDetailsLike {
  * `display: false`），只有 `attribution === "user"` 的那条是用户发起的回合。
  */
 export function isUserSkillPrompt(message: { customType?: string; attribution?: string }): boolean {
-	return message.customType === SKILL_PROMPT_MESSAGE_TYPE && message.attribution === "user";
+  return message.customType === SKILL_PROMPT_MESSAGE_TYPE && message.attribution === "user";
 }
 
 /**
@@ -54,8 +54,8 @@ export function isUserSkillPrompt(message: { customType?: string; attribution?: 
  * user typed rather than the skill body wrapped around it.
  */
 export function skillPromptCommandLabel(details: SkillPromptDetailsLike | undefined): string {
-	if (details?.prompt) return details.prompt;
-	if (!details?.name) return "/skill";
-	const args = details.args?.trim();
-	return args ? `/skill:${details.name} ${args}` : `/skill:${details.name}`;
+  if (details?.prompt) return details.prompt;
+  if (!details?.name) return "/skill";
+  const args = details.args?.trim();
+  return args ? `/skill:${details.name} ${args}` : `/skill:${details.name}`;
 }

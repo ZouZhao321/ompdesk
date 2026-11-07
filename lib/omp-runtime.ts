@@ -1,4 +1,9 @@
-import { discoverAuthStorage, getAgentDir, ModelRegistry, Settings } from "@oh-my-pi/pi-coding-agent";
+import {
+  discoverAuthStorage,
+  getAgentDir,
+  ModelRegistry,
+  Settings,
+} from "@oh-my-pi/pi-coding-agent";
 import type { AuthStorage } from "@oh-my-pi/pi-coding-agent";
 
 /**
@@ -14,33 +19,33 @@ import type { AuthStorage } from "@oh-my-pi/pi-coding-agent";
  */
 
 declare global {
-	var __ompRuntimePromise: Promise<OmpRuntime> | undefined;
+  var __ompRuntimePromise: Promise<OmpRuntime> | undefined;
 }
 
 export interface OmpRuntime {
-	agentDir: string;
-	settings: Settings;
-	authStorage: AuthStorage;
-	modelRegistry: ModelRegistry;
+  agentDir: string;
+  settings: Settings;
+  authStorage: AuthStorage;
+  modelRegistry: ModelRegistry;
 }
 
 async function createRuntime(): Promise<OmpRuntime> {
-	const agentDir = getAgentDir();
-	const settings = await Settings.init({ agentDir });
-	const authStorage = await discoverAuthStorage(agentDir);
-	// Pinning the registry to this exact AuthStorage keeps credential_disabled
-	// events flowing to the same instance the routes read from.
-	const modelRegistry = new ModelRegistry(authStorage);
-	await modelRegistry.refresh("online-if-uncached");
-	return { agentDir, settings, authStorage, modelRegistry };
+  const agentDir = getAgentDir();
+  const settings = await Settings.init({ agentDir });
+  const authStorage = await discoverAuthStorage(agentDir);
+  // Pinning the registry to this exact AuthStorage keeps credential_disabled
+  // events flowing to the same instance the routes read from.
+  const modelRegistry = new ModelRegistry(authStorage);
+  await modelRegistry.refresh("online-if-uncached");
+  return { agentDir, settings, authStorage, modelRegistry };
 }
 
 export function getOmpRuntime(): Promise<OmpRuntime> {
-	globalThis.__ompRuntimePromise ??= createRuntime().catch((error) => {
-		globalThis.__ompRuntimePromise = undefined;
-		throw error;
-	});
-	return globalThis.__ompRuntimePromise;
+  globalThis.__ompRuntimePromise ??= createRuntime().catch((error) => {
+    globalThis.__ompRuntimePromise = undefined;
+    throw error;
+  });
+  return globalThis.__ompRuntimePromise;
 }
 
 /**
@@ -51,12 +56,12 @@ export function getOmpRuntime(): Promise<OmpRuntime> {
  * runtime overrides intact.
  */
 export async function getSettingsForCwd(cwd: string | undefined): Promise<Settings> {
-	const { settings } = await getOmpRuntime();
-	if (!cwd || settings.getCwd() === cwd) return settings;
-	return settings.cloneForCwd(cwd);
+  const { settings } = await getOmpRuntime();
+  if (!cwd || settings.getCwd() === cwd) return settings;
+  return settings.cloneForCwd(cwd);
 }
 
 /** Drop the cached runtime so the next request rebuilds it (config/auth edits). */
 export function invalidateOmpRuntime(): void {
-	globalThis.__ompRuntimePromise = undefined;
+  globalThis.__ompRuntimePromise = undefined;
 }

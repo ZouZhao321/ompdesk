@@ -5,8 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, {
-	jsx: { runtime: "automatic" },
-	tsconfigPaths: true,
+  jsx: { runtime: "automatic" },
+  tsconfigPaths: true,
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
@@ -14,140 +14,143 @@ const { ImagePreviewProvider } = await jiti.import("./ImageZoom.tsx");
 const { normalizeDisplayMath } = await jiti.import("../lib/markdown.ts");
 
 function renderMarkdown(markdown, { withPreview = true, sessionId } = {}) {
-	const body = React.createElement(
-		MarkdownBody,
-		{
-			cwd: "/home/me/project",
-			onOpenFile() {},
-			sessionId,
-		},
-		markdown,
-	);
-	const wrapped = withPreview ? React.createElement(ImagePreviewProvider, null, body) : body;
+  const body = React.createElement(
+    MarkdownBody,
+    {
+      cwd: "/home/me/project",
+      onOpenFile() {},
+      sessionId,
+    },
+    markdown,
+  );
+  const wrapped = withPreview ? React.createElement(ImagePreviewProvider, null, body) : body;
 
-	return renderToStaticMarkup(React.createElement(I18nProvider, null, wrapped));
+  return renderToStaticMarkup(React.createElement(I18nProvider, null, wrapped));
 }
 
 test("opens non-file markdown links in a safe new tab", () => {
-	const html = renderMarkdown("[docs](https://example.com/docs)");
+  const html = renderMarkdown("[docs](https://example.com/docs)");
 
-	assert.match(
-		html,
-		/<a (?=[^>]*href="https:\/\/example\.com\/docs")(?=[^>]*target="_blank")(?=[^>]*rel="noopener noreferrer")[^>]*>docs<\/a>/,
-	);
-	assert.doesNotMatch(html, /\snode=/);
+  assert.match(
+    html,
+    /<a (?=[^>]*href="https:\/\/example\.com\/docs")(?=[^>]*target="_blank")(?=[^>]*rel="noopener noreferrer")[^>]*>docs<\/a>/,
+  );
+  assert.doesNotMatch(html, /\snode=/);
 });
 
 test("keeps local file markdown links in the app", () => {
-	const html = renderMarkdown("[file](components/MarkdownBody.tsx)");
+  const html = renderMarkdown("[file](components/MarkdownBody.tsx)");
 
-	assert.match(html, /<a href="components\/MarkdownBody\.tsx">file<\/a>/);
-	assert.doesNotMatch(html, /target=|rel=|\snode=/);
+  assert.match(html, /<a href="components\/MarkdownBody\.tsx">file<\/a>/);
+  assert.doesNotMatch(html, /target=|rel=|\snode=/);
 });
 
 test("keeps single-tilde CJK numeric ranges literal instead of striking them", () => {
-	const html = renderMarkdown("5~7U 保证金 × 100~200倍杠杆");
+  const html = renderMarkdown("5~7U 保证金 × 100~200倍杠杆");
 
-	assert.doesNotMatch(html, /<del>/);
-	assert.match(html, /5~7U/);
-	assert.match(html, /100~200倍/);
+  assert.doesNotMatch(html, /<del>/);
+  assert.match(html, /5~7U/);
+  assert.match(html, /100~200倍/);
 });
 
 test("still renders double-tilde strikethrough", () => {
-	const html = renderMarkdown("~~gone~~");
+  const html = renderMarkdown("~~gone~~");
 
-	assert.match(html, /<del>gone<\/del>/);
+  assert.match(html, /<del>gone<\/del>/);
 });
 
 test("renders LaTeX parenthesis delimiters as inline math", () => {
-	const html = renderMarkdown(String.raw`射线为 \(r_c = K^{-1}p\)。`);
+  const html = renderMarkdown(String.raw`射线为 \(r_c = K^{-1}p\)。`);
 
-	assert.match(html, /class="katex"/);
-	assert.match(html, /r_c/);
+  assert.match(html, /class="katex"/);
+  assert.match(html, /r_c/);
 });
 
 test("renders paired LaTeX bracket delimiters as display math", () => {
-	const html = renderMarkdown(String.raw`\[
+  const html = renderMarkdown(String.raw`\[
 P(\lambda)=o_b+\lambda r_b
 \]`);
-	const oneLineHtml = renderMarkdown(String.raw`\[P(\lambda)=o_b+\lambda r_b\]`);
+  const oneLineHtml = renderMarkdown(String.raw`\[P(\lambda)=o_b+\lambda r_b\]`);
 
-	assert.match(html, /class="katex-display"/);
-	assert.match(html, /lambda/);
-	assert.match(oneLineHtml, /class="katex-display"/);
+  assert.match(html, /class="katex-display"/);
+  assert.match(html, /lambda/);
+  assert.match(oneLineHtml, /class="katex-display"/);
 });
 
 test("leaves an unmatched LaTeX bracket delimiter unchanged", () => {
-	const markdown = String.raw`before
+  const markdown = String.raw`before
 \[
 x + y
 after`;
 
-	assert.equal(normalizeDisplayMath(markdown), markdown);
+  assert.equal(normalizeDisplayMath(markdown), markdown);
 });
 
 test("does not normalize LaTeX delimiters inside Markdown code", () => {
-	const markdown = "    \\(indented\\)\n\n`code\n\\(inline\\)`\n\n```text\n\\[\nfenced\n\\]\n```";
+  const markdown = "    \\(indented\\)\n\n`code\n\\(inline\\)`\n\n```text\n\\[\nfenced\n\\]\n```";
 
-	assert.equal(normalizeDisplayMath(markdown), markdown);
+  assert.equal(normalizeDisplayMath(markdown), markdown);
 });
 
 test("does not normalize LaTeX delimiters inside raw HTML code", () => {
-	const markdown = "<code>\\(inline\\)</code>\n\n<pre>\n\\(block\\)\n</pre>";
+  const markdown = "<code>\\(inline\\)</code>\n\n<pre>\n\\(block\\)\n</pre>";
 
-	assert.equal(normalizeDisplayMath(markdown), markdown);
+  assert.equal(normalizeDisplayMath(markdown), markdown);
 });
 
 test("does not normalize escaped delimiters or link destinations", () => {
-	const escaped = String.raw`Literal: \\(x+y\\).`;
-	const link = String.raw`[docs](https://example.com/\(manual\))`;
+  const escaped = String.raw`Literal: \\(x+y\\).`;
+  const link = String.raw`[docs](https://example.com/\(manual\))`;
 
-	assert.equal(normalizeDisplayMath(escaped), escaped);
-	assert.equal(normalizeDisplayMath(link), link);
+  assert.equal(normalizeDisplayMath(escaped), escaped);
+  assert.equal(normalizeDisplayMath(link), link);
 });
 
 test("renders local markdown images as zoomable images served by the file API", () => {
-	const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)");
+  const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)");
 
-	assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
-	assert.match(html, /alt="shot"/);
-	assert.match(html, /class="markdown-image-zoomable"/);
-	assert.match(html, /loading="lazy"/);
-	assert.doesNotMatch(html, /\snode=/);
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+  assert.match(html, /alt="shot"/);
+  assert.match(html, /class="markdown-image-zoomable"/);
+  assert.match(html, /loading="lazy"/);
+  assert.doesNotMatch(html, /\snode=/);
 });
 
 test("keeps linked images inside their anchor", () => {
-	const html = renderMarkdown("[![shot](/home/me/project/assets/shot.png)](https://example.com)");
+  const html = renderMarkdown("[![shot](/home/me/project/assets/shot.png)](https://example.com)");
 
-	assert.match(
-		html,
-		/<a [^>]*href="https:\/\/example\.com"[^>]*><img [^>]*class="markdown-image-zoomable"[^>]*\/><\/a>/,
-	);
+  assert.match(
+    html,
+    /<a [^>]*href="https:\/\/example\.com"[^>]*><img [^>]*class="markdown-image-zoomable"[^>]*\/><\/a>/,
+  );
 });
 
 test("resolves relative markdown images against the working directory", () => {
-	const html = renderMarkdown("![shot](./assets/shot.png)");
+  const html = renderMarkdown("![shot](./assets/shot.png)");
 
-	assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
 });
 
 test("leaves remote markdown images on their own URL", () => {
-	const html = renderMarkdown("![shot](https://cdn.example.com/shot.png)");
+  const html = renderMarkdown("![shot](https://cdn.example.com/shot.png)");
 
-	assert.match(html, /src="https:\/\/cdn\.example\.com\/shot\.png"/);
-	assert.doesNotMatch(html, /\/api\/files\//);
+  assert.match(html, /src="https:\/\/cdn\.example\.com\/shot\.png"/);
+  assert.doesNotMatch(html, /\/api\/files\//);
 });
 
 test("degrades to plain images when no preview host is mounted", () => {
-	const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)", { withPreview: false });
+  const html = renderMarkdown("![shot](/home/me/project/assets/shot.png)", { withPreview: false });
 
-	assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
-	assert.match(html, /alt="shot"/);
-	assert.doesNotMatch(html, /markdown-image-zoomable/);
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read"/);
+  assert.match(html, /alt="shot"/);
+  assert.doesNotMatch(html, /markdown-image-zoomable/);
 });
 
 test("passes the session id to local image urls", () => {
-	const html = renderMarkdown("![shot](./assets/shot.png)", { sessionId: "sess-1" });
+  const html = renderMarkdown("![shot](./assets/shot.png)", { sessionId: "sess-1" });
 
-	assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read&amp;sessionId=sess-1"/);
+  assert.match(
+    html,
+    /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read&amp;sessionId=sess-1"/,
+  );
 });

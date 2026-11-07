@@ -15,33 +15,33 @@ export const FOLLOW_OBSERVATION_HOLD_MS = RAIL_JUMP_SETTLE_MS * 2 + 500;
 
 /** 改变跟随开关的事件。 */
 export type FollowEvent =
-	/** 提交提问或执行 shell 命令：要看到的就是末尾。 */
-	| { type: "submit" }
-	/** 点了「回到底部」。 */
-	| { type: "resume" }
-	/** 分支/叶子切换：整段消息替换后回到底部。 */
-	| { type: "load" }
-	/** 位置被有意改到别处，例如跳转到某一轮。 */
-	| { type: "pause" }
-	/** 列表报告了一次滚动位置。 */
-	| {
-			type: "scroll";
-			/** 这次滚动是不是用户自己驱动的（滚轮/触摸/指针/方向键）。 */
-			userDriven: boolean;
-			/** 距列表底部的像素。 */
-			distanceFromBottom: number;
-			/**
-			 * scrollTop 是否朝末尾方向增大。内容增高或布局夹取（滚动位置被向下夹）都会
-			 * 改变距底部的距离，但只有朝末尾移动才可能是「用户回到末尾」。
-			 */
-			movedTowardEnd: boolean;
-	  };
+  /** 提交提问或执行 shell 命令：要看到的就是末尾。 */
+  | { type: "submit" }
+  /** 点了「回到底部」。 */
+  | { type: "resume" }
+  /** 分支/叶子切换：整段消息替换后回到底部。 */
+  | { type: "load" }
+  /** 位置被有意改到别处，例如跳转到某一轮。 */
+  | { type: "pause" }
+  /** 列表报告了一次滚动位置。 */
+  | {
+      type: "scroll";
+      /** 这次滚动是不是用户自己驱动的（滚轮/触摸/指针/方向键）。 */
+      userDriven: boolean;
+      /** 距列表底部的像素。 */
+      distanceFromBottom: number;
+      /**
+       * scrollTop 是否朝末尾方向增大。内容增高或布局夹取（滚动位置被向下夹）都会
+       * 改变距底部的距离，但只有朝末尾移动才可能是「用户回到末尾」。
+       */
+      movedTowardEnd: boolean;
+    };
 
 /** 一次事件的结论：写回的跟随状态，以及要执行的滚动。 */
 export interface FollowOutcome {
-	paused: boolean;
-	/** 把视图带到末尾用的滚动方式；null 表示这次事件不碰滚动位置。 */
-	scrollToEnd: "auto" | "smooth" | null;
+  paused: boolean;
+  /** 把视图带到末尾用的滚动方式；null 表示这次事件不碰滚动位置。 */
+  scrollToEnd: "auto" | "smooth" | null;
 }
 
 /**
@@ -60,22 +60,22 @@ export interface FollowOutcome {
  * 把刚停掉的跟随又打开，「回到底部」按钮不再出现。
  */
 export function reduceFollow(event: FollowEvent): FollowOutcome | null {
-	switch (event.type) {
-		case "submit":
-			return { paused: false, scrollToEnd: "auto" };
-		case "resume":
-			return { paused: false, scrollToEnd: "smooth" };
-		case "load":
-			return { paused: false, scrollToEnd: "auto" };
-		case "pause":
-			return { paused: true, scrollToEnd: null };
-		case "scroll": {
-			if (event.movedTowardEnd && event.distanceFromBottom <= FOLLOW_BOTTOM_THRESHOLD_PX) {
-				return { paused: false, scrollToEnd: null };
-			}
-			return event.userDriven && event.distanceFromBottom > FOLLOW_BOTTOM_THRESHOLD_PX
-				? { paused: true, scrollToEnd: null }
-				: null;
-		}
-	}
+  switch (event.type) {
+    case "submit":
+      return { paused: false, scrollToEnd: "auto" };
+    case "resume":
+      return { paused: false, scrollToEnd: "smooth" };
+    case "load":
+      return { paused: false, scrollToEnd: "auto" };
+    case "pause":
+      return { paused: true, scrollToEnd: null };
+    case "scroll": {
+      if (event.movedTowardEnd && event.distanceFromBottom <= FOLLOW_BOTTOM_THRESHOLD_PX) {
+        return { paused: false, scrollToEnd: null };
+      }
+      return event.userDriven && event.distanceFromBottom > FOLLOW_BOTTOM_THRESHOLD_PX
+        ? { paused: true, scrollToEnd: null }
+        : null;
+    }
+  }
 }

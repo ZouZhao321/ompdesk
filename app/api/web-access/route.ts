@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
 import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import {
-	clearWebPassword,
-	getWebAuthStatus,
-	setWebPassword,
-	setWebPasswordEnabled,
-	validatePassword,
+  clearWebPassword,
+  getWebAuthStatus,
+  setWebPassword,
+  setWebPasswordEnabled,
+  validatePassword,
 } from "@/bin/web-auth-store.js";
 import { hasJsonContentType } from "@/lib/request-security";
 import type { WebAccessStatus } from "@/lib/api-types";
@@ -29,84 +29,88 @@ const ACTIONS = new Set<WebAccessAction>(["set-password", "enable", "disable", "
 
 /** Audit names for the credential-store operations, stable for log filtering. */
 const AUDIT_ACTIONS: Record<WebAccessAction, string> = {
-	"set-password": "web-access.password.set",
-	enable: "web-access.password.enable",
-	disable: "web-access.password.disable",
-	clear: "web-access.password.clear",
+  "set-password": "web-access.password.set",
+  enable: "web-access.password.enable",
+  disable: "web-access.password.disable",
+  clear: "web-access.password.clear",
 };
 
 function statusResponse(status: WebAccessStatus) {
-	return NextResponse.json(status, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(status, { headers: { "Cache-Control": "no-store" } });
 }
 
 export const GET = withRequestLog("/api/web-access", getRouteHandler);
 
 async function getRouteHandler() {
-	return statusResponse(getWebAuthStatus());
+  return statusResponse(getWebAuthStatus());
 }
 
 export const PUT = withRequestLog("/api/web-access", async (req: Request) => {
-	if (!hasJsonContentType(req)) {
-		return NextResponse.json({ error: "Expected a JSON body" }, { status: 415 });
-	}
+  if (!hasJsonContentType(req)) {
+    return NextResponse.json({ error: "Expected a JSON body" }, { status: 415 });
+  }
 
-	let body: { action?: unknown; password?: unknown };
-	try {
-		body = (await req.json()) as { action?: unknown; password?: unknown };
-	} catch {
-		return NextResponse.json({ error: "Expected a JSON body" }, { status: 400 });
-	}
+  let body: { action?: unknown; password?: unknown };
+  try {
+    body = (await req.json()) as { action?: unknown; password?: unknown };
+  } catch {
+    return NextResponse.json({ error: "Expected a JSON body" }, { status: 400 });
+  }
 
-	const action = body.action;
-	if (typeof action !== "string" || !ACTIONS.has(action as WebAccessAction)) {
-		return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-	}
-	const auditAction = AUDIT_ACTIONS[action as WebAccessAction];
+  const action = body.action;
+  if (typeof action !== "string" || !ACTIONS.has(action as WebAccessAction)) {
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  }
+  const auditAction = AUDIT_ACTIONS[action as WebAccessAction];
 
-	// `OMPDESK_PASSWORD` overrides the stored credential, so editing the store
-	// while it is set would change nothing a user could observe.
-	if (getWebAuthStatus().managedByEnvironment) {
-		auditFailure(auditAction, "password", { status: 409, reason: "managed-by-environment" });
-		return NextResponse.json(
-			{
-				error: "Password access is managed by the OMPDESK_PASSWORD environment variable. Unset it to manage the password here.",
-			},
-			{ status: 409 },
-		);
-	}
+  // `OMPDESK_PASSWORD` overrides the stored credential, so editing the store
+  // while it is set would change nothing a user could observe.
+  if (getWebAuthStatus().managedByEnvironment) {
+    auditFailure(auditAction, "password", { status: 409, reason: "managed-by-environment" });
+    return NextResponse.json(
+      {
+        error:
+          "Password access is managed by the OMPDESK_PASSWORD environment variable. Unset it to manage the password here.",
+      },
+      { status: 409 },
+    );
+  }
 
-	try {
-		switch (action as WebAccessAction) {
-			case "set-password": {
-				const invalid = validatePassword(body.password);
-				if (invalid) {
-					auditFailure(auditAction, "password", { status: 400, reason: "invalid-password" });
-					return NextResponse.json({ error: invalid }, { status: 400 });
-				}
-				const status = setWebPassword(body.password);
-				auditSuccess(auditAction, "password");
-				return statusResponse(status);
-			}
-			case "enable": {
-				const status = setWebPasswordEnabled(true);
-				auditSuccess(auditAction, "password");
-				return statusResponse(status);
-			}
-			case "disable": {
-				const status = setWebPasswordEnabled(false);
-				auditSuccess(auditAction, "password");
-				return statusResponse(status);
-			}
-			case "clear": {
-				const status = clearWebPassword();
-				auditSuccess(auditAction, "password");
-				return statusResponse(status);
-			}
-			default:
-				return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-		}
-	} catch (error) {
-		auditFailure(auditAction, "password", { status: 400, error });
-		return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
-	}
+  try {
+    switch (action as WebAccessAction) {
+      case "set-password": {
+        const invalid = validatePassword(body.password);
+        if (invalid) {
+          auditFailure(auditAction, "password", { status: 400, reason: "invalid-password" });
+          return NextResponse.json({ error: invalid }, { status: 400 });
+        }
+        const status = setWebPassword(body.password);
+        auditSuccess(auditAction, "password");
+        return statusResponse(status);
+      }
+      case "enable": {
+        const status = setWebPasswordEnabled(true);
+        auditSuccess(auditAction, "password");
+        return statusResponse(status);
+      }
+      case "disable": {
+        const status = setWebPasswordEnabled(false);
+        auditSuccess(auditAction, "password");
+        return statusResponse(status);
+      }
+      case "clear": {
+        const status = clearWebPassword();
+        auditSuccess(auditAction, "password");
+        return statusResponse(status);
+      }
+      default:
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    }
+  } catch (error) {
+    auditFailure(auditAction, "password", { status: 400, error });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 400 },
+    );
+  }
 });

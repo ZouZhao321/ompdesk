@@ -22,34 +22,40 @@ const GIT_LITERAL_RE = /(["'`])git\1/;
  * `execFile(gitBinary, …)` 这种首参存变量的调用反而两边都看不见。
  */
 export const SUBPROCESS_ENTRY_POINTS = Object.freeze([
-	"exec",
-	"execFile",
-	"execFileSync",
-	"execSync",
-	"spawn",
-	"spawnSync",
+  "exec",
+  "execFile",
+  "execFileSync",
+  "execSync",
+  "spawn",
+  "spawnSync",
 ]);
 
 /** 文本预筛：与下面的 AST 规则同形，供调用方在解析前跳过不碰 git 的文件。 */
 export function mentionsGitLiteral(source) {
-	return GIT_LITERAL_RE.test(source);
+  return GIT_LITERAL_RE.test(source);
 }
 
 /** 按扩展名选解析模式，`.tsx` 里的 JSX 与 `.mjs` 里的纯 JS 各自按对应语法解析。 */
 function scriptKindFor(filename) {
-	if (filename.endsWith(".tsx")) return ts.ScriptKind.TSX;
-	if (/\.(mjs|cjs|js|jsx)$/.test(filename)) return ts.ScriptKind.JS;
-	return ts.ScriptKind.TS;
+  if (filename.endsWith(".tsx")) return ts.ScriptKind.TSX;
+  if (/\.(mjs|cjs|js|jsx)$/.test(filename)) return ts.ScriptKind.JS;
+  return ts.ScriptKind.TS;
 }
 
 /** 解析源码；`filename` 只用于选择解析模式与报错定位。 */
 function parseSource(source, filename) {
-	return ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, scriptKindFor(filename));
+  return ts.createSourceFile(
+    filename,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKindFor(filename),
+  );
 }
 
 /** 调用点在源码里的行号（从 1 起），用于报错定位。 */
 function lineOf(sourceFile, node) {
-	return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+  return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
 }
 
 /**
@@ -57,50 +63,52 @@ function lineOf(sourceFile, node) {
  * 那一份。按名字建一张全局表会让后出现的声明盖掉前一份，把没剥离环境的调用判成合规。
  */
 function declarationScopes(sourceFile) {
-	const scopes = new Map();
-	const collect = (node) => {
-		if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-			let scope = node.parent;
-			while (
-				scope &&
-				!ts.isBlock(scope) &&
-				!ts.isSourceFile(scope) &&
-				!ts.isModuleBlock(scope) &&
-				!ts.isCaseBlock(scope)
-			) {
-				scope = scope.parent;
-			}
-			if (scope) {
-				if (!scopes.has(scope)) scopes.set(scope, new Map());
-				scopes.get(scope).set(node.name.text, node);
-			}
-		}
-		ts.forEachChild(node, collect);
-	};
-	collect(sourceFile);
-	return scopes;
+  const scopes = new Map();
+  const collect = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      let scope = node.parent;
+      while (
+        scope &&
+        !ts.isBlock(scope) &&
+        !ts.isSourceFile(scope) &&
+        !ts.isModuleBlock(scope) &&
+        !ts.isCaseBlock(scope)
+      ) {
+        scope = scope.parent;
+      }
+      if (scope) {
+        if (!scopes.has(scope)) scopes.set(scope, new Map());
+        scopes.get(scope).set(node.name.text, node);
+      }
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFile);
+  return scopes;
 }
 
 /** 把 options 参数还原成对象字面量：直接写的字面量，或作用域链上最近的同名变量声明。 */
 function resolveObjectLiteral(node, scopes) {
-	if (!node) return null;
-	if (ts.isObjectLiteralExpression(node)) return node;
-	if (!ts.isIdentifier(node)) return null;
-	for (let scope = node.parent; scope; scope = scope.parent) {
-		const declaration = scopes.get(scope)?.get(node.text);
-		if (declaration) {
-			return ts.isObjectLiteralExpression(declaration.initializer) ? declaration.initializer : null;
-		}
-	}
-	return null;
+  if (!node) return null;
+  if (ts.isObjectLiteralExpression(node)) return node;
+  if (!ts.isIdentifier(node)) return null;
+  for (let scope = node.parent; scope; scope = scope.parent) {
+    const declaration = scopes.get(scope)?.get(node.text);
+    if (declaration) {
+      return ts.isObjectLiteralExpression(declaration.initializer) ? declaration.initializer : null;
+    }
+  }
+  return null;
 }
 
 /**
  * 字面量 `"git"`：普通字符串或无插值的模板字符串。带插值的模板不是字面量，扫不到。
  */
 function isGitLiteral(node) {
-	if (!node) return false;
-	return (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === "git";
+  if (!node) return false;
+  return (
+    (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === "git"
+  );
 }
 
 /**
@@ -108,11 +116,11 @@ function isGitLiteral(node) {
  * 排第二位。取第一个能还原成对象字面量的实参，两种形状都覆盖。
  */
 function findOptionsArgument(call, scopes) {
-	for (const argument of call.arguments.slice(1)) {
-		const objectLiteral = resolveObjectLiteral(argument, scopes);
-		if (objectLiteral) return objectLiteral;
-	}
-	return null;
+  for (const argument of call.arguments.slice(1)) {
+    const objectLiteral = resolveObjectLiteral(argument, scopes);
+    if (objectLiteral) return objectLiteral;
+  }
+  return null;
 }
 
 /**
@@ -120,21 +128,21 @@ function findOptionsArgument(call, scopes) {
  * `filename` 只用于选择解析模式与报错定位。
  */
 export function gitSubprocessCalls(source, filename = "source.ts") {
-	const sourceFile = parseSource(source, filename);
-	const declarations = declarationScopes(sourceFile);
+  const sourceFile = parseSource(source, filename);
+  const declarations = declarationScopes(sourceFile);
 
-	const calls = [];
-	const visit = (node) => {
-		if (ts.isCallExpression(node) && isGitLiteral(node.arguments[0])) {
-			calls.push({
-				line: lineOf(sourceFile, node),
-				options: findOptionsArgument(node, declarations),
-			});
-		}
-		ts.forEachChild(node, visit);
-	};
-	visit(sourceFile);
-	return calls;
+  const calls = [];
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && isGitLiteral(node.arguments[0])) {
+      calls.push({
+        line: lineOf(sourceFile, node),
+        options: findOptionsArgument(node, declarations),
+      });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return calls;
 }
 
 /**
@@ -142,21 +150,21 @@ export function gitSubprocessCalls(source, filename = "source.ts") {
  * 正则字面量的 `.exec` 也落进这段，本守卫只用于 git 子进程模块，误报方向是多数一条。
  */
 function referenceName(node) {
-	if (ts.isIdentifier(node)) return node.text;
-	if (ts.isPropertyAccessExpression(node)) return node.name.text;
-	return null;
+  if (ts.isIdentifier(node)) return node.text;
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  return null;
 }
 
 /** `promisify(execFile)` 与 `promisify(cp.execFile)` 这类把入口包一层的写法。 */
 function isPromisifiedEntry(expression, names) {
-	if (!ts.isCallExpression(expression)) return false;
-	if (referenceName(expression.expression) !== "promisify") return false;
-	return expression.arguments.some((argument) => names.has(referenceName(argument)));
+  if (!ts.isCallExpression(expression)) return false;
+  if (referenceName(expression.expression) !== "promisify") return false;
+  return expression.arguments.some((argument) => names.has(referenceName(argument)));
 }
 
 /** 初始化表达式是否只是入口的别名：`const run = execFile`、`const execFileAsync = promisify(execFile)`。 */
 function aliasesEntryPoint(expression, names) {
-	return names.has(referenceName(expression)) || isPromisifiedEntry(expression, names);
+  return names.has(referenceName(expression)) || isPromisifiedEntry(expression, names);
 }
 
 /**
@@ -164,28 +172,28 @@ function aliasesEntryPoint(expression, names) {
  * `const run = execFileAsync` 也能解析到 `execFile`。
  */
 function entryPointNames(sourceFile) {
-	const names = new Set(SUBPROCESS_ENTRY_POINTS);
-	const declarations = [];
-	const collect = (node) => {
-		if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
-			declarations.push(node);
-		}
-		ts.forEachChild(node, collect);
-	};
-	collect(sourceFile);
+  const names = new Set(SUBPROCESS_ENTRY_POINTS);
+  const declarations = [];
+  const collect = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      declarations.push(node);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFile);
 
-	let added = true;
-	while (added) {
-		added = false;
-		for (const declaration of declarations) {
-			if (names.has(declaration.name.text)) continue;
-			if (aliasesEntryPoint(declaration.initializer, names)) {
-				names.add(declaration.name.text);
-				added = true;
-			}
-		}
-	}
-	return names;
+  let added = true;
+  while (added) {
+    added = false;
+    for (const declaration of declarations) {
+      if (names.has(declaration.name.text)) continue;
+      if (aliasesEntryPoint(declaration.initializer, names)) {
+        names.add(declaration.name.text);
+        added = true;
+      }
+    }
+  }
+  return names;
 }
 
 /**
@@ -195,31 +203,34 @@ function entryPointNames(sourceFile) {
  * 子进程调用点都被扫到，光数扫到的条数挡不住漏扫。
  */
 export function subprocessCallSiteLines(source, filename = "source.ts") {
-	const sourceFile = parseSource(source, filename);
-	const names = entryPointNames(sourceFile);
-	const lines = [];
-	const visit = (node) => {
-		if (ts.isCallExpression(node) && names.has(referenceName(node.expression))) {
-			lines.push(lineOf(sourceFile, node));
-		}
-		ts.forEachChild(node, visit);
-	};
-	visit(sourceFile);
-	return lines;
+  const sourceFile = parseSource(source, filename);
+  const names = entryPointNames(sourceFile);
+  const lines = [];
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && names.has(referenceName(node.expression))) {
+      lines.push(lineOf(sourceFile, node));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return lines;
 }
 
 /** 对象字面量里是否有 `env: createGitEnv()` 属性。 */
 export function hasCreateGitEnvProperty(objectLiteral) {
-	return objectLiteral.properties.some((property) => {
-		if (!ts.isPropertyAssignment(property)) return false;
-		const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : null;
-		return (
-			name === "env" &&
-			ts.isCallExpression(property.initializer) &&
-			ts.isIdentifier(property.initializer.expression) &&
-			property.initializer.expression.text === "createGitEnv"
-		);
-	});
+  return objectLiteral.properties.some((property) => {
+    if (!ts.isPropertyAssignment(property)) return false;
+    const name =
+      ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
+        ? property.name.text
+        : null;
+    return (
+      name === "env" &&
+      ts.isCallExpression(property.initializer) &&
+      ts.isIdentifier(property.initializer.expression) &&
+      property.initializer.expression.text === "createGitEnv"
+    );
+  });
 }
 
 /**
@@ -227,11 +238,11 @@ export function hasCreateGitEnvProperty(objectLiteral) {
  * 由调用方自己断言调用数量，守卫不替它表态。
  */
 export function assertStrippedGitEnv(calls, label) {
-	for (const { line, options } of calls) {
-		assert.ok(options, `${label} 第 ${line} 行的 git 调用必须传 options 对象字面量`);
-		assert.ok(
-			hasCreateGitEnvProperty(options),
-			`${label} 第 ${line} 行的 git 调用要传剥离后的环境 env: createGitEnv()`,
-		);
-	}
+  for (const { line, options } of calls) {
+    assert.ok(options, `${label} 第 ${line} 行的 git 调用必须传 options 对象字面量`);
+    assert.ok(
+      hasCreateGitEnvProperty(options),
+      `${label} 第 ${line} 行的 git 调用要传剥离后的环境 env: createGitEnv()`,
+    );
+  }
 }

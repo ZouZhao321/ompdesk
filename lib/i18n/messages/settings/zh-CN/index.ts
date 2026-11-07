@@ -14,16 +14,19 @@ import { toolsFiles } from "./tools-files";
  * 避免多人在同一份语言包文件里改动。
  */
 export const settingsZhParts: Record<string, Record<string, string>> = {
-	appearance,
-	modelProviders,
-	interactionTasks,
-	toolsFiles,
-	contextMemoryShell,
-	chromeShell,
-	chromeThemes,
-	chromeMcp,
-	chromeAccess,
-	chromeLogs,
+  appearance,
+  modelProviders,
+  interactionTasks,
+  toolsFiles,
+  contextMemoryShell,
+  chromeShell,
+  chromeThemes,
+  chromeMcp,
+  chromeAccess,
+  chromeLogs,
 };
 
-export const settingsZhMessages: Record<string, string> = Object.assign({}, ...Object.values(settingsZhParts));
+export const settingsZhMessages: Record<string, string> = Object.assign(
+  {},
+  ...Object.values(settingsZhParts),
+);

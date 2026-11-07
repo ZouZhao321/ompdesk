@@ -20,21 +20,21 @@ export const MIN_MEMORY_SAMPLE_INTERVAL_MS = 1_000;
 
 /** 一次采样结果。内存数值单位为字节，`uptimeSec` 是进程已运行的秒数。 */
 export interface MemorySample {
-	rss: number;
-	heapTotal: number;
-	heapUsed: number;
-	external: number;
-	arrayBuffers: number;
-	uptimeSec: number;
+  rss: number;
+  heapTotal: number;
+  heapUsed: number;
+  external: number;
+  arrayBuffers: number;
+  uptimeSec: number;
 }
 
 /** `process.memoryUsage()` 的只读子集；Bun 与 Node 都提供这些字段。 */
 export interface MemoryUsageLike {
-	rss: number;
-	heapTotal: number;
-	heapUsed: number;
-	external: number;
-	arrayBuffers?: number;
+  rss: number;
+  heapTotal: number;
+  heapUsed: number;
+  external: number;
+  arrayBuffers?: number;
 }
 
 /**
@@ -45,17 +45,17 @@ export interface MemoryUsageLike {
  * 堆上还是在原生侧。
  */
 export function readMemorySample(
-	usage: MemoryUsageLike = process.memoryUsage(),
-	uptimeSec: number = process.uptime(),
+  usage: MemoryUsageLike = process.memoryUsage(),
+  uptimeSec: number = process.uptime(),
 ): MemorySample {
-	return {
-		rss: Math.round(usage.rss),
-		heapTotal: Math.round(usage.heapTotal),
-		heapUsed: Math.round(usage.heapUsed),
-		external: Math.round(usage.external),
-		arrayBuffers: Math.round(usage.arrayBuffers ?? 0),
-		uptimeSec: Math.round(uptimeSec),
-	};
+  return {
+    rss: Math.round(usage.rss),
+    heapTotal: Math.round(usage.heapTotal),
+    heapUsed: Math.round(usage.heapUsed),
+    external: Math.round(usage.external),
+    arrayBuffers: Math.round(usage.arrayBuffers ?? 0),
+    uptimeSec: Math.round(uptimeSec),
+  };
 }
 
 /**
@@ -64,45 +64,52 @@ export function readMemorySample(
  * `OMPDESK_MEMORY_SAMPLE_MS` 为 `0` 时关闭采样；空的、非数字、负数与短于
  * `MIN_MEMORY_SAMPLE_INTERVAL_MS` 的值一律按未配置处理，返回默认间隔。
  */
-export function resolveMemorySampleIntervalMs(env: NodeJS.ProcessEnv = process.env): number | undefined {
-	const raw = env[MEMORY_SAMPLE_INTERVAL_ENV]?.trim();
-	if (!raw) return DEFAULT_MEMORY_SAMPLE_INTERVAL_MS;
-	const value = Number(raw);
-	if (!Number.isFinite(value)) return DEFAULT_MEMORY_SAMPLE_INTERVAL_MS;
-	if (value === 0) return undefined;
-	if (value < MIN_MEMORY_SAMPLE_INTERVAL_MS) return DEFAULT_MEMORY_SAMPLE_INTERVAL_MS;
-	return Math.round(value);
+export function resolveMemorySampleIntervalMs(
+  env: NodeJS.ProcessEnv = process.env,
+): number | undefined {
+  const raw = env[MEMORY_SAMPLE_INTERVAL_ENV]?.trim();
+  if (!raw) return DEFAULT_MEMORY_SAMPLE_INTERVAL_MS;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return DEFAULT_MEMORY_SAMPLE_INTERVAL_MS;
+  if (value === 0) return undefined;
+  if (value < MIN_MEMORY_SAMPLE_INTERVAL_MS) return DEFAULT_MEMORY_SAMPLE_INTERVAL_MS;
+  return Math.round(value);
 }
 
 /** 定时器来源；测试用假实现驱动采样，不依赖真实时间。 */
 export interface MemoryMonitorClock {
-	setInterval(callback: () => void, intervalMs: number): unknown;
-	clearInterval(handle: unknown): void;
+  setInterval(callback: () => void, intervalMs: number): unknown;
+  clearInterval(handle: unknown): void;
 }
 
 const defaultClock: MemoryMonitorClock = {
-	setInterval(callback, intervalMs) {
-		const handle: unknown = setInterval(callback, intervalMs);
-		// 采样器不应以自身的理由阻止进程退出。Bun 与 Node 的定时器都带 `unref`。
-		if (handle && typeof handle === "object" && "unref" in handle && typeof handle.unref === "function") {
-			handle.unref();
-		}
-		return handle;
-	},
-	clearInterval(handle) {
-		clearInterval(handle as NodeJS.Timeout);
-	},
+  setInterval(callback, intervalMs) {
+    const handle: unknown = setInterval(callback, intervalMs);
+    // 采样器不应以自身的理由阻止进程退出。Bun 与 Node 的定时器都带 `unref`。
+    if (
+      handle &&
+      typeof handle === "object" &&
+      "unref" in handle &&
+      typeof handle.unref === "function"
+    ) {
+      handle.unref();
+    }
+    return handle;
+  },
+  clearInterval(handle) {
+    clearInterval(handle as NodeJS.Timeout);
+  },
 };
 
 export interface MemoryMonitorOptions {
-	/** 接收每次采样；异常由调用方承担，采样器不重试。 */
-	emit: (sample: MemorySample, intervalMs: number) => void;
-	/** 采样间隔；缺省时读 `OMPDESK_MEMORY_SAMPLE_MS`。 */
-	intervalMs?: number;
-	/** 解析间隔时使用的环境变量，默认 `process.env`。 */
-	env?: NodeJS.ProcessEnv;
-	/** 定时器实现，默认使用全局定时器。 */
-	clock?: MemoryMonitorClock;
+  /** 接收每次采样；异常由调用方承担，采样器不重试。 */
+  emit: (sample: MemorySample, intervalMs: number) => void;
+  /** 采样间隔；缺省时读 `OMPDESK_MEMORY_SAMPLE_MS`。 */
+  intervalMs?: number;
+  /** 解析间隔时使用的环境变量，默认 `process.env`。 */
+  env?: NodeJS.ProcessEnv;
+  /** 定时器实现，默认使用全局定时器。 */
+  clock?: MemoryMonitorClock;
 }
 
 /**
@@ -112,8 +119,8 @@ export interface MemoryMonitorOptions {
 const MONITOR_STATE = Symbol.for("ompdesk.memory-monitor");
 
 interface RunningMonitor {
-	handle: unknown;
-	clock: MemoryMonitorClock;
+  handle: unknown;
+  clock: MemoryMonitorClock;
 }
 
 const monitorState = globalThis as unknown as Record<symbol, RunningMonitor | undefined>;
@@ -124,22 +131,22 @@ const monitorState = globalThis as unknown as Record<symbol, RunningMonitor | un
  * 已经在运行、或间隔被关闭时返回 `false`。
  */
 export function startMemoryMonitor(options: MemoryMonitorOptions): boolean {
-	if (monitorState[MONITOR_STATE]) return false;
-	const intervalMs = options.intervalMs ?? resolveMemorySampleIntervalMs(options.env);
-	if (intervalMs === undefined) return false;
+  if (monitorState[MONITOR_STATE]) return false;
+  const intervalMs = options.intervalMs ?? resolveMemorySampleIntervalMs(options.env);
+  if (intervalMs === undefined) return false;
 
-	const clock = options.clock ?? defaultClock;
-	const emit = () => options.emit(readMemorySample(), intervalMs);
-	// 先登记再采样：emit 内部的日志写入可能再次触发启动路径。
-	monitorState[MONITOR_STATE] = { handle: clock.setInterval(emit, intervalMs), clock };
-	emit();
-	return true;
+  const clock = options.clock ?? defaultClock;
+  const emit = () => options.emit(readMemorySample(), intervalMs);
+  // 先登记再采样：emit 内部的日志写入可能再次触发启动路径。
+  monitorState[MONITOR_STATE] = { handle: clock.setInterval(emit, intervalMs), clock };
+  emit();
+  return true;
 }
 
 /** 停止采样；没有运行中的采样器时什么也不做。 */
 export function stopMemoryMonitor(): void {
-	const running = monitorState[MONITOR_STATE];
-	if (!running) return;
-	monitorState[MONITOR_STATE] = undefined;
-	running.clock.clearInterval(running.handle);
+  const running = monitorState[MONITOR_STATE];
+  if (!running) return;
+  monitorState[MONITOR_STATE] = undefined;
+  running.clock.clearInterval(running.handle);
 }

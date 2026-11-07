@@ -31,17 +31,17 @@ const AUTHORITY_BREAK = /[/?#]/;
  *    out of the match.
  */
 const URL_PATTERN =
-	/[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+|\/\/[^\s"'<>/]+(?:[/?#][^\s"'<>]*)?|[A-Za-z0-9._%+-]+:[^\s"'<>/@]+@[^\s"'<>]+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?\/[^\s"'<>]*\?[^\s"'<>]*/gi;
+  /[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+|\/\/[^\s"'<>/]+(?:[/?#][^\s"'<>]*)?|[A-Za-z0-9._%+-]+:[^\s"'<>/@]+@[^\s"'<>]+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?\/[^\s"'<>]*\?[^\s"'<>]*/gi;
 
 /** Keep query keys but drop every value, matching what `URL` serialization would produce. */
 function redactQueryValues(query: string): string {
-	return query
-		.split("&")
-		.map((pair) => {
-			const equals = pair.indexOf("=");
-			return equals === -1 ? pair : `${pair.slice(0, equals)}=${REDACTED}`;
-		})
-		.join("&");
+  return query
+    .split("&")
+    .map((pair) => {
+      const equals = pair.indexOf("=");
+      return equals === -1 ? pair : `${pair.slice(0, equals)}=${REDACTED}`;
+    })
+    .join("&");
 }
 
 /**
@@ -50,53 +50,55 @@ function redactQueryValues(query: string): string {
  * up to the first `/`, `?`, or `#`; userinfo is everything before the last `@`.
  */
 function redactLooseUrl(raw: string): string {
-	const fragmentIndex = raw.indexOf("#");
-	const withoutFragment = fragmentIndex === -1 ? raw : raw.slice(0, fragmentIndex);
-	const queryIndex = withoutFragment.indexOf("?");
-	const beforeQuery = queryIndex === -1 ? withoutFragment : withoutFragment.slice(0, queryIndex);
-	const query = queryIndex === -1 ? null : withoutFragment.slice(queryIndex + 1);
+  const fragmentIndex = raw.indexOf("#");
+  const withoutFragment = fragmentIndex === -1 ? raw : raw.slice(0, fragmentIndex);
+  const queryIndex = withoutFragment.indexOf("?");
+  const beforeQuery = queryIndex === -1 ? withoutFragment : withoutFragment.slice(0, queryIndex);
+  const query = queryIndex === -1 ? null : withoutFragment.slice(queryIndex + 1);
 
-	if (OPAQUE_SCHEME.test(beforeQuery)) {
-		// `mailto:`, `tel:` and `urn:` have no authority, so an `@` here is part
-		// of the address rather than userinfo. Keep the opaque value and only
-		// redact the query values.
-		return query === null ? beforeQuery : `${beforeQuery}?${redactQueryValues(query)}`;
-	}
+  if (OPAQUE_SCHEME.test(beforeQuery)) {
+    // `mailto:`, `tel:` and `urn:` have no authority, so an `@` here is part
+    // of the address rather than userinfo. Keep the opaque value and only
+    // redact the query values.
+    return query === null ? beforeQuery : `${beforeQuery}?${redactQueryValues(query)}`;
+  }
 
-	const scheme = SCHEME_PREFIX.exec(beforeQuery);
-	const authorityStart = scheme ? scheme[0].length : beforeQuery.startsWith("//") ? 2 : 0;
-	const prefix = beforeQuery.slice(0, authorityStart);
-	const rest = beforeQuery.slice(authorityStart);
-	const breakIndex = rest.search(AUTHORITY_BREAK);
-	const authority = breakIndex === -1 ? rest : rest.slice(0, breakIndex);
-	const tail = breakIndex === -1 ? "" : rest.slice(breakIndex);
-	const at = authority.lastIndexOf("@");
-	const head = `${prefix}${at === -1 ? authority : authority.slice(at + 1)}${tail}`;
+  const scheme = SCHEME_PREFIX.exec(beforeQuery);
+  const authorityStart = scheme ? scheme[0].length : beforeQuery.startsWith("//") ? 2 : 0;
+  const prefix = beforeQuery.slice(0, authorityStart);
+  const rest = beforeQuery.slice(authorityStart);
+  const breakIndex = rest.search(AUTHORITY_BREAK);
+  const authority = breakIndex === -1 ? rest : rest.slice(0, breakIndex);
+  const tail = breakIndex === -1 ? "" : rest.slice(breakIndex);
+  const at = authority.lastIndexOf("@");
+  const head = `${prefix}${at === -1 ? authority : authority.slice(at + 1)}${tail}`;
 
-	return query === null ? head : `${head}?${redactQueryValues(query)}`;
+  return query === null ? head : `${head}?${redactQueryValues(query)}`;
 }
 
 /** Strip userinfo, query values, and fragments from one URL of any supported form. */
 function redactUrl(raw: string): string {
-	const protocolRelative = raw.startsWith("//");
-	if (!protocolRelative && !SCHEME_PREFIX.test(raw)) return redactLooseUrl(raw);
-	try {
-		const url = new URL(raw, protocolRelative ? URL_BASE : undefined);
-		url.username = "";
-		url.password = "";
-		url.hash = "";
-		// Rebuild the query instead of `set`-ing each key: `set` collapses a
-		// repeated parameter (`?a=1&a=2`) into one, which loses the recorded URL's
-		// shape. This keeps every key and its order, with only values redacted.
-		url.search = new URLSearchParams([...url.searchParams].map(([key]) => [key, REDACTED])).toString();
-		const rendered = url.toString();
-		return protocolRelative ? rendered.replace(PROTOCOL_PREFIX, "") : rendered;
-	} catch {
-		return redactLooseUrl(raw);
-	}
+  const protocolRelative = raw.startsWith("//");
+  if (!protocolRelative && !SCHEME_PREFIX.test(raw)) return redactLooseUrl(raw);
+  try {
+    const url = new URL(raw, protocolRelative ? URL_BASE : undefined);
+    url.username = "";
+    url.password = "";
+    url.hash = "";
+    // Rebuild the query instead of `set`-ing each key: `set` collapses a
+    // repeated parameter (`?a=1&a=2`) into one, which loses the recorded URL's
+    // shape. This keeps every key and its order, with only values redacted.
+    url.search = new URLSearchParams(
+      [...url.searchParams].map(([key]) => [key, REDACTED]),
+    ).toString();
+    const rendered = url.toString();
+    return protocolRelative ? rendered.replace(PROTOCOL_PREFIX, "") : rendered;
+  } catch {
+    return redactLooseUrl(raw);
+  }
 }
 
 /** Redact every URL embedded in free text (targets, detail strings, error messages). */
 export function redactUrlsIn(value: string): string {
-	return value.replace(URL_PATTERN, (match) => redactUrl(match));
+  return value.replace(URL_PATTERN, (match) => redactUrl(match));
 }

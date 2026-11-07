@@ -10,5 +10,5 @@
  * Bun, so the module is loaded by the runtime that is actually executing.
  */
 export function importRuntimeModule<T>(specifier: string): Promise<T> {
-	return import(/* webpackIgnore: true */ specifier) as Promise<T>;
+  return import(/* webpackIgnore: true */ specifier) as Promise<T>;
 }

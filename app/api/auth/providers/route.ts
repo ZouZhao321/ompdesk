@@ -9,6 +9,6 @@ export const dynamic = "force-dynamic";
 export const GET = withRequestLog("/api/auth/providers", getRouteHandler);
 
 async function getRouteHandler() {
-	const providers = buildOAuthProviderList(await collectProviderListingInputs());
-	return Response.json({ providers });
+  const providers = buildOAuthProviderList(await collectProviderListingInputs());
+  return Response.json({ providers });
 }

@@ -18,74 +18,77 @@ import type { SessionInfo } from "./types";
 const STORAGE_KEY = "pi-web:last-open-by-workspace";
 
 interface StorageLike {
-	getItem(key: string): string | null;
-	setItem(key: string, value: string): void;
-	removeItem(key: string): void;
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
 }
 
 function getBrowserStorage(): StorageLike | null {
-	if (typeof window === "undefined") return null;
-	try {
-		return window.localStorage;
-	} catch {
-		return null;
-	}
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function readMap(storage: StorageLike): Record<string, string | undefined> {
-	const raw = storage.getItem(STORAGE_KEY);
-	if (!raw) return {};
-	try {
-		const parsed: unknown = JSON.parse(raw);
-		return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
-			? (parsed as Record<string, string | undefined>)
-			: {};
-	} catch {
-		return {};
-	}
+  const raw = storage.getItem(STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, string | undefined>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 /** The remembered session id for a workspace, or null when none/stale. */
 export function getLastOpenSession(
-	workspaceKey: string,
-	storage: StorageLike | null = getBrowserStorage(),
+  workspaceKey: string,
+  storage: StorageLike | null = getBrowserStorage(),
 ): string | null {
-	if (!storage) return null;
-	try {
-		const id = readMap(storage)[workspaceKey];
-		return typeof id === "string" && id.length > 0 ? id : null;
-	} catch {
-		return null;
-	}
+  if (!storage) return null;
+  try {
+    const id = readMap(storage)[workspaceKey];
+    return typeof id === "string" && id.length > 0 ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 export function setLastOpenSession(
-	workspaceKey: string,
-	sessionId: string,
-	storage: StorageLike | null = getBrowserStorage(),
+  workspaceKey: string,
+  sessionId: string,
+  storage: StorageLike | null = getBrowserStorage(),
 ): void {
-	if (!storage) return;
-	try {
-		const map = readMap(storage);
-		map[workspaceKey] = sessionId;
-		storage.setItem(STORAGE_KEY, JSON.stringify(map));
-	} catch {
-		// storage unavailable — memory is best-effort
-	}
+  if (!storage) return;
+  try {
+    const map = readMap(storage);
+    map[workspaceKey] = sessionId;
+    storage.setItem(STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // storage unavailable — memory is best-effort
+  }
 }
 
-export function clearLastOpen(workspaceKey: string, storage: StorageLike | null = getBrowserStorage()): void {
-	if (!storage) return;
-	try {
-		const map = readMap(storage);
-		if (!(workspaceKey in map)) return;
-		delete map[workspaceKey];
-		// Keep the store clean: drop the key entirely when nothing is remembered.
-		if (Object.keys(map).length === 0) storage.removeItem(STORAGE_KEY);
-		else storage.setItem(STORAGE_KEY, JSON.stringify(map));
-	} catch {
-		// ignore
-	}
+export function clearLastOpen(
+  workspaceKey: string,
+  storage: StorageLike | null = getBrowserStorage(),
+): void {
+  if (!storage) return;
+  try {
+    const map = readMap(storage);
+    if (!(workspaceKey in map)) return;
+    delete map[workspaceKey];
+    // Keep the store clean: drop the key entirely when nothing is remembered.
+    if (Object.keys(map).length === 0) storage.removeItem(STORAGE_KEY);
+    else storage.setItem(STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
 }
 
 // A single per-tab continuation survives refresh without aliasing history in
@@ -93,68 +96,69 @@ export function clearLastOpen(workspaceKey: string, storage: StorageLike | null 
 const CONTINUATION_KEY = "pi-web:active-runtime";
 
 function getTabStorage(): StorageLike | null {
-	if (typeof window === "undefined") return null;
-	try {
-		return window.sessionStorage;
-	} catch {
-		return null;
-	}
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 export function getSessionContinuation(
-	sessionId: string,
-	storage: StorageLike | null = getTabStorage(),
+  sessionId: string,
+  storage: StorageLike | null = getTabStorage(),
 ): string | undefined {
-	try {
-		const record = JSON.parse(storage?.getItem(CONTINUATION_KEY) ?? "null");
-		return record?.sessionId === sessionId &&
-			typeof record.runtimeId === "string" &&
-			record.runtimeId.startsWith("runtime:")
-			? record.runtimeId
-			: undefined;
-	} catch {
-		return undefined;
-	}
+  try {
+    const record = JSON.parse(storage?.getItem(CONTINUATION_KEY) ?? "null");
+    return record?.sessionId === sessionId &&
+      typeof record.runtimeId === "string" &&
+      record.runtimeId.startsWith("runtime:")
+      ? record.runtimeId
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function rememberSessionContinuation(
-	sessionId: string,
-	runtimeId: string,
-	storage: StorageLike | null = getTabStorage(),
+  sessionId: string,
+  runtimeId: string,
+  storage: StorageLike | null = getTabStorage(),
 ): void {
-	try {
-		storage?.setItem(CONTINUATION_KEY, JSON.stringify({ sessionId, runtimeId }));
-	} catch {
-		/* Storage is optional. */
-	}
+  try {
+    storage?.setItem(CONTINUATION_KEY, JSON.stringify({ sessionId, runtimeId }));
+  } catch {
+    /* Storage is optional. */
+  }
 }
 
 export function clearSessionContinuation(
-	storage: StorageLike | null = getTabStorage(),
-	expectedRuntimeId?: string,
+  storage: StorageLike | null = getTabStorage(),
+  expectedRuntimeId?: string,
 ): void {
-	try {
-		if (
-			expectedRuntimeId &&
-			JSON.parse(storage?.getItem(CONTINUATION_KEY) ?? "null")?.runtimeId !== expectedRuntimeId
-		)
-			return;
-		storage?.removeItem(CONTINUATION_KEY);
-	} catch {
-		/* Storage is optional. */
-	}
+  try {
+    if (
+      expectedRuntimeId &&
+      JSON.parse(storage?.getItem(CONTINUATION_KEY) ?? "null")?.runtimeId !== expectedRuntimeId
+    )
+      return;
+    storage?.removeItem(CONTINUATION_KEY);
+  } catch {
+    /* Storage is optional. */
+  }
 }
 
 /** Resolve a saved tab continuation before requiring its old history row. */
 export function restoreSessionContinuation(
-	sessionId: string,
-	sessions: SessionInfo[],
-	sessionIdsByRuntimeId: Record<string, string> = {},
-	storage: StorageLike | null = getTabStorage(),
+  sessionId: string,
+  sessions: SessionInfo[],
+  sessionIdsByRuntimeId: Record<string, string> = {},
+  storage: StorageLike | null = getTabStorage(),
 ): SessionInfo | undefined {
-	const runtimeId = getSessionContinuation(sessionId, storage);
-	const canonicalId = runtimeId ? (sessionIdsByRuntimeId[runtimeId] ?? sessionId) : sessionId;
-	const session =
-		sessions.find((entry) => entry.id === canonicalId) ?? sessions.find((entry) => entry.id === sessionId);
-	return session ? { ...session, id: canonicalId, runtimeId } : undefined;
+  const runtimeId = getSessionContinuation(sessionId, storage);
+  const canonicalId = runtimeId ? (sessionIdsByRuntimeId[runtimeId] ?? sessionId) : sessionId;
+  const session =
+    sessions.find((entry) => entry.id === canonicalId) ??
+    sessions.find((entry) => entry.id === sessionId);
+  return session ? { ...session, id: canonicalId, runtimeId } : undefined;
 }

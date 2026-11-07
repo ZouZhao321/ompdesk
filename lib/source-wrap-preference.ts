@@ -6,18 +6,18 @@ let wrapLines = false;
 const listeners = new Set<() => void>();
 
 export function getSourceWrapLines(): boolean {
-	return wrapLines;
+  return wrapLines;
 }
 
 export function setSourceWrapLines(next: boolean): void {
-	if (next === wrapLines) return;
-	wrapLines = next;
-	for (const listener of [...listeners]) listener();
+  if (next === wrapLines) return;
+  wrapLines = next;
+  for (const listener of [...listeners]) listener();
 }
 
 export function subscribeSourceWrapLines(listener: () => void): () => void {
-	listeners.add(listener);
-	return () => {
-		listeners.delete(listener);
-	};
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
