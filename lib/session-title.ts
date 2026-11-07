@@ -67,6 +67,7 @@ function skillPromptText(message: AgentMessage): string | undefined {
   if (message.role !== "custom") return undefined;
   const custom = message as {
     customType?: string;
+    attribution?: string;
     details?: SkillPromptDetailsLike;
   };
   if (!isUserSkillPrompt(custom)) return undefined;

@@ -37,12 +37,6 @@ export interface SkillPromptDetailsLike {
 }
 
 /**
- * Compact command label for a stored `skill-prompt` custom message.
- *
- * The transcript row, session title, and list preview all show the command the
- * user typed rather than the skill body wrapped around it.
- */
-/**
  * 用户手动调用的技能指令。
  *
  * SDK 用同一个 `skill-prompt` 类型记录自动加载的技能（`attribution: "agent"`、
@@ -55,6 +49,12 @@ export function isUserSkillPrompt(message: {
   return message.customType === SKILL_PROMPT_MESSAGE_TYPE && message.attribution === "user";
 }
 
+/**
+ * Compact command label for a stored `skill-prompt` custom message.
+ *
+ * The transcript row, session title, and list preview all show the command the
+ * user typed rather than the skill body wrapped around it.
+ */
 export function skillPromptCommandLabel(details: SkillPromptDetailsLike | undefined): string {
   if (details?.prompt) return details.prompt;
   if (!details?.name) return "/skill";

@@ -706,9 +706,10 @@ export class AgentSessionWrapper {
           queueChipText: text,
         },
       );
-      // SDK 丢掉提交（会话被其它提交占用）时它返回 false，此时不能假装送达。
-      if (!delivered) this.announceSkillFallback("dropped", skill.name);
-      return delivered;
+      if (delivered) return true;
+      // 会话被别的提交占用时 SDK 返回 false：按普通消息重发，别让指令凭空消失。
+      this.announceSkillFallback("dropped", skill.name);
+      return fallback();
     })();
   }
 
@@ -1950,6 +1951,17 @@ function runtimeMessageActivityMs(entry: SessionMessageEntry): number | undefine
   return Number.isNaN(timestamp) ? undefined : timestamp;
 }
 
+/** 第一轮发言的预览文本：技能指令取命令行，普通消息取正文。 */
+function runtimeFirstMessage(
+  entry: { type: string; details?: unknown } | SessionMessageEntry | undefined,
+): string {
+  if (!entry) return "(no messages)";
+  if (entry.type === "custom_message") {
+    return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+  }
+  return runtimeMessageText(entry as SessionMessageEntry) || "(no messages)";
+}
+
 /**
  * Return live sessions that should be visible in the session list. Pi delays
  * the first JSONL flush until an assistant message exists, so an accepted new
@@ -1966,17 +1978,20 @@ export function getRpcSessionInfos(): SessionInfo[] {
       { type: string; timestamp: string } | SessionMessageEntry
     >;
     const messages = entries.filter((entry): entry is SessionMessageEntry => entry.type === "message");
-    // 技能指令落盘为 custom_message，不在 messages 里，但它是用户发起的回合。
-    const firstSkillMessage = entries.find(
-      (entry) => entry.type === "custom_message" && isUserSkillPrompt(entry as { customType?: string; attribution?: string }),
-    ) as { details?: unknown } | undefined;
-    const firstUserMessage = messages.find((entry) => isUserTurnEntry(entry));
+    // 按落盘顺序取第一条用户回合：技能指令是 custom_message，普通提问是 message。
+    // 两者混在一份列表里时，先出现的那条才决定标题与预览。
+    const firstTurn = entries.find((entry) => (
+      entry.type === "message"
+        ? isUserTurnEntry(entry as SessionMessageEntry)
+        : entry.type === "custom_message"
+          && isUserSkillPrompt(entry as { customType?: string; attribution?: string })
+    ));
     const sessionFile = manager.getSessionFile() ?? session.sessionFile;
     const persisted = Boolean(sessionFile && existsSync(sessionFile));
 
     // An ensure_session call creates an idle, empty runtime while the composer
     // loads commands. Do not leak it into history before a prompt is accepted.
-    if (!persisted && (!session.isRunning() || (!firstUserMessage && !firstSkillMessage))) continue;
+    if (!persisted && (!session.isRunning() || !firstTurn)) continue;
 
     const created = header?.timestamp
       ?? entries[0]?.timestamp
@@ -1996,11 +2011,7 @@ export function getRpcSessionInfos(): SessionInfo[] {
       created,
       modified: new Date(lastActivityMs).toISOString(),
       messageCount: messages.length,
-      firstMessage: firstUserMessage
-        ? runtimeMessageText(firstUserMessage) || "(no messages)"
-        : firstSkillMessage
-          ? skillPromptCommandLabel(firstSkillMessage.details as SkillPromptDetailsLike | undefined)
-          : "(no messages)",
+      firstMessage: runtimeFirstMessage(firstTurn),
       transient: !persisted,
     });
   }

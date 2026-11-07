@@ -47,38 +47,73 @@ export function mergeSessionLists(
   return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
 }
 
-/** 首条消息扫描的读取上限：足以覆盖会话开头的标题、模型与首轮消息。 */
-const FIRST_MESSAGE_SCAN_BYTES = 8 * 1024;
+/** 首条消息扫描的上限：技能正文可能很长，按块读满这个额度为止。 */
+const FIRST_MESSAGE_SCAN_BYTES = 1024 * 1024;
+const FIRST_MESSAGE_SCAN_CHUNK = 64 * 1024;
 
 /**
  * `/skill:name args` when a session opens with a user-invoked skill command.
  *
  * omp 的列表只认 `message` 条目：技能指令落盘为 `custom_message`，要么被读成
- * 「没有消息」，要么被下一条助手回复顶替，两种都不该拿来当标题。这里只读文件
- * 开头一段，遇到真正的用户或助手消息就停，因此普通会话只多一次小读。
+ * 「没有消息」，要么被下一条助手回复顶替，两种都不该拿来当标题。这里按行读到
+ * 第一条用户回合为止，不按固定字节窗口截断（技能正文常常超过窗口）。
+ * 坏文件只丢一个标题：读取或解析失败一律按「没有首条消息」处理。
  */
-async function readLeadingSkillCommand(filePath: string): Promise<string | undefined> {
+function readLeadingSkillCommand(filePath: string): string | undefined {
   if (!existsSync(filePath)) return undefined;
-  const handle = openSync(filePath, "r");
+  let handle: number;
   try {
-    const buffer = Buffer.allocUnsafe(FIRST_MESSAGE_SCAN_BYTES);
-    const bytesRead = readSync(handle, buffer, 0, buffer.length, 0);
-    const lines = buffer.subarray(0, bytesRead).toString("utf8").split("\n");
-    // 末行可能被截断，丢弃它以免把半条记录当成完整 JSON。
-    lines.pop();
-    for (const line of lines) {
-      if (!line.includes('"custom_message"') && !line.includes('"message"')) continue;
-      const entry = JSON.parse(line) as
-        | { type: string; customType?: string; attribution?: string; details?: unknown; message?: { role?: string } };
-      if (entry.type === "custom_message" && isUserSkillPrompt(entry)) {
-        return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
-      }
-      if (entry.type === "message" && entry.message?.role !== "bashExecution") return undefined;
+    handle = openSync(filePath, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const chunk = Buffer.allocUnsafe(FIRST_MESSAGE_SCAN_CHUNK);
+    let carry = "";
+    let offset = 0;
+    while (offset < FIRST_MESSAGE_SCAN_BYTES) {
+      const bytesRead = readSync(handle, chunk, 0, chunk.length, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+      const lines = (carry + chunk.subarray(0, bytesRead).toString("utf8")).split("\n");
+      carry = lines.pop() ?? "";
+      const verdict = inspectLeadingLines(lines);
+      if (verdict !== undefined) return verdict ?? undefined;
     }
+    return inspectLeadingLines([carry]) ?? undefined;
+  } catch {
     return undefined;
   } finally {
     closeSync(handle);
   }
+}
+
+/**
+ * `undefined`：还没遇到用户回合，继续读；`null`：遇到用户或助手消息，停止；
+ * 字符串：命令行标签。
+ */
+function inspectLeadingLines(lines: readonly string[]): string | null | undefined {
+  for (const line of lines) {
+    if (!line.includes('"type"')) continue;
+    let entry: {
+      type?: string;
+      customType?: string;
+      attribution?: string;
+      details?: unknown;
+      message?: { role?: string };
+    };
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      // 半条记录或外部生成的历史文件：跳过这一行，不影响其它会话。
+      continue;
+    }
+    if (entry.type === "custom_message" && isUserSkillPrompt(entry)) {
+      return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+    }
+    if (entry.type === "message" && entry.message?.role !== "bashExecution") return null;
+  }
+  return undefined;
 }
 
 async function loadAllSessions(): Promise<SessionInfo[]> {
@@ -93,7 +128,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   const sessions = await Promise.all(ompSessions.map(async (s) => {
     cacheSessionPath(s.id, s.path);
     const listedFirstMessage = s.firstMessage || "(no messages)";
-    const skillCommand = await readLeadingSkillCommand(s.path);
+    const skillCommand = readLeadingSkillCommand(s.path);
     return {
       path: s.path,
       id: s.id,

@@ -126,12 +126,12 @@ const BRANCH_FORK_USER_TEXTS = [
 const SUBAGENT_USER_TEXT = "伪造会话 subagent 的用户消息";
 const SUBAGENT_ASSISTANT_TEXT = "伪造会话 subagent 的助手回复";
 // 子会话标题带 Sub 前缀，侧栏据此折叠子代理会话。
+const SUBAGENT_TITLE_PREFIX = "Sub ";
+// 技能正文只存在于 custom_message 里，标题与预览要显示用户敲的指令。
 const SKILL_COMMAND_NAME = "demo-skill";
 const SKILL_COMMAND_ARGS = "只回复第一句";
 const SKILL_COMMAND_PROMPT = `/skill:${SKILL_COMMAND_NAME} ${SKILL_COMMAND_ARGS}`;
-// 技能正文只存在于 custom_message 里，标题与预览要显示用户敲的指令。
 const SKILL_COMMAND_BODY = "用户调用了 demo-skill，照它写的流程执行。";
-const SUBAGENT_TITLE_PREFIX = "Sub ";
 // 子会话消息相对父会话逐条递增，读回时顺序不依赖文件写入时序。
 const CHILD_MESSAGE_OFFSET_MS = 1000;
 

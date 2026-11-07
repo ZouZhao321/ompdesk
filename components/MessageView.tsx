@@ -1900,8 +1900,10 @@ function SkillPromptMessageView({ message, cwd, onOpenFile, sessionId }: { messa
             >
               {command}
             </code>
+            {(body || images.length > 0) && (
             <button
               onClick={() => setExpanded((value) => !value)}
+              aria-expanded={expanded}
               className="message-action-button"
               style={{
                 marginLeft: "auto",
@@ -1916,6 +1918,7 @@ function SkillPromptMessageView({ message, cwd, onOpenFile, sessionId }: { messa
             >
               {expanded ? t("i18n.collapse") : t("i18n.expand")}
             </button>
+            )}
           </div>
           {images.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: body || expanded ? 8 : 0 }}>
