@@ -9,6 +9,7 @@ import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
 import { getFileIcon } from "./FileIcons";
 import { GIT_STATUS_COLORS, GitStatusBadge } from "./GitStatusBadge";
 import { PanelIconButton } from "./PanelIconButton";
+import { WorktreeSwitcher } from "./WorktreeSwitcher";
 
 /** 面板可见时轮询远端工作区状态的间隔。 */
 const POLL_INTERVAL_MS = 5_000;
@@ -178,6 +179,7 @@ export function GitChangesPanel({ cwd, onOpenFile, active = true, refreshKey = 0
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <WorktreeSwitcher cwd={cwd} refreshKey={refreshKey} active={active} />
       <div style={{
         display: "flex",
         alignItems: "center",

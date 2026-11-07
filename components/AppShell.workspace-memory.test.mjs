@@ -30,14 +30,15 @@ test("explicit context changes invalidate a pending workspace restore", () => {
 test("all active-session transitions share one persistence effect", () => {
   assert.match(
     source,
-    /useEffect\(\(\) => \{\s+if \(!selectedSession\) return;[\s\S]*?setLastOpenSession\(projectKey, selectedSession\.id\);\s+\}, \[selectedSession\]\);/,
+    /useEffect\(\(\) => \{\s+if \(!selectedSession\) return;[\s\S]*?setLastOpenSession\(normalizeProjectKey\(projectKey\), selectedSession\.id\);\s+\}, \[selectedSession\]\);/,
   );
 });
 
 test("workspace restoration stays within the cross-project flow", () => {
-  // ompdesk returns early on same-project moves before the restore call.
+  // ompdesk returns early on same-project moves (compared by normalized key)
+  // before the restore call.
   assert.match(
     callbackBody("handleCwdChange", "handleSelectSession"),
-    /if \(currentProject === newProject\) \{\s*return;\s*\}[\s\S]*?restoreWorkspaceContext\(newProject\);/,
+    /if \(currentProject !== null && normalizeProjectKey\(currentProject\) === normalizeProjectKey\(newProject\)\) \{\s*return;\s*\}[\s\S]*?restoreWorkspaceContext\(newProject\);/,
   );
 });

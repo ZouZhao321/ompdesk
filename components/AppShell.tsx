@@ -35,6 +35,7 @@ import {
   showBrowserNotification,
 } from "@/lib/browser-notifications";
 import { getInitialNavigation } from "@/lib/initial-navigation";
+import { normalizeProjectKey } from "@/lib/project-order";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { clearUnreadSessionIds } from "@/lib/session-unread";
 import { clearLastOpen, getLastOpenSession, setLastOpenSession, getSessionContinuation, clearSessionContinuation, rememberSessionContinuation, restoreSessionContinuation } from "@/lib/workspace-memory";
@@ -533,7 +534,7 @@ export function AppShell() {
     const projectKey = selectedSession.projectRoot
       ?? activeProjectRootRef.current
       ?? selectedSession.cwd;
-    setLastOpenSession(projectKey, selectedSession.id);
+    setLastOpenSession(normalizeProjectKey(projectKey), selectedSession.id);
   }, [selectedSession]);
 
   useEffect(() => {
@@ -577,7 +578,7 @@ export function AppShell() {
   // back to the default welcome page instead of erroring.
   const restoreWorkspaceContext = useCallback((projectKey: string) => {
     const token = ++workspaceRestoreTokenRef.current;
-    const lastOpenSessionId = getLastOpenSession(projectKey);
+    const lastOpenSessionId = getLastOpenSession(normalizeProjectKey(projectKey));
     if (!lastOpenSessionId) return;
     void fetch("/api/sessions")
       .then((r) => (r.ok ? (r.json() as Promise<{ sessions: SessionInfo[]; sessionIdsByRuntimeId?: Record<string, string> }>) : null))
@@ -588,12 +589,12 @@ export function AppShell() {
           // The list loaded but the remembered session is gone — forget it.
           // When the list itself failed (d === null) keep the memory so a
           // later switch retries the restore.
-          if (d) clearLastOpen(projectKey);
+          if (d) clearLastOpen(normalizeProjectKey(projectKey));
           return;
         }
-        if ((s.projectRoot ?? s.cwd) !== projectKey) {
+        if (normalizeProjectKey(s.projectRoot ?? s.cwd) !== normalizeProjectKey(projectKey)) {
           // Defensive: the remembered session drifted out of this workspace.
-          clearLastOpen(projectKey);
+          clearLastOpen(normalizeProjectKey(projectKey));
           return;
         }
         // Selecting the session must remount the chat with the session
@@ -630,7 +631,7 @@ export function AppShell() {
     // Worktrees of one repo share a project root. Moving the effective cwd
     // within the same project (e.g. switching worktree, or clicking a session
     // that lives in another worktree) must not close the open session.
-    if (currentProject === newProject) {
+    if (currentProject !== null && normalizeProjectKey(currentProject) === normalizeProjectKey(newProject)) {
       return;
     }
     // Close any session that belongs to a different project — it no longer
@@ -670,8 +671,7 @@ export function AppShell() {
     // Keep ordinary same-session clicks as a no-op.
     if (!isRestore && selectedSession) {
       const sameProject =
-        (selectedSession.projectRoot ?? selectedSession.cwd) ===
-        (session.projectRoot ?? session.cwd);
+        normalizeProjectKey(selectedSession.projectRoot ?? selectedSession.cwd) === normalizeProjectKey(session.projectRoot ?? session.cwd);
       if (selectedSession.id === session.id && sameProject && !selectedSession.runtimeId) {
         if (isMobile) setSidebarOpen(false);
         return;

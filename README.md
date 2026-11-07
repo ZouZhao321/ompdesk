@@ -126,7 +126,7 @@ On the phone open `http://<tailnet IPv4>:30141` (read the address with `tailscal
 - Read session state at a glance: running, waiting for an answer, unread, completed, interrupted, cancelled, or failed. Browser notifications cover runs that finish while the tab is in the background.
 - Rename, archive, restore, and delete sessions; archived sessions stay on disk.
 - Follow forks as a tree and switch between branches without leaving the sidebar.
-- Start a session in the selected project or a custom working directory, and switch Git worktrees from the same place.
+- Start a session in the selected project or a custom working directory, and switch Git worktrees from the Git tab in the right panel.
 - Install the interface as a progressive web app (PWA) on a phone; the layout and hit targets adapt to small screens.
 
 ### Chat and agent runs
@@ -223,7 +223,7 @@ File browsing is not a general filesystem browser. `/api/files` allows the sessi
 - **Proxy**: ompdesk passes the standard proxy variables through to Bun. The launcher adds loopback hosts to `NO_PROXY` so a local provider (Ollama, LM Studio, llama.cpp) keeps working; Bun reads the variables once at startup.
 - **Runtime logs**: every request, agent run, tool call, security decision, and audit action is written as structured JSON and can be read, searched, and downloaded from **Settings → Logs**. Record shape, levels, and `OMP_LOG_LEVEL` / `OMPDESK_LOG_STDOUT`: [docs/logging.md](./docs/logging.md).
 - **Telemetry**: set `OTEL_EXPORTER_OTLP_ENDPOINT` to export traces, logs, and metrics over OTLP `http/protobuf`. With no endpoint, no exporter loads. Prompt and reply text stay out unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=full` is set. Supported variables and per-signal switches: [docs/telemetry.md](./docs/telemetry.md) (Chinese).
-- **Worktrees**: the switcher appears for Git repository roots and covers new sessions, the Explorer, and file mentions. Creation and removal rules: [docs/worktrees.md](./docs/worktrees.md).
+- **Worktrees**: the branch switcher sits at the top of the Git tab for Git repository roots and covers new sessions, the Explorer, and file mentions. Creation and removal rules: [docs/worktrees.md](./docs/worktrees.md).
 - **Forks**: **Fork** creates a new `.jsonl` file. **Edit from here** creates another branch inside the same session file.
 - **Skills**: the installer runs `npx skills add ... --agent claude-code`, which writes the `.claude/skills` layout omp discovers by default.
 - **Interface language**: English and Simplified Chinese ship today; the initial locale follows the browser, and the top bar switch persists the choice in `localStorage`. Adding a language: [docs/i18n.md](./docs/i18n.md).

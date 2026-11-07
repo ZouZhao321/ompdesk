@@ -135,6 +135,8 @@ tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
 types.ts             共享 TypeScript 类型
 normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
 worktree.ts          项目解析、本地分支清单、按分支确保工作副本与增删
+worktree-types.ts    /api/worktrees 的 checkout 与本地分支类型，侧栏与 Git 面板共用
+worktree-switch.ts   分支切换请求的发布与订阅：Git 面板发起，侧栏执行目录解析
 ```
 
 ## components/
@@ -170,6 +172,8 @@ SkillsConfig.tsx    设置面板内的 skills 列表与安装
 FileExplorer.tsx    文件树
 FileExplorerPanel.tsx 右侧标签页中的文件树视图（上传、刷新、变更文件）
 GitChangesPanel.tsx 右侧标签页中的 Git 变更列表（状态、汇总、刷新与轮询）
+WorktreeSwitcher.tsx Git 标签页顶部的分支下拉：当前分支、切换 checkout 与新建 worktree
+PathLabel.tsx       路径标签：左端省略并保留结尾路径段，Git 面板的 checkout 行使用
 GitStatusBadge.tsx  变更文件的状态字母徽标与状态配色
 PanelIconButton.tsx 右侧面板工具栏图标按钮
 FileIcons.tsx       文件图标辅助
