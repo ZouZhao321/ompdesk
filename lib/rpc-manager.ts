@@ -2,12 +2,16 @@ import { getSetting } from "@/lib/omp-settings";
 import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import {
   applyResolvedSystemPromptInputs,
+  buildSkillPromptMessage,
+  type BuiltSkillPromptMessage,
   createAgentSession,
   type CreateAgentSessionOptions,
   discoverSessionExtensionPaths,
   getAgentDir,
   initTheme,
+  parseSkillInvocation,
   SessionManager,
+  SKILL_PROMPT_MESSAGE_TYPE,
   Theme,
 } from "@oh-my-pi/pi-coding-agent";
 import { buildAvailableSlashCommands } from "@oh-my-pi/pi-coding-agent/slash-commands/available-commands";
@@ -28,6 +32,7 @@ import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
 import { untrustedProjectSessionOptions } from "./project-trust";
 import { resolveSessionSystemPrompts } from "./session-system-prompt";
 import { readDefaultModelRole } from "./model-roles";
@@ -210,6 +215,9 @@ function listTools(session: AgentSessionLike): ToolInfo[] {
 }
 
 type AvailableCommandsSession = Parameters<typeof buildAvailableSlashCommands>[0];
+
+/** Why a `/skill:<name>` draft could not be delivered as a skill message. */
+type SkillFallbackReason = "disabled" | "unknown" | "unreadable" | "dropped";
 
 function appendSlashCommand(
   commands: SlashCommandInfo[],
@@ -646,6 +654,71 @@ export class AgentSessionWrapper {
   }
 
   /**
+   * 把一次用户提交分派给技能通道，判定同步完成，正文读取与投递异步进行。
+   *
+   * 返回值与 SDK 的 `prompt()` 一致，在整轮结束时兑现，调用方只挂回调不等待：
+   * 等待会把 RPC 请求拖到整轮结束。技能不可用（开关关闭、名字不存在、文件读不出）
+   * 时说明原因并调用 `fallback` 按普通消息发出。
+   *
+   * `queueOnly` 让插话与排队保持「只入队、不起新一轮」的原有语义。
+   */
+  private dispatchSkillAwareCommand(
+    text: string,
+    images: Array<{ type: "image"; data: string; mimeType: string }> | undefined,
+    streamingBehavior: "steer" | "followUp" | undefined,
+    fallback: () => Promise<boolean>,
+    queueOnly = false,
+  ): Promise<boolean> {
+    const parsed = parseSkillInvocation(text);
+    if (!parsed) return fallback();
+    if (!this.inner.skillsSettings?.enableSkillCommands) {
+      this.announceSkillFallback("disabled", parsed.name);
+      return fallback();
+    }
+    const skill = this.inner.skills.find((candidate) => candidate.name === parsed.name);
+    if (!skill) {
+      this.announceSkillFallback("unknown", parsed.name);
+      return fallback();
+    }
+    return (async () => {
+      let built: BuiltSkillPromptMessage;
+      try {
+        built = await buildSkillPromptMessage(skill, parsed, "user");
+      } catch {
+        this.announceSkillFallback("unreadable", skill.name);
+        return fallback();
+      }
+      const content = images?.length
+        ? [{ type: "text" as const, text: built.message }, ...images]
+        : built.message;
+      const delivered = await this.inner.promptCustomMessage(
+        {
+          customType: SKILL_PROMPT_MESSAGE_TYPE,
+          content,
+          display: true,
+          details: built.details,
+          attribution: "user",
+        },
+        {
+          ...(streamingBehavior ? { streamingBehavior } : {}),
+          ...(queueOnly ? { queueOnly: true } : {}),
+          // The queued chip shows what the operator typed, not the envelope.
+          queueChipText: text,
+        },
+      );
+      if (delivered) return true;
+      // 会话被别的提交占用时 SDK 返回 false：按普通消息重发，别让指令凭空消失。
+      this.announceSkillFallback("dropped", skill.name);
+      return fallback();
+    })();
+  }
+
+  /** Tell the browser that a skill draft was sent as ordinary text instead. */
+  private announceSkillFallback(reason: SkillFallbackReason, skill: string): void {
+    this.emit({ type: "skill_command_unavailable", reason, skill });
+  }
+
+  /**
    * Send one goal continuation turn. It is a hidden custom message rather than
    * a prompt so it does not appear as something the operator typed, but the
    * browser must still see the session go busy, exactly as for a real prompt.
@@ -927,11 +1000,16 @@ export class AgentSessionWrapper {
 
         let running: Promise<boolean>;
         try {
-          running = this.inner.prompt(command.message as string, {
-            ...(promptImages?.length ? { images: promptImages } : {}),
-            ...(streamingBehavior ? { streamingBehavior } : {}),
-            userInitiated: true,
-          });
+          running = this.dispatchSkillAwareCommand(
+            command.message as string,
+            promptImages,
+            streamingBehavior,
+            () => this.inner.prompt(command.message as string, {
+              ...(promptImages?.length ? { images: promptImages } : {}),
+              ...(streamingBehavior ? { streamingBehavior } : {}),
+              userInitiated: true,
+            }),
+          );
         } catch (error) {
           // The SDK rejected the prompt before returning a promise, so there is
           // no handler below to close the run record it just opened.
@@ -1076,33 +1154,33 @@ export class AgentSessionWrapper {
           const sessionDir = sessionManager.getSessionDir();
           let newSessionFile: string;
 
-        // The map forks after a whole turn (includeEntry), the chat Fork button
-        // before the selected message (entry.parentId).
-        const cutEntryId = command.includeEntry === true ? entryId : entry.parentId;
-        if (!cutEntryId) {
-          // Fork before the first message: create an empty session linked to this one
-          const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
-          await newManager.newSession({ parentSession: currentSessionFile });
-          await newManager.ensureOnDisk();
-          newSessionFile = newManager.getSessionFile() as string;
-        } else {
-          // Copy the path up to and including the cut entry.
-          const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
-          const forkedPath = sourceManager.createBranchedSession(cutEntryId);
-          if (!forkedPath) throw new Error("Failed to create forked session");
-          newSessionFile = forkedPath;
-        }
+          // The map forks after a whole turn (includeEntry), the chat Fork button
+          // before the selected message (entry.parentId).
+          const cutEntryId = command.includeEntry === true ? entryId : entry.parentId;
+          if (!cutEntryId) {
+            // Fork before the first message: create an empty session linked to this one
+            const newManager = SessionManager.create(sessionManager.getCwd(), sessionDir);
+            await newManager.newSession({ parentSession: currentSessionFile });
+            await newManager.ensureOnDisk();
+            newSessionFile = newManager.getSessionFile() as string;
+          } else {
+            // Copy the path up to and including the cut entry.
+            const sourceManager = await SessionManager.open(currentSessionFile, sessionDir);
+            const forkedPath = sourceManager.createBranchedSession(cutEntryId);
+            if (!forkedPath) throw new Error("Failed to create forked session");
+            newSessionFile = forkedPath;
+          }
 
-        newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
-        cacheSessionPath(newSessionId, newSessionFile);
-        invalidateSessionListCache();
-      } catch (error) {
-        writeAgentRunRecords(this.runLog.command("fork", {
-          ok: false,
-          durationMs: performance.now() - startedAt,
-          error,
-        }));
-        throw error;
+          newSessionId = (await SessionManager.open(newSessionFile, sessionDir)).getSessionId();
+          cacheSessionPath(newSessionId, newSessionFile);
+          invalidateSessionListCache();
+        } catch (error) {
+          writeAgentRunRecords(this.runLog.command("fork", {
+            ok: false,
+            durationMs: performance.now() - startedAt,
+            error,
+          }));
+          throw error;
         }
 
         // The fork is committed from here on: its result is recorded before the
@@ -1234,7 +1312,16 @@ export class AgentSessionWrapper {
       case "steer": {
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         await this.withRunCommand("steer", () =>
-          this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined)
+          this.dispatchSkillAwareCommand(
+            command.message as string,
+            steerImages,
+            "steer",
+            async () => {
+              await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+              return true;
+            },
+            true,
+          )
         );
         return null;
       }
@@ -1242,7 +1329,16 @@ export class AgentSessionWrapper {
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         await this.withRunCommand("follow_up", () =>
-          this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined)
+          this.dispatchSkillAwareCommand(
+            command.message as string,
+            followImages,
+            "followUp",
+            async () => {
+              await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+              return true;
+            },
+            true,
+          )
         );
         return null;
       }
@@ -1839,6 +1935,9 @@ export function getRpcSession(sessionId: string): AgentSessionWrapper | undefine
 
 function runtimeMessageText(entry: SessionMessageEntry): string {
   if (entry.message.role === "bashExecution") return "";
+  if (entry.message.role === "custom" && isUserSkillPrompt(entry.message)) {
+    return skillPromptCommandLabel(entry.message.details as SkillPromptDetailsLike | undefined);
+  }
   const content = entry.message.content;
   if (typeof content === "string") return content;
   return content
@@ -1847,11 +1946,28 @@ function runtimeMessageText(entry: SessionMessageEntry): string {
     .join(" ");
 }
 
+/** A typed prompt or a user-invoked skill command, both operator turns. */
+function isUserTurnEntry(entry: SessionMessageEntry): boolean {
+  if (entry.message.role === "user") return true;
+  return entry.message.role === "custom" && isUserSkillPrompt(entry.message);
+}
+
 function runtimeMessageActivityMs(entry: SessionMessageEntry): number | undefined {
   if (entry.message.role !== "user" && entry.message.role !== "assistant") return undefined;
   if (typeof entry.message.timestamp === "number") return entry.message.timestamp;
   const timestamp = new Date(entry.timestamp).getTime();
   return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+/** 第一轮发言的预览文本：技能指令取命令行，普通消息取正文。 */
+function runtimeFirstMessage(
+  entry: { type: string; details?: unknown } | SessionMessageEntry | undefined,
+): string {
+  if (!entry) return "(no messages)";
+  if (entry.type === "custom_message") {
+    return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+  }
+  return runtimeMessageText(entry as SessionMessageEntry) || "(no messages)";
 }
 
 /**
@@ -1870,13 +1986,20 @@ export function getRpcSessionInfos(): SessionInfo[] {
       { type: string; timestamp: string } | SessionMessageEntry
     >;
     const messages = entries.filter((entry): entry is SessionMessageEntry => entry.type === "message");
-    const firstUserMessage = messages.find((entry) => entry.message.role === "user");
+    // 按落盘顺序取第一条用户回合：技能指令是 custom_message，普通提问是 message。
+    // 两者混在一份列表里时，先出现的那条才决定标题与预览。
+    const firstTurn = entries.find((entry) => (
+      entry.type === "message"
+        ? isUserTurnEntry(entry as SessionMessageEntry)
+        : entry.type === "custom_message"
+          && isUserSkillPrompt(entry as { customType?: string; attribution?: string })
+    ));
     const sessionFile = manager.getSessionFile() ?? session.sessionFile;
     const persisted = Boolean(sessionFile && existsSync(sessionFile));
 
     // An ensure_session call creates an idle, empty runtime while the composer
     // loads commands. Do not leak it into history before a prompt is accepted.
-    if (!persisted && (!session.isRunning() || !firstUserMessage)) continue;
+    if (!persisted && (!session.isRunning() || !firstTurn)) continue;
 
     const created = header?.timestamp
       ?? entries[0]?.timestamp
@@ -1896,7 +2019,7 @@ export function getRpcSessionInfos(): SessionInfo[] {
       created,
       modified: new Date(lastActivityMs).toISOString(),
       messageCount: messages.length,
-      firstMessage: firstUserMessage ? runtimeMessageText(firstUserMessage) || "(no messages)" : "(no messages)",
+      firstMessage: runtimeFirstMessage(firstTurn),
       transient: !persisted,
     });
   }

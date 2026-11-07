@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
 import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
@@ -170,6 +171,14 @@ type ExtensionUiDialogRequest = Extract<
 >;
 type ExtensionUiCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
 export type NoticeType = "info" | "success" | "warning" | "error";
+
+/** 技能指令未生效的提示文案，键与 `SkillFallbackReason` 对齐。 */
+const SKILL_UNAVAILABLE_MESSAGE_KEYS: Record<string, string> = {
+  disabled: "chat.skillCommandDisabled",
+  unreadable: "chat.skillCommandUnreadable",
+  dropped: "chat.skillCommandDropped",
+  unknown: "chat.skillCommandUnknown",
+};
 
 export type NoticeItem = {
   id: string;
@@ -536,7 +545,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 观测自己收回，最坏也只是这段窗口内的位置不参与判定。
   const followObservationHoldUntilRef = useRef(0);
   // Forward reference: handleSend/executeBash are declared above applyFollow.
-  const applyFollowRef = useRef<(event: FollowEvent) => void>(() => {});
+  const applyFollowRef = useRef<(event: FollowEvent) => void>(() => { });
   // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
   const scrollTranscriptToEndRef = useRef(opts.scrollTranscriptToEnd);
   scrollTranscriptToEndRef.current = opts.scrollTranscriptToEnd;
@@ -567,7 +576,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     let toolResults = 0;
     let toolCalls = 0;
     for (const msg of messages) {
-      if (msg.role === "user") userMessages += 1;
+      if (msg.role === "user" || (msg.role === "custom" && isUserSkillPrompt(msg))) userMessages += 1;
       if (msg.role === "toolResult") toolResults += 1;
       if (msg.role !== "assistant") continue;
       assistantMessages += 1;
@@ -970,7 +979,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     eventSourceSessionIdRef.current = sid;
     eventSourceRuntimeIdRef.current = runtimeIdRef.current;
 
-    let cancel = () => {};
+    let cancel = () => { };
     const promise = new Promise<EventStreamConnectionResult>((resolve) => {
       let settled = false;
       let receivedConnected = false;
@@ -1555,7 +1564,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               // next turn); dead wrapper (no state) means the queue is gone.
               setQueuedMessages(normalizeQueuedMessages(d.state?.queuedMessages));
             })
-            .catch(() => {});
+            .catch(() => { });
         }
         break;
       case "goal_status":
@@ -1587,6 +1596,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "prompt_error":
         addNotice({ type: "error", message: (event.errorMessage as string | undefined) ?? "Command failed" });
         break;
+      case "skill_command_unavailable": {
+        const reason = event.reason as string | undefined;
+        const messageKey =
+          SKILL_UNAVAILABLE_MESSAGE_KEYS[reason ?? ""] ?? SKILL_UNAVAILABLE_MESSAGE_KEYS.unknown;
+        addNotice({
+          type: "warning",
+          message: t(messageKey, { skill: (event.skill as string | undefined) ?? "" }),
+        });
+        break;
+      }
       case "extension_error":
         addNotice({
           type: "error",
@@ -1634,7 +1653,28 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             return [...prev, delivered];
           });
         } else if (completed) {
-          setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
+          const delivered = normalizeToolCalls(completed);
+          if (isUserSkillPrompt(delivered as CustomMessage)) {
+            // 技能指令替换乐观气泡，避免同一句指令显示两遍。
+            const command = skillPromptCommandLabel(
+              (delivered as CustomMessage).details as SkillPromptDetailsLike | undefined,
+            );
+            const optimisticKey = optimisticUserMessageKeyRef.current;
+            optimisticUserMessageKeyRef.current = null;
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              // 带图片发送时乐观 key 含图片签名，与纯文本命令行不相等；
+              // 两种命中都算同一条气泡，避免指令显示两遍。
+              const lastIsOptimistic = last?.role === "user"
+                && (userMessageKey(last) === optimisticKey || extractMessageText(last) === command);
+              if (optimisticKey && lastIsOptimistic) {
+                return [...prev.slice(0, -1), delivered];
+              }
+              return [...prev, delivered];
+            });
+          } else {
+            setMessages((prev) => [...prev, delivered]);
+          }
         }
         const sid = sessionIdRef.current;
         if (sid) void refreshContextUsage(sid);
@@ -1781,7 +1821,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage, t]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
