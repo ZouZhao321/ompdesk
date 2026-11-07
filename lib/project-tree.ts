@@ -1,6 +1,6 @@
 import type { BranchPreview } from "@/lib/types";
 
-// BranchNavigator still traverses recursively, so keep the response tree shallow.
+// Clients may traverse the response tree recursively, so keep it shallow.
 export const MAX_PROJECTED_TREE_DEPTH = 200;
 const MAX_BRANCH_PREVIEW_LENGTH = 40;
 
