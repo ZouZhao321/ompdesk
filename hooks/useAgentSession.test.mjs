@@ -44,8 +44,8 @@ test("keeps the session event stream open through the idle grace window", () => 
   // 终态 agent_end 就是运行结束的权威信号；等到 15s 对账才收尾会让输入框停在引导模式。
   assert.match(agentEndSource, /event\.isTerminal !== false && event\.yielded !== false/);
   assert.match(agentEndSource, /settleUiStage\(\)/);
-  assert.match(agentEndSource, /notifiedPromptRunIdRef\.current = promptRunIdRef\.current/);
-  assert.match(agentEndSource, /onAgentEnd\?\.\(sessionIdRef\.current \?\? undefined\)/);
+  assert.match(agentEndSource, /notifyPromptStage\(promptRunIdRef\.current\)/);
+  assert.doesNotMatch(agentEndSource, /onAgentEnd\?\./);
   assert.match(agentEndSource, /scheduleEventStreamClose\(sessionIdRef\.current\)/);
   assert.match(promptDoneSource, /notifyPromptStage\(runId\)/);
   assert.match(promptDoneSource, /scheduleEventStreamClose\(sid\)/);

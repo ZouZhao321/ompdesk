@@ -1316,14 +1316,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sdkAgentActiveRef.current = false;
       optimisticUserMessageKeyRef.current = null;
       const wasRunning = settleUiStage();
-      if (promptWasPending) {
+      if (promptWasPending || (agentWasActive && wasRunning)) {
         notifyPromptStage(runId);
-      } else if (agentWasActive && wasRunning) {
-        onAgentEnd?.(sessionIdRef.current ?? undefined);
       }
       if (sid) scheduleEventStreamClose(sid);
     }
-  }, [loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, settleUiStage]);
+  }, [loadSession, notifyPromptStage, scheduleEventStreamClose, settleUiStage]);
 
   const waitForPromptSettlement = useCallback(async (sid: string, runId?: number) => {
     const settleKey = `${sid}:${runId ?? "auto"}`;
@@ -1535,11 +1533,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const terminalEnd = event.isTerminal !== false && event.yielded !== false;
         if (terminalEnd) {
           sdkAgentActiveRef.current = false;
-          const wasRunning = settleUiStage();
-          if (wasRunning) {
-            notifiedPromptRunIdRef.current = promptRunIdRef.current;
-            onAgentEnd?.(sessionIdRef.current ?? undefined);
-          }
+          settleUiStage();
+          notifyPromptStage(promptRunIdRef.current);
           if (sessionIdRef.current) scheduleEventStreamClose(sessionIdRef.current);
         }
         if (sessionIdRef.current) {
@@ -1786,7 +1781,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage, onAgentEnd]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {

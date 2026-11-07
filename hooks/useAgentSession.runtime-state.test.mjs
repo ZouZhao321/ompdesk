@@ -63,8 +63,15 @@ function harness() {
     "AgentPhase", "RetryInfo", "GoalStatus", "BashRunning", "PendingBash"]) {
     bindings[`set${name}`] = (...args) => effects.push([name, ...args]);
   }
+  bindings.sdkAgentActiveRef = { current: true };
+  bindings.notifiedPromptRunIdRef = { current: -1 };
+  bindings.onAgentEnd = (...args) => effects.push(["AgentEnd", ...args]);
+  bindings.setAgentRunning = (...args) => effects.push(["AgentRunning", ...args]);
+  bindings.scheduleEventStreamClose = (...args) => effects.push(["Close", ...args]);
   bindings.followSessionIdentity = callback("followSessionIdentity", bindings);
   bindings.followRuntimeState = callback("followRuntimeState", bindings);
+  bindings.settleUiStage = callback("settleUiStage", bindings);
+  bindings.notifyPromptStage = callback("notifyPromptStage", bindings);
   // 叶子的唯一写入口：状态与去重用的 ref 由它一起写，测试跑的是同一份代码。
   bindings.applyActiveLeaf = callback("applyActiveLeaf", bindings);
   return { bindings, effects, continuation };
@@ -261,3 +268,20 @@ for (const name of ["waitForPromptSettlement", "waitForBashSettlement"]) {
     });
   }
 }
+
+test("terminal agent_end settles once while a resumable end keeps the run busy", () => {
+  const h = harness();
+  h.bindings.sessionIdRef.current = null;
+  const fn = callback("handleAgentEvent", h.bindings);
+
+  fn({ type: "agent_end", isTerminal: false });
+  assert.equal(h.bindings.agentRunningRef.current, true);
+  assert.equal(h.effects.filter(([name]) => name === "AgentEnd").length, 0);
+
+  fn({ type: "agent_end", isTerminal: true });
+  assert.equal(h.bindings.agentRunningRef.current, false);
+  assert.equal(h.effects.filter(([name]) => name === "AgentEnd").length, 1);
+
+  fn({ type: "agent_end", isTerminal: true });
+  assert.equal(h.effects.filter(([name]) => name === "AgentEnd").length, 1);
+});
