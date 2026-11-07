@@ -1,9 +1,7 @@
 import { isIP } from "node:net";
 
 function normalizeHostname(value: string): string {
-  const unbracketed = value.startsWith("[") && value.endsWith("]")
-    ? value.slice(1, -1)
-    : value;
+  const unbracketed = value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value;
   return unbracketed.toLowerCase().replace(/\.$/, "");
 }
 
@@ -11,7 +9,13 @@ function hostnameFromAuthority(value: string): string | null {
   if (!value || /[\s/@\\]/.test(value)) return null;
   try {
     const parsed = new URL(`http://${value}`);
-    if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    if (
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash
+    ) {
       return null;
     }
     return normalizeHostname(parsed.hostname);
@@ -53,10 +57,10 @@ function getRequestOrigin(request: Request): string | null {
 
 function isUserInitiatedSessionExportNavigation(request: Request): boolean {
   if (
-    request.method !== "GET"
-    || request.headers.get("sec-fetch-mode") !== "navigate"
-    || request.headers.get("sec-fetch-dest") !== "document"
-    || request.headers.get("sec-fetch-user") !== "?1"
+    request.method !== "GET" ||
+    request.headers.get("sec-fetch-mode") !== "navigate" ||
+    request.headers.get("sec-fetch-dest") !== "document" ||
+    request.headers.get("sec-fetch-user") !== "?1"
   ) {
     return false;
   }
@@ -113,6 +117,8 @@ export function isApiRequestAllowed(
 
 export function hasJsonContentType(request: Request): boolean {
   const mediaType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-  return mediaType === "application/json"
-    || Boolean(mediaType?.startsWith("application/") && mediaType.endsWith("+json"));
+  return (
+    mediaType === "application/json" ||
+    Boolean(mediaType?.startsWith("application/") && mediaType.endsWith("+json"))
+  );
 }

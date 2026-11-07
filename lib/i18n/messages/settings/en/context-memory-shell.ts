@@ -15,7 +15,8 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.bash.gitGuard.description":
     "Refuse git commands that discard or move shared work in the bash tool: stash, reset --hard or to another commit, and checkout/switch/restore outside a merge or rebase conflict",
   "settings.field.bashInterceptor.enabled.label": "Bash Interceptor",
-  "settings.field.bashInterceptor.enabled.description": "Block shell commands that have dedicated tools",
+  "settings.field.bashInterceptor.enabled.description":
+    "Block shell commands that have dedicated tools",
   "settings.field.bash.direnv.label": "direnv Auto-Load",
   "settings.field.bash.direnv.description":
     "Auto-load a repo's direnv/devenv `.envrc` into the bash session so devenv tools and env vars are present without manual `direnv exec`. Honors direnv's allow list: an `.envrc` you haven't `direnv allow`ed is never executed",
@@ -27,7 +28,8 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.shellMinimizer.sourceOutlineLevel.description":
     "Source outline mode for cat/read of source files: default or aggressive",
   "settings.field.eval.py.label": "Python Eval Backend",
-  "settings.field.eval.py.description": "Allow the eval tool to dispatch Python cells to the IPython kernel",
+  "settings.field.eval.py.description":
+    "Allow the eval tool to dispatch Python cells to the IPython kernel",
   "settings.field.eval.js.label": "JavaScript Eval Backend",
   "settings.field.eval.js.description":
     "Allow the eval tool to dispatch JavaScript cells to the in-process runtime",
@@ -125,7 +127,8 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.ttsr.judge.description":
     "Ask the judge model role each `question` rule about completed replies, reasoning, and tool calls; a yes injects the rule as a warning",
   "settings.field.ttsr.contextMode.label": "TTSR Context Mode",
-  "settings.field.ttsr.contextMode.description": "What to do with partial output when TTSR triggers",
+  "settings.field.ttsr.contextMode.description":
+    "What to do with partial output when TTSR triggers",
   "settings.field.ttsr.interruptMode.label": "TTSR Interrupt Mode",
   "settings.field.ttsr.interruptMode.description":
     "When to interrupt mid-stream vs inject warning after completion",
@@ -202,11 +205,9 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.mnemopi.llmBaseUrl.description":
     "Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
   "settings.field.mnemopi.llmApiKey.label": "Mnemopi LLM API Key",
-  "settings.field.mnemopi.llmApiKey.description":
-    "Optional LLM API key for Mnemopi remote mode",
+  "settings.field.mnemopi.llmApiKey.description": "Optional LLM API key for Mnemopi remote mode",
   "settings.field.mnemopi.llmModel.label": "Mnemopi LLM Model",
-  "settings.field.mnemopi.llmModel.description":
-    "Optional LLM model name for Mnemopi remote mode",
+  "settings.field.mnemopi.llmModel.description": "Optional LLM model name for Mnemopi remote mode",
   "settings.field.hindsight.apiUrl.label": "Hindsight API URL",
   "settings.field.hindsight.apiUrl.description": "Hindsight server URL (Cloud or self-hosted)",
   "settings.field.hindsight.apiToken.label": "Hindsight API Token",

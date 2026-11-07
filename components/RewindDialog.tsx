@@ -116,45 +116,47 @@ export function RewindDialog({
             <div style={{ padding: "20px 8px", fontSize: 12, color: "var(--text-muted)" }}>
               {t("chat.rewindEmpty")}
             </div>
-          ) : entries.map((entry) => (
-            <button
-              key={entry.entryId}
-              type="button"
-              onClick={() => onSelect(entry.entryId)}
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: 6,
-                padding: "9px 10px",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                background: "transparent",
-                color: "var(--text)",
-                textAlign: "left",
-                cursor: "pointer",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    fontSize: 13,
-                  }}
-                >
-                  {entry.text}
-                </span>
-                {entry.images.length > 0 && (
-                  <span style={{ flexShrink: 0, fontSize: 11, color: "var(--text-muted)" }}>
-                    {t("chat.rewindImages", { count: entry.images.length })}
+          ) : (
+            entries.map((entry) => (
+              <button
+                key={entry.entryId}
+                type="button"
+                onClick={() => onSelect(entry.entryId)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  marginTop: 6,
+                  padding: "9px 10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  background: "transparent",
+                  color: "var(--text)",
+                  textAlign: "left",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontSize: 13,
+                    }}
+                  >
+                    {entry.text}
                   </span>
-                )}
-              </div>
-            </button>
-          ))}
+                  {entry.images.length > 0 && (
+                    <span style={{ flexShrink: 0, fontSize: 11, color: "var(--text-muted)" }}>
+                      {t("chat.rewindImages", { count: entry.images.length })}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -114,11 +114,13 @@ export function initialMarkerUnreadIds(
   runningSessionIds: ReadonlySet<string>,
   waitingSessionIds: ReadonlySet<string>,
 ): string[] {
-  return sessions
-    // 运行中与等待回答的会话由动态层负责，播种会立刻被动态标记盖住。
-    .filter((session) => !runningSessionIds.has(session.id) && !waitingSessionIds.has(session.id))
-    .filter((session) => isStaticMarkerStatus(session.status) && session.status !== "complete")
-    .map((session) => session.id);
+  return (
+    sessions
+      // 运行中与等待回答的会话由动态层负责，播种会立刻被动态标记盖住。
+      .filter((session) => !runningSessionIds.has(session.id) && !waitingSessionIds.has(session.id))
+      .filter((session) => isStaticMarkerStatus(session.status) && session.status !== "complete")
+      .map((session) => session.id)
+  );
 }
 
 /** 一次运行结束时的归属条件：决定这次结束是否写进未读集合。 */
@@ -180,19 +182,24 @@ export interface FinishedRuns {
  */
 export function resolveFinishedRuns(input: FinishedRunsInput): FinishedRuns {
   const selectedCanonicalId = input.selectedRuntimeId
-    ? input.sessionIdsByRuntimeId?.[input.selectedRuntimeId] ?? input.selectedSessionId ?? null
-    : input.selectedSessionId ?? null;
+    ? (input.sessionIdsByRuntimeId?.[input.selectedRuntimeId] ?? input.selectedSessionId ?? null)
+    : (input.selectedSessionId ?? null);
   const previousRuntimeIds = new Map(
-    Object.entries(input.previousSessionIdsByRuntimeId ?? {})
-      .map(([runtimeId, sessionId]) => [sessionId, runtimeId]),
+    Object.entries(input.previousSessionIdsByRuntimeId ?? {}).map(([runtimeId, sessionId]) => [
+      sessionId,
+      runtimeId,
+    ]),
   );
 
   const finished: { id: string; isSelected: boolean }[] = [];
   for (const id of input.previousRunningSessionIds) {
     const runtimeId = previousRuntimeIds.get(id);
-    const currentId = (runtimeId === undefined ? undefined : input.sessionIdsByRuntimeId?.[runtimeId]) ?? id;
+    const currentId =
+      (runtimeId === undefined ? undefined : input.sessionIdsByRuntimeId?.[runtimeId]) ?? id;
     if (input.runningSessionIds.has(currentId)) continue;
-    const isSelected = currentId === selectedCanonicalId || (runtimeId !== undefined && runtimeId === input.selectedRuntimeId);
+    const isSelected =
+      currentId === selectedCanonicalId ||
+      (runtimeId !== undefined && runtimeId === input.selectedRuntimeId);
     const merged = finished.find((run) => run.id === currentId);
     if (merged) {
       // 多次运行可能换算到同一个会话：任一次属于选中，这次结束就算被看到。
@@ -203,11 +210,13 @@ export function resolveFinishedRuns(input: FinishedRunsInput): FinishedRuns {
   }
 
   const unreadIds = finished
-    .filter((run) => shouldMarkSessionUnread({
-      isSelected: run.isSelected,
-      isPageVisible: input.isPageVisible,
-      isEndUnobserved: input.isEndUnobserved,
-    }))
+    .filter((run) =>
+      shouldMarkSessionUnread({
+        isSelected: run.isSelected,
+        isPageVisible: input.isPageVisible,
+        isEndUnobserved: input.isEndUnobserved,
+      }),
+    )
     .map((run) => run.id);
   const backgroundIds = finished.filter((run) => !run.isSelected).map((run) => run.id);
 
