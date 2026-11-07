@@ -47,32 +47,38 @@ export function mergeSessionLists(
   return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
 }
 
+/** 首条消息扫描的读取上限：足以覆盖会话开头的标题、模型与首轮消息。 */
+const FIRST_MESSAGE_SCAN_BYTES = 8 * 1024;
+
 /**
- * `/skill:name args` for a session whose first turn is a user-invoked skill.
+ * `/skill:name args` when a session opens with a user-invoked skill command.
  *
- * omp's scan reads only `message` entries, so a skill-first session reports
- * "(no messages)" even though a skill body was sent. The command the user typed
- * lives in the custom message's details; the envelope must never reach a title.
+ * omp 的列表只认 `message` 条目：技能指令落盘为 `custom_message`，要么被读成
+ * 「没有消息」，要么被下一条助手回复顶替，两种都不该拿来当标题。这里只读文件
+ * 开头一段，遇到真正的用户或助手消息就停，因此普通会话只多一次小读。
  */
-async function readSkillCommandFirstMessage(filePath: string): Promise<string | undefined> {
-  const entries = await getSessionEntries(filePath).catch((error: NodeJS.ErrnoException) => {
-    // 文件在扫描与读取之间被删掉时按「没有首条消息」处理；其余读取错误照常抛出。
-    if (error.code === "ENOENT") return undefined;
-    throw error;
-  });
-  if (!entries) return undefined;
-  for (const entry of entries) {
-    if (entry.type !== "message") {
+async function readLeadingSkillCommand(filePath: string): Promise<string | undefined> {
+  if (!existsSync(filePath)) return undefined;
+  const handle = openSync(filePath, "r");
+  try {
+    const buffer = Buffer.allocUnsafe(FIRST_MESSAGE_SCAN_BYTES);
+    const bytesRead = readSync(handle, buffer, 0, buffer.length, 0);
+    const lines = buffer.subarray(0, bytesRead).toString("utf8").split("\n");
+    // 末行可能被截断，丢弃它以免把半条记录当成完整 JSON。
+    lines.pop();
+    for (const line of lines) {
+      if (!line.includes('"custom_message"') && !line.includes('"message"')) continue;
+      const entry = JSON.parse(line) as
+        | { type: string; customType?: string; attribution?: string; details?: unknown; message?: { role?: string } };
       if (entry.type === "custom_message" && isUserSkillPrompt(entry)) {
         return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
       }
-      continue;
+      if (entry.type === "message" && entry.message?.role !== "bashExecution") return undefined;
     }
-    // 命令输出不是发言，跳过它继续找；真正的用户或助手消息出现即停。
-    if (entry.message.role === "bashExecution") continue;
     return undefined;
+  } finally {
+    closeSync(handle);
   }
-  return undefined;
 }
 
 async function loadAllSessions(): Promise<SessionInfo[]> {
@@ -87,6 +93,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   const sessions = await Promise.all(ompSessions.map(async (s) => {
     cacheSessionPath(s.id, s.path);
     const listedFirstMessage = s.firstMessage || "(no messages)";
+    const skillCommand = await readLeadingSkillCommand(s.path);
     return {
       path: s.path,
       id: s.id,
@@ -95,9 +102,7 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
       created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
       modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
       messageCount: s.messageCount,
-      firstMessage: listedFirstMessage === "(no messages)"
-        ? (await readSkillCommandFirstMessage(s.path)) ?? listedFirstMessage
-        : listedFirstMessage,
+      firstMessage: skillCommand ?? listedFirstMessage,
       parentSessionId: s.parentSessionPath
         ? pathToId.get(sessionPathKey(s.parentSessionPath))
           ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
@@ -600,6 +605,7 @@ function entryToUiMessage(
         customType: entry.customType,
         content: entry.content,
         display: entry.display,
+        attribution: entry.attribution,
         details: entry.details,
         timestamp: parseEntryTimestamp(entry.timestamp),
       };

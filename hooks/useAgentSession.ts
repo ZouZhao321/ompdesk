@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
 import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
@@ -1580,7 +1581,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           ? "chat.skillCommandDisabled"
           : reason === "unreadable"
             ? "chat.skillCommandUnreadable"
-            : "chat.skillCommandUnknown";
+            : reason === "dropped"
+              ? "chat.skillCommandDropped"
+              : "chat.skillCommandUnknown";
         addNotice({
           type: "warning",
           message: t(messageKey, { skill: (event.skill as string | undefined) ?? "" }),
@@ -1634,7 +1637,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             return [...prev, delivered];
           });
         } else if (completed) {
-          setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
+          const delivered = normalizeToolCalls(completed);
+          if (isUserSkillPrompt(delivered as CustomMessage)) {
+            // 技能指令替换乐观气泡，避免同一句指令显示两遍。
+            const command = skillPromptCommandLabel(
+              (delivered as CustomMessage).details as SkillPromptDetailsLike | undefined,
+            );
+            const optimisticKey = optimisticUserMessageKeyRef.current;
+            optimisticUserMessageKeyRef.current = null;
+            const commandKey = userMessageKey({ content: command });
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (optimisticKey && optimisticKey === commandKey && last?.role === "user") {
+                return [...prev.slice(0, -1), delivered];
+              }
+              return [...prev, delivered];
+            });
+          } else {
+            setMessages((prev) => [...prev, delivered]);
+          }
         }
         const sid = sessionIdRef.current;
         if (sid) void refreshContextUsage(sid);

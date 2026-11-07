@@ -404,6 +404,7 @@ export const enLocale: LocalePlugin = {
     "chat.skillCommandDisabled": "Skill commands are disabled; this was sent as a normal message",
     "chat.skillCommandUnknown": "No skill named {skill}; this was sent as a normal message",
     "chat.skillCommandUnreadable": "The {skill} skill could not be read; this was sent as a normal message",
+    "chat.skillCommandDropped": "The {skill} command was not delivered because the session was busy; send it again",
     "chat.transcriptRail": "Prompt navigation",
     "chat.previousPrompt": "Previous prompt",
     "chat.nextPrompt": "Next prompt",

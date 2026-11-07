@@ -217,7 +217,7 @@ function listTools(session: AgentSessionLike): ToolInfo[] {
 type AvailableCommandsSession = Parameters<typeof buildAvailableSlashCommands>[0];
 
 /** Why a `/skill:<name>` draft could not be delivered as a skill message. */
-type SkillFallbackReason = "disabled" | "unknown" | "unreadable";
+type SkillFallbackReason = "disabled" | "unknown" | "unreadable" | "dropped";
 
 function appendSlashCommand(
   commands: SlashCommandInfo[],
@@ -654,57 +654,62 @@ export class AgentSessionWrapper {
   }
 
   /**
-   * Deliver a `/skill:<name>` draft through the same custom-message path the
-   * SDK's own clients use: the stored content is the `<skill>` envelope,
-   * `details` keep the command for display, and the model still receives the
-   * full body. Hidden skills (`hide: true`) never block a user who names them.
+   * 把一次用户提交分派给技能通道，判定同步完成，正文读取与投递异步进行。
    *
-   * Returns false — after telling the browser why — when the draft cannot
-   * become a skill message; the caller then sends it as ordinary text.
-   * `skills.enableSkillCommands: false`, an unknown name, and an unreadable
-   * skill file all take that path.
+   * 返回值与 SDK 的 `prompt()` 一致，在整轮结束时兑现，调用方只挂回调不等待：
+   * 等待会把 RPC 请求拖到整轮结束。技能不可用（开关关闭、名字不存在、文件读不出）
+   * 时说明原因并调用 `fallback` 按普通消息发出。
+   *
+   * `queueOnly` 让插话与排队保持「只入队、不起新一轮」的原有语义。
    */
-  private async tryDeliverSkillCommand(
+  private dispatchSkillAwareCommand(
     text: string,
     images: Array<{ type: "image"; data: string; mimeType: string }> | undefined,
     streamingBehavior: "steer" | "followUp" | undefined,
+    fallback: () => Promise<boolean>,
+    queueOnly = false,
   ): Promise<boolean> {
     const parsed = parseSkillInvocation(text);
-    if (!parsed) return false;
+    if (!parsed) return fallback();
     if (!this.inner.skillsSettings?.enableSkillCommands) {
       this.announceSkillFallback("disabled", parsed.name);
-      return false;
+      return fallback();
     }
     const skill = this.inner.skills.find((candidate) => candidate.name === parsed.name);
     if (!skill) {
       this.announceSkillFallback("unknown", parsed.name);
-      return false;
+      return fallback();
     }
-    let built: BuiltSkillPromptMessage;
-    try {
-      built = await buildSkillPromptMessage(skill, parsed, "user");
-    } catch {
-      this.announceSkillFallback("unreadable", skill.name);
-      return false;
-    }
-    const content = images?.length
-      ? [{ type: "text" as const, text: built.message }, ...images]
-      : built.message;
-    await this.inner.promptCustomMessage(
-      {
-        customType: SKILL_PROMPT_MESSAGE_TYPE,
-        content,
-        display: true,
-        details: built.details,
-        attribution: "user",
-      },
-      {
-        ...(streamingBehavior ? { streamingBehavior } : {}),
-        // The queued chip shows what the operator typed, not the envelope.
-        queueChipText: text,
-      },
-    );
-    return true;
+    return (async () => {
+      let built: BuiltSkillPromptMessage;
+      try {
+        built = await buildSkillPromptMessage(skill, parsed, "user");
+      } catch {
+        this.announceSkillFallback("unreadable", skill.name);
+        return fallback();
+      }
+      const content = images?.length
+        ? [{ type: "text" as const, text: built.message }, ...images]
+        : built.message;
+      const delivered = await this.inner.promptCustomMessage(
+        {
+          customType: SKILL_PROMPT_MESSAGE_TYPE,
+          content,
+          display: true,
+          details: built.details,
+          attribution: "user",
+        },
+        {
+          ...(streamingBehavior ? { streamingBehavior } : {}),
+          ...(queueOnly ? { queueOnly: true } : {}),
+          // The queued chip shows what the operator typed, not the envelope.
+          queueChipText: text,
+        },
+      );
+      // SDK 丢掉提交（会话被其它提交占用）时它返回 false，此时不能假装送达。
+      if (!delivered) this.announceSkillFallback("dropped", skill.name);
+      return delivered;
+    })();
   }
 
   /** Tell the browser that a skill draft was sent as ordinary text instead. */
@@ -994,18 +999,16 @@ export class AgentSessionWrapper {
 
         let running: Promise<boolean>;
         try {
-          const delivered = await this.tryDeliverSkillCommand(
+          running = this.dispatchSkillAwareCommand(
             command.message as string,
             promptImages,
             streamingBehavior,
-          );
-          running = delivered
-            ? Promise.resolve(true)
-            : this.inner.prompt(command.message as string, {
+            () => this.inner.prompt(command.message as string, {
               ...(promptImages?.length ? { images: promptImages } : {}),
               ...(streamingBehavior ? { streamingBehavior } : {}),
               userInitiated: true,
-            });
+            }),
+          );
         } catch (error) {
           // The SDK rejected the prompt before returning a promise, so there is
           // no handler below to close the run record it just opened.
@@ -1299,29 +1302,35 @@ export class AgentSessionWrapper {
 
       case "steer": {
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.withRunCommand("steer", async () => {
-          const delivered = await this.tryDeliverSkillCommand(
+        await this.withRunCommand("steer", () =>
+          this.dispatchSkillAwareCommand(
             command.message as string,
             steerImages,
             "steer",
-          );
-          if (delivered) return;
-          await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
-        });
+            async () => {
+              await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined);
+              return true;
+            },
+            true,
+          )
+        );
         return null;
       }
 
       case "follow_up": {
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        await this.withRunCommand("follow_up", async () => {
-          const delivered = await this.tryDeliverSkillCommand(
+        await this.withRunCommand("follow_up", () =>
+          this.dispatchSkillAwareCommand(
             command.message as string,
             followImages,
             "followUp",
-          );
-          if (delivered) return;
-          await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
-        });
+            async () => {
+              await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined);
+              return true;
+            },
+            true,
+          )
+        );
         return null;
       }
 
@@ -1957,13 +1966,17 @@ export function getRpcSessionInfos(): SessionInfo[] {
       { type: string; timestamp: string } | SessionMessageEntry
     >;
     const messages = entries.filter((entry): entry is SessionMessageEntry => entry.type === "message");
+    // 技能指令落盘为 custom_message，不在 messages 里，但它是用户发起的回合。
+    const firstSkillMessage = entries.find(
+      (entry) => entry.type === "custom_message" && isUserSkillPrompt(entry as { customType?: string; attribution?: string }),
+    ) as { details?: unknown } | undefined;
     const firstUserMessage = messages.find((entry) => isUserTurnEntry(entry));
     const sessionFile = manager.getSessionFile() ?? session.sessionFile;
     const persisted = Boolean(sessionFile && existsSync(sessionFile));
 
     // An ensure_session call creates an idle, empty runtime while the composer
     // loads commands. Do not leak it into history before a prompt is accepted.
-    if (!persisted && (!session.isRunning() || !firstUserMessage)) continue;
+    if (!persisted && (!session.isRunning() || (!firstUserMessage && !firstSkillMessage))) continue;
 
     const created = header?.timestamp
       ?? entries[0]?.timestamp
@@ -1983,7 +1996,11 @@ export function getRpcSessionInfos(): SessionInfo[] {
       created,
       modified: new Date(lastActivityMs).toISOString(),
       messageCount: messages.length,
-      firstMessage: firstUserMessage ? runtimeMessageText(firstUserMessage) || "(no messages)" : "(no messages)",
+      firstMessage: firstUserMessage
+        ? runtimeMessageText(firstUserMessage) || "(no messages)"
+        : firstSkillMessage
+          ? skillPromptCommandLabel(firstSkillMessage.details as SkillPromptDetailsLike | undefined)
+          : "(no messages)",
       transient: !persisted,
     });
   }

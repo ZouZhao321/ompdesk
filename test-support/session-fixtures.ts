@@ -661,6 +661,10 @@ async function buildSkillCommandScenario(
       "user",
       options.messageTime,
     );
+    // 助手紧接着回复：列表扫描会把这条回复当成首条消息，标题因此仍须取指令。
+    manager.appendMessage(
+      assistantMessage("已经按 demo-skill 的流程处理。", options.messageTime + 1000),
+    );
     await manager.setSessionName(options.title, "user");
     await manager.ensureOnDisk();
     await manager.flush();

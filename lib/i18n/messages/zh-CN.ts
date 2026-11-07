@@ -404,6 +404,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.skillCommandDisabled": "技能指令已关闭，这条按普通消息发出去了",
     "chat.skillCommandUnknown": "没有名为 {skill} 的技能，这条按普通消息发出去了",
     "chat.skillCommandUnreadable": "读不到技能 {skill} 的内容，这条按普通消息发出去了",
+    "chat.skillCommandDropped": "技能 {skill} 的指令没有送达，会话正忙，请重发一次",
     "chat.transcriptRail": "提问跳转",
     "chat.previousPrompt": "上一条提问",
     "chat.nextPrompt": "下一条提问",
