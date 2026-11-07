@@ -1,2 +1,7 @@
-# git blame 时跳过的一次性排版提交（git config blame.ignoreRevsFile .git-blame-ignore-revs）
-a777d6f07f3ddd8f9bbe0bbef48cb0abfc604368
+# git blame 与代码托管的归属查询跳过这些提交：它们只改排版，不改行为。
+# 排版按五批拆分合入，这里一次列全；未合入的提交被跳过时 git blame 会忽略该行。
+7dfa4d39aec15d1953bc2122f6c865a1f3ad8ba3
+54b3cd87f2b2cf435ded4b3c1f9e47ca4562d1b7
+59e9d2e85712dedcefb595ff3f6dae8a9e5be007
+e0d088c9c459527d7cb47b172ab80714bb1cfef2
+ef5be625e064f125e19b3941989f084bc9a829e6
