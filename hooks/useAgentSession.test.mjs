@@ -19,15 +19,11 @@ test("keeps the session event stream open through the idle grace window", () => 
   );
   const agentEndSource = source.slice(
     source.indexOf('case "agent_end"'),
-    source.indexOf('case "agent_settled"'),
+    source.indexOf('case "goal_status"'),
   );
   const agentStartSource = source.slice(
     source.indexOf('case "agent_start"'),
     source.indexOf('case "agent_end"'),
-  );
-  const agentSettledSource = source.slice(
-    source.indexOf('case "agent_settled"'),
-    source.indexOf('case "prompt_done"'),
   );
   const promptDoneSource = source.slice(
     source.indexOf('case "prompt_done"'),
@@ -52,10 +48,15 @@ test("keeps the session event stream open through the idle grace window", () => 
   assert.doesNotMatch(finishSource, /closeEvents\(\)/);
   assert.doesNotMatch(agentEndSource, /closeEvents\(\)/);
   assert.match(agentStartSource, /cancelEventStreamGrace\(\)/);
-  assert.match(agentSettledSource, /scheduleEventStreamClose\(sid\)/);
-  assert.match(agentSettledSource, /onAgentEnd\?\.\(sessionIdRef\.current \?\? undefined\)/);
+  // 终态 agent_end 就是运行结束的权威信号；等到 15s 对账才收尾会让输入框停在引导模式。
+  assert.match(agentEndSource, /event\.isTerminal !== false && event\.yielded !== false/);
+  assert.match(agentEndSource, /settleUiStage\(\)/);
+  assert.match(agentEndSource, /notifyPromptStage\(promptRunIdRef\.current\)/);
+  assert.doesNotMatch(agentEndSource, /onAgentEnd\?\./);
+  assert.match(agentEndSource, /scheduleEventStreamClose\(sessionIdRef\.current\)/);
   assert.match(promptDoneSource, /notifyPromptStage\(runId\)/);
   assert.match(promptDoneSource, /scheduleEventStreamClose\(sid\)/);
+  assert.match(promptDoneSource, /waitForPromptSettlement\(sid, runId\)/);
   assert.match(
     sendSource,
     /const definitivelyRejected = !promptRequestStarted \|\| isPromptRejectedError\(e\)/,
@@ -171,13 +172,13 @@ test("fork navigation selects the new session id from the RPC result", () => {
 
   assert.match(
     forkSource,
-    /const handleFork = useCallback\(async \([\s\S]*?entryId\?: string\): Promise<\{ forked: boolean; error\?: string \}>/,
+    /const handleFork = useCallback\(async \([\s\S]*?entryId\?: string,?[\s\S]*?Promise<\{ forked: boolean; error\?: string \}>/,
   );
   assert.match(forkSource, /type: "fork"/);
   assert.match(forkSource, /\.\.\.\(entryId \? \{ entryId \} : \{\}\)/);
   assert.match(forkSource, /const \{ cancelled, newSessionId \} = result \?\? \{\};/);
   assert.match(forkSource, /if \(!cancelled && newSessionId\) \{/);
-  assert.match(forkSource, /onSessionForked\?\.\(newSessionId\); return \{ forked: true \};/);
+  assert.match(forkSource, /onSessionForked\?\.\(newSessionId\);\s*return \{ forked: true \};/);
   assert.match(forkSource, /error: e instanceof Error \? e\.message : String\(e\)/);
   assert.match(forkSource, /setForkingEntryId\(null\)/);
 });

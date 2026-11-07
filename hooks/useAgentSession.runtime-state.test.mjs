@@ -28,6 +28,7 @@ function harness() {
     historyRequestRef: { current: 0 },
     contextUsageRequestIdRef: { current: 0 },
     promptRunIdRef: { current: 1 },
+    promptSettleKeysRef: { current: new Set() },
     bashRecoveryIdRef: { current: 0 },
     agentRunningRef: { current: true },
     bashRunningRef: { current: true },
@@ -85,8 +86,15 @@ function harness() {
   ]) {
     bindings[`set${name}`] = (...args) => effects.push([name, ...args]);
   }
+  bindings.sdkAgentActiveRef = { current: true };
+  bindings.notifiedPromptRunIdRef = { current: -1 };
+  bindings.onAgentEnd = (...args) => effects.push(["AgentEnd", ...args]);
+  bindings.setAgentRunning = (...args) => effects.push(["AgentRunning", ...args]);
+  bindings.scheduleEventStreamClose = (...args) => effects.push(["Close", ...args]);
   bindings.followSessionIdentity = callback("followSessionIdentity", bindings);
   bindings.followRuntimeState = callback("followRuntimeState", bindings);
+  bindings.settleUiStage = callback("settleUiStage", bindings);
+  bindings.notifyPromptStage = callback("notifyPromptStage", bindings);
   // 叶子的唯一写入口：状态与去重用的 ref 由它一起写，测试跑的是同一份代码。
   bindings.applyActiveLeaf = callback("applyActiveLeaf", bindings);
   return { bindings, effects, continuation };
@@ -193,7 +201,7 @@ for (const name of ["reconcileAgentState", "refreshContextUsage", "handleAgentEv
       return { ok: true, json: () => pending.promise };
     };
     const fn = callback(name, h.bindings);
-    const result = fn(name === "handleAgentEvent" ? { type: "agent_end" } : "b");
+    const result = fn(name === "handleAgentEvent" ? { type: "agent_end", isTerminal: false } : "b");
     await requested.promise;
     installNewRuntime(h);
     pending.resolve({ running: false, state: { sessionId: "b", contextUsage: { percent: 99 } } });
@@ -321,3 +329,20 @@ for (const name of ["waitForPromptSettlement", "waitForBashSettlement"]) {
     });
   }
 }
+
+test("terminal agent_end settles once while a resumable end keeps the run busy", () => {
+  const h = harness();
+  h.bindings.sessionIdRef.current = null;
+  const fn = callback("handleAgentEvent", h.bindings);
+
+  fn({ type: "agent_end", isTerminal: false });
+  assert.equal(h.bindings.agentRunningRef.current, true);
+  assert.equal(h.effects.filter(([name]) => name === "AgentEnd").length, 0);
+
+  fn({ type: "agent_end", isTerminal: true });
+  assert.equal(h.bindings.agentRunningRef.current, false);
+  assert.equal(h.effects.filter(([name]) => name === "AgentEnd").length, 1);
+
+  fn({ type: "agent_end", isTerminal: true });
+  assert.equal(h.effects.filter(([name]) => name === "AgentEnd").length, 1);
+});

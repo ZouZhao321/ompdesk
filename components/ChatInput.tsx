@@ -126,10 +126,9 @@ export interface ChatInputHandle {
   insertText: (text: string) => void;
   insertIfEmpty: (text: string) => void;
   replaceMessage: (message: UserMessage) => void;
-  prependText: (text: string) => void;
   addImages: (files: File[]) => void;
   rekeyDraft: (previousKey: string, nextKey: string) => void;
-  restoreSubmission: (text: string, images?: ChatDraftImage[], targetDraftKey?: string) => void;
+  restoreSubmission: (text: string, images?: ChatDraftImage[], targetDraftKey?: string) => number;
 }
 
 const TOOL_PRESETS = ["off", "default", "full"] as const;
@@ -353,9 +352,11 @@ function revokeImagePreview(image: AttachedImage): void {
 }
 
 function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: string }) {
+  const { t } = useI18n();
+  const label = !text || text === "[Image]" ? t("chat.queuedImage") : text;
   return (
     <div
-      title={text}
+      title={label}
       style={{
         display: "flex",
         alignItems: "center",
@@ -382,7 +383,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
       <span
         style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
       >
-        {text}
+        {label}
       </span>
     </div>
   );
@@ -621,24 +622,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
         ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
       });
     },
-    prependText(text: string) {
-      if (!text.trim()) return;
-      const ta = textareaRef.current;
-      const current = ta ? ta.value : value;
-      // Mirrors the TUI's queue restore: queued text first, then whatever
-      // the user already typed, separated by a blank line.
-      const combined = [text, current].filter((t) => t.trim()).join("\n\n");
-      valueRef.current = combined;
-      setValue(combined);
-      setAtQuery(null);
-      requestAnimationFrame(() => {
-        if (!ta) return;
-        ta.focus();
-        ta.setSelectionRange(combined.length, combined.length);
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-      });
-    },
     rekeyDraft(previousKey: string, nextKey: string) {
       if (previousKey === nextKey) return;
       if (draftKeyRef.current !== previousKey) {
@@ -677,7 +660,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       setHistoryMenuOpen(false);
     },
     restoreSubmission(text: string, images?: ChatDraftImage[], targetDraftKey?: string) {
-      if (!text.trim() && !images?.length) return;
+      if (!text.trim() && !images?.length) return 0;
 
       // clearInput is queued before the submission handler runs. Compose with
       // that queued state so a fast rejection cannot observe stale DOM text and
@@ -699,7 +682,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
       // layout and remounts this component. Persist synchronously so recovery is
       // not lost if this instance is the one being unmounted.
       if (destinationDraftKey) setDraft(destinationDraftKey, restoredDraft);
-      if (!targetsCurrentComposer) return;
+      if (!targetsCurrentComposer) return 0;
       const restoredImages = images?.length
         ? [
             ...draftImagesToAttachedImages(images).slice(
@@ -709,6 +692,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             ...attachedImagesRef.current,
           ].slice(0, MAX_ATTACHED_IMAGES)
         : attachedImagesRef.current;
+      const requestedImageCount = images?.filter(isBase64ImageWithinLimits).length ?? 0;
+      const restoredImageCount = restoredImages.length - attachedImagesRef.current.length;
       // Session promotion can rekey this composer before React flushes the
       // functional updates below, so update the imperative snapshot first.
       valueRef.current = restoredDraft.value;
@@ -737,6 +722,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
         ta.style.height = "auto";
         ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
       });
+      return Math.max(0, requestedImageCount - restoredImageCount);
     },
     insertText(text: string) {
       const ta = textareaRef.current;
@@ -948,8 +934,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     filteredSlashCommands.length === 1
       ? t(slashQuery ? "chat.match" : "chat.command")
       : t(slashQuery ? "chat.matches" : "chat.commands", { count: filteredSlashCommands.length });
-  const hasInputText = Boolean(value.trim());
-  const canQueueStreamingMessage = hasInputText && attachedImages.length === 0;
+  const canQueueStreamingMessage = Boolean(value.trim()) || attachedImages.length > 0;
 
   // ── @ file autocomplete ──────────────────────────────────────────────────
   // Recomputed from the text before the caret on every change/caret move.
@@ -1170,11 +1155,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
     (mode: "steer" | "followup") => {
       const msg = value.trim();
       if (!msg && !attachedImages.length) return;
-      if (attachedImages.length) return;
       onAudioUnlock?.();
       // 忙碌时 `/rewind` 与 `/branch` 必须走内建分发拿到忙态提示，不能被当成 steer/follow-up 发给模型。
       if (isRewindInput(msg)) {
-        clearInput();
+        // 带图片时保留附件：忙碌分发只给提示，不能把尚未发送的图片清掉。
+        if (!attachedImages.length) clearInput();
         void onBuiltinCommand?.(msg);
         return;
       }
@@ -2347,11 +2332,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                   <button
                     onClick={() => sendQueued("steer")}
                     disabled={!canQueueStreamingMessage}
-                    title={
-                      attachedImages.length
-                        ? "Image attachments cannot be queued while the agent is running"
-                        : "Interrupt the current run and inject this message now"
-                    }
+                    title={t("chat.steerTitle")}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -2390,11 +2371,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                   <button
                     onClick={() => sendQueued("followup")}
                     disabled={!canQueueStreamingMessage}
-                    title={
-                      attachedImages.length
-                        ? "Image attachments cannot be queued while the agent is running"
-                        : "Queue this message after the agent finishes"
-                    }
+                    title={t("chat.followUpTitle")}
                     style={{
                       display: "flex",
                       alignItems: "center",

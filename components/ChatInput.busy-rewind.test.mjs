@@ -159,3 +159,33 @@ test("handleSend dispatches /rewind to the builtin handler when the session is i
   );
   assert.equal(h.names().filter((name) => name === "clearInput").length, 1);
 });
+
+test("sendQueued queues image attachments for steer and follow-up", () => {
+  const image = { data: "AQID", mimeType: "image/png", previewUrl: "data:image/png;base64,AQID" };
+  const steer = harness({ value: "", attachedImages: [image], isStreaming: true });
+  steer.sendQueued("steer");
+  assert.deepEqual(
+    steer.calls.filter(([name]) => name === "onSteer"),
+    [["onSteer", "", [image]]],
+  );
+  assert.equal(steer.input.cleared, true);
+
+  const follow = harness({ value: "", attachedImages: [image], isStreaming: true });
+  follow.sendQueued("followup");
+  assert.deepEqual(
+    follow.calls.filter(([name]) => name === "onFollowUp"),
+    [["onFollowUp", "", [image]]],
+  );
+  assert.equal(follow.input.cleared, true);
+});
+
+test("sendQueued keeps image attachments when a busy /rewind is rejected", () => {
+  const image = { data: "AQID", mimeType: "image/png", previewUrl: "data:image/png;base64,AQID" };
+  const h = harness({ value: "/rewind", attachedImages: [image], isStreaming: true });
+  h.sendQueued("steer");
+  assert.deepEqual(
+    h.calls.filter(([name]) => name === "onBuiltinCommand"),
+    [["onBuiltinCommand", "/rewind"]],
+  );
+  assert.equal(h.names().includes("clearInput"), false);
+});
