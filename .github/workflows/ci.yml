@@ -26,6 +26,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # 覆盖率门禁要与合并目标分支求分叉点（git merge-base origin/main HEAD）。
+          # 浅克隆只有一个提交，分叉点取不到；改名识别同样依赖历史。
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -43,9 +47,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # 流水线只在 package.json 的 `ci` 脚本里定义一次（typecheck → test → build →
-      # smoke:dev）；本地 `bun run verify` 与推送前钩子用的是同一份定义，改流程只改
-      # 那一处，CI 与本地不会再分叉。
+      # 流水线只在 package.json 的 `ci` 脚本里定义一次（typecheck → test →
+      # coverage:gate → build → smoke:dev）；本地 `bun run verify` 与推送前钩子用的是
+      # 同一份定义，改流程只改那一处，CI 与本地不会再分叉。
+      #
+      # coverage:gate 复用同一条测试命令产出 lcov，再渲染本次改动的覆盖率数字并执行
+      # 覆盖率规则。规则有判定结果时这一步以非零退出码结束，合并检查随之变红；测试
+      # 失败仍由前面的 test 步骤决定。本地单独复现用 `bun run coverage:gate`。
       #
       # eslint 不进这道门禁：全仓 `bun run lint` 现有存量 error（React 编译器的
       # memoization 检查，落在 components/ 与 hooks/），加进来必然红。复现命令
@@ -58,5 +66,10 @@ jobs:
       # 最后一步会真实启动 dev server 请求首页与一个 API 路由：`bun run build` 只编译
       # 生产图谱，开发图谱里把 node: 内置模块带进 edge 或浏览器产物的错误能绕开它，
       # 表现成页面 500；冒烟失败时打印编译日志。
-      - name: Verify (typecheck, tests, build, dev smoke)
+      - name: Verify (typecheck, tests, coverage, build, dev smoke)
+        # 堆叠 PR 的合并目标是上一层分支，覆盖率门禁按同一个合并目标算改动清单：
+        # 只看本 PR 自己的增量，不把上一层引入的文件重复判一遍。推到 main 时 base_ref
+        # 为空，退回 origin/main。
+        env:
+          COVERAGE_GATE_BASE: origin/${{ github.base_ref || 'main' }}
         run: bun run ci
