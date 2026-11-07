@@ -62,6 +62,52 @@ jobs:
       - name: Verify the packed tarball installs and serves
         run: bun run verify:package
 
+      # 发布出去的就是这一个 tgz：Windows 与 macOS 作业装它，而不是各平台
+      # 重新构建一份永远不会发布的产物。
+      - name: Upload the packed tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: ompdesk-tarball
+          path: .tmp/pack-check/tarball/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  package-smoke:
+    name: Package smoke (${{ matrix.os }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Download the packed tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: ompdesk-tarball
+          path: .tmp/pack-tarball
+
+      # 安装、启动与首页探测都与 Linux 那一份相同，差别只在运行平台：
+      # npm 的 sh 包装、Bun 可执行文件解析、路径分隔符与端口绑定都要按各平台真实走一遍。
+      - name: Install the tarball and serve the homepage
+        env:
+          OMPDESK_PACK_TARBALL: ${{ github.workspace }}/.tmp/pack-tarball
+        run: bun run verify:package
+
   windows:
     name: Verify on Windows
     runs-on: windows-latest
