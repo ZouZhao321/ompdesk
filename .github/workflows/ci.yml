@@ -1,7 +1,8 @@
 name: CI
 
-# 质量门禁分五组：
-# - Verify build：Linux 上跑 `bun run ci`（typecheck → test → build → dev 冒烟）与打包安装冒烟；
+# 质量门禁分六组：
+# - Verify build：Linux 上跑 `bun run ci`（typecheck → test → build → dev 冒烟），再 `npm pack` 并上传产物；
+# - Package smoke：三个平台各装一遍同一个 tgz，起服务请求首页；
 # - Verify on Windows：平台分支与路径语义只在这里有覆盖；
 # - Lint changed files：只查改动行，existing 的 8 个 lint error 不挡 PR；
 # - Commit titles：外部贡献者不装本地钩子时的标题校验；
