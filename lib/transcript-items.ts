@@ -7,6 +7,7 @@ import {
 	type DisplayOptions,
 } from "./message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "./turn-written-files";
+import { isUserSkillPrompt } from "./slash-display";
 
 /** 构建条目时界面持有的输入。 */
 export interface TranscriptItemsOptions {
@@ -78,7 +79,10 @@ export interface TranscriptItem {
  */
 export function isGroupAnchor(message: AgentMessage): boolean {
 	if (message.role === "user") return true;
-	return message.role === "custom" && (message as CustomMessage).customType === "compaction";
+	if (message.role !== "custom") return false;
+	const custom = message as CustomMessage;
+	// 技能指令是用户回合：正文就是提问，折进过程组会把提问藏起来。
+	return custom.customType === "compaction" || isUserSkillPrompt(custom);
 }
 
 function hasFinalAssistantAnswer(message: AgentMessage, options: DisplayOptions): boolean {

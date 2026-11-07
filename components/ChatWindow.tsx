@@ -18,6 +18,7 @@ import type {
 	AgentMessage,
 	BashExecutionMessage,
 	BlockingExtensionUiRequest,
+	CustomMessage,
 	ExtensionUiRequest,
 	SessionInfo,
 	SessionTreeNode,
@@ -30,6 +31,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { buildRewindEntries } from "@/lib/rewind";
 import type { DisplayOptions } from "@/lib/message-display";
 import type { WrittenFile } from "@/lib/turn-written-files";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { buildTranscriptItems } from "@/lib/transcript-items";
 import {
 	buildTranscriptRailDots,
@@ -107,10 +109,7 @@ function phaseLabel(
 		if (names.length === 0) return t("chat.runningTool");
 		if (names.length === 1) return t("chat.runningNamedTool", { name: names[0] });
 		if (names.length <= 3) return t("chat.runningTools", { names: names.join(", ") });
-		return t("chat.runningToolsMore", {
-			names: names.slice(0, 2).join(", "),
-			count: names.length - 2,
-		});
+		return t("chat.runningToolsMore", { names: names.slice(0, 2).join(", "), count: names.length - 2 });
 	}
 	if (phase?.kind === "waiting_model") return t("chat.waitingModel");
 	if (phase?.kind === "running_command") return t("chat.runningCommand");
@@ -189,6 +188,11 @@ const TRANSCRIPT_SLOTS: Components<TranscriptListItem, TranscriptSlotsContext> =
 };
 
 function getUserInputText(message: AgentMessage): string | null {
+	// 技能指令是用户回合，跳转条与输入历史都要把它算进来。
+	if (message.role === "custom" && isUserSkillPrompt(message as CustomMessage)) {
+		const label = skillPromptCommandLabel((message as CustomMessage).details as SkillPromptDetailsLike | undefined);
+		return label.trim().length > 0 ? label.trim() : null;
+	}
 	if (message.role !== "user") return null;
 	if (typeof message.content === "string") {
 		const text = message.content.trim();
@@ -261,22 +265,11 @@ function ProcessDetailsGroup({
 					strokeWidth="1.6"
 					strokeLinecap="round"
 					strokeLinejoin="round"
-					style={{
-						flexShrink: 0,
-						transform: expanded ? "rotate(90deg)" : "none",
-						transition: "transform 0.15s",
-					}}
+					style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}
 				>
 					<polyline points="4 2.5 7.5 6 4 9.5" />
 				</svg>
-				<span
-					style={{
-						minWidth: 0,
-						overflow: "hidden",
-						textOverflow: "ellipsis",
-						whiteSpace: "nowrap",
-					}}
-				>
+				<span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
 					{parts.join(" · ")}
 				</span>
 			</button>
@@ -1437,9 +1430,7 @@ function GoalBar({
 	const paused = !goal.enabled;
 	const budget =
 		goal.tokenBudget !== undefined
-			? t("chat.goalBudgetLeft", {
-					left: formatTokenCount(Math.max(0, goal.tokenBudget - goal.tokensUsed)),
-				})
+			? t("chat.goalBudgetLeft", { left: formatTokenCount(Math.max(0, goal.tokenBudget - goal.tokensUsed)) })
 			: t("chat.goalTokensUsed", { used: formatTokenCount(goal.tokensUsed) });
 	return (
 		<div
@@ -1972,10 +1963,7 @@ function ExtensionDialog({
 										<input
 											value={customAnswers[question.id] ?? ""}
 											onChange={(event) =>
-												setCustomAnswers((current) => ({
-													...current,
-													[question.id]: event.target.value,
-												}))
+												setCustomAnswers((current) => ({ ...current, [question.id]: event.target.value }))
 											}
 											onKeyDown={(event) => {
 												if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitAnswers();
@@ -2175,15 +2163,7 @@ function ExtensionDialog({
 								lineHeight: 1.5,
 							}}
 						/>
-						<div
-							style={{
-								display: "flex",
-								flexWrap: "wrap",
-								justifyContent: "flex-end",
-								gap: 8,
-								marginTop: 9,
-							}}
-						>
+						<div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8, marginTop: 9 }}>
 							<button
 								type="button"
 								onClick={() =>
@@ -2264,14 +2244,7 @@ function ExtensionDialog({
 					}}
 				>
 					<div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650 }}>{request.title}</div>
-					<div
-						style={{
-							marginTop: 3,
-							color: "var(--text-dim)",
-							fontSize: 11,
-							fontFamily: "var(--font-mono)",
-						}}
-					>
+					<div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>
 						{t("chat.extensionRequest")}
 					</div>
 				</div>
@@ -2285,14 +2258,7 @@ function ExtensionDialog({
 					}}
 				>
 					{request.method === "confirm" && (
-						<div
-							style={{
-								color: "var(--text-muted)",
-								fontSize: 13,
-								lineHeight: 1.6,
-								whiteSpace: "pre-wrap",
-							}}
-						>
+						<div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
 							{request.message}
 						</div>
 					)}

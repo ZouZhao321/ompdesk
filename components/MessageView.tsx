@@ -21,6 +21,7 @@ import {
 } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import type {
@@ -312,8 +313,19 @@ export const MessageView = memo(
 			return null;
 		}
 		if (message.role === "custom") {
-			if ((message as CustomMessage).customType === "compaction") {
+			const customType = (message as CustomMessage).customType;
+			if (customType === "compaction") {
 				return <CompactionMessageView message={message as CustomMessage} />;
+			}
+			if (isUserSkillPrompt(message as CustomMessage)) {
+				return (
+					<SkillPromptMessageView
+						message={message as CustomMessage}
+						cwd={cwd}
+						onOpenFile={onOpenFile}
+						sessionId={sessionId}
+					/>
+				);
 			}
 			return (
 				<CustomMessageView
@@ -1461,12 +1473,7 @@ function ToolCallCard({
 				)}
 				{duration !== undefined && (
 					<span
-						style={{
-							fontSize: 11,
-							color: "var(--text-dim)",
-							flexShrink: 0,
-							fontVariantNumeric: "tabular-nums",
-						}}
+						style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}
 					>
 						{duration}s
 					</span>
@@ -1480,11 +1487,7 @@ function ToolCallCard({
 					strokeWidth="1.6"
 					strokeLinecap="round"
 					strokeLinejoin="round"
-					style={{
-						flexShrink: 0,
-						transform: expanded ? "rotate(180deg)" : "none",
-						transition: "transform 0.15s",
-					}}
+					style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
 				>
 					<polyline points="2 3.5 5 6.5 8 3.5" />
 				</svg>
@@ -2302,15 +2305,7 @@ function CompactionMessageView({ message }: { message: CustomMessage }) {
 					<div style={{ color: "var(--text)", fontSize: 15, fontWeight: 700, lineHeight: 1.35 }}>
 						{t("i18n.conversationCompacted")}
 					</div>
-					<div
-						style={{
-							marginTop: 3,
-							marginBottom: 10,
-							color: "var(--text)",
-							fontSize: 14,
-							lineHeight: 1.5,
-						}}
-					>
+					<div style={{ marginTop: 3, marginBottom: 10, color: "var(--text)", fontSize: 14, lineHeight: 1.5 }}>
 						{t("i18n.compactionDescription")}
 					</div>
 					{parsedSummary.body ? (
@@ -2355,6 +2350,129 @@ function CompactionFileList({ title, files }: { title: string; files: string[] }
 					<li key={file}>{file}</li>
 				))}
 			</ul>
+		</div>
+	);
+}
+
+/**
+ * A user-invoked `/skill:name args` turn. It reads as a user bubble with the
+ * command as its title; the skill envelope stays folded until asked for, so a
+ * long skill body never pushes the conversation down.
+ */
+function SkillPromptMessageView({
+	message,
+	cwd,
+	onOpenFile,
+	sessionId,
+}: {
+	message: CustomMessage;
+	cwd?: string;
+	onOpenFile?: (filePath: string) => void;
+	sessionId?: string;
+}) {
+	const { t } = useI18n();
+	const [expanded, setExpanded] = useState(false);
+	const command = skillPromptCommandLabel(message.details as SkillPromptDetailsLike | undefined);
+	const body = getMessageText(message.content);
+	const images = getMessageImages(message.content);
+
+	return (
+		<div style={{ marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+			<div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "85%" }}>
+				<div
+					style={{
+						flex: 1,
+						minWidth: 0,
+						background: "var(--user-bg)",
+						border: "1px solid rgba(59,130,246,0.2)",
+						borderRadius: 12,
+						padding: "8px 12px",
+						fontSize: 14,
+						lineHeight: 1.6,
+						color: "var(--text)",
+						wordBreak: "break-word",
+					}}
+				>
+					<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+						<code
+							style={{
+								fontFamily: "var(--font-mono)",
+								fontSize: 13,
+								color: "var(--accent)",
+								wordBreak: "break-all",
+							}}
+						>
+							{command}
+						</code>
+						{(body || images.length > 0) && (
+							<button
+								onClick={() => setExpanded((value) => !value)}
+								aria-expanded={expanded}
+								className="message-action-button"
+								style={{
+									marginLeft: "auto",
+									padding: "2px 6px",
+									border: "none",
+									background: "none",
+									color: "var(--text-dim)",
+									cursor: "pointer",
+									fontSize: 11,
+									whiteSpace: "nowrap",
+								}}
+							>
+								{expanded ? t("i18n.collapse") : t("i18n.expand")}
+							</button>
+						)}
+					</div>
+					{images.length > 0 && (
+						<div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: body || expanded ? 8 : 0 }}>
+							{images.map((img, i) => {
+								const src = imageSource(img);
+								if (!src) return null;
+								return (
+									<ZoomableImage
+										key={i}
+										src={src}
+										thumbnail
+										imgStyle={{
+											maxWidth: 240,
+											maxHeight: 240,
+											borderRadius: 6,
+											objectFit: "contain",
+											display: "block",
+											border: "1px solid rgba(59,130,246,0.15)",
+										}}
+									/>
+								);
+							})}
+						</div>
+					)}
+					{expanded && (
+						<div
+							style={{
+								marginTop: 8,
+								borderTop: "1px solid rgba(59,130,246,0.2)",
+								paddingTop: 8,
+								maxHeight: USER_BUBBLE_MAX_HEIGHT,
+								overflowY: "auto",
+							}}
+						>
+							{body ? (
+								<SafeMarkdownBody
+									className="markdown-user-message"
+									cwd={cwd}
+									onOpenFile={onOpenFile}
+									sessionId={sessionId}
+								>
+									{body}
+								</SafeMarkdownBody>
+							) : (
+								<span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.noMessage")}</span>
+							)}
+						</div>
+					)}
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -2413,12 +2531,7 @@ function CustomMessageView({
 					}}
 				>
 					<span
-						style={{
-							color: "var(--text-muted)",
-							fontFamily: "var(--font-mono)",
-							fontSize: 11,
-							fontWeight: 650,
-						}}
+						style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}
 					>
 						{title}
 					</span>
@@ -2686,11 +2799,7 @@ function BashExecutionView({
 		setFullError(null);
 		try {
 			const res = await fetch(fullOutputUrl);
-			const d = (await res.json()) as {
-				success?: boolean;
-				data?: { output?: string };
-				error?: string;
-			};
+			const d = (await res.json()) as { success?: boolean; data?: { output?: string }; error?: string };
 			if (d.success) {
 				setFullOutput(d.data?.output ?? "");
 			} else {

@@ -92,6 +92,8 @@ export interface CustomMessage {
 	content: string | (TextContent | ImageContent)[];
 	display: boolean;
 	details?: unknown;
+	/** `"user"` 表示这条自定义消息是用户发起的回合，例如手动调用的技能指令。 */
+	attribution?: "user" | "agent";
 	timestamp?: number;
 }
 
@@ -349,6 +351,7 @@ export interface CustomMessageEntry extends SessionEntryBase {
 	content: string | (TextContent | ImageContent)[];
 	details?: unknown;
 	display: boolean;
+	attribution?: "user" | "agent";
 }
 
 export interface LabelEntry extends SessionEntryBase {

@@ -2,6 +2,7 @@ import type {
 	AgentSessionEvent,
 	SessionManager,
 	Settings,
+	SkillsSettings,
 	SlashCommandInfo as OmpSlashCommandInfo,
 	Theme,
 } from "@oh-my-pi/pi-coding-agent";
@@ -81,7 +82,8 @@ interface SkillLike {
 	name: string;
 	description?: string;
 	source?: string;
-	filePath?: string;
+	filePath: string;
+	baseDir: string;
 }
 
 interface ExtensionRunnerLike {
@@ -170,6 +172,8 @@ export interface AgentSessionLike {
 	readonly extensionRunner: ExtensionRunnerLike | undefined;
 	readonly promptTemplates: readonly PromptTemplateLike[];
 	readonly skills: readonly SkillLike[];
+	/** Resolved `skills.*` settings; absent when the SDK was built without them. */
+	readonly skillsSettings?: SkillsSettings;
 
 	readonly bindExtensions?: unknown;
 	reload(options?: { beforeSessionStart?: () => void | Promise<void> }): Promise<void>;
@@ -188,13 +192,7 @@ export interface AgentSessionLike {
 		command: string,
 		onChunk?: (chunk: string) => void,
 		options?: { excludeFromContext?: boolean },
-	): Promise<{
-		output: string;
-		exitCode?: number;
-		cancelled?: boolean;
-		truncated?: boolean;
-		fullOutputPath?: string;
-	}>;
+	): Promise<{ output: string; exitCode?: number; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string }>;
 	abortBash(): void;
 	readonly isBashRunning: boolean;
 	setModel(
@@ -224,14 +222,8 @@ export interface AgentSessionLike {
 	readonly queuedMessageCount: number;
 	getQueuedMessages(): { steering: readonly string[]; followUp: readonly string[] };
 	clearQueue(): {
-		steering: Array<{
-			text: string;
-			images?: Array<{ type: "image"; data: string; mimeType: string }>;
-		}>;
-		followUp: Array<{
-			text: string;
-			images?: Array<{ type: "image"; data: string; mimeType: string }>;
-		}>;
+		steering: Array<{ text: string; images?: Array<{ type: "image"; data: string; mimeType: string }> }>;
+		followUp: Array<{ text: string; images?: Array<{ type: "image"; data: string; mimeType: string }> }>;
 	};
 	getAllToolNames(): string[];
 	getToolByName(name: string): { name: string; description?: string } | undefined;
@@ -282,12 +274,17 @@ export interface AgentSessionLike {
 	promptCustomMessage(
 		message: {
 			customType: string;
-			content: string;
+			content: string | Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
 			display?: boolean;
+			details?: unknown;
 			attribution?: "user" | "agent";
 		},
-		options?: { streamingBehavior?: "steer" | "followUp" },
-	): Promise<void>;
+		options?: {
+			streamingBehavior?: "steer" | "followUp";
+			queueChipText?: string;
+			queueOnly?: boolean;
+		},
+	): Promise<boolean>;
 }
 
 /** The subset of omp's `GoalRuntime` ompdesk drives. */

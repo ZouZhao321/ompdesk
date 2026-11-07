@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { stripAnsi } from "@/lib/ansi";
 import {
 	canApplySessionIdentity,
@@ -176,6 +177,14 @@ type ExtensionUiDialogRequest = Extract<
 type ExtensionUiCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
 export type NoticeType = "info" | "success" | "warning" | "error";
 
+/** 技能指令未生效的提示文案，键与 `SkillFallbackReason` 对齐。 */
+const SKILL_UNAVAILABLE_MESSAGE_KEYS: Record<string, string> = {
+	disabled: "chat.skillCommandDisabled",
+	unreadable: "chat.skillCommandUnreadable",
+	dropped: "chat.skillCommandDropped",
+	unknown: "chat.skillCommandUnknown",
+};
+
 export type NoticeItem = {
 	id: string;
 	message: string;
@@ -207,13 +216,7 @@ export interface CompactResultInfo {
 
 export type BuiltinSlashCommandResult =
 	| { handled: false }
-	| {
-			handled: true;
-			message?: string;
-			error?: string;
-			prompt?: string;
-			action?: "openSessionStats" | "openRewind";
-	  };
+	| { handled: true; message?: string; error?: string; prompt?: string; action?: "openSessionStats" | "openRewind" };
 
 export interface UseAgentSessionOptions {
 	session: SessionInfo | null;
@@ -479,16 +482,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	}, []);
 	const [messages, setMessages] = useState<AgentMessage[]>([]);
 	const [entryIds, setEntryIds] = useState<string[]>([]);
-	const [streamState, dispatch] = useReducer(streamReducer, {
-		isStreaming: false,
-		streamingMessage: null,
-	});
+	const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
 	const [agentRunning, setAgentRunning] = useState(false);
 	const [bashRunning, setBashRunning] = useState(false);
-	const [pendingBash, setPendingBash] = useState<{
-		command: string;
-		excludeFromContext: boolean;
-	} | null>(null);
+	const [pendingBash, setPendingBash] = useState<{ command: string; excludeFromContext: boolean } | null>(null);
 	const [modelNames, setModelNames] = useState<Record<string, string>>({});
 	const [modelList, setModelList] = useState<ModelEntry[]>([]);
 	const [modelError, setModelError] = useState<string | null>(null);
@@ -503,11 +500,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	const [toolPreset, setToolPreset] = useState<"none" | "default" | "full">("default");
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
 	const [effectiveThinkingLevel, setEffectiveThinkingLevel] = useState<string | undefined>();
-	const [retryInfo, setRetryInfo] = useState<{
-		attempt: number;
-		maxAttempts: number;
-		errorMessage?: string;
-	} | null>(null);
+	const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(
+		null,
+	);
 	const [contextUsage, setContextUsage] = useState<{
 		percent: number | null;
 		contextWindow: number;
@@ -516,10 +511,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
 	const [rewindOpen, setRewindOpen] = useState(false);
 	const rewindInFlightRef = useRef(false);
-	const [currentModelOverride, setCurrentModelOverride] = useState<{
-		provider: string;
-		modelId: string;
-	} | null>(null);
+	const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
 	const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
 	const [modelSwitching, setModelSwitching] = useState(false);
 	const [isCompacting, setIsCompacting] = useState(false);
@@ -534,10 +526,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	const [extensionCustomUi, setExtensionCustomUi] = useState<ExtensionUiCustomRequest | null>(null);
 	const [extensionStatuses, setExtensionStatuses] = useState<ExtensionStatusItem[]>([]);
 	const [extensionWidgets, setExtensionWidgets] = useState<ExtensionWidgetItem[]>([]);
-	const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({
-		steering: [],
-		followUp: [],
-	});
+	const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({ steering: [], followUp: [] });
 	const [subagents, setSubagents] = useState<SubagentSnapshot[]>([]);
 
 	const eventSourceRef = useRef<EventSource | null>(null);
@@ -619,7 +608,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 		let toolResults = 0;
 		let toolCalls = 0;
 		for (const msg of messages) {
-			if (msg.role === "user") userMessages += 1;
+			if (msg.role === "user" || (msg.role === "custom" && isUserSkillPrompt(msg))) userMessages += 1;
 			if (msg.role === "toolResult") toolResults += 1;
 			if (msg.role !== "assistant") continue;
 			assistantMessages += 1;
@@ -849,10 +838,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 							: `/api/sessions/${encodeURIComponent(sid)}/state`,
 					);
 					if (!stateRes.ok) throw new Error(`HTTP ${stateRes.status}`);
-					const agentState = (await stateRes.json()) as {
-						running: boolean;
-						state?: AgentStateResponse;
-					};
+					const agentState = (await stateRes.json()) as { running: boolean; state?: AgentStateResponse };
 					if (!mountedRef.current || sessionIdRef.current !== sid) return null;
 
 					const liveState = agentState.state;
@@ -1150,13 +1136,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 					// connection must be ready before they continue.
 				};
 			});
-			eventConnectionAttemptRef.current = {
-				source: es,
-				promise,
-				pending: true,
-				connected: false,
-				cancel,
-			};
+			eventConnectionAttemptRef.current = { source: es, promise, pending: true, connected: false, cancel };
 			return promise;
 		},
 		[closeEvents],
@@ -1169,10 +1149,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 			if (requestedRuntimeId) {
 				const stateRes = await fetch(`/api/agent/${encodeURIComponent(requestedRuntimeId)}`);
 				if (stateRes.ok) {
-					const state = (await stateRes.json()) as {
-						running?: boolean;
-						state?: AgentStateResponse;
-					};
+					const state = (await stateRes.json()) as { running?: boolean; state?: AgentStateResponse };
 					if (!mountedRef.current || sessionIdRef.current !== sid) throw new Error("Session is no longer active");
 					const stale = followRuntimeState(state.state, sid, requestedRuntimeId);
 					if (!stale && !state.running) {
@@ -1616,10 +1593,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 					return;
 				if (followRuntimeState(data.state, sid, requestedRuntimeId)) return;
 				if (data.state?.model && !modelSwitchPendingRef.current) {
-					setCurrentModelOverride({
-						provider: data.state.model.provider,
-						modelId: data.state.model.id,
-					});
+					setCurrentModelOverride({ provider: data.state.model.provider, modelId: data.state.model.id });
 				}
 				if (data.state?.contextUsage !== undefined) setContextUsage(data.state.contextUsage ?? null);
 			} catch {
@@ -1762,11 +1736,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 					}
 					break;
 				case "prompt_error":
+					addNotice({ type: "error", message: (event.errorMessage as string | undefined) ?? "Command failed" });
+					break;
+				case "skill_command_unavailable": {
+					const reason = event.reason as string | undefined;
+					const messageKey =
+						SKILL_UNAVAILABLE_MESSAGE_KEYS[reason ?? ""] ?? SKILL_UNAVAILABLE_MESSAGE_KEYS.unknown;
 					addNotice({
-						type: "error",
-						message: (event.errorMessage as string | undefined) ?? "Command failed",
+						type: "warning",
+						message: t(messageKey, { skill: (event.skill as string | undefined) ?? "" }),
 					});
 					break;
+				}
 				case "extension_error":
 					addNotice({
 						type: "error",
@@ -1812,7 +1793,29 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 							return [...prev, delivered];
 						});
 					} else if (completed) {
-						setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
+						const delivered = normalizeToolCalls(completed);
+						if (isUserSkillPrompt(delivered as CustomMessage)) {
+							// 技能指令替换乐观气泡，避免同一句指令显示两遍。
+							const command = skillPromptCommandLabel(
+								(delivered as CustomMessage).details as SkillPromptDetailsLike | undefined,
+							);
+							const optimisticKey = optimisticUserMessageKeyRef.current;
+							optimisticUserMessageKeyRef.current = null;
+							setMessages((prev) => {
+								const last = prev[prev.length - 1];
+								// 带图片发送时乐观 key 含图片签名，与纯文本命令行不相等；
+								// 两种命中都算同一条气泡，避免指令显示两遍。
+								const lastIsOptimistic =
+									last?.role === "user" &&
+									(userMessageKey(last) === optimisticKey || extractMessageText(last) === command);
+								if (optimisticKey && lastIsOptimistic) {
+									return [...prev.slice(0, -1), delivered];
+								}
+								return [...prev, delivered];
+							});
+						} else {
+							setMessages((prev) => [...prev, delivered]);
+						}
 					}
 					const sid = sessionIdRef.current;
 					if (sid) void refreshContextUsage(sid);
@@ -1977,6 +1980,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 			refreshContextUsage,
 			scheduleEventStreamClose,
 			settleUiStage,
+			t,
 		],
 	);
 	handleAgentEventRef.current = handleAgentEvent;
@@ -2022,11 +2026,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 			// 提交后一律回到底部：上滚过的视图不会停在历史中间。
 			applyFollowRef.current({ type: "submit" });
 
-			const piImages = images?.map((img) => ({
-				type: "image" as const,
-				data: img.data,
-				mimeType: img.mimeType,
-			}));
+			const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 			let sentSessionId: string | null = null;
 			let promptRequestStarted = false;
 
@@ -2043,11 +2043,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 							if (existingSid) {
 								await sendAgentCommand(
 									sid,
-									{
-										type: "set_model",
-										provider: selectedModel.provider,
-										modelId: selectedModel.modelId,
-									},
+									{ type: "set_model", provider: selectedModel.provider, modelId: selectedModel.modelId },
 									runtimeIdRef,
 								);
 							}
@@ -2593,10 +2589,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 					case "handoff": {
 						if (!sid) return complete({ handled: true, error: "No active session" });
 						if (agentRunningRef.current || bashRunningRef.current) {
-							return complete({
-								handled: true,
-								error: "Cannot hand off while the session is busy",
-							});
+							return complete({ handled: true, error: "Cannot hand off while the session is busy" });
 						}
 						// Handoff generation is a long oneshot LLM call; keep the composer
 						// busy through it with the existing agent-running state so a prompt
@@ -2623,10 +2616,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 							// navigating to a replacement session.
 							const reloaded = await loadSession(sessionIdRef.current ?? currentSid, true);
 							if (mountedRef.current && reloaded && !("deferred" in reloaded)) promoteNewSession();
-							return complete({
-								handled: true,
-								message: "Context handed off and compacted in place",
-							});
+							return complete({ handled: true, message: "Context handed off and compacted in place" });
 						} finally {
 							if (mountedRef.current) {
 								agentRunningRef.current = false;
@@ -2750,11 +2740,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	const handleSteer = useCallback(async (message: string, images?: AttachedImage[]) => {
 		const sid = sessionIdRef.current;
 		if (!sid) return;
-		const piImages = images?.map((img) => ({
-			type: "image" as const,
-			data: img.data,
-			mimeType: img.mimeType,
-		}));
+		const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 		try {
 			await sendAgentCommand(
 				sid,
@@ -2774,11 +2760,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 		async (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => {
 			const sid = sessionIdRef.current;
 			if (!sid) return;
-			const piImages = images?.map((img) => ({
-				type: "image" as const,
-				data: img.data,
-				mimeType: img.mimeType,
-			}));
+			const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 			try {
 				await sendAgentCommand(
 					sid,
@@ -2800,11 +2782,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 	const handleFollowUp = useCallback(async (message: string, images?: AttachedImage[]) => {
 		const sid = sessionIdRef.current;
 		if (!sid) return;
-		const piImages = images?.map((img) => ({
-			type: "image" as const,
-			data: img.data,
-			mimeType: img.mimeType,
-		}));
+		const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 		try {
 			await sendAgentCommand(
 				sid,
