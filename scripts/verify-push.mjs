@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * 推送前校验：先确认锁文件一致，再跑与 CI 完全相同的 `bun run ci`
- * （typecheck → test → build → smoke:dev）。流水线只在 package.json 里定义一次，
+ * （format → typecheck → test → build → smoke:dev）。流水线只在 package.json 里定义一次，
  * 这里不再抄一份步骤清单，避免钩子与 CI 分叉。
  *
  * 锁文件用 `bun install --frozen-lockfile --dry-run` 校验：CI 上它会真的安装，
@@ -18,27 +18,27 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 if (!process.env.OMPDESK_SMOKE_PORT) {
-  let offset = 0;
-  for (const ch of ROOT) offset = (offset * 31 + ch.charCodeAt(0)) % 50;
-  process.env.OMPDESK_SMOKE_PORT = String(30199 + offset);
+	let offset = 0;
+	for (const ch of ROOT) offset = (offset * 31 + ch.charCodeAt(0)) % 50;
+	process.env.OMPDESK_SMOKE_PORT = String(30199 + offset);
 }
 
 const STEPS = [
-  { name: "锁文件一致性", args: ["install", "--frozen-lockfile", "--dry-run"] },
-  { name: "CI 流水线", args: ["run", "ci"] },
+	{ name: "锁文件一致性", args: ["install", "--frozen-lockfile", "--dry-run"] },
+	{ name: "CI 流水线", args: ["run", "ci"] },
 ];
 
 for (const step of STEPS) {
-  process.stdout.write(`\n[verify] ${step.name}\n`);
-  const result = spawnSync(process.execPath, step.args, {
-    cwd: ROOT,
-    stdio: "inherit",
-    env: process.env,
-  });
-  if (result.status !== 0) {
-    process.stderr.write(`\n[verify] ${step.name} 失败，推送中止。CI 会跑同一条流水线。\n`);
-    process.exit(result.status ?? 1);
-  }
+	process.stdout.write(`\n[verify] ${step.name}\n`);
+	const result = spawnSync(process.execPath, step.args, {
+		cwd: ROOT,
+		stdio: "inherit",
+		env: process.env,
+	});
+	if (result.status !== 0) {
+		process.stderr.write(`\n[verify] ${step.name} 失败，推送中止。CI 会跑同一条流水线。\n`);
+		process.exit(result.status ?? 1);
+	}
 }
 
 process.stdout.write("\n[verify] 锁文件一致性与 CI 流水线全部通过\n");
