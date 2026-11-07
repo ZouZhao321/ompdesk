@@ -27,10 +27,10 @@ import { resolvePromptInput } from "@oh-my-pi/pi-coding-agent/system-prompt";
  */
 
 export interface ResolvedSessionSystemPrompts {
-  /** `SYSTEM.md` text, rendered through omp's custom system prompt template. */
-  systemPrompt: string | undefined;
-  /** `APPEND_SYSTEM.md` text, appended to the rendered system prompt. */
-  appendPrompt: string | undefined;
+	/** `SYSTEM.md` text, rendered through omp's custom system prompt template. */
+	systemPrompt: string | undefined;
+	/** `APPEND_SYSTEM.md` text, appended to the rendered system prompt. */
+	appendPrompt: string | undefined;
 }
 
 /**
@@ -40,9 +40,7 @@ export interface ResolvedSessionSystemPrompts {
  * asks twice to invert that; mirror it rather than reordering the result.
  */
 function discoverPromptFile(fileName: string, cwd: string): string | undefined {
-  return (
-    findConfigFile(fileName, { user: false, cwd }) ?? findConfigFile(fileName, { user: true, cwd })
-  );
+	return findConfigFile(fileName, { user: false, cwd }) ?? findConfigFile(fileName, { user: true, cwd });
 }
 
 /**
@@ -51,12 +49,10 @@ function discoverPromptFile(fileName: string, cwd: string): string | undefined {
  * Both fields are `undefined` when no file exists, which keeps the session on
  * omp's default prompt.
  */
-export async function resolveSessionSystemPrompts(
-  cwd: string,
-): Promise<ResolvedSessionSystemPrompts> {
-  const [systemPrompt, appendPrompt] = await Promise.all([
-    resolvePromptInput(discoverPromptFile("SYSTEM.md", cwd), "system prompt"),
-    resolvePromptInput(discoverPromptFile("APPEND_SYSTEM.md", cwd), "append system prompt"),
-  ]);
-  return { systemPrompt, appendPrompt };
+export async function resolveSessionSystemPrompts(cwd: string): Promise<ResolvedSessionSystemPrompts> {
+	const [systemPrompt, appendPrompt] = await Promise.all([
+		resolvePromptInput(discoverPromptFile("SYSTEM.md", cwd), "system prompt"),
+		resolvePromptInput(discoverPromptFile("APPEND_SYSTEM.md", cwd), "append system prompt"),
+	]);
+	return { systemPrompt, appendPrompt };
 }

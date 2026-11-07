@@ -19,5 +19,4 @@ export const MOBILE_HIT_TARGET_PX = 44;
  * 视觉视口，不会让 JS 与 CSS 的判定错位。
  */
 export const MOBILE_LAYOUT_QUERY =
-  `(max-width: ${MOBILE_MAX_WIDTH}px), ` +
-  `(pointer: coarse) and (max-width: ${MOBILE_COARSE_MAX_WIDTH}px)`;
+	`(max-width: ${MOBILE_MAX_WIDTH}px), ` + `(pointer: coarse) and (max-width: ${MOBILE_COARSE_MAX_WIDTH}px)`;

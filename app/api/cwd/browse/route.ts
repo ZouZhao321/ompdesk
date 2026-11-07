@@ -2,52 +2,52 @@ import { NextRequest, NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
 import { stat } from "fs/promises";
 import {
-  getBrowseStartDirectory,
-  getParentDirectory,
-  listDirectories,
-  listWindowsDrives,
-  resolveDirectory,
-  shouldShowWindowsDrivePicker,
+	getBrowseStartDirectory,
+	getParentDirectory,
+	listDirectories,
+	listWindowsDrives,
+	resolveDirectory,
+	shouldShowWindowsDrivePicker,
 } from "@/lib/directory-browser";
 
 // GET /api/cwd/browse?path=...：列出文件系统中的可读子目录。
 export const GET = withRequestLog("/api/cwd/browse", getRouteHandler);
 
 async function getRouteHandler(request: NextRequest) {
-  try {
-    const requested = request.nextUrl.searchParams.get("path")?.trim();
+	try {
+		const requested = request.nextUrl.searchParams.get("path")?.trim();
 
-    if (shouldShowWindowsDrivePicker(requested)) {
-      return NextResponse.json({
-        path: "",
-        parentPath: null,
-        drives: await listWindowsDrives(),
-        directories: [],
-      });
-    }
+		if (shouldShowWindowsDrivePicker(requested)) {
+			return NextResponse.json({
+				path: "",
+				parentPath: null,
+				drives: await listWindowsDrives(),
+				directories: [],
+			});
+		}
 
-    const candidate = getBrowseStartDirectory(requested);
+		const candidate = getBrowseStartDirectory(requested);
 
-    let resolved: string;
-    try {
-      resolved = await resolveDirectory(candidate);
-    } catch {
-      return NextResponse.json({ error: "Directory does not exist" }, { status: 404 });
-    }
+		let resolved: string;
+		try {
+			resolved = await resolveDirectory(candidate);
+		} catch {
+			return NextResponse.json({ error: "Directory does not exist" }, { status: 404 });
+		}
 
-    const directoryStat = await stat(resolved);
-    if (!directoryStat.isDirectory()) {
-      return NextResponse.json({ error: "Path is not a directory" }, { status: 400 });
-    }
+		const directoryStat = await stat(resolved);
+		if (!directoryStat.isDirectory()) {
+			return NextResponse.json({ error: "Path is not a directory" }, { status: 400 });
+		}
 
-    const directories = await listDirectories(resolved);
+		const directories = await listDirectories(resolved);
 
-    return NextResponse.json({
-      path: resolved,
-      parentPath: getParentDirectory(resolved),
-      directories,
-    });
-  } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
-  }
+		return NextResponse.json({
+			path: resolved,
+			parentPath: getParentDirectory(resolved),
+			directories,
+		});
+	} catch (error) {
+		return NextResponse.json({ error: String(error) }, { status: 500 });
+	}
 }

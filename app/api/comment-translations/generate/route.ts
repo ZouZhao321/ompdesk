@@ -6,8 +6,8 @@ import { resolveCommentTranslationModel } from "@/lib/comment-translation-model"
 export const dynamic = "force-dynamic";
 
 const handleGenerate = createCommentTranslationHandler({
-  resolveModel: resolveCommentTranslationModel,
-  agentDir: getAgentDir,
+	resolveModel: resolveCommentTranslationModel,
+	agentDir: getAgentDir,
 });
 
 // POST /api/comment-translations/generate

@@ -7,28 +7,28 @@ import { basename, dirname, join } from "path";
  * process permissions. The caller must create the parent directory first.
  */
 export function writePrivateFileAtomicSync(path: string, contents: string): void {
-  const dir = dirname(path);
-  const tempPath = join(dir, `.${basename(path)}-${randomUUID()}.tmp`);
-  let operationFailed = false;
+	const dir = dirname(path);
+	const tempPath = join(dir, `.${basename(path)}-${randomUUID()}.tmp`);
+	let operationFailed = false;
 
-  try {
-    writeFileSync(tempPath, contents, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-      flush: true,
-    });
-    renameSync(tempPath, path);
-  } catch (error) {
-    operationFailed = true;
-    throw error;
-  } finally {
-    try {
-      unlinkSync(tempPath);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !operationFailed) {
-        throw error;
-      }
-    }
-  }
+	try {
+		writeFileSync(tempPath, contents, {
+			encoding: "utf8",
+			flag: "wx",
+			mode: 0o600,
+			flush: true,
+		});
+		renameSync(tempPath, path);
+	} catch (error) {
+		operationFailed = true;
+		throw error;
+	} finally {
+		try {
+			unlinkSync(tempPath);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !operationFailed) {
+				throw error;
+			}
+		}
+	}
 }

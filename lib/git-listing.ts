@@ -14,20 +14,20 @@ const GIT_LIST_MAX_BUFFER = 64 * 1024 * 1024;
  * 调用方据此退回目录遍历。
  */
 export async function listGitFiles(cwd: string): Promise<string[] | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["-C", cwd, "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-      {
-        timeout: GIT_LIST_TIMEOUT_MS,
-        maxBuffer: GIT_LIST_MAX_BUFFER,
-        env: createGitEnv(),
-      },
-    );
-    return stdout.split("\0").filter(Boolean);
-  } catch {
-    // 这里的 catch 用于探测仓库是否存在，不是吞掉失败：非仓库时 git 退出非零，
-    // 由调用方换用目录遍历。
-    return null;
-  }
+	try {
+		const { stdout } = await execFileAsync(
+			"git",
+			["-C", cwd, "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+			{
+				timeout: GIT_LIST_TIMEOUT_MS,
+				maxBuffer: GIT_LIST_MAX_BUFFER,
+				env: createGitEnv(),
+			},
+		);
+		return stdout.split("\0").filter(Boolean);
+	} catch {
+		// 这里的 catch 用于探测仓库是否存在，不是吞掉失败：非仓库时 git 退出非零，
+		// 由调用方换用目录遍历。
+		return null;
+	}
 }

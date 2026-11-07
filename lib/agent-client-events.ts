@@ -1,9 +1,9 @@
 import type { AgentEvent } from "./rpc-manager";
 
 const OMITTED_EVENT_TYPES: Record<string, true> = {
-  turn_start: true,
-  turn_end: true,
-  tool_execution_update: true,
+	turn_start: true,
+	turn_end: true,
+	tool_execution_update: true,
 };
 
 /**
@@ -11,14 +11,14 @@ const OMITTED_EVENT_TYPES: Record<string, true> = {
  * 终态标记，客户端据此立即收尾，不必等兜底对账。
  */
 export function toClientEvent(event: AgentEvent): AgentEvent | null {
-  if (OMITTED_EVENT_TYPES[event.type]) return null;
-  if (event.type === "message_update") {
-    const clientEvent = { ...event };
-    delete clientEvent.assistantMessageEvent;
-    return clientEvent;
-  }
-  if (event.type === "agent_end") {
-    return { type: "agent_end", isTerminal: event.isTerminal, yielded: event.yielded };
-  }
-  return event;
+	if (OMITTED_EVENT_TYPES[event.type]) return null;
+	if (event.type === "message_update") {
+		const clientEvent = { ...event };
+		delete clientEvent.assistantMessageEvent;
+		return clientEvent;
+	}
+	if (event.type === "agent_end") {
+		return { type: "agent_end", isTerminal: event.isTerminal, yielded: event.yielded };
+	}
+	return event;
 }

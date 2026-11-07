@@ -9,35 +9,35 @@ const LOCALE_STORAGE_KEY = "pi-locale";
 const defaultLocale: Locale = "en";
 
 interface I18nContextValue {
-  locale: Locale;
-  setLocale: (locale: Locale) => void;
-  t: Translate;
-  /** 查询文案，缺失时返回调用方给出的服务端原文。 */
-  tOr: (key: string, fallback: string) => string;
-  supportedLocales: LocalePlugin[];
+	locale: Locale;
+	setLocale: (locale: Locale) => void;
+	t: Translate;
+	/** 查询文案，缺失时返回调用方给出的服务端原文。 */
+	tOr: (key: string, fallback: string) => string;
+	supportedLocales: LocalePlugin[];
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 function getMessages(): Record<string, Record<string, string>> {
-  return Object.fromEntries(
-    getSupportedLocales().flatMap((id) => {
-      const plugin = getLocalePlugin(id);
-      return plugin ? [[id, plugin.messages]] : [];
-    }),
-  );
+	return Object.fromEntries(
+		getSupportedLocales().flatMap((id) => {
+			const plugin = getLocalePlugin(id);
+			return plugin ? [[id, plugin.messages]] : [];
+		}),
+	);
 }
 
 function readInitialLocale(): Locale {
-  try {
-    const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-    if (stored === "en" || stored === "zh-CN") return stored;
-  } catch {
-    // 隐私模式或存储不可用时继续使用浏览器语言。
-  }
-  return resolveBrowserLocale(
-    window.navigator.languages.length ? window.navigator.languages : [window.navigator.language],
-  );
+	try {
+		const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+		if (stored === "en" || stored === "zh-CN") return stored;
+	} catch {
+		// 隐私模式或存储不可用时继续使用浏览器语言。
+	}
+	return resolveBrowserLocale(
+		window.navigator.languages.length ? window.navigator.languages : [window.navigator.language],
+	);
 }
 
 /**
@@ -46,55 +46,55 @@ function readInitialLocale(): Locale {
  * @returns 包含语言上下文的 React 节点
  */
 export function I18nProvider({
-  children,
-  initialLocale = defaultLocale,
+	children,
+	initialLocale = defaultLocale,
 }: {
-  children: React.ReactNode;
-  initialLocale?: Locale;
+	children: React.ReactNode;
+	initialLocale?: Locale;
 }) {
-  const [locale, setLocaleState] = useState<Locale>(initialLocale);
-  const [hydrated, setHydrated] = useState(false);
-  const supportedLocales = useMemo(
-    () =>
-      getSupportedLocales()
-        .map((id) => getLocalePlugin(id))
-        .filter((plugin): plugin is LocalePlugin => Boolean(plugin)),
-    [],
-  );
-  const messages = useMemo(() => getMessages(), []);
+	const [locale, setLocaleState] = useState<Locale>(initialLocale);
+	const [hydrated, setHydrated] = useState(false);
+	const supportedLocales = useMemo(
+		() =>
+			getSupportedLocales()
+				.map((id) => getLocalePlugin(id))
+				.filter((plugin): plugin is LocalePlugin => Boolean(plugin)),
+		[],
+	);
+	const messages = useMemo(() => getMessages(), []);
 
-  useEffect(() => {
-    const next = readInitialLocale();
-    setLocaleState(next);
-    document.documentElement.lang = next;
-    setHydrated(true);
-  }, []);
+	useEffect(() => {
+		const next = readInitialLocale();
+		setLocaleState(next);
+		document.documentElement.lang = next;
+		setHydrated(true);
+	}, []);
 
-  const setLocale = useCallback((next: Locale) => {
-    if (!getLocalePlugin(next)) return;
-    setLocaleState(next);
-    document.documentElement.lang = next;
-    try {
-      window.localStorage.setItem(LOCALE_STORAGE_KEY, next);
-    } catch {
-      // 存储失败不影响当前页面内的语言切换。
-    }
-  }, []);
+	const setLocale = useCallback((next: Locale) => {
+		if (!getLocalePlugin(next)) return;
+		setLocaleState(next);
+		document.documentElement.lang = next;
+		try {
+			window.localStorage.setItem(LOCALE_STORAGE_KEY, next);
+		} catch {
+			// 存储失败不影响当前页面内的语言切换。
+		}
+	}, []);
 
-  const t = useCallback(
-    (key: string, params?: TranslationParams) => translateMessage(locale, key, messages, params),
-    [locale, messages],
-  );
-  const tOr = useCallback(
-    (key: string, fallback: string) => translateOrFallback(locale, key, messages, fallback),
-    [locale, messages],
-  );
-  const value = useMemo(
-    () => ({ locale: hydrated ? locale : initialLocale, setLocale, t, tOr, supportedLocales }),
-    [hydrated, initialLocale, locale, setLocale, t, tOr, supportedLocales],
-  );
+	const t = useCallback(
+		(key: string, params?: TranslationParams) => translateMessage(locale, key, messages, params),
+		[locale, messages],
+	);
+	const tOr = useCallback(
+		(key: string, fallback: string) => translateOrFallback(locale, key, messages, fallback),
+		[locale, messages],
+	);
+	const value = useMemo(
+		() => ({ locale: hydrated ? locale : initialLocale, setLocale, t, tOr, supportedLocales }),
+		[hydrated, initialLocale, locale, setLocale, t, tOr, supportedLocales],
+	);
 
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+	return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
 /**
@@ -103,7 +103,7 @@ export function I18nProvider({
  * @throws 当组件不在 I18nProvider 内时抛出异常
  */
 export function useI18n(): I18nContextValue {
-  const context = useContext(I18nContext);
-  if (!context) throw new Error("useI18n must be used inside I18nProvider");
-  return context;
+	const context = useContext(I18nContext);
+	if (!context) throw new Error("useI18n must be used inside I18nProvider");
+	return context;
 }

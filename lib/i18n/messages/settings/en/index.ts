@@ -14,19 +14,16 @@ import { toolsFiles } from "./tools-files";
  * 避免多人在同一份语言包文件里改动。
  */
 export const settingsEnParts: Record<string, Record<string, string>> = {
-  appearance,
-  modelProviders,
-  interactionTasks,
-  toolsFiles,
-  contextMemoryShell,
-  chromeShell,
-  chromeThemes,
-  chromeMcp,
-  chromeAccess,
-  chromeLogs,
+	appearance,
+	modelProviders,
+	interactionTasks,
+	toolsFiles,
+	contextMemoryShell,
+	chromeShell,
+	chromeThemes,
+	chromeMcp,
+	chromeAccess,
+	chromeLogs,
 };
 
-export const settingsEnMessages: Record<string, string> = Object.assign(
-  {},
-  ...Object.values(settingsEnParts),
-);
+export const settingsEnMessages: Record<string, string> = Object.assign({}, ...Object.values(settingsEnParts));

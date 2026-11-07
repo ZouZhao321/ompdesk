@@ -18,8 +18,8 @@ import { basename, dirname, join, resolve } from "node:path";
  * 键，包含关系跟着误判。
  */
 export function comparableDirectory(directory: string): string {
-  const real = realPathOfNearestAncestor(resolve(directory));
-  return process.platform === "win32" ? real.toLowerCase() : real;
+	const real = realPathOfNearestAncestor(resolve(directory));
+	return process.platform === "win32" ? real.toLowerCase() : real;
 }
 
 /**
@@ -29,19 +29,19 @@ export function comparableDirectory(directory: string): string {
  * 其他错误照常抛出。
  */
 function realPathOfNearestAncestor(absolute: string): string {
-  const missing: string[] = [];
-  let current = absolute;
-  for (;;) {
-    try {
-      return join(realpathSync.native(current), ...missing);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
-      const parent = dirname(current);
-      // 到根目录仍解析不到真实路径：没有可用的祖先，按字面路径比较。
-      if (parent === current) return absolute;
-      missing.unshift(basename(current));
-      current = parent;
-    }
-  }
+	const missing: string[] = [];
+	let current = absolute;
+	for (;;) {
+		try {
+			return join(realpathSync.native(current), ...missing);
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code;
+			if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+			const parent = dirname(current);
+			// 到根目录仍解析不到真实路径：没有可用的祖先，按字面路径比较。
+			if (parent === current) return absolute;
+			missing.unshift(basename(current));
+			current = parent;
+		}
+	}
 }

@@ -12,10 +12,10 @@ import type { AnyUiMetadata, SettingTab } from "@oh-my-pi/pi-tui/overlays/settin
 import type { SettingsFieldType } from "./settings-api";
 
 export {
-  SETTING_TABS,
-  TAB_GROUPS,
-  TAB_METADATA,
-  type SettingTab,
+	SETTING_TABS,
+	TAB_GROUPS,
+	TAB_METADATA,
+	type SettingTab,
 } from "@oh-my-pi/pi-tui/overlays/settings-defs";
 
 export type SettingPath = string;
@@ -25,62 +25,62 @@ export type SettingPath = string;
 orderedSettings();
 
 export function findSetting(path: SettingPath): AnySetting | undefined {
-  return lookup(path);
+	return lookup(path);
 }
 
 function requireSetting(path: SettingPath): AnySetting {
-  const setting = lookup(path);
-  if (!setting) throw new Error(`Unknown setting: ${path}`);
-  return setting;
+	const setting = lookup(path);
+	if (!setting) throw new Error(`Unknown setting: ${path}`);
+	return setting;
 }
 
 /** Effective value (environment included), `undefined` for an unknown path. */
 export function getSetting<T = unknown>(settings: Settings, path: SettingPath): T | undefined {
-  return lookup(path)?.get(settings) as T | undefined;
+	return lookup(path)?.get(settings) as T | undefined;
 }
 
 /** Persists `value` to the global config layer. */
 export function setSetting(settings: Settings, path: SettingPath, value: unknown): void {
-  requireSetting(path).set(settings, value);
+	requireSetting(path).set(settings, value);
 }
 
 export function isSettingConfigured(settings: Settings, path: SettingPath): boolean {
-  return lookup(path)?.isConfigured(settings) ?? false;
+	return lookup(path)?.isConfigured(settings) ?? false;
 }
 
 export function getSkillsSettings(settings: Settings): SkillsSettings {
-  return cfgSkills.get(settings);
+	return cfgSkills.get(settings);
 }
 
 export function getDefault(path: SettingPath): unknown {
-  return lookup(path)?.default;
+	return lookup(path)?.default;
 }
 
 export function getType(path: SettingPath): string | undefined {
-  return lookup(path)?.type;
+	return lookup(path)?.type;
 }
 
 export function getEnumValues(path: SettingPath): readonly string[] | undefined {
-  return lookup(path)?.enumValues;
+	return lookup(path)?.enumValues;
 }
 
 export function getUi(path: SettingPath): AnyUiMetadata | undefined {
-  return lookup(path)?.ui;
+	return lookup(path)?.ui;
 }
 
 export function hasUi(path: SettingPath): boolean {
-  return lookup(path)?.ui !== undefined;
+	return lookup(path)?.ui !== undefined;
 }
 
 export function isCredential(path: SettingPath): boolean {
-  return lookup(path)?.isCredential ?? false;
+	return lookup(path)?.isCredential ?? false;
 }
 
 /** Paths shown on `tab`, in omp's settings-panel order. */
 export function getPathsForTab(tab: SettingTab): SettingPath[] {
-  return orderedSettings()
-    .filter((setting) => setting.ui?.tab === tab)
-    .map((setting) => setting.id);
+	return orderedSettings()
+		.filter((setting) => setting.ui?.tab === tab)
+		.map((setting) => setting.id);
 }
 
 /**
@@ -89,16 +89,14 @@ export function getPathsForTab(tab: SettingTab): SettingPath[] {
  * @returns 控件类型，设置项不展示时返回 null
  */
 export function getSettingsFieldType(path: SettingPath): SettingsFieldType | null {
-  const schemaType = getType(path);
-  const ui = getUi(path);
-  if (!ui) return null;
-  if (schemaType === "boolean") return "boolean";
-  if (schemaType === "enum") return "select";
-  if (schemaType === "string")
-    return isCredential(path) ? "secret" : ui.options ? "select" : "text";
-  if (schemaType === "number") return ui.options ? "select" : null;
-  if (schemaType === "array") return ui.options ? "multiselect" : null;
-  if (schemaType === "record")
-    return path === "providers.maxInFlightRequests" ? "providerLimits" : "text";
-  return null;
+	const schemaType = getType(path);
+	const ui = getUi(path);
+	if (!ui) return null;
+	if (schemaType === "boolean") return "boolean";
+	if (schemaType === "enum") return "select";
+	if (schemaType === "string") return isCredential(path) ? "secret" : ui.options ? "select" : "text";
+	if (schemaType === "number") return ui.options ? "select" : null;
+	if (schemaType === "array") return ui.options ? "multiselect" : null;
+	if (schemaType === "record") return path === "providers.maxInFlightRequests" ? "providerLimits" : "text";
+	return null;
 }

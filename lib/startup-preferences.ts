@@ -5,14 +5,14 @@ import { formatRoleSelector } from "./model-roles";
 import { setSetting } from "@/lib/omp-settings";
 
 export interface ExplicitStartupPreferences {
-  model?: { provider: string; modelId: string };
-  thinkingLevel?: ConfiguredThinkingLevel;
+	model?: { provider: string; modelId: string };
+	thinkingLevel?: ConfiguredThinkingLevel;
 }
 
 export interface EffectiveStartupPreferences {
-  model?: { provider: string; modelId: string };
-  thinkingLevel: ThinkingLevel;
-  supportsThinking: boolean;
+	model?: { provider: string; modelId: string };
+	thinkingLevel: ThinkingLevel;
+	supportsThinking: boolean;
 }
 
 /**
@@ -27,39 +27,37 @@ export interface EffectiveStartupPreferences {
  * terminal starts on the model the browser last selected, and vice versa.
  */
 export async function persistExplicitStartupPreferences(
-  settings: Settings,
-  explicit: ExplicitStartupPreferences,
-  effective: EffectiveStartupPreferences,
+	settings: Settings,
+	explicit: ExplicitStartupPreferences,
+	effective: EffectiveStartupPreferences,
 ): Promise<{ modelDefaultChanged: boolean }> {
-  if (!explicit.model && !explicit.thinkingLevel) {
-    return { modelDefaultChanged: false };
-  }
+	if (!explicit.model && !explicit.thinkingLevel) {
+		return { modelDefaultChanged: false };
+	}
 
-  let modelDefaultChanged = false;
+	let modelDefaultChanged = false;
 
-  if (
-    explicit.model &&
-    effective.model &&
-    explicit.model.provider === effective.model.provider &&
-    explicit.model.modelId === effective.model.modelId
-  ) {
-    settings.setModelRole("default", formatRoleSelector(effective.model));
-    modelDefaultChanged = true;
-  }
+	if (
+		explicit.model &&
+		effective.model &&
+		explicit.model.provider === effective.model.provider &&
+		explicit.model.modelId === effective.model.modelId
+	) {
+		settings.setModelRole("default", formatRoleSelector(effective.model));
+		modelDefaultChanged = true;
+	}
 
-  if (
-    explicit.thinkingLevel &&
-    (explicit.thinkingLevel === "auto" ||
-      effective.supportsThinking ||
-      effective.thinkingLevel !== "off")
-  ) {
-    setSetting(
-      settings,
-      "defaultThinkingLevel",
-      explicit.thinkingLevel === "auto" ? "auto" : effective.thinkingLevel,
-    );
-  }
+	if (
+		explicit.thinkingLevel &&
+		(explicit.thinkingLevel === "auto" || effective.supportsThinking || effective.thinkingLevel !== "off")
+	) {
+		setSetting(
+			settings,
+			"defaultThinkingLevel",
+			explicit.thinkingLevel === "auto" ? "auto" : effective.thinkingLevel,
+		);
+	}
 
-  await settings.flush();
-  return { modelDefaultChanged };
+	await settings.flush();
+	return { modelDefaultChanged };
 }

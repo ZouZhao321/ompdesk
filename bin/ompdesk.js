@@ -2,17 +2,17 @@
 "use strict";
 
 const {
-  getMissingBunMessage,
-  getUnsupportedBunVersionMessage,
-  isBunVersionSupported,
-  resolveBunPath,
-  withLoopbackNoProxy,
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+	getMissingBunMessage,
+	getUnsupportedBunVersionMessage,
+	isBunVersionSupported,
+	resolveBunPath,
+	withLoopbackNoProxy,
+	// eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require("./runtime");
 
 if (process.versions.bun && !isBunVersionSupported(process.versions.bun)) {
-  console.error(getUnsupportedBunVersionMessage(process.versions.bun));
-  process.exit(1);
+	console.error(getUnsupportedBunVersionMessage(process.versions.bun));
+	process.exit(1);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -24,17 +24,17 @@ const fs = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parseLaunchOptions, loopbackBindingError } = require("./ompdesk-options");
 const {
-  getWebAuthStatus,
-  resolveWebAuthFile,
-  setWebPassword,
-  setWebPasswordEnabled,
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+	getWebAuthStatus,
+	resolveWebAuthFile,
+	setWebPassword,
+	setWebPasswordEnabled,
+	// eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require("./web-auth-store");
 const {
-  PromptAbortedError,
-  isInteractive,
-  readNewPassword,
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+	PromptAbortedError,
+	isInteractive,
+	readNewPassword,
+	// eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require("./password-prompt");
 
 const pkgDir = path.join(__dirname, "..");
@@ -44,23 +44,22 @@ const nextDir = path.join(pkgDir, ".next");
 // may not exist when installed via npx/bunx).
 let nextBin;
 try {
-  nextBin = require.resolve("next/dist/bin/next", { paths: [pkgDir] });
+	nextBin = require.resolve("next/dist/bin/next", { paths: [pkgDir] });
 } catch {
-  // Fallback: locate next package root and derive the bin path manually.
-  try {
-    const nextPkg = require.resolve("next/package.json", { paths: [pkgDir] });
-    nextBin = path.join(path.dirname(nextPkg), "dist", "bin", "next");
-  } catch {
-    nextBin = path.join(pkgDir, "node_modules", "next", "dist", "bin", "next");
-  }
+	// Fallback: locate next package root and derive the bin path manually.
+	try {
+		const nextPkg = require.resolve("next/package.json", { paths: [pkgDir] });
+		nextBin = path.join(path.dirname(nextPkg), "dist", "bin", "next");
+	} catch {
+		nextBin = path.join(pkgDir, "node_modules", "next", "dist", "bin", "next");
+	}
 }
-
 
 const { port, hostname, openBrowser, authenticated, resetPassword } = parseLaunchOptions();
 const bindingError = loopbackBindingError(hostname);
 if (bindingError) {
-  console.error(bindingError);
-  process.exit(1);
+	console.error(bindingError);
+	process.exit(1);
 }
 const loopbackHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 // Resolved once here and handed to the server through the environment, so the
@@ -69,31 +68,33 @@ const loopbackHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const webAuthFile = resolveWebAuthFile();
 
 if (!fs.existsSync(nextDir)) {
-  console.error("Build artifacts not found. Please report this issue.");
-  process.exit(1);
+	console.error("Build artifacts not found. Please report this issue.");
+	process.exit(1);
 }
 
 const bunPath = resolveBunPath();
 if (!bunPath) {
-  console.error(getMissingBunMessage());
-  process.exit(1);
+	console.error(getMissingBunMessage());
+	process.exit(1);
 }
 
 /** Refuse to hang on a password prompt nobody is there to answer. */
 function requireTerminal(flag) {
-  if (isInteractive()) return;
-  throw new Error([
-    `${flag} has to ask for a password, but ompdesk is not attached to a terminal.`,
-    "Run ompdesk once interactively to set the password, or pass OMPDESK_PASSWORD in the environment.",
-  ].join("\n"));
+	if (isInteractive()) return;
+	throw new Error(
+		[
+			`${flag} has to ask for a password, but ompdesk is not attached to a terminal.`,
+			"Run ompdesk once interactively to set the password, or pass OMPDESK_PASSWORD in the environment.",
+		].join("\n"),
+	);
 }
 
 async function setPasswordInteractively(intro) {
-  console.log(intro);
-  console.log(`It is stored as a scrypt hash in ${webAuthFile} — ompdesk never keeps the password itself.`);
-  const password = await readNewPassword();
-  const status = setWebPassword(password, { file: webAuthFile });
-  console.log(`Password saved. ompdesk now asks for the username "${status.username}" and this password.`);
+	console.log(intro);
+	console.log(`It is stored as a scrypt hash in ${webAuthFile} — ompdesk never keeps the password itself.`);
+	const password = await readNewPassword();
+	const status = setWebPassword(password, { file: webAuthFile });
+	console.log(`Password saved. ompdesk now asks for the username "${status.username}" and this password.`);
 }
 
 /**
@@ -103,104 +104,104 @@ async function setPasswordInteractively(intro) {
  * credential is written first and `next start` is spawned afterwards.
  */
 async function configurePasswordAccess() {
-  const status = getWebAuthStatus({ file: webAuthFile });
+	const status = getWebAuthStatus({ file: webAuthFile });
 
-  if (resetPassword) {
-    if (status.managedByEnvironment) {
-      console.warn(
-        "Warning: OMPDESK_PASSWORD is set and takes precedence over the stored password. Unset it for this reset to have any effect.",
-      );
-    }
-    requireTerminal("--reset-password");
-    await setPasswordInteractively("Setting a new ompdesk password.");
-    return;
-  }
+	if (resetPassword) {
+		if (status.managedByEnvironment) {
+			console.warn(
+				"Warning: OMPDESK_PASSWORD is set and takes precedence over the stored password. Unset it for this reset to have any effect.",
+			);
+		}
+		requireTerminal("--reset-password");
+		await setPasswordInteractively("Setting a new ompdesk password.");
+		return;
+	}
 
-  if (!authenticated) return;
+	if (!authenticated) return;
 
-  if (status.managedByEnvironment) {
-    console.log("Password access is already required: OMPDESK_PASSWORD is set.");
-    return;
-  }
-  if (status.stored) {
-    if (!status.enabled) {
-      setWebPasswordEnabled(true, { file: webAuthFile });
-      console.log("Password access enabled with the password already stored on this machine.");
-    }
-    return;
-  }
+	if (status.managedByEnvironment) {
+		console.log("Password access is already required: OMPDESK_PASSWORD is set.");
+		return;
+	}
+	if (status.stored) {
+		if (!status.enabled) {
+			setWebPasswordEnabled(true, { file: webAuthFile });
+			console.log("Password access enabled with the password already stored on this machine.");
+		}
+		return;
+	}
 
-  requireTerminal("--authenticated");
-  await setPasswordInteractively("--authenticated was requested and no ompdesk password has been set yet.");
+	requireTerminal("--authenticated");
+	await setPasswordInteractively("--authenticated was requested and no ompdesk password has been set yet.");
 }
 
 function warnAboutExposure() {
-  if (loopbackHostnames.has(hostname)) return;
-  if (getWebAuthStatus({ file: webAuthFile }).enabled) {
-    console.warn(
-      `Warning: ompdesk is listening on ${hostname} with Basic Auth over HTTP. Use HTTPS or a trusted VPN to protect the password in transit.`,
-    );
-  } else {
-    console.warn(
-      `Warning: ompdesk is listening on ${hostname} without authentication. Only use this on a trusted network, or start it with --authenticated.`,
-    );
-  }
+	if (loopbackHostnames.has(hostname)) return;
+	if (getWebAuthStatus({ file: webAuthFile }).enabled) {
+		console.warn(
+			`Warning: ompdesk is listening on ${hostname} with Basic Auth over HTTP. Use HTTPS or a trusted VPN to protect the password in transit.`,
+		);
+	} else {
+		console.warn(
+			`Warning: ompdesk is listening on ${hostname} without authentication. Only use this on a trusted network, or start it with --authenticated.`,
+		);
+	}
 }
 
 function startServer() {
-  warnAboutExposure();
+	warnAboutExposure();
 
-  // The launcher itself runs on Bun, and `--bun` keeps next's CLI entry on the
-  // same runtime instead of handing its shebang to node. The omp SDK ships
-  // TypeScript sources and `bun:` builtins, so the API routes only resolve here.
-  const child = spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", hostname], {
-    cwd: pkgDir,
-    stdio: ["inherit", "pipe", "inherit"],
-    env: {
-      ...withLoopbackNoProxy(process.env),
-      OMPDESK_HOSTNAME: hostname,
-      OMPDESK_AUTH_FILE: webAuthFile,
-      // Preserve the directory from which `ompdesk` was launched so relative
-      // project paths in the browser resolve against the user's shell cwd.
-      OMPDESK_LAUNCH_CWD: process.cwd(),
-    },
-  });
+	// The launcher itself runs on Bun, and `--bun` keeps next's CLI entry on the
+	// same runtime instead of handing its shebang to node. The omp SDK ships
+	// TypeScript sources and `bun:` builtins, so the API routes only resolve here.
+	const child = spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", hostname], {
+		cwd: pkgDir,
+		stdio: ["inherit", "pipe", "inherit"],
+		env: {
+			...withLoopbackNoProxy(process.env),
+			OMPDESK_HOSTNAME: hostname,
+			OMPDESK_AUTH_FILE: webAuthFile,
+			// Preserve the directory from which `ompdesk` was launched so relative
+			// project paths in the browser resolve against the user's shell cwd.
+			OMPDESK_LAUNCH_CWD: process.cwd(),
+		},
+	});
 
-  child.on("error", (error) => {
-    console.error(`Failed to launch ompdesk through Bun (${bunPath}): ${error.message}`);
-    process.exit(1);
-  });
+	child.on("error", (error) => {
+		console.error(`Failed to launch ompdesk through Bun (${bunPath}): ${error.message}`);
+		process.exit(1);
+	});
 
-  let browserOpened = false;
-  const url = `http://${hostname}:${port}`;
+	let browserOpened = false;
+	const url = `http://${hostname}:${port}`;
 
-  child.stdout.on("data", (chunk) => {
-    const text = chunk.toString();
-    process.stdout.write(text);
-    if (openBrowser && !browserOpened && text.includes("Ready")) {
-      browserOpened = true;
-      const isWindows = process.platform === "win32";
-      const isMac = process.platform === "darwin";
-      const openCmd = isWindows ? "start" : isMac ? "open" : "xdg-open";
-      const opener = spawn(openCmd, [url], {
-        shell: isWindows,
-        stdio: "ignore",
-        detached: true,
-      });
+	child.stdout.on("data", (chunk) => {
+		const text = chunk.toString();
+		process.stdout.write(text);
+		if (openBrowser && !browserOpened && text.includes("Ready")) {
+			browserOpened = true;
+			const isWindows = process.platform === "win32";
+			const isMac = process.platform === "darwin";
+			const openCmd = isWindows ? "start" : isMac ? "open" : "xdg-open";
+			const opener = spawn(openCmd, [url], {
+				shell: isWindows,
+				stdio: "ignore",
+				detached: true,
+			});
 
-      opener.on("error", (error) => {
-        console.warn(`Could not open browser automatically: ${error.message}`);
-      });
+			opener.on("error", (error) => {
+				console.warn(`Could not open browser automatically: ${error.message}`);
+			});
 
-      opener.unref();
-    }
-  });
+			opener.unref();
+		}
+	});
 
-  child.on("exit", (code) => process.exit(code ?? 0));
+	child.on("exit", (code) => process.exit(code ?? 0));
 }
 
 configurePasswordAccess().then(startServer, (error) => {
-  if (error instanceof PromptAbortedError) process.exit(130);
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+	if (error instanceof PromptAbortedError) process.exit(130);
+	console.error(error instanceof Error ? error.message : String(error));
+	process.exit(1);
 });

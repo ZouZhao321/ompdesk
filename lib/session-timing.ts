@@ -1,7 +1,7 @@
 interface TimingEntry {
-  type: string;
-  timestamp: string;
-  message?: { role?: string };
+	type: string;
+	timestamp: string;
+	message?: { role?: string };
 }
 
 /**
@@ -13,35 +13,30 @@ interface TimingEntry {
  * time, so counting the incoming gap could include arbitrary human idle.
  */
 export function computeSessionTotalActiveMs(entries: readonly TimingEntry[]): number {
-  let totalActiveMs = 0;
-  let previousTimestamp: number | undefined;
+	let totalActiveMs = 0;
+	let previousTimestamp: number | undefined;
 
-  for (const entry of entries) {
-    if (!isTimingEntry(entry.type)) continue;
+	for (const entry of entries) {
+		if (!isTimingEntry(entry.type)) continue;
 
-    const timestamp = Date.parse(entry.timestamp);
-    if (!Number.isFinite(timestamp)) continue;
+		const timestamp = Date.parse(entry.timestamp);
+		if (!Number.isFinite(timestamp)) continue;
 
-    const role = entry.type === "message" ? entry.message?.role : undefined;
-    if (role === "user" || role === "bashExecution") {
-      previousTimestamp = timestamp;
-      continue;
-    }
+		const role = entry.type === "message" ? entry.message?.role : undefined;
+		if (role === "user" || role === "bashExecution") {
+			previousTimestamp = timestamp;
+			continue;
+		}
 
-    if (previousTimestamp !== undefined && timestamp > previousTimestamp) {
-      totalActiveMs += timestamp - previousTimestamp;
-    }
-    previousTimestamp = timestamp;
-  }
+		if (previousTimestamp !== undefined && timestamp > previousTimestamp) {
+			totalActiveMs += timestamp - previousTimestamp;
+		}
+		previousTimestamp = timestamp;
+	}
 
-  return totalActiveMs;
+	return totalActiveMs;
 }
 
 function isTimingEntry(type: string): boolean {
-  return (
-    type === "message" ||
-    type === "compaction" ||
-    type === "branch_summary" ||
-    type === "custom_message"
-  );
+	return type === "message" || type === "compaction" || type === "branch_summary" || type === "custom_message";
 }

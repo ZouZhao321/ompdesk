@@ -9,10 +9,10 @@ import type { CommentTranslationModel } from "@/lib/comment-translation-generati
 const GENERATION_TIMEOUT_MS = 20_000;
 
 function assistantText(message: AssistantMessage): string {
-  return message.content
-    .filter((block): block is { type: "text"; text: string } => block.type === "text")
-    .map((block) => block.text)
-    .join("");
+	return message.content
+		.filter((block): block is { type: "text"; text: string } => block.type === "text")
+		.map((block) => block.text)
+		.join("");
 }
 
 /**
@@ -23,50 +23,46 @@ function assistantText(message: AssistantMessage): string {
  * 模型拿不到凭据时返回 null，由路由给出明确提示。
  */
 export async function resolveCommentTranslationModel(): Promise<CommentTranslationModel | null> {
-  const { modelRegistry, settings } = await getOmpRuntime();
-  const scope = await resolveVisibleModels(
-    modelRegistry,
-    getSetting<string[]>(settings, "enabledModels"),
-    settings,
-  );
-  const selection = selectInitialModelScope(scope, {
-    defaultModel: readDefaultModelRole(settings),
-  });
-  const model = selection.model;
-  if (!model) return null;
+	const { modelRegistry, settings } = await getOmpRuntime();
+	const scope = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
+	const selection = selectInitialModelScope(scope, {
+		defaultModel: readDefaultModelRole(settings),
+	});
+	const model = selection.model;
+	if (!model) return null;
 
-  const resolved = await modelRegistry.getApiKeyAndHeaders(model);
-  if (!resolved.ok || !resolved.apiKey) return null;
+	const resolved = await modelRegistry.getApiKeyAndHeaders(model);
+	if (!resolved.ok || !resolved.apiKey) return null;
 
-  return {
-    id: `${model.provider}/${model.id}`,
-    complete: async (prompt) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
-      try {
-        const message = await completeSimple(
-          model,
-          {
-            messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
-          },
-          {
-            apiKey: resolved.apiKey,
-            ...(resolved.headers ? { headers: resolved.headers } : {}),
-            maxTokens: 4_096,
-            cacheRetention: "none",
-            signal: controller.signal,
-          },
-        );
-        if (message.stopReason === "error" || message.stopReason === "aborted") {
-          throw new Error(
-            message.errorMessage ??
-              (controller.signal.aborted ? "Model request timed out" : "Model request failed"),
-          );
-        }
-        return assistantText(message);
-      } finally {
-        clearTimeout(timeout);
-      }
-    },
-  };
+	return {
+		id: `${model.provider}/${model.id}`,
+		complete: async (prompt) => {
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
+			try {
+				const message = await completeSimple(
+					model,
+					{
+						messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
+					},
+					{
+						apiKey: resolved.apiKey,
+						...(resolved.headers ? { headers: resolved.headers } : {}),
+						maxTokens: 4_096,
+						cacheRetention: "none",
+						signal: controller.signal,
+					},
+				);
+				if (message.stopReason === "error" || message.stopReason === "aborted") {
+					throw new Error(
+						message.errorMessage ??
+							(controller.signal.aborted ? "Model request timed out" : "Model request failed"),
+					);
+				}
+				return assistantText(message);
+			} finally {
+				clearTimeout(timeout);
+			}
+		},
+	};
 }

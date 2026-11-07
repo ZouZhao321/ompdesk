@@ -3,7 +3,7 @@
  * `_expandSkillCommand`. The expanded text remains the stored session input.
  */
 const SKILL_EXPANSION_RE =
-  /^<skill name="([^"\n]+)" location="([^"\n]+)">\nReferences are relative to [^\n]+\.\n\n([\s\S]*)\n<\/skill>(?:\n\n([\s\S]+))?$/;
+	/^<skill name="([^"\n]+)" location="([^"\n]+)">\nReferences are relative to [^\n]+\.\n\n([\s\S]*)\n<\/skill>(?:\n\n([\s\S]+))?$/;
 
 /**
  * Restore a complete SDK skill expansion to its compact command form.
@@ -15,9 +15,9 @@ const SKILL_EXPANSION_RE =
  * when a skill body contains an example `</skill>` tag.
  */
 export function skillExpansionToCommand(text: string): string | null {
-  const match = text.match(SKILL_EXPANSION_RE);
-  if (!match) return null;
+	const match = text.match(SKILL_EXPANSION_RE);
+	if (!match) return null;
 
-  const [, name, , , args] = match;
-  return args ? `/skill:${name} ${args}` : `/skill:${name}`;
+	const [, name, , , args] = match;
+	return args ? `/skill:${name} ${args}` : `/skill:${name}`;
 }

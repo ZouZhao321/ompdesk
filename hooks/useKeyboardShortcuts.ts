@@ -13,7 +13,7 @@ let globalAbortHandler: (() => void) | null = null;
  * Call this from ChatWindow whenever agentRunning or handleAbort changes.
  */
 export function registerAbortHandler(handler: (() => void) | null): void {
-  globalAbortHandler = handler;
+	globalAbortHandler = handler;
 }
 
 // ---------------------------------------------------------------------------
@@ -21,10 +21,10 @@ export function registerAbortHandler(handler: (() => void) | null): void {
 // ---------------------------------------------------------------------------
 
 interface UseGlobalKeyboardShortcutsOptions {
-  /** Called when Ctrl+Alt+N is pressed. Receives current cwd. */
-  onNewSession?: (cwd: string) => void;
-  /** The currently selected project directory (sidebar cwd). */
-  activeCwd?: string | null;
+	/** Called when Ctrl+Alt+N is pressed. Receives current cwd. */
+	onNewSession?: (cwd: string) => void;
+	/** The currently selected project directory (sidebar cwd). */
+	activeCwd?: string | null;
 }
 
 /**
@@ -40,32 +40,32 @@ interface UseGlobalKeyboardShortcutsOptions {
  * state that is local to that component.
  */
 export function useGlobalKeyboardShortcuts(options: UseGlobalKeyboardShortcutsOptions): void {
-  const { onNewSession, activeCwd } = options;
+	const { onNewSession, activeCwd } = options;
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent): void => {
-      // ---- Esc: stop agent ----
-      if (e.key === "Escape") {
-        if (!globalAbortHandler) return;
+	useEffect(() => {
+		const handler = (e: KeyboardEvent): void => {
+			// ---- Esc: stop agent ----
+			if (e.key === "Escape") {
+				if (!globalAbortHandler) return;
 
-        const tag = (e.target as HTMLElement)?.tagName;
-        // Let textarea/input handle Esc internally (ChatInput menus / stop).
-        if (tag === "TEXTAREA" || tag === "INPUT") return;
+				const tag = (e.target as HTMLElement)?.tagName;
+				// Let textarea/input handle Esc internally (ChatInput menus / stop).
+				if (tag === "TEXTAREA" || tag === "INPUT") return;
 
-        e.preventDefault();
-        globalAbortHandler();
-        return;
-      }
+				e.preventDefault();
+				globalAbortHandler();
+				return;
+			}
 
-      // ---- Ctrl+Alt+N: new session ----
-      if (e.key === "n" && e.ctrlKey && e.altKey) {
-        if (!activeCwd || !onNewSession) return;
-        e.preventDefault();
-        onNewSession(activeCwd);
-      }
-    };
+			// ---- Ctrl+Alt+N: new session ----
+			if (e.key === "n" && e.ctrlKey && e.altKey) {
+				if (!activeCwd || !onNewSession) return;
+				e.preventDefault();
+				onNewSession(activeCwd);
+			}
+		};
 
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [activeCwd, onNewSession]);
+		window.addEventListener("keydown", handler);
+		return () => window.removeEventListener("keydown", handler);
+	}, [activeCwd, onNewSession]);
 }

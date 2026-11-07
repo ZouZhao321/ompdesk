@@ -10,22 +10,19 @@ export const dynamic = "force-dynamic";
 export const GET = withRequestLog("/api/theme", getRouteHandler);
 
 async function getRouteHandler(req: Request) {
-  if (!isApiRequestAllowed(req)) {
-    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
-  }
-  try {
-    const cwd = new URL(req.url).searchParams.get("cwd") ?? undefined;
-    if (cwd) {
-      const allowedRoots = await getAllowedFileRoots();
-      if (!isExistingFilePathAllowed(cwd, allowedRoots)) {
-        return NextResponse.json({ error: "Access denied" }, { status: 403 });
-      }
-    }
-    return NextResponse.json(await getWebThemeConfig(await getSettingsForCwd(cwd)));
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
-  }
+	if (!isApiRequestAllowed(req)) {
+		return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+	}
+	try {
+		const cwd = new URL(req.url).searchParams.get("cwd") ?? undefined;
+		if (cwd) {
+			const allowedRoots = await getAllowedFileRoots();
+			if (!isExistingFilePathAllowed(cwd, allowedRoots)) {
+				return NextResponse.json({ error: "Access denied" }, { status: 403 });
+			}
+		}
+		return NextResponse.json(await getWebThemeConfig(await getSettingsForCwd(cwd)));
+	} catch (error) {
+		return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+	}
 }

@@ -3,18 +3,18 @@ import { resolveLocalFilePath } from "./file-links";
 import { isEditToolName, isWriteToolName } from "./tool-names";
 
 export interface WrittenFile {
-  /** Resolved absolute path of a file this turn wrote. */
-  filePath: string;
+	/** Resolved absolute path of a file this turn wrote. */
+	filePath: string;
 }
 
 function isFileWritingToolName(toolName: string): boolean {
-  return isWriteToolName(toolName) || isEditToolName(toolName);
+	return isWriteToolName(toolName) || isEditToolName(toolName);
 }
 
 function readToolPath(input: Record<string, unknown> | undefined): string | null {
-  if (!input) return null;
-  const value = input.file_path ?? input.path;
-  return typeof value === "string" && value.length > 0 ? value : null;
+	if (!input) return null;
+	const value = input.file_path ?? input.path;
+	return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 /**
@@ -28,33 +28,33 @@ function readToolPath(input: Record<string, unknown> | undefined): string | null
  * Paths are resolved against `cwd`, deduped, and kept in first-seen order.
  */
 export function extractTurnWrittenFiles(
-  content: AssistantContentBlock[],
-  toolResults: Map<string, ToolResultMessage> | undefined,
-  cwd?: string,
+	content: AssistantContentBlock[],
+	toolResults: Map<string, ToolResultMessage> | undefined,
+	cwd?: string,
 ): WrittenFile[] {
-  const seen = new Set<string>();
-  const writtenFiles: WrittenFile[] = [];
+	const seen = new Set<string>();
+	const writtenFiles: WrittenFile[] = [];
 
-  for (const block of content) {
-    if (block.type !== "toolCall") continue;
-    if (!isFileWritingToolName(block.toolName)) continue;
+	for (const block of content) {
+		if (block.type !== "toolCall") continue;
+		if (!isFileWritingToolName(block.toolName)) continue;
 
-    // No result yet (still streaming) or the call failed — nothing was written.
-    const result = toolResults?.get(block.toolCallId);
-    if (!result || result.isError) continue;
+		// No result yet (still streaming) or the call failed — nothing was written.
+		const result = toolResults?.get(block.toolCallId);
+		if (!result || result.isError) continue;
 
-    const rawPath = readToolPath(block.input);
-    if (!rawPath) continue;
+		const rawPath = readToolPath(block.input);
+		if (!rawPath) continue;
 
-    // Tool arguments are filesystem paths, not hrefs: preserve characters such
-    // as #, ?, and :digits that have special meaning in links and source refs.
-    const filePath = resolveLocalFilePath(rawPath, cwd);
-    if (!filePath) continue;
+		// Tool arguments are filesystem paths, not hrefs: preserve characters such
+		// as #, ?, and :digits that have special meaning in links and source refs.
+		const filePath = resolveLocalFilePath(rawPath, cwd);
+		if (!filePath) continue;
 
-    if (seen.has(filePath)) continue;
-    seen.add(filePath);
-    writtenFiles.push({ filePath });
-  }
+		if (seen.has(filePath)) continue;
+		seen.add(filePath);
+		writtenFiles.push({ filePath });
+	}
 
-  return writtenFiles;
+	return writtenFiles;
 }

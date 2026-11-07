@@ -12,10 +12,10 @@ const warnedMissingKeys = new Set<string>();
  * @returns 完成参数替换后的消息
  */
 export function interpolateMessage(message: string, params: TranslationParams = {}): string {
-  return message.replace(/\{([\w.-]+)\}/g, (token, name: string) => {
-    const value = params[name];
-    return value === undefined ? token : String(value);
-  });
+	return message.replace(/\{([\w.-]+)\}/g, (token, name: string) => {
+		const value = params[name];
+		return value === undefined ? token : String(value);
+	});
 }
 
 /**
@@ -26,19 +26,14 @@ export function interpolateMessage(message: string, params: TranslationParams = 
  * @param fallback 缺失时使用的原文
  * @returns 翻译结果或 fallback
  */
-export function translateOrFallback(
-  locale: Locale,
-  key: string,
-  messages: MessagesByLocale,
-  fallback: string,
-): string {
-  const message = messages[locale]?.[key] ?? messages.en?.[key];
-  if (message !== undefined) return message;
-  if (process.env.NODE_ENV !== "production" && !warnedMissingKeys.has(key)) {
-    warnedMissingKeys.add(key);
-    console.warn(`[i18n] Missing translation: ${key}`);
-  }
-  return fallback;
+export function translateOrFallback(locale: Locale, key: string, messages: MessagesByLocale, fallback: string): string {
+	const message = messages[locale]?.[key] ?? messages.en?.[key];
+	if (message !== undefined) return message;
+	if (process.env.NODE_ENV !== "production" && !warnedMissingKeys.has(key)) {
+		warnedMissingKeys.add(key);
+		console.warn(`[i18n] Missing translation: ${key}`);
+	}
+	return fallback;
 }
 
 /**
@@ -50,12 +45,12 @@ export function translateOrFallback(
  * @returns 翻译结果，缺失时返回 key
  */
 export function translateMessage(
-  locale: Locale,
-  key: string,
-  messages: MessagesByLocale,
-  params: TranslationParams = {},
+	locale: Locale,
+	key: string,
+	messages: MessagesByLocale,
+	params: TranslationParams = {},
 ): string {
-  return interpolateMessage(translateOrFallback(locale, key, messages, key), params);
+	return interpolateMessage(translateOrFallback(locale, key, messages, key), params);
 }
 
 /**
@@ -66,20 +61,17 @@ export function translateMessage(
  * @returns locale-aware 的相对时间文本
  */
 export function formatRelativeTime(date: Date | string, locale: Locale, now = new Date()): string {
-  const target = date instanceof Date ? date : new Date(date);
-  const diffMs = target.getTime() - now.getTime();
-  const absMs = Math.abs(diffMs);
-  const [unit, divisor] =
-    absMs < 60_000
-      ? ["second", 1_000]
-      : absMs < 3_600_000
-        ? ["minute", 60_000]
-        : absMs < 86_400_000
-          ? ["hour", 3_600_000]
-          : ["day", 86_400_000];
-  const value = Math.round(diffMs / divisor);
-  return new Intl.RelativeTimeFormat(locale, { numeric: "always" }).format(
-    value,
-    unit as Intl.RelativeTimeFormatUnit,
-  );
+	const target = date instanceof Date ? date : new Date(date);
+	const diffMs = target.getTime() - now.getTime();
+	const absMs = Math.abs(diffMs);
+	const [unit, divisor] =
+		absMs < 60_000
+			? ["second", 1_000]
+			: absMs < 3_600_000
+				? ["minute", 60_000]
+				: absMs < 86_400_000
+					? ["hour", 3_600_000]
+					: ["day", 86_400_000];
+	const value = Math.round(diffMs / divisor);
+	return new Intl.RelativeTimeFormat(locale, { numeric: "always" }).format(value, unit as Intl.RelativeTimeFormatUnit);
 }

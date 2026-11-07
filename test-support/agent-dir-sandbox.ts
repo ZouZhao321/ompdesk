@@ -14,10 +14,10 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { resetSessionIndexForTests } from "@oh-my-pi/pi-coding-agent/session/session-index";
 import {
-  getAgentDir,
-  relativePathWithinNormalizedRoot,
-  setAgentDir,
-  __resetDirsFromEnvForTests,
+	getAgentDir,
+	relativePathWithinNormalizedRoot,
+	setAgentDir,
+	__resetDirsFromEnvForTests,
 } from "@oh-my-pi/pi-utils/dirs";
 import { comparableDirectory } from "./path-compare";
 
@@ -32,36 +32,36 @@ const RUNTIME_AGENT_DIR = "runtime/agent";
  * `options.dirs` 写出沙箱外同样是代码问题，抛的是普通 `Error`，不能被当成环境限制跳过。
  */
 export class SandboxDirectoryCreateError extends Error {
-  constructor(target: string, cause: unknown) {
-    super(`无法创建沙箱目录：${target}`, { cause });
-    this.name = "SandboxDirectoryCreateError";
-  }
+	constructor(target: string, cause: unknown) {
+		super(`无法创建沙箱目录：${target}`, { cause });
+		this.name = "SandboxDirectoryCreateError";
+	}
 }
 
 export interface AgentDirSnapshot {
-  agentDir: string;
-  env: string | undefined;
+	agentDir: string;
+	env: string | undefined;
 }
 
 /** 只依赖清理注册能力的用例上下文，node:test 的 TestContext 直接满足。 */
 export interface SandboxCleanupHost {
-  after(callback: () => void): void;
+	after(callback: () => void): void;
 }
 
 export interface AgentDirSandboxOptions {
-  /** 临时目录前缀。 */
-  prefix: string;
-  /** 除 `runtime/agent` 之外要建在临时目录里的子目录。 */
-  dirs: readonly string[];
-  /** 恢复原活动目录之前执行，用于清掉指向沙箱的缓存。 */
-  beforeRestore?: () => void;
+	/** 临时目录前缀。 */
+	prefix: string;
+	/** 除 `runtime/agent` 之外要建在临时目录里的子目录。 */
+	dirs: readonly string[];
+	/** 恢复原活动目录之前执行，用于清掉指向沙箱的缓存。 */
+	beforeRestore?: () => void;
 }
 
 export interface AgentDirSandbox {
-  /** 临时目录根，子目录由调用方按 `options.dirs` 自行拼接。 */
-  root: string;
-  /** 用例期间的活动 agent 目录，即 `<root>/runtime/agent`。 */
-  agentDir: string;
+	/** 临时目录根，子目录由调用方按 `options.dirs` 自行拼接。 */
+	root: string;
+	/** 用例期间的活动 agent 目录，即 `<root>/runtime/agent`。 */
+	agentDir: string;
 }
 
 /**
@@ -71,36 +71,36 @@ export interface AgentDirSandbox {
  * 沿用上一个 agent 目录的数据库。
  */
 export function switchAgentDir(dir: string): AgentDirSnapshot {
-  const snapshot = { agentDir: getAgentDir(), env: process.env.PI_CODING_AGENT_DIR };
-  try {
-    setAgentDir(dir);
-    resetAgentDirState();
-  } catch (error) {
-    // 切换可能停在半路（目录已改、索引还是旧的）。不先回到快照，调用方删掉临时
-    // 目录后活动目录就会指向已删除的目录；恢复失败只记录，原始错误照常抛出。
-    restoreSnapshotOrResetState(snapshot, `恢复活动 agent 目录（切换到 ${dir} 失败后）`);
-    throw error;
-  }
-  return snapshot;
+	const snapshot = { agentDir: getAgentDir(), env: process.env.PI_CODING_AGENT_DIR };
+	try {
+		setAgentDir(dir);
+		resetAgentDirState();
+	} catch (error) {
+		// 切换可能停在半路（目录已改、索引还是旧的）。不先回到快照，调用方删掉临时
+		// 目录后活动目录就会指向已删除的目录；恢复失败只记录，原始错误照常抛出。
+		restoreSnapshotOrResetState(snapshot, `恢复活动 agent 目录（切换到 ${dir} 失败后）`);
+		throw error;
+	}
+	return snapshot;
 }
 
 export function restoreAgentDir(snapshot: AgentDirSnapshot): void {
-  // `setAgentDir` 抛错时 `PI_CODING_AGENT_DIR` 也必须回到快照：环境变量与目录解析
-  // 是同一份事实的两处投影，只留下沙箱环境的话，后续任何一次从环境重建都会再指回
-  // 即将删除的沙箱目录。
-  try {
-    setAgentDir(snapshot.agentDir);
-  } finally {
-    if (snapshot.env === undefined) delete process.env.PI_CODING_AGENT_DIR;
-    else process.env.PI_CODING_AGENT_DIR = snapshot.env;
-    resetAgentDirState();
-  }
+	// `setAgentDir` 抛错时 `PI_CODING_AGENT_DIR` 也必须回到快照：环境变量与目录解析
+	// 是同一份事实的两处投影，只留下沙箱环境的话，后续任何一次从环境重建都会再指回
+	// 即将删除的沙箱目录。
+	try {
+		setAgentDir(snapshot.agentDir);
+	} finally {
+		if (snapshot.env === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = snapshot.env;
+		resetAgentDirState();
+	}
 }
 
 /** 目录解析与会话索引都从当前环境重建，两者必须一起复位。 */
 function resetAgentDirState(): void {
-  __resetDirsFromEnvForTests();
-  resetSessionIndexForTests();
+	__resetDirsFromEnvForTests();
+	resetSessionIndexForTests();
 }
 
 /**
@@ -108,17 +108,17 @@ function resetAgentDirState(): void {
  * 都幂等，恢复停在半路时它们可能仍指向沙箱，后续用例就会写进待删除的目录。
  */
 function restoreSnapshotOrResetState(snapshot: AgentDirSnapshot, action: string): void {
-  try {
-    restoreAgentDir(snapshot);
-    return;
-  } catch (error) {
-    warnCleanupFailure(action, error);
-  }
-  try {
-    resetAgentDirState();
-  } catch (error) {
-    warnCleanupFailure(`${action}后重建目录解析与会话索引`, error);
-  }
+	try {
+		restoreAgentDir(snapshot);
+		return;
+	} catch (error) {
+		warnCleanupFailure(action, error);
+	}
+	try {
+		resetAgentDirState();
+	} catch (error) {
+		warnCleanupFailure(`${action}后重建目录解析与会话索引`, error);
+	}
 }
 
 /**
@@ -127,34 +127,29 @@ function restoreSnapshotOrResetState(snapshot: AgentDirSnapshot, action: string)
  * 「仍在沙箱」处理。
  */
 function activeAgentDirWithinSandbox(root: string): boolean {
-  let activeAgentDir: string;
-  try {
-    activeAgentDir = getAgentDir();
-  } catch (error) {
-    warnCleanupFailure(`读取活动 agent 目录（${root}）`, error);
-    return true;
-  }
-  // 与样本守卫共用同一套归一：沙箱根里的符号链接（macOS 的 /var → /private/var）
-  // 由真实路径解析归一，Windows 上再折叠大小写。否则经链接写成的活动目录会被判成
-  // 在沙箱之外，删掉沙箱后活动目录就指向了已删除的路径。
-  try {
-    return (
-      relativePathWithinNormalizedRoot(
-        comparableDirectory(root),
-        comparableDirectory(activeAgentDir),
-      ) !== null
-    );
-  } catch (error) {
-    // 比较本身也要读文件系统（realpath），EACCES/EPERM/ELOOP 时比不出结论。此处只能
-    // 保守：保留目录只会漏删，删掉却会让后续用例写进已删除的路径；抛出还会中断
-    // t.after 的清理和用例对原始错误的报告。
-    warnCleanupFailure(`比较活动 agent 目录与沙箱（${root}）`, error);
-    return true;
-  }
+	let activeAgentDir: string;
+	try {
+		activeAgentDir = getAgentDir();
+	} catch (error) {
+		warnCleanupFailure(`读取活动 agent 目录（${root}）`, error);
+		return true;
+	}
+	// 与样本守卫共用同一套归一：沙箱根里的符号链接（macOS 的 /var → /private/var）
+	// 由真实路径解析归一，Windows 上再折叠大小写。否则经链接写成的活动目录会被判成
+	// 在沙箱之外，删掉沙箱后活动目录就指向了已删除的路径。
+	try {
+		return relativePathWithinNormalizedRoot(comparableDirectory(root), comparableDirectory(activeAgentDir)) !== null;
+	} catch (error) {
+		// 比较本身也要读文件系统（realpath），EACCES/EPERM/ELOOP 时比不出结论。此处只能
+		// 保守：保留目录只会漏删，删掉却会让后续用例写进已删除的路径；抛出还会中断
+		// t.after 的清理和用例对原始错误的报告。
+		warnCleanupFailure(`比较活动 agent 目录与沙箱（${root}）`, error);
+		return true;
+	}
 }
 
 function warnCleanupFailure(action: string, error: unknown): void {
-  console.warn(`ompdesk 测试沙箱清理失败：${action}`, error);
+	console.warn(`ompdesk 测试沙箱清理失败：${action}`, error);
 }
 
 /**
@@ -163,10 +158,10 @@ function warnCleanupFailure(action: string, error: unknown): void {
  * 抛普通错误——包成 `SandboxDirectoryCreateError` 会被当成环境限制而静默跳过用例。
  */
 function assertSandboxDirectoryFragment(dir: string): void {
-  const outsideSandbox = dir.length === 0 || isAbsolute(dir) || dir.split(/[\\/]/).includes("..");
-  if (outsideSandbox) {
-    throw new Error(`沙箱子目录必须是沙箱内的相对路径：${JSON.stringify(dir)}`);
-  }
+	const outsideSandbox = dir.length === 0 || isAbsolute(dir) || dir.split(/[\\/]/).includes("..");
+	if (outsideSandbox) {
+		throw new Error(`沙箱子目录必须是沙箱内的相对路径：${JSON.stringify(dir)}`);
+	}
 }
 
 /**
@@ -177,27 +172,26 @@ function assertSandboxDirectoryFragment(dir: string): void {
  * 注册，先删掉再抛；删不掉只记录，保留目录交给系统回收。
  */
 function createSandboxRoot(options: AgentDirSandboxOptions): string {
-  for (const dir of options.dirs) assertSandboxDirectoryFragment(dir);
+	for (const dir of options.dirs) assertSandboxDirectoryFragment(dir);
 
-  let root: string;
-  try {
-    root = mkdtempSync(join(tmpdir(), options.prefix));
-  } catch (error) {
-    throw new SandboxDirectoryCreateError(`前缀 ${options.prefix} 的临时目录`, error);
-  }
+	let root: string;
+	try {
+		root = mkdtempSync(join(tmpdir(), options.prefix));
+	} catch (error) {
+		throw new SandboxDirectoryCreateError(`前缀 ${options.prefix} 的临时目录`, error);
+	}
 
-  try {
-    for (const dir of [RUNTIME_AGENT_DIR, ...options.dirs])
-      mkdirSync(join(root, dir), { recursive: true });
-    return root;
-  } catch (error) {
-    try {
-      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-    } catch (cleanupError) {
-      warnCleanupFailure(`删除临时目录 ${root}`, cleanupError);
-    }
-    throw new SandboxDirectoryCreateError(root, error);
-  }
+	try {
+		for (const dir of [RUNTIME_AGENT_DIR, ...options.dirs]) mkdirSync(join(root, dir), { recursive: true });
+		return root;
+	} catch (error) {
+		try {
+			rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		} catch (cleanupError) {
+			warnCleanupFailure(`删除临时目录 ${root}`, cleanupError);
+		}
+		throw new SandboxDirectoryCreateError(root, error);
+	}
 }
 
 /**
@@ -209,54 +203,51 @@ function createSandboxRoot(options: AgentDirSandboxOptions): string {
  * 短暂报 EBUSY——history.db 的句柄是模块级的，Windows 上关闭句柄到目录可删除之间
  * 有延迟——同样只记录。
  */
-export function createAgentDirSandbox(
-  t: SandboxCleanupHost,
-  options: AgentDirSandboxOptions,
-): AgentDirSandbox {
-  const root = createSandboxRoot(options);
-  const agentDir = join(root, RUNTIME_AGENT_DIR);
+export function createAgentDirSandbox(t: SandboxCleanupHost, options: AgentDirSandboxOptions): AgentDirSandbox {
+	const root = createSandboxRoot(options);
+	const agentDir = join(root, RUNTIME_AGENT_DIR);
 
-  let previous: AgentDirSnapshot;
-  try {
-    previous = switchAgentDir(agentDir);
-  } catch (error) {
-    // 切换可能停在半路（目录已改、索引还是旧的），此时 t.after 尚未注册，没人会
-    // 收拾这棵临时目录。但内部恢复也可能失败：活动目录仍指向 root 时删掉它会让
-    // 后续用例写进已删除的目录，保留目录交给系统回收。
-    if (activeAgentDirWithinSandbox(root)) {
-      console.warn(`ompdesk 测试沙箱保留临时目录 ${root}：活动 agent 目录仍指向它`);
-    } else {
-      try {
-        rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-      } catch (cleanupError) {
-        warnCleanupFailure(`删除临时目录 ${root}`, cleanupError);
-      }
-    }
-    throw error;
-  }
+	let previous: AgentDirSnapshot;
+	try {
+		previous = switchAgentDir(agentDir);
+	} catch (error) {
+		// 切换可能停在半路（目录已改、索引还是旧的），此时 t.after 尚未注册，没人会
+		// 收拾这棵临时目录。但内部恢复也可能失败：活动目录仍指向 root 时删掉它会让
+		// 后续用例写进已删除的目录，保留目录交给系统回收。
+		if (activeAgentDirWithinSandbox(root)) {
+			console.warn(`ompdesk 测试沙箱保留临时目录 ${root}：活动 agent 目录仍指向它`);
+		} else {
+			try {
+				rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+			} catch (cleanupError) {
+				warnCleanupFailure(`删除临时目录 ${root}`, cleanupError);
+			}
+		}
+		throw error;
+	}
 
-  t.after(() => {
-    try {
-      options.beforeRestore?.();
-    } catch (error) {
-      warnCleanupFailure(`beforeRestore（${root}）`, error);
-    }
+	t.after(() => {
+		try {
+			options.beforeRestore?.();
+		} catch (error) {
+			warnCleanupFailure(`beforeRestore（${root}）`, error);
+		}
 
-    restoreSnapshotOrResetState(previous, `恢复活动 agent 目录（${root}）`);
+		restoreSnapshotOrResetState(previous, `恢复活动 agent 目录（${root}）`);
 
-    // 活动目录仍指向沙箱：删掉 root 会让后续用例写进已删除的目录，保留目录交给
-    // 系统回收。
-    if (activeAgentDirWithinSandbox(root)) {
-      console.warn(`ompdesk 测试沙箱保留临时目录 ${root}：活动 agent 目录仍指向它`);
-      return;
-    }
+		// 活动目录仍指向沙箱：删掉 root 会让后续用例写进已删除的目录，保留目录交给
+		// 系统回收。
+		if (activeAgentDirWithinSandbox(root)) {
+			console.warn(`ompdesk 测试沙箱保留临时目录 ${root}：活动 agent 目录仍指向它`);
+			return;
+		}
 
-    try {
-      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-    } catch (error) {
-      warnCleanupFailure(`删除临时目录 ${root}`, error);
-    }
-  });
+		try {
+			rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		} catch (error) {
+			warnCleanupFailure(`删除临时目录 ${root}`, error);
+		}
+	});
 
-  return { root, agentDir };
+	return { root, agentDir };
 }
