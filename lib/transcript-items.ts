@@ -13,6 +13,7 @@ import {
   type DisplayOptions,
 } from "./message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "./turn-written-files";
+import { isUserSkillPrompt } from "./slash-display";
 
 /** 构建条目时界面持有的输入。 */
 export interface TranscriptItemsOptions {
@@ -85,10 +86,9 @@ export interface TranscriptItem {
 export function isGroupAnchor(message: AgentMessage): boolean {
   if (message.role === "user") return true;
   if (message.role !== "custom") return false;
-  const customType = (message as CustomMessage).customType;
-  // A skill command is a user turn: its body is the prompt, so folding it into
-  // the process group would hide the question that produced the answer.
-  return customType === "compaction" || customType === "skill-prompt";
+  const custom = message as CustomMessage;
+  // 技能指令是用户回合：正文就是提问，折进过程组会把提问藏起来。
+  return custom.customType === "compaction" || isUserSkillPrompt(custom);
 }
 
 function hasFinalAssistantAnswer(message: AgentMessage, options: DisplayOptions): boolean {

@@ -14,7 +14,7 @@ import { useDisplaySettings } from "@/hooks/useDisplaySettings";
 import { planDeferredContent, settleDeferredContent, thinkingPart, toolCallPart, transcriptViewState, useTranscriptExpanded } from "@/lib/transcript-view-state";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
-import { skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import type {
@@ -254,7 +254,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     if (customType === "compaction") {
       return <CompactionMessageView message={message as CustomMessage} />;
     }
-    if (customType === "skill-prompt") {
+    if (isUserSkillPrompt(message as CustomMessage)) {
       return <SkillPromptMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;
     }
     return <CustomMessageView message={message as CustomMessage} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} />;

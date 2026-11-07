@@ -1178,10 +1178,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const rest = prev.filter((item) => item.key !== request.widgetKey);
           return request.widgetLines
             ? [...rest, {
-              key: request.widgetKey,
-              lines: request.widgetLines,
-              placement: request.widgetPlacement ?? "aboveEditor",
-            }]
+                key: request.widgetKey,
+                lines: request.widgetLines,
+                placement: request.widgetPlacement ?? "aboveEditor",
+              }]
             : rest;
         });
         break;

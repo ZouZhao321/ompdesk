@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import {
+  isUserSkillPrompt,
   skillExpansionToCommand,
   skillPromptCommandLabel,
   type SkillPromptDetailsLike,
@@ -68,7 +69,7 @@ function skillPromptText(message: AgentMessage): string | undefined {
     customType?: string;
     details?: SkillPromptDetailsLike;
   };
-  if (custom.customType !== "skill-prompt") return undefined;
+  if (!isUserSkillPrompt(custom)) return undefined;
   return skillPromptCommandLabel(custom.details);
 }
 

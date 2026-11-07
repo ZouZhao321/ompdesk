@@ -32,7 +32,7 @@ import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
-import { skillPromptCommandLabel } from "./slash-display";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
 import { untrustedProjectSessionOptions } from "./project-trust";
 import { resolveSessionSystemPrompts } from "./session-system-prompt";
 import { readDefaultModelRole } from "./model-roles";
@@ -671,7 +671,7 @@ export class AgentSessionWrapper {
   ): Promise<boolean> {
     const parsed = parseSkillInvocation(text);
     if (!parsed) return false;
-    if (this.inner.skillsSettings?.enableSkillCommands === false) {
+    if (!this.inner.skillsSettings?.enableSkillCommands) {
       this.announceSkillFallback("disabled", parsed.name);
       return false;
     }
@@ -1352,7 +1352,7 @@ export class AgentSessionWrapper {
           output: (text) => {
             output.push(text);
           },
-          refreshCommands: () => { },
+          refreshCommands: () => {},
           reloadPlugins: async () => {
             await this.waitForExtensionsBound();
             this.extensionStatuses.clear();
@@ -1756,7 +1756,7 @@ export class AgentSessionWrapper {
           notifyType: type,
         } as ExtensionUiRequest as AgentEvent);
       },
-      onTerminalInput: () => () => { },
+      onTerminalInput: () => () => {},
       setStatus: (key, text) => {
         if (text === undefined) this.extensionStatuses.delete(key);
         else this.extensionStatuses.set(key, text);
@@ -1768,10 +1768,10 @@ export class AgentSessionWrapper {
           statusText: text,
         } as ExtensionUiRequest as AgentEvent);
       },
-      setWorkingMessage: () => { },
-      setWorkingVisible: () => { },
-      setWorkingIndicator: () => { },
-      setHiddenThinkingLabel: () => { },
+      setWorkingMessage: () => {},
+      setWorkingVisible: () => {},
+      setWorkingIndicator: () => {},
+      setHiddenThinkingLabel: () => {},
       setWidget: (key, content, options) => {
         if (content !== undefined && !Array.isArray(content)) return;
         if (content === undefined) {
@@ -1792,8 +1792,8 @@ export class AgentSessionWrapper {
           widgetPlacement: options?.placement,
         } as ExtensionUiRequest as AgentEvent);
       },
-      setFooter: () => { },
-      setHeader: () => { },
+      setFooter: () => {},
+      setHeader: () => {},
       setTitle: (title) => {
         this.emit({
           type: "extension_ui_request",
@@ -1820,15 +1820,15 @@ export class AgentSessionWrapper {
         } as ExtensionUiRequest as AgentEvent);
       },
       getEditorText: () => "",
-      addAutocompleteProvider: () => { },
-      setEditorComponent: () => { },
+      addAutocompleteProvider: () => {},
+      setEditorComponent: () => {},
       getEditorComponent: () => undefined,
       get theme() { return PLAIN_TEXT_THEME; },
       getAllThemes: () => [],
       getTheme: () => undefined,
       setTheme: () => ({ success: false, error: "Theme switching is not supported in ompdesk extension UI yet" }),
       getToolsExpanded: () => false,
-      setToolsExpanded: () => { },
+      setToolsExpanded: () => {},
     };
   }
 }
@@ -1917,8 +1917,8 @@ export function getRpcSession(sessionId: string): AgentSessionWrapper | undefine
 
 function runtimeMessageText(entry: SessionMessageEntry): string {
   if (entry.message.role === "bashExecution") return "";
-  if (entry.message.role === "custom" && entry.message.customType === "skill-prompt") {
-    return skillPromptCommandLabel(entry.message.details as { name?: string; args?: string; prompt?: string } | undefined);
+  if (entry.message.role === "custom" && isUserSkillPrompt(entry.message)) {
+    return skillPromptCommandLabel(entry.message.details as SkillPromptDetailsLike | undefined);
   }
   const content = entry.message.content;
   if (typeof content === "string") return content;
@@ -1931,7 +1931,7 @@ function runtimeMessageText(entry: SessionMessageEntry): string {
 /** A typed prompt or a user-invoked skill command, both operator turns. */
 function isUserTurnEntry(entry: SessionMessageEntry): boolean {
   if (entry.message.role === "user") return true;
-  return entry.message.role === "custom" && entry.message.customType === "skill-prompt";
+  return entry.message.role === "custom" && isUserSkillPrompt(entry.message);
 }
 
 function runtimeMessageActivityMs(entry: SessionMessageEntry): number | undefined {

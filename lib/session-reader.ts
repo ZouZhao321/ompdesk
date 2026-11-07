@@ -14,7 +14,7 @@ import type { SessionEntry as OmpSessionEntry, SessionInfo as OmpSessionInfo } f
 import { getOmpRuntime } from "./omp-runtime";
 import { normalizeToolCalls } from "./normalize";
 import { sessionPathKey } from "./session-path";
-import { skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
@@ -55,18 +55,22 @@ export function mergeSessionLists(
  * lives in the custom message's details; the envelope must never reach a title.
  */
 async function readSkillCommandFirstMessage(filePath: string): Promise<string | undefined> {
-  let entries: SessionEntry[];
-  try {
-    entries = await getSessionEntries(filePath);
-  } catch {
-    // One unreadable file must not fail the whole sidebar listing.
-    return undefined;
-  }
+  const entries = await getSessionEntries(filePath).catch((error: NodeJS.ErrnoException) => {
+    // 文件在扫描与读取之间被删掉时按「没有首条消息」处理；其余读取错误照常抛出。
+    if (error.code === "ENOENT") return undefined;
+    throw error;
+  });
+  if (!entries) return undefined;
   for (const entry of entries) {
-    if (entry.type === "message") return undefined;
-    if (entry.type === "custom_message" && entry.customType === "skill-prompt") {
-      return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+    if (entry.type !== "message") {
+      if (entry.type === "custom_message" && isUserSkillPrompt(entry)) {
+        return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+      }
+      continue;
     }
+    // 命令输出不是发言，跳过它继续找；真正的用户或助手消息出现即停。
+    if (entry.message.role === "bashExecution") continue;
+    return undefined;
   }
   return undefined;
 }
