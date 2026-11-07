@@ -189,7 +189,9 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
         setError(
           (caught as { name?: string } | null)?.name === "AbortError"
             ? LOGS_ERROR_TIMEOUT
-            : caught instanceof Error ? caught.message : String(caught),
+            : caught instanceof Error
+              ? caught.message
+              : String(caught),
         );
       } finally {
         clearTimeout(timeout);
@@ -225,7 +227,7 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
 
   // Stable identity so memoized rows are not re-rendered by a new callback.
   const handleToggleEntry = useCallback((offset: number) => {
-    setExpandedOffset((value) => value === offset ? null : offset);
+    setExpandedOffset((value) => (value === offset ? null : offset));
   }, []);
 
   const handleListScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
@@ -253,8 +255,14 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
       selectedFile={selectedFile}
       expandedOffset={expandedOffset}
       listRef={listRef}
-      onLevelChange={(next) => { setPaused(false); setLevel(next); }}
-      onKeywordChange={(value) => { setPaused(false); setKeyword(value); }}
+      onLevelChange={(next) => {
+        setPaused(false);
+        setLevel(next);
+      }}
+      onKeywordChange={(value) => {
+        setPaused(false);
+        setKeyword(value);
+      }}
       onFileChange={(next) => {
         // Picking a rotated file stops following: the "Following" contract is
         // `selectedFile === null`, and polling a pinned file while claiming to
@@ -273,7 +281,10 @@ export function LogsPanel({ client = fetchLogsPage }: { client?: LogsClient }) {
         setSelectedFile((current) => selectFileAfterFollow(next, current, file?.name));
       }}
       onTogglePause={() => setPaused((value) => !value)}
-      onRefresh={() => { setPaused(false); setRefreshToken((value) => value + 1); }}
+      onRefresh={() => {
+        setPaused(false);
+        setRefreshToken((value) => value + 1);
+      }}
       onToggleEntry={handleToggleEntry}
       onListScroll={handleListScroll}
     />

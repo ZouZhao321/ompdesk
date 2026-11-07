@@ -4,7 +4,12 @@
  * @returns 小写、连字符分隔的分组片段；空名称回退为 group
  */
 export function groupSlug(group: string): string {
-  return group.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || "group";
+  return (
+    group
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, "-")
+      .replace(/^-+|-+$/g, "") || "group"
+  );
 }
 
 /** 设置标签名的翻译 key。 */
@@ -50,6 +55,8 @@ export function filterSettingFieldsByQuery<T extends SettingSearchField>(
   if (!normalized) return [];
   return fields.filter((field) => {
     const display = text(field);
-    return `${display.label} ${display.description} ${field.path} ${display.group}`.toLowerCase().includes(normalized);
+    return `${display.label} ${display.description} ${field.path} ${display.group}`
+      .toLowerCase()
+      .includes(normalized);
   });
 }

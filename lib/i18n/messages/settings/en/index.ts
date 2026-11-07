@@ -26,4 +26,7 @@ export const settingsEnParts: Record<string, Record<string, string>> = {
   chromeLogs,
 };
 
-export const settingsEnMessages: Record<string, string> = Object.assign({}, ...Object.values(settingsEnParts));
+export const settingsEnMessages: Record<string, string> = Object.assign(
+  {},
+  ...Object.values(settingsEnParts),
+);

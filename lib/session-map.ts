@@ -1,7 +1,12 @@
 import { statSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import type { SessionInfo } from "./types";
-import { getSessionEntries, listAllSessions, readSessionHeader, resolveSessionPath } from "./session-reader";
+import {
+  getSessionEntries,
+  listAllSessions,
+  readSessionHeader,
+  resolveSessionPath,
+} from "./session-reader";
 import { sessionPathKey } from "./session-path";
 import type { MapTurnDetail, MapTurnNode, SessionMapPayload } from "./map-types";
 
@@ -230,7 +235,9 @@ function buildChildren(sessions: SessionInfo[]): Map<string, SessionInfo[]> {
 }
 
 /** Target session plus every fork descendant, parent first. Subagent sessions are excluded. */
-async function collectChain(target: SessionInfo): Promise<{ sessions: SessionInfo[]; truncated: boolean }> {
+async function collectChain(
+  target: SessionInfo,
+): Promise<{ sessions: SessionInfo[]; truncated: boolean }> {
   const all = await listAllSessions();
   const children = buildChildren(all);
   const chain: SessionInfo[] = [];
@@ -256,7 +263,9 @@ async function collectChain(target: SessionInfo): Promise<{ sessions: SessionInf
   return { sessions: chain, truncated };
 }
 
-async function parseChain(chain: SessionInfo[]): Promise<Array<{ info: SessionInfo; parsed: ParsedFile }>> {
+async function parseChain(
+  chain: SessionInfo[],
+): Promise<Array<{ info: SessionInfo; parsed: ParsedFile }>> {
   const results = await Promise.allSettled(chain.map((info) => parseSessionFile(info.path)));
   const root = results[0];
   // The root file is the map itself: a broken root must surface, not look empty.
@@ -268,7 +277,9 @@ async function parseChain(chain: SessionInfo[]): Promise<Array<{ info: SessionIn
   return loaded;
 }
 
-async function resolveTarget(sessionId: string): Promise<{ info: SessionInfo; path: string } | null> {
+async function resolveTarget(
+  sessionId: string,
+): Promise<{ info: SessionInfo; path: string } | null> {
   const path = await resolveSessionPath(sessionId);
   if (!path) return null;
   const key = sessionPathKey(path);
@@ -330,7 +341,10 @@ export async function buildSessionMap(sessionId: string): Promise<SessionMapPayl
   return { nodes, truncated };
 }
 
-export async function readMapTurn(sessionId: string, turnId: string): Promise<MapTurnDetail | null> {
+export async function readMapTurn(
+  sessionId: string,
+  turnId: string,
+): Promise<MapTurnDetail | null> {
   const target = await resolveTarget(sessionId);
   if (!target) return null;
   const chain = await collectChain(target.info);

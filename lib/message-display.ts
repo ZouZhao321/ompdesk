@@ -1,4 +1,9 @@
-import type { AssistantContentBlock, AssistantMessage, ThinkingContent, ToolCallContent } from "./types";
+import type {
+  AssistantContentBlock,
+  AssistantMessage,
+  ThinkingContent,
+  ToolCallContent,
+} from "./types";
 
 export interface DisplayOptions {
   isStreaming?: boolean;
@@ -6,12 +11,23 @@ export interface DisplayOptions {
   hideThinking?: boolean;
 }
 
-export function isEmptyThinkingBlock(block: AssistantContentBlock, options: DisplayOptions = {}): block is ThinkingContent {
-  return block.type === "thinking" && !block.deferred && !options.isStreaming && block.thinking.trim() === "";
+export function isEmptyThinkingBlock(
+  block: AssistantContentBlock,
+  options: DisplayOptions = {},
+): block is ThinkingContent {
+  return (
+    block.type === "thinking" &&
+    !block.deferred &&
+    !options.isStreaming &&
+    block.thinking.trim() === ""
+  );
 }
 
 /** True for blocks the transcript must not render at all. */
-export function isHiddenAssistantBlock(block: AssistantContentBlock, options: DisplayOptions = {}): boolean {
+export function isHiddenAssistantBlock(
+  block: AssistantContentBlock,
+  options: DisplayOptions = {},
+): boolean {
   if (options.hideThinking && block.type === "thinking") return true;
   return isEmptyThinkingBlock(block, options);
 }
@@ -61,7 +77,11 @@ export type ThinkingDisplay = "text" | "loading" | "error" | "placeholder";
  * 思考块展示什么。正文一旦在手就优先渲染：正文已经取回、重新请求却失败时，错误
  * 文案不该把它盖掉，加载态同理。
  */
-export function thinkingDisplayState(hasText: boolean, loading: boolean, error: string | null): ThinkingDisplay {
+export function thinkingDisplayState(
+  hasText: boolean,
+  loading: boolean,
+  error: string | null,
+): ThinkingDisplay {
   if (hasText) return "text";
   if (loading) return "loading";
   if (error !== null && error.length > 0) return "error";

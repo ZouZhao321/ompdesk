@@ -42,9 +42,7 @@ function createUndiciClient(
   origin: string | URL,
   options: object,
 ): Undici.Dispatcher {
-  return withUndiciErrorListener(
-    new undici.Client(origin, options as Undici.Client.Options),
-  );
+  return withUndiciErrorListener(new undici.Client(origin, options as Undici.Client.Options));
 }
 
 function createUndiciOriginDispatcher(
@@ -105,10 +103,8 @@ export function configureHttpDispatcher(
           allowH2: false,
           bodyTimeout: normalizedTimeoutMs,
           headersTimeout: normalizedTimeoutMs,
-          clientFactory: (origin, options) =>
-            createUndiciClient(undici, origin, options),
-          factory: (origin, options) =>
-            createUndiciOriginDispatcher(undici, origin, options),
+          clientFactory: (origin, options) => createUndiciClient(undici, origin, options),
+          factory: (origin, options) => createUndiciOriginDispatcher(undici, origin, options),
         }),
       );
       undici.setGlobalDispatcher(dispatcher);

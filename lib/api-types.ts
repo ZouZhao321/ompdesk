@@ -25,11 +25,7 @@ export interface SkillInstallInfo {
   canCheckForUpdates: boolean;
 }
 
-export type SkillUpdateState =
-  | "up-to-date"
-  | "update-available"
-  | "unsupported"
-  | "error";
+export type SkillUpdateState = "up-to-date" | "update-available" | "unsupported" | "error";
 
 export interface SkillUpdateResult {
   package: string;
@@ -180,10 +176,7 @@ export interface OmpdeskInstallPlan {
   restartRequired: boolean;
 }
 
-export type OmpdeskUpdateAvailability =
-  | "up-to-date"
-  | "installable"
-  | "manual";
+export type OmpdeskUpdateAvailability = "up-to-date" | "installable" | "manual";
 
 export interface OmpdeskUpdateResponse {
   currentAppVersion: string;

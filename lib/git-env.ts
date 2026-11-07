@@ -213,7 +213,10 @@ function readCountedConfig(env: NodeJS.ProcessEnv, rawCount: string): CountedCon
     if (keyNames.length !== 1) return null;
     const valueNames = findEnvKeys(env, `GIT_CONFIG_VALUE_${index}`);
     if (valueNames.length > 1) return null;
-    entries.push({ key: env[keyNames[0]] ?? "", value: valueNames.length === 1 ? env[valueNames[0]] : undefined });
+    entries.push({
+      key: env[keyNames[0]] ?? "",
+      value: valueNames.length === 1 ? env[valueNames[0]] : undefined,
+    });
   }
   return entries;
 }

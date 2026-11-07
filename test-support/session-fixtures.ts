@@ -23,7 +23,11 @@ import { mkdir, readdir, rename, rm, stat } from "fs/promises";
 import { basename, join, resolve } from "path";
 import { setTimeout as delay } from "timers/promises";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
-import { getAgentDir, getBaseConfigRoot, relativePathWithinNormalizedRoot } from "@oh-my-pi/pi-utils/dirs";
+import {
+  getAgentDir,
+  getBaseConfigRoot,
+  relativePathWithinNormalizedRoot,
+} from "@oh-my-pi/pi-utils/dirs";
 import { comparableDirectory } from "./path-compare";
 
 export type SessionScenario = "single-turn" | "empty" | "branch" | "subagent" | "tools" | "long";
@@ -219,8 +223,14 @@ export async function seedSessions(
 
     try {
       await options.onStagingReady?.();
-      const plan = await buildScenario(scenario, { cwd: options.cwd, title, messageTime }, stagingDir);
-      const children = await replaceDirectory(stagingDir, scenarioDir, agentDir, () => plan.extend(scenarioDir));
+      const plan = await buildScenario(
+        scenario,
+        { cwd: options.cwd, title, messageTime },
+        stagingDir,
+      );
+      const children = await replaceDirectory(stagingDir, scenarioDir, agentDir, () =>
+        plan.extend(scenarioDir),
+      );
       return [...plan.sessions, ...children].map((session) => ({
         id: session.id,
         path: join(scenarioDir, basename(session.file)),
@@ -292,9 +302,9 @@ function assertOutsideConfigRoot(agentDir: string): void {
   const configRoot = comparableDirectory(getBaseConfigRoot());
   if (relativePathWithinNormalizedRoot(configRoot, comparableDirectory(agentDir)) !== null) {
     throw new Error(
-      `session-fixtures: agentDir 不能位于真实用户配置根 ${configRoot} 之下（${agentDir}）：`
-        + "真实的 agent 目录可能尚未创建或只含 sessions，条目检查会放行，样本就会写进用户数据。"
-        + '请改用任务临时目录，例如 join(mkdtempSync(join(tmpdir(), "ompdesk-")), "agent")',
+      `session-fixtures: agentDir 不能位于真实用户配置根 ${configRoot} 之下（${agentDir}）：` +
+        "真实的 agent 目录可能尚未创建或只含 sessions，条目检查会放行，样本就会写进用户数据。" +
+        '请改用任务临时目录，例如 join(mkdtempSync(join(tmpdir(), "ompdesk-")), "agent")',
     );
   }
 }
@@ -315,29 +325,29 @@ function assertActiveAgentDirSeparate(agentDir: string): void {
   const target = comparableDirectory(agentDir);
   if (active === target) {
     throw new Error(
-      `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：`
-        + "setSessionName 会把标题写进该目录的 history.db。"
-        + "铺样本前先把活动目录切到目标之外，例如 setAgentDir(runtimeDir) 后再调用 "
-        + "seedSessions(scenario, { agentDir })",
+      `session-fixtures: 活动 agent 目录不能与目标 agentDir 相同（${agentDir}）：` +
+        "setSessionName 会把标题写进该目录的 history.db。" +
+        "铺样本前先把活动目录切到目标之外，例如 setAgentDir(runtimeDir) 后再调用 " +
+        "seedSessions(scenario, { agentDir })",
     );
   }
 
   if (relativePathWithinNormalizedRoot(target, active) !== null) {
     throw new Error(
-      `session-fixtures: 活动 agent 目录位于目标 agentDir 内部（${activeAgentDir} 在 ${agentDir} 之下）：`
-        + "setSessionName 会在样本树里创建 history.db，破坏下一次铺设与复位。"
-        + "铺样本前先把活动目录切到 agentDir 之外，例如 "
-        + 'setAgentDir(join(tmpdir(), "runtime/agent"))',
+      `session-fixtures: 活动 agent 目录位于目标 agentDir 内部（${activeAgentDir} 在 ${agentDir} 之下）：` +
+        "setSessionName 会在样本树里创建 history.db，破坏下一次铺设与复位。" +
+        "铺样本前先把活动目录切到 agentDir 之外，例如 " +
+        'setAgentDir(join(tmpdir(), "runtime/agent"))',
     );
   }
 
   const configRoot = comparableDirectory(getBaseConfigRoot());
   if (relativePathWithinNormalizedRoot(configRoot, active) !== null) {
     throw new Error(
-      `session-fixtures: 活动 agent 目录位于真实用户配置根 ${configRoot} 之下（${activeAgentDir}）：`
-        + "setSessionName 会把标题写进该目录的 history.db。"
-        + "铺样本前先把活动目录切到任务临时目录，例如 "
-        + 'setAgentDir(join(tmpdir(), "runtime/agent"))',
+      `session-fixtures: 活动 agent 目录位于真实用户配置根 ${configRoot} 之下（${activeAgentDir}）：` +
+        "setSessionName 会把标题写进该目录的 history.db。" +
+        "铺样本前先把活动目录切到任务临时目录，例如 " +
+        'setAgentDir(join(tmpdir(), "runtime/agent"))',
     );
   }
 }
@@ -401,9 +411,9 @@ function assertSessionsDirInsideAgentDir(agentDir: string): void {
   const sessions = comparableDirectory(join(agentDir, SESSIONS_DIR));
   if (relativePathWithinNormalizedRoot(root, sessions) === null) {
     throw new Error(
-      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 必须位于 agentDir 之内，`
-        + `实际解析到 ${sessions}（agentDir 为 ${root}）：`
-        + "符号链接会让清扫与样本写入落到链接目标。",
+      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 必须位于 agentDir 之内，` +
+        `实际解析到 ${sessions}（agentDir 为 ${root}）：` +
+        "符号链接会让清扫与样本写入落到链接目标。",
     );
   }
 }
@@ -418,8 +428,8 @@ async function assertFixtureSessionsDir(sessionsDir: string): Promise<void> {
     .map((entry) => entry.name);
   if (unexpected.length > 0) {
     throw new Error(
-      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 只允许 ${FIXTURE_PREFIX}* 目录，`
-        + `实际还有 ${unexpected.join("、")}`,
+      `session-fixtures: agentDir 的 ${SESSIONS_DIR} 只允许 ${FIXTURE_PREFIX}* 目录，` +
+        `实际还有 ${unexpected.join("、")}`,
     );
   }
 }
@@ -484,7 +494,9 @@ async function buildScenario(
       };
     case "empty":
       return {
-        sessions: [await createSession({ cwd: options.cwd, title: options.title, messages: [] }, stagingDir)],
+        sessions: [
+          await createSession({ cwd: options.cwd, title: options.title, messages: [] }, stagingDir),
+        ],
         extend: async () => [],
       };
     case "branch":
@@ -589,12 +601,18 @@ async function buildToolsScenario(
         "toolUse",
       ),
       toolResultMessage(call, call.resultText, start + 2 * TOOLS_MESSAGE_STEP_MS),
-      assistantMessage(TOOLS_REPLY_TEXTS[round], start + 3 * TOOLS_MESSAGE_STEP_MS, TOOLS_ASSISTANT_USAGE),
+      assistantMessage(
+        TOOLS_REPLY_TEXTS[round],
+        start + 3 * TOOLS_MESSAGE_STEP_MS,
+        TOOLS_ASSISTANT_USAGE,
+      ),
     );
   }
 
   return {
-    sessions: [await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir)],
+    sessions: [
+      await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir),
+    ],
     extend: async () => [],
   };
 }
@@ -618,7 +636,9 @@ async function buildLongScenario(
   }
 
   return {
-    sessions: [await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir)],
+    sessions: [
+      await createSession({ cwd: options.cwd, title: options.title, messages }, stagingDir),
+    ],
     extend: async () => [],
   };
 }
@@ -653,7 +673,9 @@ async function branchSession(
   options: { title: string | null; messageTime: number; messages: SessionMessage[] },
   sessionDir: string,
 ): Promise<BuiltSession> {
-  const manager = await SessionManager.open(parent.file, sessionDir, undefined, { suppressBreadcrumb: true });
+  const manager = await SessionManager.open(parent.file, sessionDir, undefined, {
+    suppressBreadcrumb: true,
+  });
   try {
     const leafId = manager.getLeafId();
     if (!leafId) {

@@ -56,7 +56,9 @@ function toModelRef(model: Model<Api>, thinkingLevel?: string): ModelRoleModelRe
  * Session startup uses this the way pi-web used `settings.defaultModel`: as the
  * preferred model when the browser did not pick one explicitly.
  */
-export function readDefaultModelRole(settings: Settings): { provider: string; modelId: string } | undefined {
+export function readDefaultModelRole(
+  settings: Settings,
+): { provider: string; modelId: string } | undefined {
   const selector = settings.getModelRole("default");
   if (!selector) return undefined;
   const slash = selector.indexOf("/");
@@ -93,7 +95,9 @@ export function listModelRoles(
       ...(selector ? { selector } : {}),
       source: settings.getModelRoleSource(role),
       provenance: settings.getModelRoleProvenance(role),
-      ...(resolution?.model ? { resolved: toModelRef(resolution.model, resolution.thinkingLevel) } : {}),
+      ...(resolution?.model
+        ? { resolved: toModelRef(resolution.model, resolution.thinkingLevel) }
+        : {}),
       ...(resolution?.warning ? { warning: resolution.warning } : {}),
     };
   });
