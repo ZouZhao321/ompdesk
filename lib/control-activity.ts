@@ -36,6 +36,9 @@ export function groupSessionActivity(
 
   for (const session of sessions) {
     const projectPath = workspaceKeyOf(session);
+    // A session with neither a project root nor a cwd has no row on the page
+    // either; grouping it under "" would print a phantom project.
+    if (!projectPath) continue;
     const project = byProject.get(projectPath) ?? { path: projectPath, sessions: 0, running: 0, waiting: 0 };
     project.sessions += 1;
     if (running.has(session.id)) project.running += 1;
@@ -49,6 +52,11 @@ export function groupSessionActivity(
     || left.path.localeCompare(right.path)
   ));
 
+  // Totals stay tied to the runtime snapshot, not to the project rows: the
+  // snapshot also holds sessions this list cannot place (running before the
+  // first turn is persisted). Deriving the total from the rows would make `stop`
+  // stop refusing for a task nobody can see, which silently interrupts work.
+  // The caller reports the difference instead of hiding it.
   return {
     running: runningSessionIds.length,
     waiting: waitingSessionIds.length,

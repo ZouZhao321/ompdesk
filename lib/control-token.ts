@@ -16,12 +16,17 @@ export const CONTROL_TOKEN_HEADER = "x-ompdesk-control-token";
 export const CONTROL_API_PREFIX = "/api/control/";
 
 /**
- * Constant-time comparison without `node:crypto`.
+ * Does the presented token equal the one this instance was started with?
  *
- * `proxy.ts` is not the constraint — it already imports `lib/web-auth`, which
- * pulls in `node:crypto`. This module just avoids a second hashing dependency
- * for a comparison of two equal-length hex strings, where the loop below is the
- * whole job.
+ * Not constant time, and not claimed to be: the loop exits early on a length
+ * mismatch. That is acceptable here because the comparison is not a password
+ * check — the token never leaves this machine, is compared only over loopback,
+ * and both sides are fixed-length hex. `lib/web-auth.ts` keeps the constant-time
+ * comparison where a real credential is at stake.
+ *
+ * "Not configured" and "wrong token" both answer false on purpose: the caller
+ * turns that into a bare 404, so an unauthenticated request cannot distinguish
+ * the two.
  */
 export function controlTokensMatch(provided: string | null, expected: string | undefined): boolean {
   if (!provided || !expected || provided.length !== expected.length) return false;
