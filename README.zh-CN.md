@@ -99,6 +99,8 @@ ompdesk
 | `OMPDESK_TRUST_PROXY=1` | 信任最后一个 `x-forwarded-for` 地址，用于按来源限流。只在自己控制代理时开启。 |
 | `OMPDESK_ALLOW_NON_LOOPBACK=1` | 跳过只允许回环地址的检查。Docker 镜像会设置它，不要在宿主机上使用。 |
 | `OMPDESK_BUN` | 启动器使用的 Bun 可执行文件。 |
+| `OMPDESK_STARTUP_TIMEOUT_MS` | `start` 等待端口应答的上限，默认 120000 毫秒。 |
+| `OMPDESK_DIST_DIR` | 使用 `.next` 之外的构建目录；`next.config.ts` 读同一个变量。 |
 | `PI_CODING_AGENT_DIR` | 改用另一个 omp 数据目录，默认是 `~/.omp/agent`。 |
 | `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` | 服务端访问模型与提供方时使用的代理。Bun 在启动时读取一次。 |
 

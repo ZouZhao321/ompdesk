@@ -99,6 +99,8 @@ The `ompdesk` entrypoint runs under Node or Bun, locates a Bun runtime, and re-e
 | `OMPDESK_TRUST_PROXY=1` | Trust the last `x-forwarded-for` hop for rate-limit bucketing. Only set it behind a proxy you control. |
 | `OMPDESK_ALLOW_NON_LOOPBACK=1` | Skip the loopback-only check. The Docker image sets it; do not use it on a host. |
 | `OMPDESK_BUN` | Bun executable used by the launcher. |
+| `OMPDESK_STARTUP_TIMEOUT_MS` | How long `start` waits for the port to answer before giving up. Defaults to 120000. |
+| `OMPDESK_DIST_DIR` | Serve a build directory other than `.next`. `next.config.ts` reads the same variable. |
 | `PI_CODING_AGENT_DIR` | Use another omp agent directory instead of `~/.omp/agent`. |
 | `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | Proxy for server-side model and provider requests. Bun reads them once at startup. |
 

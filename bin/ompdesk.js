@@ -57,6 +57,8 @@ const {
 } = require("./daemon-control");
 
 const pkgDir = path.join(__dirname, "..");
+// `next.config.ts` takes its `distDir` from the same variable, so the launcher
+// has to check the directory the server will actually serve.
 const nextDir = path.resolve(pkgDir, process.env.OMPDESK_DIST_DIR?.trim() || ".next");
 
 // Resolve next's CLI entry directly to avoid relying on .bin symlinks (which
@@ -92,6 +94,10 @@ const webAuthFile = resolveWebAuthFile();
 const stateDirPath = stateDir();
 const instanceFile = recordFile(stateDirPath, port);
 const portNumber = Number(port);
+// `[::1]` is accepted by the loopback check as a way of writing an address, but
+// it is not something `net.connect` or `next -H` accept: they want the bare
+// `::1`. Normalising once here keeps the record, the probe and the child in step.
+const serverHost = hostname.replace(/^\[|\]$/g, "");
 
 let bunPath = null;
 
@@ -209,14 +215,14 @@ function openInBrowser(url) {
  * endpoint has to answer without the web password.
  */
 function spawnServer({ stdio, detached, controlToken }) {
-  return spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", hostname], {
+  return spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", serverHost], {
     cwd: pkgDir,
     stdio,
     detached,
     windowsHide: detached,
     env: {
       ...withLoopbackNoProxy(process.env),
-      OMPDESK_HOSTNAME: hostname,
+      OMPDESK_HOSTNAME: serverHost,
       OMPDESK_AUTH_FILE: webAuthFile,
       // Preserve the directory from which `ompdesk` was launched so relative
       // project paths in the browser resolve against the user's shell cwd.
@@ -269,6 +275,9 @@ async function runAttached() {
 async function startDaemon() {
   requireServerPrerequisites();
   await configurePasswordAccess();
+  // The warning belongs to the launch, not to the terminal: it is the person
+  // starting ompdesk who can still decide to drop `-H`.
+  warnAboutExposure();
 
   const existing = readRecord(instanceFile);
   if (existing && isProcessAlive(existing.pid) && await probePort(existing.host, existing.port)) {
@@ -277,7 +286,7 @@ async function startDaemon() {
   }
   if (existing) removeRecord(instanceFile);
 
-  if (await probePort(hostname, portNumber)) {
+  if (await probePort(serverHost, portNumber)) {
     console.error(`Port ${port} is already in use by another process. Stop it, or start ompdesk with --port.`);
     process.exit(1);
   }
@@ -303,7 +312,7 @@ async function startDaemon() {
   child.on("error", (error) => { exited = { error }; });
   child.unref();
 
-  const started = await waitForPort(hostname, portNumber, startupTimeoutMs(), true);
+  const started = await waitForPort(serverHost, portNumber, startupTimeoutMs(), true);
   if (!started || exited) {
     console.error(`ompdesk did not start. Inspect the run log: ${logPath}`);
     terminateInstance(child.pid, true);
@@ -312,9 +321,9 @@ async function startDaemon() {
 
   const record = {
     pid: child.pid,
-    host: hostname,
+    host: serverHost,
     port: portNumber,
-    url: buildUrl(hostname, portNumber),
+    url: buildUrl(serverHost, portNumber),
     startedAt: new Date().toISOString(),
     controlToken,
     log: logPath,
@@ -362,16 +371,26 @@ async function runStatus() {
   return 0;
 }
 
-async function stopInstance(record) {
-  terminateInstance(record.pid, false);
-  if (await waitForPort(record.host, record.port, 8_000, false)) {
-    removeRecord(recordFile(stateDirPath, record.port));
-    return;
+/**
+ * Stop one instance and report whether the port actually came back.
+ *
+ * Printing "stopped" while the port stays bound would leave a server running
+ * with no record to reach it, so the record is only dropped once the probe says
+ * the port is free. `force` skips the graceful signal instead of waiting for it.
+ */
+async function stopInstance(record, { force: forceful }) {
+  terminateInstance(record.pid, forceful);
+  const released = await waitForPort(record.host, record.port, forceful ? 4_000 : 8_000, false);
+  if (!released) {
+    terminateInstance(record.pid, true);
+    if (await waitForPort(record.host, record.port, 4_000, false)) {
+      removeRecord(recordFile(stateDirPath, record.port));
+      return true;
+    }
+    return false;
   }
-
-  terminateInstance(record.pid, true);
-  await waitForPort(record.host, record.port, 4_000, false);
   removeRecord(recordFile(stateDirPath, record.port));
+  return true;
 }
 
 async function runStop() {
@@ -395,8 +414,12 @@ async function runStop() {
       continue;
     }
 
-    await stopInstance(record);
-    console.log(`ompdesk on port ${record.port} stopped.`);
+    if (await stopInstance(record, { force })) {
+      console.log(`ompdesk on port ${record.port} stopped.`);
+    } else {
+      console.error(`ompdesk on port ${record.port} is still listening. Stop it from the process list, or retry with --force.`);
+      status = 1;
+    }
   }
   return status;
 }

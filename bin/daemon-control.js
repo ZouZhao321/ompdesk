@@ -12,6 +12,8 @@ const { randomBytes } = require("crypto");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
+const http = require("http");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const net = require("net");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const path = require("path");
@@ -20,6 +22,9 @@ const { resolveAgentDir } = require("./web-auth-store");
 
 const RECORD_PREFIX = "ompdesk-daemon-";
 const RECORD_SUFFIX = ".json";
+// Kept in step with `CONTROL_TOKEN_HEADER` in lib/control-token.ts: the launcher
+// cannot import TypeScript (it loads before Bun is resolved), so the wire name
+// is written twice and the two spellings have to match.
 const CONTROL_TOKEN_HEADER = "x-ompdesk-control-token";
 const PROBE_TIMEOUT_MS = 1_000;
 const READY_POLL_MS = 250;
@@ -100,7 +105,7 @@ function isProcessAlive(pid) {
 /** TCP connect probe: the port answers, or it does not. */
 function probePort(host, port, timeoutMs = PROBE_TIMEOUT_MS) {
   return new Promise((resolve) => {
-    const socket = net.connect({ host, port });
+    const socket = net.connect({ host: host.replace(/^\[|\]$/g, ""), port });
     let settled = false;
     const finish = (reachable) => {
       if (settled) return;
@@ -117,35 +122,76 @@ function probePort(host, port, timeoutMs = PROBE_TIMEOUT_MS) {
 /**
  * Wait until the port reaches the wanted state.
  *
- * `open` picks the direction: waiting for the server to come up, or for it to
- * release the port after a stop.
+ * `expectOpen` picks the direction: waiting for the server to come up, or for
+ * the port to be released after a stop.
  */
-async function waitForPort(host, port, timeoutMs, open) {
+async function waitForPort(host, port, timeoutMs, expectOpen) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await probePort(host, port) === open) return true;
+    if (await probePort(host, port) === expectOpen) return true;
     await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS));
   }
   return false;
 }
 
+/** IPv6 hosts need brackets in a URL; the loopback check accepts `::1` and `[::1]`. */
 function buildUrl(host, port) {
-  return `http://${host}:${port}`;
+  const bracketed = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+  return `http://${bracketed}:${port}`;
 }
 
-/** Read the live activity view from the running instance, or null when it does not answer. */
-async function fetchActivity(record, timeoutMs = 5_000) {
-  if (!record || !record.url || !record.controlToken) return null;
-  try {
-    const response = await fetch(`${record.url}/api/control/activity`, {
-      headers: { [CONTROL_TOKEN_HEADER]: record.controlToken },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
+/**
+ * Read the live activity view from the running instance.
+ *
+ * `node:http` rather than `fetch`: `fetch` honours `HTTP_PROXY`, and the
+ * launcher's own environment never went through `withLoopbackNoProxy`, so an
+ * operator with a proxy configured would have every control call fail even
+ * though the server is on loopback and answering.
+ */
+function fetchActivity(record, timeoutMs = 5_000) {
+  if (!record || !record.host || !record.port || !record.controlToken) {
+    return Promise.resolve(null);
   }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    const request = http.request({
+      hostname: record.host.replace(/^\[|\]$/g, ""),
+      port: record.port,
+      path: "/api/control/activity",
+      headers: { [CONTROL_TOKEN_HEADER]: record.controlToken },
+      timeout: timeoutMs,
+    }, (response) => {
+      if (response.statusCode !== 200) {
+        response.resume();
+        finish(null);
+        return;
+      }
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => {
+        try {
+          finish(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        } catch {
+          finish(null);
+        }
+      });
+      response.on("error", () => finish(null));
+    });
+
+    request.on("error", () => finish(null));
+    request.on("timeout", () => {
+      request.destroy();
+      finish(null);
+    });
+    request.end();
+  });
 }
 
 /**
@@ -155,8 +201,9 @@ async function fetchActivity(record, timeoutMs = 5_000) {
  * means killing the recorded pid alone can leave the server it spawned holding
  * the port: `taskkill /T` walks the child tree on Windows, and on POSIX the
  * detached start makes the daemon the leader of a process group that `-pid`
- * reaches. Windows has no SIGTERM, so `/F` is unconditional there instead of
- * looking like a graceful stop that silently does nothing.
+ * reaches. Windows has no SIGTERM, so both paths there end the tree with `/F`;
+ * `--force` still changes the outcome by skipping the running-task check in
+ * `runStop`, which is the part a person is choosing between.
  */
 function terminateInstance(pid, force) {
   if (!Number.isInteger(pid) || pid <= 0) return;
@@ -176,11 +223,16 @@ function terminateInstance(pid, force) {
   }
 }
 
-/** Split a session path into the label a person recognises: the last directory name. */
+/**
+ * Last path segment, which is what a person calls the project.
+ *
+ * `projectDisplayName` in lib/project-order.ts is the shared version, but that
+ * module is TypeScript and this file loads before Bun is resolved. The rule is
+ * two lines, so it stays duplicated here rather than forcing a build step.
+ */
 function projectLabel(projectPath) {
   const normalized = String(projectPath ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
-  const segment = normalized.slice(normalized.lastIndexOf("/") + 1);
-  return segment || normalized || "(unknown)";
+  return normalized.slice(normalized.lastIndexOf("/") + 1) || normalized || "(unknown)";
 }
 
 function describeActivity(activity) {
@@ -201,6 +253,7 @@ function formatStatus(record, activity) {
   const lines = [
     `ompdesk is running at ${record.url}`,
     `pid ${record.pid}, started ${record.startedAt}`,
+    `log ${record.log}`,
   ];
   if (!activity) {
     lines.push("Session state is unavailable: the instance did not answer the control endpoint.");

@@ -40,15 +40,10 @@ function loopbackBindingError(hostname, env = process.env) {
 
 const COMMANDS = new Set(["start", "status", "stop", "foreground"]);
 
-/**
- * First positional argument selects the command. `__daemon-run` is the same
- * launcher re-entering itself as the detached server process; it is not part of
- * the user-facing vocabulary.
- */
+/** First positional argument selects the command; none means `start`. */
 function readCommand(positionals) {
   const first = positionals[0];
   if (!first) return "start";
-  if (first === "__daemon-run") return first;
   if (COMMANDS.has(first)) return first;
   return { error: `Unknown command: ${first}. Use start, status, stop or foreground.` };
 }

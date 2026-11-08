@@ -3,6 +3,7 @@ import { withRequestLog } from "@/lib/api-request-log";
 import { groupSessionActivity } from "@/lib/control-activity";
 import { CONTROL_TOKEN_HEADER, controlTokensMatch } from "@/lib/control-token";
 import { getRpcSessionActivitySnapshot, getRpcSessionInfos } from "@/lib/rpc-manager";
+import { readArchivedIds } from "@/lib/session-archive";
 import { attachSessionProjectInfo, listAllSessions, mergeSessionLists } from "@/lib/session-reader";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +11,8 @@ export const dynamic = "force-dynamic";
 /**
  * What `ompdesk status` and `ompdesk stop` read: the same session list the
  * sidebar shows, grouped by project, with the live activity snapshot laid over
- * it. Session counts come from disk so a project keeps its row after its last
- * turn ends; `running` and `waiting` come from the runtime, so `stop` only
- * refuses for work this process can actually interrupt.
+ * it. Archived sessions are filtered out the same way, so the counts match what
+ * the page displays rather than including rows nobody can see.
  */
 export const GET = withRequestLog("/api/control/activity", getRouteHandler);
 
@@ -28,13 +28,11 @@ async function getRouteHandler(request: Request) {
     attachSessionProjectInfo(getRpcSessionInfos()),
   ]);
   const snapshot = getRpcSessionActivitySnapshot();
+  const archived = readArchivedIds();
+  const sessions = mergeSessionLists(persisted, runtime).filter((session) => !archived.has(session.id));
 
   return NextResponse.json(
-    groupSessionActivity(
-      mergeSessionLists(persisted, runtime),
-      snapshot.runningSessionIds,
-      snapshot.waitingSessionIds,
-    ),
+    groupSessionActivity(sessions, snapshot.runningSessionIds, snapshot.waitingSessionIds),
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -142,14 +142,15 @@ test("状态输出包含地址、进程与按项目的活动", () => {
   });
   assert.equal(lines[0], "ompdesk is running at http://127.0.0.1:30141");
   assert.match(lines[1], /^pid \d+, started /);
-  assert.deepEqual(lines.slice(2), [
+  assert.match(lines[2], /^log /);
+  assert.deepEqual(lines.slice(3), [
     "ompdesk: 3 sessions, 1 running",
     "quiet: 1 session",
   ]);
 });
 
 test("状态输出在端点不响应时说明无法确认", () => {
-  assert.deepEqual(formatStatus(record(), null).slice(2), [
+  assert.deepEqual(formatStatus(record(), null).slice(3), [
     "Session state is unavailable: the instance did not answer the control endpoint.",
   ]);
   assert.deepEqual(formatStatus(null, null), ["ompdesk is not running."]);

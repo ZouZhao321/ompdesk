@@ -1,4 +1,5 @@
-import type { SessionInfo } from "@/lib/types";
+import type { SessionInfo } from "./types";
+import { workspaceKeyOf } from "./workspace-activity";
 
 export interface ProjectActivity {
   path: string;
@@ -14,24 +15,27 @@ export interface SessionActivity {
 }
 
 /**
- * Group live sessions by project for `ompdesk status`.
+ * Group the session list by workspace for `ompdesk status`.
  *
- * Only sessions the server process is actually holding appear here: a session
- * on disk that nothing is running is not something the daemon can interrupt, so
- * counting it would overstate what `stop` would break. Projects are ordered by
- * running, then waiting, then path, so the project holding work comes first.
+ * Session counts come from the list handed in — the same one the sidebar shows,
+ * so a project keeps its row after its last turn ends. `running` and `waiting`
+ * come from the runtime snapshot: they answer "what would stopping now
+ * interrupt", which is why `stop` refuses on `running` and not on `sessions`.
+ *
+ * The workspace key comes from `workspaceKeyOf`, the rule the sidebar groups by,
+ * so a worktree session counts under its main checkout on both surfaces.
  */
 export function groupSessionActivity(
-  sessions: SessionInfo[],
-  runningSessionIds: string[],
-  waitingSessionIds: string[],
+  sessions: readonly SessionInfo[],
+  runningSessionIds: readonly string[],
+  waitingSessionIds: readonly string[],
 ): SessionActivity {
   const running = new Set(runningSessionIds);
   const waiting = new Set(waitingSessionIds);
   const byProject = new Map<string, ProjectActivity>();
 
   for (const session of sessions) {
-    const projectPath = session.projectRoot ?? session.cwd;
+    const projectPath = workspaceKeyOf(session);
     const project = byProject.get(projectPath) ?? { path: projectPath, sessions: 0, running: 0, waiting: 0 };
     project.sessions += 1;
     if (running.has(session.id)) project.running += 1;

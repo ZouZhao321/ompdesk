@@ -24,6 +24,11 @@ buffered before them.
 The Settings → Logs panel reads the current process's file and rotations only.
 It cannot list or open any other file.
 
+A background instance started by `ompdesk` also keeps the server's own terminal
+output in `<agentDir>/ompdesk-daemon-<port>.log`, appended across restarts. That
+file is outside this rotation scheme and the Logs panel does not read it; `ompdesk
+status` prints its path so it can be opened directly.
+
 ## Record shape
 
 Each line is one JSON object. `message` is a stable event name; business fields
@@ -264,6 +269,7 @@ is never bundled into the proxy bundle.
 | `security.auth.denied` | warn | Wrong or missing Basic Auth. `reason` is `invalid-credentials` or `missing-credentials`. |
 | `security.auth.unavailable` | warn | Password access is on but the credential file cannot be read. `reason: "credential-file-unreadable"`. |
 | `security.recovery.access` | info | The `/recover` page or recovery API was reached while locked. `reason: "recovery-surface"`, and the request proceeds as actor `recovery`. |
+| `security.control.access` | info | The launcher's control channel answered a token-bearing request (`reason: "control-token"`). Tokens match only while `OMPDESK_CONTROL_TOKEN` is set, so a request without it is refused with 404 before this point. |
 | `security.recovery.code.issued` | info / warn | `ok`, plus `expiresAt` on success or `reason`/`retryAfterMs` on failure. |
 | `security.recovery.code.redeemed` | info / warn | `ok`, plus `reason` when redemption fails. The submitted code and the new password are not recorded. |
 

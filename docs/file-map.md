@@ -86,6 +86,8 @@ comment-translation-generation.ts 勾选条目的批量译文生成：字典命�
 comment-translation-validation.ts 译文逐字片段校验：路径、标识符、数字与括号片段
 comment-translation-route.ts 生成接口的请求校验与处理器
 comment-translation-model.ts 生成接口的模型接线：可见模型选择与 completeSimple 调用
+control-activity.ts 按工作区汇总会话数、运行中与等待输入，供 /api/control/activity 使用；工作区键与侧边栏同一规则
+control-token.ts     后台实例的控制令牌：请求头名、路径前缀与常量时间比较
 git-env.ts           createGitEnv()：git 子进程环境，剥离钩子注入的仓库定位变量
 git-ignore.ts        checkIgnoredEntries：git check-ignore 批量判定目录项是否被忽略，不可判定返回 null
 git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文件，非仓库返回 null
