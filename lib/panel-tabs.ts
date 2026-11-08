@@ -12,12 +12,24 @@ export interface FileTab extends TabBase {
   kind: "file";
   label: string;
   filePath: string;
-  initialDisplayMode?: "source" | "preview" | "diff";
+  initialDisplayMode?: DisplayMode;
   /**
    * 每次打开请求的序号。同一个文件被再次打开、且要求切到指定显示模式时，
    * 序号变化会让面板正文重新应用该模式；只改文件路径无法表达这种重复请求。
    */
   openSeq?: number;
+}
+
+/** 打开文件标签的显示模式。 */
+export type DisplayMode = "source" | "preview" | "diff";
+
+/**
+ * 打开文件入口的可选参数，标签栏、文件树、Git 面板与会话区的改动文件卡片共用。
+ * `modeHint` 只在明确要求切换显示模式时给出，省略表示沿用标签当前状态。
+ */
+export interface OpenFileOptions {
+  sourceSessionId?: string | null;
+  modeHint?: DisplayMode;
 }
 
 export interface ViewTab extends TabBase {

@@ -77,7 +77,8 @@ export function writtenFileLabels(filePaths: string[]): string[] {
       );
       if (unique) return suffix;
     }
-    return parts.join("/");
+    // 段序列完全相同时后缀无解：退回完整绝对路径，保证两个标签仍然不同。
+    return filePaths[index];
   });
 }
 

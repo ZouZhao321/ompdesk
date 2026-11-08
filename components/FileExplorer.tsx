@@ -11,6 +11,7 @@ import {
   normalizeFilePathSlashes,
 } from "@/lib/file-paths";
 import type { GitFileStatus, GitStatusResponse } from "@/lib/git-types";
+import type { OpenFileOptions } from "@/lib/panel-tabs";
 import { GIT_STATUS_COLORS, GitStatusBadge } from "./GitStatusBadge";
 import type { Translate } from "@/lib/i18n/types";
 import { useI18n } from "@/hooks/useI18n";
@@ -425,8 +426,6 @@ function TreeNode({
     </div>
   );
 }
-
-type OpenFileOptions = { sourceSessionId?: string | null; modeHint?: "diff" };
 
 type OpenFileHandler = (filePath: string, fileName: string, options?: OpenFileOptions) => void;
 

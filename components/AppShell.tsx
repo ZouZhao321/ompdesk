@@ -27,7 +27,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { canApplySessionIdentity, type SessionIdentity } from "@/lib/agent-client";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
-import { PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type FileTab, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
+import { PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type FileTab, type OpenFileOptions, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -922,7 +922,7 @@ export function AppShell() {
   const handleOpenFile = useCallback((
     filePath: string,
     fileName: string,
-    options?: { sourceSessionId?: string | null; modeHint?: "diff" },
+    options?: OpenFileOptions,
   ) => {
     const sourceSessionId = options?.sourceSessionId;
     const modeHint = options?.modeHint;
@@ -961,7 +961,7 @@ export function AppShell() {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
 
-  const handleOpenLinkedFile = useCallback((filePath: string, options?: { modeHint?: "diff" }) => {
+  const handleOpenLinkedFile = useCallback((filePath: string, options?: OpenFileOptions) => {
     handleOpenFile(filePath, getFileName(filePath), { ...options, sourceSessionId: selectedSession?.id ?? null });
   }, [handleOpenFile, selectedSession?.id]);
 

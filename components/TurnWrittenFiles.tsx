@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { getFileName } from "@/lib/file-paths";
+import type { OpenFileOptions } from "@/lib/panel-tabs";
 import { writtenFileLabels, type WrittenFile } from "@/lib/turn-written-files";
 import { getFileIcon } from "./FileIcons";
 
@@ -12,7 +13,7 @@ import { getFileIcon } from "./FileIcons";
  */
 export function TurnWrittenFiles({ files, onOpenFile }: {
   files: WrittenFile[];
-  onOpenFile?: (filePath: string, options?: { modeHint?: "diff" }) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
 }) {
   const { t } = useI18n();
   if (files.length === 0) return null;
@@ -38,8 +39,8 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
               gap: 4,
               padding: "2px 8px",
               // 长文件名要收在容器内：按钮可以被压到行宽，名字用省略号收尾。
+              // 不在按钮上写 minWidth，手机档的 44px 命中区来自样式表，内联值会压过它。
               maxWidth: "100%",
-              minWidth: 0,
               fontSize: 12,
               fontFamily: "var(--font-mono)",
               color: "var(--text)",
