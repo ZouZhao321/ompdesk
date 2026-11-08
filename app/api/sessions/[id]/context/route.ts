@@ -3,8 +3,7 @@ import { withRequestLog } from "@/lib/api-request-log";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { resolveSessionPath, buildSessionContext, getHistoricalContextUsage } from "@/lib/session-reader";
 import { getRpcSession, getFinalRpcSessionId } from "@/lib/rpc-manager";
-import { getSettingsForCwd } from "@/lib/omp-runtime";
-import { getSettingForWeb } from "@/lib/omp-settings";
+import { shouldCollapseCompactedHistory } from "@/lib/transcript-collapse";
 
 export const GET = withRequestLog("/api/sessions/[id]/context", getRouteHandler);
 
@@ -30,11 +29,10 @@ async function getRouteHandler(
 
     const sm = liveRpc?.inner.sessionManager ?? await SessionManager.open(filePath!);
     const entries = sm.getEntries() as never;
-    const settings = await getSettingsForCwd(sm.getHeader()?.cwd ?? undefined);
     const context = buildSessionContext(entries, leafId, {
       deferThinking,
       deferToolResultImages,
-      collapseCompactedHistory: getSettingForWeb(settings, "display.collapseCompacted") === true,
+      collapseCompactedHistory: await shouldCollapseCompactedHistory(sm.getHeader()?.cwd),
     });
     const contextUsage = await getHistoricalContextUsage(entries, leafId);
 

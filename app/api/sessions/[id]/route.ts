@@ -17,8 +17,7 @@ import { sessionPathKey } from "@/lib/session-path";
 import { setSessionArchived } from "@/lib/session-archive";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
-import { getSettingsForCwd } from "@/lib/omp-runtime";
-import { getSettingForWeb } from "@/lib/omp-settings";
+import { shouldCollapseCompactedHistory } from "@/lib/transcript-collapse";
 import { projectTreeForResponse } from "@/lib/project-tree";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 
@@ -50,11 +49,10 @@ async function getRouteHandler(
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
     const header = sm.getHeader();
-    const settings = await getSettingsForCwd(header?.cwd ?? undefined);
     const context = buildSessionContext(entries, leafId, {
       deferThinking,
       deferToolResultImages,
-      collapseCompactedHistory: getSettingForWeb(settings, "display.collapseCompacted") === true,
+      collapseCompactedHistory: await shouldCollapseCompactedHistory(header?.cwd),
     });
     // A runtime fallback can differ from the last persisted model selector.
     if (liveRpc?.inner.model) {
