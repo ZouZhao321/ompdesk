@@ -111,13 +111,14 @@ export function mergeOpenFileTab(tabs: Tab[], request: OpenFileRequest): Tab[] {
       : tab);
   }
   const modeUnchanged = existing.initialDisplayMode === request.modeHint;
+  // 走到这里 request 已收窄为带 modeHint 的一支，openSeq 必为数字。
   if (sourceUnchanged && modeUnchanged && request.openSeq === existing.openSeq) return tabs;
   return tabs.map((tab) => tab.id === tabId && tab.kind === "file"
     ? {
       ...tab,
       ...(sourceUnchanged ? {} : { sourceSessionId: request.sourceSessionId }),
       initialDisplayMode: request.modeHint,
-      ...(request.openSeq === undefined ? {} : { openSeq: request.openSeq }),
+      openSeq: request.openSeq,
     }
     : tab);
 }
