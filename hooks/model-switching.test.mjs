@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { readSourceFile } from "../test-support/source-text.ts";
 
-const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
+const source = await readSourceFile(new URL("./useAgentSession.ts", import.meta.url));
 const loadSessionSource = source.slice(
   source.indexOf("const loadSession = useCallback"),
   source.indexOf("const loadContext = useCallback"),
@@ -26,7 +26,7 @@ test("existing-session model changes are optimistic and serialized", () => {
 test("session reloads cannot clear an in-flight optimistic model", () => {
   assert.match(
     loadSessionSource,
-    /setCurrentModelOverride\(\(current\) => modelSwitchPendingRef\.current \? current : null\)/,
+    /setCurrentModelOverride\(\(current\) => \(?modelSwitchPendingRef\.current \? current : null\)?\)/,
   );
 });
 
