@@ -31,7 +31,7 @@ ompdesk 不另外运行一个代理程序，也不复制 omp 的数据：会话�
 
 ## 快速开始
 
-ompdesk 的服务端运行在 **Bun** 上。omp 的 SDK 以 TypeScript 源码发布并引用 `bun:` 内置模块，Node 无法加载它。请先安装 Bun 1.3.14 或更新版本：
+ompdesk 的服务端运行在 **Bun** 上。omp 的 SDK 以 TypeScript 源码发布并引用 `bun:` 内置模块，Node 无法加载它。请先安装 Bun 1.4.2 或更新版本：
 
 ```bash
 curl -fsSL https://bun.sh/install | bash        # macOS / Linux
@@ -46,6 +46,16 @@ bunx ompdesk@latest
 
 浏览器打开 [http://127.0.0.1:30141](http://127.0.0.1:30141)。服务启动后，启动器会自动打开浏览器。
 
+`ompdesk` 在后台启动并立刻把终端还给你，关掉终端不会带走服务，也不会打断正在运行的任务。查看状态与关闭用同一条命令：
+
+```bash
+ompdesk status    # 是否在运行、访问地址、各项目正在做什么
+ompdesk stop      # 有任务在跑时拒绝
+ompdesk stop --force
+```
+
+`status` 与 `stop` 覆盖当前 agent 目录下记录的全部实例，加 `--port <端口>` 只处理其中一个。实例会把自己的进程号与运行日志记录在该目录里，因此同一端口上再次执行 `ompdesk` 会报出已在运行的地址，而不会撞在端口上报错。`ompdesk foreground` 是另一种形式：服务跟着终端前台运行，容器或服务管理器需要这一种。
+
 需要长期使用时安装到全局：
 
 ```bash
@@ -55,12 +65,22 @@ ompdesk
 
 `ompdesk` 启动入口本身可以在 Node 或 Bun 下运行，它会找到 Bun，再用 Bun 启动服务端。需要指定某个 Bun 版本时，设置 `OMPDESK_BUN=/path/to/bun`。
 
+### 子命令
+
+| 子命令 | 作用 |
+| --- | --- |
+| `ompdesk` / `ompdesk start` | 后台启动，然后立刻返回命令提示符。 |
+| `ompdesk status` | 报告每个已记录的实例：是否在运行、访问地址、进程号、各项目的会话数量。 |
+| `ompdesk stop` | 关闭已记录的实例。有会话正在运行时拒绝；`--force` 强制中断。 |
+| `ompdesk foreground` | 服务跟随本终端前台运行，供容器与服务管理器使用。 |
+
 ### 命令行选项
 
 | 选项 | 作用 |
 | --- | --- |
-| `-p, --port <端口>` | 监听端口，默认 `30141`；也可以使用 `PORT`。 |
+| `-p, --port <端口>` | 监听端口，默认 `30141`；也可以使用 `PORT`。`status` 与 `stop` 用它指定单个实例。 |
 | `-H, --hostname <地址>` | 监听地址。非回环地址会被拒绝，容器场景需设置 `OMPDESK_ALLOW_NON_LOOPBACK`。 |
+| `-f, --force` | 配合 `stop`：中断正在运行的任务，不再拒绝。 |
 | `--no-open` | 启动后不自动打开浏览器。 |
 | `--authenticated` | 本次及以后都开启密码锁。还没有密码且终端可交互时，会先询问密码。 |
 | `--reset-password` | 在不知道旧密码的情况下重设密码，需要在服务器上打开终端。 |
@@ -79,6 +99,8 @@ ompdesk
 | `OMPDESK_TRUST_PROXY=1` | 信任最后一个 `x-forwarded-for` 地址，用于按来源限流。只在自己控制代理时开启。 |
 | `OMPDESK_ALLOW_NON_LOOPBACK=1` | 跳过只允许回环地址的检查。Docker 镜像会设置它，不要在宿主机上使用。 |
 | `OMPDESK_BUN` | 启动器使用的 Bun 可执行文件。 |
+| `OMPDESK_STARTUP_TIMEOUT_MS` | `start` 等待端口应答的上限，默认 120000 毫秒。 |
+| `OMPDESK_DIST_DIR` | 使用 `.next` 之外的构建目录；`next.config.ts` 读同一个变量。 |
 | `PI_CODING_AGENT_DIR` | 改用另一个 omp 数据目录，默认是 `~/.omp/agent`。 |
 | `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` | 服务端访问模型与提供方时使用的代理。Bun 在启动时读取一次。 |
 
