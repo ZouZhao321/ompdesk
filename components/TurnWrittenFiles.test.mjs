@@ -32,3 +32,14 @@ test("renders a button per file showing the basename and full path", () => {
 test("renders nothing when no files were written", () => {
   assert.equal(render({ files: [], onOpenFile() {} }), "");
 });
+
+test("long names truncate inside the chip instead of widening it", () => {
+  const longName = `${"a".repeat(60)}.ts`;
+  const html = render({ files: [{ filePath: `/abs/out/${longName}` }], onOpenFile() {} });
+  // 名字容器允许收缩，超出部分用省略号；完整路径留在 title 与 aria-label 里。
+  assert.match(html, /text-overflow:ellipsis/);
+  assert.match(html, /white-space:nowrap/);
+  assert.match(html, /overflow:hidden/);
+  assert.ok(html.includes(`title="/abs/out/${longName}"`), "full path must stay in title");
+  assert.ok(html.includes(longName), "full name must stay readable to assistive tech");
+});

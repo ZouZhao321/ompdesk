@@ -34,6 +34,9 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
               alignItems: "center",
               gap: 4,
               padding: "2px 8px",
+              // 长文件名要收在容器内：按钮可以被压到行宽，名字用省略号收尾。
+              maxWidth: "100%",
+              minWidth: 0,
               fontSize: 12,
               fontFamily: "var(--font-mono)",
               color: "var(--text)",
@@ -44,7 +47,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
             }}
           >
             {getFileIcon(name, 12)}
-            <span>{name}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{name}</span>
           </button>
         );
       })}
