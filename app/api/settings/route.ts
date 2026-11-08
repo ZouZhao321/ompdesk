@@ -20,7 +20,7 @@ import {
   getDefaultForWeb,
   type SettingPath,
 } from "@/lib/omp-settings";
-import { getOmpRuntime, getSettingsForCwd } from "@/lib/omp-runtime";
+import { getOmpSettings, getSettingsForCwd } from "@/lib/omp-runtime";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { getAvailableWebThemes, getWebThemeConfig } from "@/lib/omp-theme";
 import type {
@@ -177,7 +177,7 @@ export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
     ) {
       throw new Error("Unknown omp theme");
     }
-    const { settings } = await getOmpRuntime();
+    const settings = await getOmpSettings();
     setSetting(settings, path, value);
     await settings.flush();
     auditSuccess("settings.write", path);
