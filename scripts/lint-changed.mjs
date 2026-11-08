@@ -44,15 +44,8 @@ function addedRanges(base, file) {
   return ranges;
 }
 
-const base =
-  process.env.LINT_BASE?.trim() ||
-  git(["merge-base", "origin/main", "HEAD"]).trim();
-const changed = git([
-  "diff",
-  "--name-only",
-  "--diff-filter=ACMR",
-  `${base}...HEAD`,
-])
+const base = process.env.LINT_BASE?.trim() || git(["merge-base", "origin/main", "HEAD"]).trim();
+const changed = git(["diff", "--name-only", "--diff-filter=ACMR", `${base}...HEAD`])
   .split("\n")
   .map((line) => line.trim())
   .filter((line) => line && EXTENSIONS.test(line));
@@ -70,15 +63,7 @@ for (let index = 0; index < changed.length; index += BATCH) {
   // Windows 命令行上限约 32K 字符，一次传入几百个路径会失败，所以按批调用。
   const result = spawnSync(
     process.execPath,
-    [
-      "x",
-      "eslint",
-      "--no-warn-ignored",
-      "--no-error-on-unmatched-pattern",
-      "-f",
-      "json",
-      ...batch,
-    ],
+    ["x", "eslint", "--no-warn-ignored", "--no-error-on-unmatched-pattern", "-f", "json", ...batch],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
   // 退出码 2 是 eslint 自身出错（配置损坏、解析器缺失），不能当成「有 error」。
@@ -89,18 +74,13 @@ for (let index = 0; index < changed.length; index += BATCH) {
 
   for (const file of JSON.parse(result.stdout || "[]")) {
     const absolute = file.filePath.replaceAll("\\", "/");
-    const relative = changed.find(
-      (candidate) =>
-        absolute === candidate || absolute.endsWith(`/${candidate}`),
-    );
+    const relative = changed.find((candidate) => absolute === candidate || absolute.endsWith(`/${candidate}`));
     const own = relative ? ranges.get(relative) : [];
     for (const message of file.messages) {
       if (message.severity !== 2) continue;
       const line = message.line ?? 0;
       if (!own.some(([from, to]) => line >= from && line <= to)) continue;
-      failures.push(
-        `${relative ?? absolute}:${line}:${message.column} ${message.ruleId} ${message.message}`,
-      );
+      failures.push(`${relative ?? absolute}:${line}:${message.column} ${message.ruleId} ${message.message}`);
     }
   }
 }
@@ -111,6 +91,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-process.stdout.write(
-  `[lint] ${changed.length} 个改动文件，改动行上没有 error\n`,
-);
+process.stdout.write(`[lint] ${changed.length} 个改动文件，改动行上没有 error\n`);
