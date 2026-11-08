@@ -18,7 +18,7 @@
   ],
   "license": "MIT",
   "engines": {
-    "bun": ">=1.3.14"
+    "bun": ">=1.4.2"
   },
   "bin": {
     "ompdesk": "bin/ompdesk.js"
@@ -49,6 +49,9 @@
     "ci": "bun run format && bun run typecheck && bun run test && bun run build && bun run smoke:dev",
     "verify": "bun run ci",
     "verify:push": "bun scripts/verify-push.mjs",
+    "lint:changed": "bun scripts/lint-changed.mjs",
+    "check:titles": "bun scripts/check-pr-titles.mjs",
+    "verify:package": "bun scripts/verify-package.mjs",
     "smoke:dev": "bun scripts/smoke-dev.mjs",
     "scratch": "bun scripts/scratch.mjs",
     "release": "bun scripts/release.ts",

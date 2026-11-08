@@ -7,7 +7,7 @@ const { delimiter, join } = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { homedir } = require("os");
 
-const MIN_BUN_VERSION = "1.3.14";
+const MIN_BUN_VERSION = "1.4.2";
 
 function parseVersion(version) {
   const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(version ?? ""));

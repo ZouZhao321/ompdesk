@@ -1,0 +1,42 @@
+name: CodeQL
+
+# 静态安全分析：认证、代理、文件访问边界与请求处理这几块是 ompdesk 的风险面，
+# 公共仓库的 CodeQL 走标准 runner，不产生费用。
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # 每周一 03:17 UTC：依赖与查询包会更新，固定频率重扫。
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze JavaScript and TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
