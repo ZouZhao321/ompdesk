@@ -36,7 +36,12 @@ export async function shouldCollapseCompactedHistory(
     const settings = await readSettings(cwd);
     return getSettingForWeb(settings, "display.collapseCompacted") === true;
   } catch (error) {
-    logThrottled(cwd, error);
+    // 日志是回落路径上的旁支：它自己再抛一次，就把「读设置失败不报 500」的约定毁了。
+    try {
+      logThrottled(cwd, error);
+    } catch {
+      // 记日志失败时静默，回落仍然成立。
+    }
     return false;
   }
 }
@@ -81,6 +86,9 @@ function logThrottled(cwd: string | undefined, error: unknown): void {
     }
   }
 
+  // Map 的顺序代表最近记录时间，淘汰逻辑据此取「最早一条」：已有的键先删再写，
+  // 否则 set 只更新值、不刷新顺序，热点键会被当成最早一条误删。
+  lastFailureLoggedAt.delete(key);
   lastFailureLoggedAt.set(key, now);
   logEvent("warn", "system", "settings.collapse_compacted.read_failed", {
     cwd,

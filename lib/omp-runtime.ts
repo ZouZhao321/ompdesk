@@ -40,11 +40,15 @@ export interface OmpRuntime {
  * one `Settings` — and one SQLite handle on `agent.db` — is open per process.
  */
 export function getOmpSettings(): Promise<Settings> {
-  globalThis.__ompSettingsPromise ??= Settings.init({ agentDir: getAgentDir() }).catch((error) => {
-    globalThis.__ompSettingsPromise = undefined;
+  if (globalThis.__ompSettingsPromise) return globalThis.__ompSettingsPromise;
+  const pending = Settings.init({ agentDir: getAgentDir() }).catch((error) => {
+    // 只清自己那一条：初始化较慢时 invalidateOmpRuntime() 可能已装入新的 promise，
+    // 迟到的 reject 若无条件清空，会把新 promise 一并抹掉，进程里出现两份 Settings。
+    if (globalThis.__ompSettingsPromise === pending) globalThis.__ompSettingsPromise = undefined;
     throw error;
   });
-  return globalThis.__ompSettingsPromise;
+  globalThis.__ompSettingsPromise = pending;
+  return pending;
 }
 
 async function createRuntime(): Promise<OmpRuntime> {
@@ -59,11 +63,14 @@ async function createRuntime(): Promise<OmpRuntime> {
 }
 
 export function getOmpRuntime(): Promise<OmpRuntime> {
-  globalThis.__ompRuntimePromise ??= createRuntime().catch((error) => {
-    globalThis.__ompRuntimePromise = undefined;
+  if (globalThis.__ompRuntimePromise) return globalThis.__ompRuntimePromise;
+  const pending = createRuntime().catch((error) => {
+    // 与 getOmpSettings 同理：只清理自己那一条，别把失效后新装入的 promise 抹掉。
+    if (globalThis.__ompRuntimePromise === pending) globalThis.__ompRuntimePromise = undefined;
     throw error;
   });
-  return globalThis.__ompRuntimePromise;
+  globalThis.__ompRuntimePromise = pending;
+  return pending;
 }
 
 /**
