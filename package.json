@@ -49,6 +49,8 @@
     "verify:package": "bun scripts/verify-package.mjs",
     "smoke:dev": "bun scripts/smoke-dev.mjs",
     "scratch": "bun scripts/scratch.mjs",
+    "queue": "bun scripts/pr-queue.ts",
+    "queue:sync": "bun scripts/pr-queue-sync.ts",
     "release": "bun scripts/release.ts",
     "release:finish": "bun scripts/release.ts finish"
   },
