@@ -1,0 +1,2 @@
+# 文本文件在仓库与工作区一律使用 LF，避免不同机器的 core.autocrlf 影响排版检查。
+* text=auto eol=lf
