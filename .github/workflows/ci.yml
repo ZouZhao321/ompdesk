@@ -1,8 +1,13 @@
 name: CI
 
-# Guards the release pipeline: publish-npm.yml runs `bun install --frozen-lockfile`,
-# so a pull request that changes package.json without refreshing bun.lock breaks the
-# npm publish only after the tag has already been pushed. Catch it on the pull request.
+# 质量门禁分六组：
+# - Verify build：Linux 上跑 `bun run ci`（typecheck → test → build → dev 冒烟），再 `npm pack` 并上传产物；
+# - Package smoke：三个平台各装一遍同一个 tgz，起服务请求首页；
+# - Verify on Windows：平台分支与路径语义只在这里有覆盖；
+# - Lint changed files：只查改动行，existing 的 8 个 lint error 不挡 PR；
+# - Commit titles：外部贡献者不装本地钩子时的标题校验；
+# - Bun versions：声明的版本下限与最新稳定版各跑一次。
+
 on:
   pull_request:
   push:
@@ -22,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     # 冒烟步骤自己会起 dev server，最坏情况下要在启动超时与两次请求超时后收尾；
     # 给 job 一个上限，避免挂起的进程一直占着 runner。
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -35,9 +40,9 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          # engines.bun requires >=1.3.14: the omp SDK ships TypeScript that
-          # imports `bun:` builtins, so an older Bun cannot serve the API routes.
-          # bun.lock is text lockfile v2, which Bun 1.3 cannot parse.
+          # engines.bun requires >=1.4.2: the omp SDK ships TypeScript that
+          # imports `bun:` builtins, and bun.lock is text lockfile v2, which
+          # Bun 1.3 cannot parse.
           bun-version: "1.4.2"
 
       - name: Install dependencies
@@ -47,16 +52,163 @@ jobs:
       # smoke:dev）；本地 `bun run verify` 与推送前钩子用的是同一份定义，改流程只改
       # 那一处，CI 与本地不会再分叉。
       #
-      # eslint 不进这道门禁：全仓 `bun run lint` 现有存量 error（React 编译器的
-      # memoization 检查，落在 components/ 与 hooks/），加进来必然红。复现命令
-      # `bun run lint`；改动本身仍要求范围内的 eslint 无 error，例如
-      # `bunx eslint test-support lib`。
-      #
-      # 不新增 Windows 作业：路径分隔符、重命名与删除的句柄竞争这些 Windows 专属分支
-      # 在这里没有回归保护，仍需在 Windows 本地手工跑 `bun test` 验证（见 PR 描述）。
-      #
       # 最后一步会真实启动 dev server 请求首页与一个 API 路由：`bun run build` 只编译
       # 生产图谱，开发图谱里把 node: 内置模块带进 edge 或浏览器产物的错误能绕开它，
       # 表现成页面 500；冒烟失败时打印编译日志。
       - name: Verify (typecheck, tests, build, dev smoke)
         run: bun run ci
+
+      # `bun run build` 的产物留在工作区，这里打 tgz 并交给三个平台的冒烟作业：
+      # `npm pack` 决定 `files` 清单，打包本身也在这一层验证。
+      - name: Pack the tarball
+        shell: bash
+        run: |
+          mkdir -p .tmp/pack-check/tarball
+          npm pack --pack-destination .tmp/pack-check/tarball
+
+      # 发布出去的就是这一个 tgz：三个平台装它，而不是各自重新构建一份
+      # 永远不会发布的产物。
+      - name: Upload the packed tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: ompdesk-tarball
+          path: .tmp/pack-check/tarball/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  package-smoke:
+    name: Package smoke (${{ matrix.os }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        # 三个支持平台各装一遍同一个 tgz：Linux 既是生产者也要按消费者验，
+        # 否则「本机构建能起」与「下载安装能起」两条路径只有后两条被覆盖。
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Download the packed tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: ompdesk-tarball
+          path: .tmp/pack-tarball
+
+      # 安装、启动与首页探测与本地命令完全相同，差别只在运行平台：
+      # 依赖解包、Bun 可执行文件解析、路径分隔符、进程树收尾与端口绑定
+      # 都要按各平台真实走一遍。
+      - name: Install the tarball and serve the homepage
+        env:
+          OMPDESK_PACK_TARBALL: ${{ github.workspace }}/.tmp/pack-tarball
+        run: bun run verify:package
+
+  windows:
+    name: Verify on Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # 只跑类型检查与测试：构建与 dev 冒烟在 Linux 上已经覆盖，Windows 的缺口是
+      # 路径分隔符、符号链接与目录重命名/删除的句柄竞争。
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
+
+  lint:
+    name: Lint changed files
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # 需要合并基线才能算出本分支改了哪些文件；默认只取 1 个提交。
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # 全仓 `bun run lint` 还有 8 个存量 error（`react-hooks/preserve-manual-memoization`，
+      # 在 components/ChatInput.tsx 与 hooks/useAgentSession.ts），整文件检查会让任何
+      # 碰到这两个文件的 PR 变红。脚本只把落在改动行上的 error 算失败。
+      - name: Lint changed lines
+        env:
+          LINT_BASE: ${{ github.event.pull_request.base.sha }}
+        run: bun run lint:changed
+
+  titles:
+    name: Commit titles
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      # 校验逻辑仍然只有 scripts/check-commit-msg.py 一份，本地钩子与这里共用。
+      - name: Check commit titles
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun run check:titles
+
+  bun-versions:
+    name: Bun ${{ matrix.bun }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 1.4.2 是 package.json 声明的下限，也是工作流固定的版本；latest 用来提前
+        # 发现上游破坏性变更。任何一格装不上依赖或跑不过测试，都说明声明、锁文件
+        # 与运行时之间有脱节。
+        bun: ["1.4.2", "latest"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun ${{ matrix.bun }}
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ matrix.bun }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
