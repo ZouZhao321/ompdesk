@@ -6,6 +6,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import type { GitFileStatus, GitStatusResponse } from "@/lib/git-types";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
+import type { OpenFileOptions } from "@/lib/panel-tabs";
 import { getFileIcon } from "./FileIcons";
 import { GIT_STATUS_COLORS, GitStatusBadge } from "./GitStatusBadge";
 import { PanelIconButton } from "./PanelIconButton";
@@ -15,7 +16,7 @@ const POLL_INTERVAL_MS = 5_000;
 
 interface Props {
   cwd: string | null;
-  onOpenFile: (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => void;
+  onOpenFile: (filePath: string, fileName: string, options?: OpenFileOptions) => void;
   /** 面板是否可见；不可见时只停止轮询，保留已读取的状态。 */
   active?: boolean;
   /** 会话回合结束时递增，触发一次重新读取。 */

@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { PanelIconButton } from "./PanelIconButton";
 import { useI18n } from "@/hooks/useI18n";
+import type { OpenFileOptions } from "@/lib/panel-tabs";
 
 interface Props {
   cwd: string;
-  onOpenFile: (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => void;
+  onOpenFile: (filePath: string, fileName: string, options?: OpenFileOptions) => void;
   refreshKey: number;
   onRefresh: () => void;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
