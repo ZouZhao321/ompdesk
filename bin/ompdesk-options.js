@@ -8,7 +8,13 @@ const { isIP } = require("net");
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 const DEFAULT_PORT = "30141";
-const COMMANDS = ["start", "status", "stop", "foreground"];
+const COMMANDS = [
+  ["start", "Start in the background and return to the prompt (default)."],
+  ["status", "Report each recorded instance: running or not, address, pid, log, per-project sessions."],
+  ["stop", "Stop the recorded instances. Refuses while a session is mid-turn."],
+  ["foreground", "Run attached to this terminal, for containers and service managers."],
+];
+const COMMAND_NAMES = COMMANDS.map(([name]) => name);
 
 function isEnabled(value) {
   return typeof value === "string" && TRUE_VALUES.has(value.trim().toLowerCase());
@@ -49,39 +55,37 @@ function loopbackBindingError(hostname, env = process.env) {
  */
 function readCommand(positionals) {
   const [first, ...rest] = positionals;
-  if (first && !COMMANDS.includes(first)) {
-    return { error: `Unknown command: ${first}. Use ${COMMANDS.join(", ")}.` };
+  if (first && !COMMAND_NAMES.includes(first)) {
+    return { error: `Unknown command: ${first}. Use ${COMMAND_NAMES.join(", ")}.` };
   }
   if (rest.length > 0) {
     return { error: `Unexpected argument "${rest.join(" ")}"; one command at a time.` };
   }
-  return { command: first ?? "start" };
+  return { command: first || "start" };
 }
 
 /**
  * Explain a `parseArgs` rejection without echoing its whole paragraph.
  *
- * The error codes are the stable part; the message regexes only catch older
- * runtimes that do not set them.
+ * `ERR_PARSE_ARGS_INVALID_OPTION_VALUE` covers two different mistakes that need
+ * different advice — a string option with no value, and a boolean flag given one
+ * (`--force=1`) — so the message decides which. The regexes also keep this
+ * working on runtimes that omit `code`.
  */
 function describeParseError(error) {
   const code = error && typeof error === "object" ? error.code : undefined;
   const message = error instanceof Error ? error.message : String(error);
 
-  // The code is the stable part; the message regexes cover runtimes that do not
-  // set it, and the flag name is read from whichever of the two is present.
   const named = /'([^']+)'/.exec(message);
-  if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION") {
-    return `Unknown option: ${named ? named[1] : "?"}. Run \`ompdesk --help\` for the supported options.`;
+  const flag = named ? named[1] : "?";
+  if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" || /Unknown option '[^']+'/.test(message)) {
+    return `Unknown option: ${flag}. Run \`ompdesk --help\` for the supported options.`;
   }
-  if (code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE") {
-    return `Option ${named ? named[1] : "?"} needs a value.`;
+  if (/does not take an argument/.test(message)) {
+    return `Option ${flag} does not take a value.`;
   }
-  if (/Unknown option '[^']+'/.test(message)) {
-    return `Unknown option: ${named ? named[1] : "?"}. Run \`ompdesk --help\` for the supported options.`;
-  }
-  if (/Option '[^']+' argument/.test(message)) {
-    return `Option ${named ? named[1] : "?"} needs a value.`;
+  if (code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE" || /Option '[^']+' argument/.test(message)) {
+    return `Option ${flag} needs a value.`;
   }
   return message;
 }
@@ -149,16 +153,14 @@ function withDefaults({ command = "start", env, cliArgs = {}, help = false, erro
   return error ? { ...options, error } : options;
 }
 
-/** Help text, built from the same constants the parser uses. */
+/** Help text, built from the same table the parser accepts commands from. */
 function usageText() {
+  const commands = COMMANDS.map(([name, summary]) => `  ${name.padEnd(11)} ${summary}`);
   return [
     "Usage: ompdesk [command] [options]",
     "",
     "Commands:",
-    "  start       Start in the background and return to the prompt (default).",
-    "  status      Report each recorded instance: running or not, address, pid, log, per-project sessions.",
-    "  stop        Stop the recorded instances. Refuses while a session is mid-turn.",
-    "  foreground  Run attached to this terminal, for containers and service managers.",
+    ...commands,
     "",
     "Options:",
     `  -p, --port <port>       Listen port (default ${DEFAULT_PORT}); selects one instance for status/stop.`,
@@ -171,4 +173,4 @@ function usageText() {
   ].join("\n");
 }
 
-module.exports = { COMMANDS, DEFAULT_PORT, parseLaunchOptions, loopbackBindingError, usageText };
+module.exports = { COMMAND_NAMES, COMMANDS, DEFAULT_PORT, parseLaunchOptions, loopbackBindingError, usageText };

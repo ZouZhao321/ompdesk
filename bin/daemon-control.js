@@ -257,7 +257,8 @@ function describeActivity(activity) {
   if (unplacedRunning > 0) unplaced.push(`${unplacedRunning} running`);
   if (unplacedWaiting > 0) unplaced.push(`${unplacedWaiting} waiting for input`);
   if (unplaced.length > 0) {
-    lines.push(`${unplaced.join(", ")} not listed under a project yet`);
+    const noun = unplaced.length === 1 ? "session" : "sessions";
+    lines.push(`Not listed under a project yet: ${unplaced.join(", ")} ${noun}.`);
   }
 
   if (lines.length === 0) return ["No sessions yet."];
