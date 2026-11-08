@@ -156,6 +156,18 @@ test("状态输出在端点不响应时说明无法确认", () => {
   assert.deepEqual(formatStatus(null, null), ["ompdesk is not running."]);
 });
 
+test("运行总数与项目行不一致时单独说明，不停留在无法定位的状态", () => {
+  const lines = describeActivity({
+    running: 2,
+    waiting: 0,
+    projects: [{ path: "/work/a", sessions: 1, running: 1, waiting: 0 }],
+  });
+  assert.deepEqual(lines, [
+    "a: 1 session, 1 running",
+    "1 running session not listed under a project yet",
+  ]);
+});
+
 test("活动输出区分运行、等待与只是有会话的项目", () => {
   assert.deepEqual(describeActivity({ running: 0, waiting: 0, projects: [] }), ["No sessions yet."]);
   assert.deepEqual(
@@ -174,7 +186,7 @@ test("命令解析识别 status、stop、foreground 与未知命令", () => {
   assert.equal(parseLaunchOptions(["foreground"], {}).command, "foreground");
   assert.equal(parseLaunchOptions(["stop", "--force"], {}).command, "stop");
   assert.equal(parseLaunchOptions(["stop", "--force"], {}).force, true);
-  assert.match(parseLaunchOptions(["nope"], {}).command.error, /Unknown command/);
+  assert.match(parseLaunchOptions(["nope"], {}).error, /Unknown command/);
   assert.equal(parseLaunchOptions(["status", "--port", "30200"], {}).portExplicit, true);
   assert.equal(parseLaunchOptions(["status"], {}).portExplicit, false);
   assert.equal(parseLaunchOptions(["status"], { PORT: "30141" }).portExplicit, false);

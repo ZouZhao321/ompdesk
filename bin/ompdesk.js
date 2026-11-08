@@ -78,13 +78,37 @@ try {
 
 
 const options = parseLaunchOptions();
-const { force, port, hostname, openBrowser, authenticated, resetPassword } = options;
+const { force, port, hostname, openBrowser, authenticated, resetPassword, help } = options;
 const command = options.command;
 
-if (command && typeof command === "object" && command.error) {
-  console.error(command.error);
+if (options.error) {
+  console.error(options.error);
+  console.error(USAGE);
   process.exit(2);
 }
+if (help) {
+  console.log(USAGE);
+  process.exit(0);
+}
+
+const USAGE = [
+  "Usage: ompdesk [command] [options]",
+  "",
+  "Commands:",
+  "  start       Start in the background and return to the prompt (default).",
+  "  status      Report each recorded instance: running or not, address, pid, log, per-project sessions.",
+  "  stop        Stop the recorded instances. Refuses while a session is mid-turn.",
+  "  foreground  Run attached to this terminal, for containers and service managers.",
+  "",
+  "Options:",
+  "  -p, --port <port>       Listen port (default 30141); selects one instance for status/stop.",
+  "  -H, --hostname <host>   Listen address; non-loopback values are refused unless allowed.",
+  "  -f, --force             With stop: interrupt running tasks instead of refusing.",
+  "      --no-open           Do not open the browser.",
+  "      --authenticated     Turn the password lock on, now and for later runs.",
+  "      --reset-password    Replace the stored password without knowing the old one.",
+  "  -h, --help              Show this message.",
+].join("\n");
 
 const loopbackHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 // Resolved once here and handed to the server through the environment, so the
