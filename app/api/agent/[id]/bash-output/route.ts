@@ -15,10 +15,7 @@ import { isBashOutputPathReferencedBySession } from "@/lib/session-file-referenc
 // size-limited; download responses stream the file without buffering it.
 export const GET = withRequestLog("/api/agent/[id]/bash-output", getRouteHandler);
 
-async function getRouteHandler(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function getRouteHandler(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let path: string | null = null;
   let download = false;
@@ -39,7 +36,7 @@ async function getRouteHandler(
     return NextResponse.json({ error: "invalid path" }, { status: 400 });
   }
 
-  if (!await isBashOutputPathReferencedBySession(resolved, id)) {
+  if (!(await isBashOutputPathReferencedBySession(resolved, id))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -50,7 +47,7 @@ async function getRouteHandler(
       return new Response(stream, {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
-          "Content-Disposition": "attachment; filename=\"bash-output.log\"",
+          "Content-Disposition": 'attachment; filename="bash-output.log"',
           "Cache-Control": "no-store",
         },
       });
@@ -58,10 +55,13 @@ async function getRouteHandler(
 
     const result = await readUtf8FileWithinLimit(resolved);
     if (result.tooLarge) {
-      return NextResponse.json({
-        error: `Full output is too large to display (limit ${MAX_INLINE_BASH_OUTPUT_BYTES} bytes)`,
-        data: { size: result.size, maxBytes: MAX_INLINE_BASH_OUTPUT_BYTES },
-      }, { status: 413 });
+      return NextResponse.json(
+        {
+          error: `Full output is too large to display (limit ${MAX_INLINE_BASH_OUTPUT_BYTES} bytes)`,
+          data: { size: result.size, maxBytes: MAX_INLINE_BASH_OUTPUT_BYTES },
+        },
+        { status: 413 },
+      );
     }
     return NextResponse.json({ success: true, data: { output: result.content } });
   } catch {

@@ -17,13 +17,7 @@ const mermaidSrc = `sequenceDiagram
     Bob-->>Alice: Hi`;
 
 function renderMermaid(props) {
-  return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      null,
-      React.createElement(MermaidBlock, props),
-    ),
-  );
+  return renderToStaticMarkup(React.createElement(I18nProvider, null, React.createElement(MermaidBlock, props)));
 }
 
 test("MermaidBlock renders source by default", () => {
@@ -59,13 +53,7 @@ test("MermaidBlock renders empty graph without error", () => {
 });
 
 function renderCode(props) {
-  return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      null,
-      React.createElement(CodeBlock, props),
-    ),
-  );
+  return renderToStaticMarkup(React.createElement(I18nProvider, null, React.createElement(CodeBlock, props)));
 }
 
 test("CodeBlock highlights code when not streaming", () => {

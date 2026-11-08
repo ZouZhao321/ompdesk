@@ -76,10 +76,7 @@ export function truncateClientField(value: string, limit: number): string {
 }
 
 /** Trim, reject empty values, and cut the rest to `limit`. */
-export function normalizeClientField(
-  value: string | null | undefined,
-  limit: number,
-): string | undefined {
+export function normalizeClientField(value: string | null | undefined, limit: number): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -140,10 +137,9 @@ function describeReason(error: unknown): { message: string; stack?: string } {
 export function buildClientErrorReport(input: ClientErrorInput): ClientErrorReport {
   const described = describeReason(input.error);
   const rawMessage = described.message || input.message;
-  const message = normalizeClientField(
-    rawMessage ? redactUrlsIn(rawMessage) : undefined,
-    CLIENT_ERROR_MESSAGE_LIMIT,
-  ) ?? (input.kind === "unhandledrejection" ? "Unhandled promise rejection" : "Uncaught exception");
+  const message =
+    normalizeClientField(rawMessage ? redactUrlsIn(rawMessage) : undefined, CLIENT_ERROR_MESSAGE_LIMIT) ??
+    (input.kind === "unhandledrejection" ? "Unhandled promise rejection" : "Uncaught exception");
 
   const report: ClientErrorReport = { kind: input.kind, message };
   const stack = normalizeClientField(
@@ -284,9 +280,8 @@ export interface InstallClientErrorReporterOptions {
 
 function defaultTarget(): ListenerTarget | null {
   const candidate = globalThis as unknown as Partial<ListenerTarget>;
-  return typeof candidate.addEventListener === "function"
-    && typeof candidate.removeEventListener === "function"
-    ? candidate as ListenerTarget
+  return typeof candidate.addEventListener === "function" && typeof candidate.removeEventListener === "function"
+    ? (candidate as ListenerTarget)
     : null;
 }
 
@@ -302,25 +297,18 @@ function defaultLocation(): ReporterLocation | null {
  * This deliberately does not wrap `console.error`: the app's own error logging
  * keeps working, and only real uncaught failures leave the page.
  */
-export function installClientErrorReporter(
-  options: InstallClientErrorReporterOptions = {},
-): () => void {
+export function installClientErrorReporter(options: InstallClientErrorReporterOptions = {}): () => void {
   const target = options.target ?? defaultTarget();
-  const fetchImpl = options.fetch
-    ?? (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
+  const fetchImpl =
+    options.fetch ?? (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
   if (!target || !fetchImpl) return () => {};
 
   const location = options.location ?? defaultLocation();
   const dedupe = options.dedupe ?? new ClientErrorDeduplicator();
-  const limiter = options.limiter
-    ?? new SlidingWindowLimiter(CLIENT_ERROR_REPORT_LIMIT, CLIENT_ERROR_REPORT_WINDOW_MS);
+  const limiter = options.limiter ?? new SlidingWindowLimiter(CLIENT_ERROR_REPORT_LIMIT, CLIENT_ERROR_REPORT_WINDOW_MS);
   const now = options.now ?? (() => Date.now());
 
-  const report = (
-    kind: ClientErrorKind,
-    error: unknown,
-    fallbackMessage: string | undefined,
-  ): void => {
+  const report = (kind: ClientErrorKind, error: unknown, fallbackMessage: string | undefined): void => {
     const at = now();
     const payload = buildClientErrorReport({
       kind,
@@ -334,12 +322,14 @@ export function installClientErrorReporter(
     if (!limiter.take("page", at).allowed) return;
 
     try {
-      void Promise.resolve(fetchImpl(CLIENT_LOG_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      })).catch(() => {
+      void Promise.resolve(
+        fetchImpl(CLIENT_LOG_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        }),
+      ).catch(() => {
         // Reporting is a side channel; a failed post must not surface to the user.
       });
     } catch {

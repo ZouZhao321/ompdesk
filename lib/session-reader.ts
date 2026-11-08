@@ -1,8 +1,4 @@
-import {
-  SessionManager,
-  buildSessionContext as ompBuildSessionContext,
-  getAgentDir,
-} from "@oh-my-pi/pi-coding-agent";
+import { SessionManager, buildSessionContext as ompBuildSessionContext, getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { Tokenizer } from "@oh-my-pi/pi-agent-core";
 import type { AgentMessage as OmpAgentMessage } from "@oh-my-pi/pi-agent-core";
 import { calculatePromptTokens, hasContextTokenUsage } from "@oh-my-pi/pi-agent-core/compaction";
@@ -22,9 +18,11 @@ export { getAgentDir };
 export async function attachSessionProjectInfo(sessions: SessionInfo[]): Promise<SessionInfo[]> {
   const uniqueCwds = [...new Set(sessions.map((s) => s.cwd).filter(Boolean))];
   const projectByCwd = new Map<string, ProjectInfo>();
-  await Promise.all(uniqueCwds.map(async (cwd) => {
-    projectByCwd.set(cwd, await resolveProject(cwd));
-  }));
+  await Promise.all(
+    uniqueCwds.map(async (cwd) => {
+      projectByCwd.set(cwd, await resolveProject(cwd));
+    }),
+  );
 
   return sessions.map((session) => {
     const project = session.cwd ? projectByCwd.get(session.cwd) : undefined;
@@ -125,27 +123,29 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   // stores an absolute path. Both forms must resolve to a parent row.
   const idSet = new Set(ompSessions.map((s) => s.id));
 
-  const sessions = await Promise.all(ompSessions.map(async (s) => {
-    cacheSessionPath(s.id, s.path);
-    const listedFirstMessage = s.firstMessage || "(no messages)";
-    const skillCommand = readLeadingSkillCommand(s.path);
-    return {
-      path: s.path,
-      id: s.id,
-      cwd: s.cwd,
-      name: s.title,
-      created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
-      modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
-      messageCount: s.messageCount,
-      firstMessage: skillCommand ?? listedFirstMessage,
-      parentSessionId: s.parentSessionPath
-        ? pathToId.get(sessionPathKey(s.parentSessionPath))
-          ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
-        : undefined,
-      transient: false,
-      ...(s.status ? { status: s.status } : {}),
-    };
-  }));
+  const sessions = await Promise.all(
+    ompSessions.map(async (s) => {
+      cacheSessionPath(s.id, s.path);
+      const listedFirstMessage = s.firstMessage || "(no messages)";
+      const skillCommand = readLeadingSkillCommand(s.path);
+      return {
+        path: s.path,
+        id: s.id,
+        cwd: s.cwd,
+        name: s.title,
+        created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
+        modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
+        messageCount: s.messageCount,
+        firstMessage: skillCommand ?? listedFirstMessage,
+        parentSessionId: s.parentSessionPath
+          ? (pathToId.get(sessionPathKey(s.parentSessionPath)) ??
+            (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined))
+          : undefined,
+        transient: false,
+        ...(s.status ? { status: s.status } : {}),
+      };
+    }),
+  );
   return attachSessionProjectInfo(sessions);
 }
 
@@ -155,7 +155,10 @@ export async function listAllSessions(options: { force?: boolean } = {}): Promis
 
   // Return cached result if still fresh (avoids re-scanning session files
   // and re-spawning git processes on every page load).
-  if (globalThis.__ompSessionListCache && Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS) {
+  if (
+    globalThis.__ompSessionListCache &&
+    Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS
+  ) {
     return globalThis.__ompSessionListCache.data;
   }
 
@@ -396,12 +399,10 @@ export function buildSessionContext(
   for (const e of entries) byId.set(e.id, e);
 
   const ompEntries = entries as unknown as OmpSessionEntry[];
-  const ompCtx = ompBuildSessionContext(
-    ompEntries,
-    leafId,
-    byId as unknown as Map<string, OmpSessionEntry>,
-    { transcript: true, collapseCompactedHistory: true },
-  );
+  const ompCtx = ompBuildSessionContext(ompEntries, leafId, byId as unknown as Map<string, OmpSessionEntry>, {
+    transcript: true,
+    collapseCompactedHistory: true,
+  });
 
   // Convert the branch entries and their IDs together so fork/navigation
   // targets stay aligned with what the transcript renders.
@@ -487,10 +488,10 @@ export async function getHistoricalContextUsage(
     const assistant = entry.message as unknown as HistoricalAssistantMessage;
     const snapshot = readContextSnapshot(assistant);
     if (
-      assistant.stopReason === "aborted"
-      || assistant.stopReason === "error"
-      || !assistant.usage
-      || (!snapshot && !hasContextTokenUsage(assistant.usage))
+      assistant.stopReason === "aborted" ||
+      assistant.stopReason === "error" ||
+      !assistant.usage ||
+      (!snapshot && !hasContextTokenUsage(assistant.usage))
     ) {
       continue;
     }
@@ -501,9 +502,10 @@ export async function getHistoricalContextUsage(
 
   const snapshot = readContextSnapshot(anchor);
   const snapshotPromptTokens = snapshot?.promptTokens;
-  const promptTokens = typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
-    ? snapshotPromptTokens
-    : calculatePromptTokens(anchor.usage);
+  const promptTokens =
+    typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
+      ? snapshotPromptTokens
+      : calculatePromptTokens(anchor.usage);
 
   if (!Number.isFinite(promptTokens) || promptTokens < 0) return undefined;
 
@@ -511,13 +513,7 @@ export async function getHistoricalContextUsage(
   let anchorIndex = -1;
   for (let index = activeMessages.length - 1; index >= 0; index -= 1) {
     const message = activeMessages[index];
-    if (
-      message === anchor
-      || (
-        message.role === "assistant"
-        && message.timestamp === anchor.timestamp
-      )
-    ) {
+    if (message === anchor || (message.role === "assistant" && message.timestamp === anchor.timestamp)) {
       anchorIndex = index;
       break;
     }
@@ -562,7 +558,7 @@ function base64ImageInfo(block: unknown): { bytes: number; mime?: string } | nul
   if (!data) return null;
 
   const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-  return { bytes: Math.max(0, Math.floor(data.length * 3 / 4) - padding), mime };
+  return { bytes: Math.max(0, Math.floor((data.length * 3) / 4) - padding), mime };
 }
 
 function omitToolResultBase64Images(message: AgentMessage): AgentMessage {
@@ -608,11 +604,11 @@ function entryToUiMessage(
       if (!options.deferThinking || message.role !== "assistant") return message;
       return {
         ...message,
-        content: message.content.map((block) => (
+        content: message.content.map((block) =>
           block.type === "thinking" && block.thinking.trim() !== ""
             ? { ...block, thinking: "", deferred: true }
-            : block
-        )),
+            : block,
+        ),
       };
     }
     case "compaction":

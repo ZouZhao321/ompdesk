@@ -1,9 +1,7 @@
 import { isIP } from "node:net";
 
 function normalizeHostname(value: string): string {
-  const unbracketed = value.startsWith("[") && value.endsWith("]")
-    ? value.slice(1, -1)
-    : value;
+  const unbracketed = value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value;
   return unbracketed.toLowerCase().replace(/\.$/, "");
 }
 
@@ -31,10 +29,9 @@ function isLoopbackHostname(hostname: string): boolean {
 }
 
 function configuredHostnamesFromEnvironment(): string[] {
-  return [
-    process.env.OMPDESK_HOSTNAME,
-    ...(process.env.OMPDESK_ALLOWED_HOSTS?.split(",") ?? []),
-  ].filter((value): value is string => Boolean(value?.trim()));
+  return [process.env.OMPDESK_HOSTNAME, ...(process.env.OMPDESK_ALLOWED_HOSTS?.split(",") ?? [])].filter(
+    (value): value is string => Boolean(value?.trim()),
+  );
 }
 
 function canonicalOrigin(value: string): string | null {
@@ -53,10 +50,10 @@ function getRequestOrigin(request: Request): string | null {
 
 function isUserInitiatedSessionExportNavigation(request: Request): boolean {
   if (
-    request.method !== "GET"
-    || request.headers.get("sec-fetch-mode") !== "navigate"
-    || request.headers.get("sec-fetch-dest") !== "document"
-    || request.headers.get("sec-fetch-user") !== "?1"
+    request.method !== "GET" ||
+    request.headers.get("sec-fetch-mode") !== "navigate" ||
+    request.headers.get("sec-fetch-dest") !== "document" ||
+    request.headers.get("sec-fetch-user") !== "?1"
   ) {
     return false;
   }
@@ -82,9 +79,7 @@ export function isApiRequestHostAllowed(
   if (!hostname) return false;
   if (isLoopbackHostname(hostname) || isIP(hostname)) return true;
 
-  return configuredHostnames.some(
-    (configured) => normalizeConfiguredHostname(configured) === hostname,
-  );
+  return configuredHostnames.some((configured) => normalizeConfiguredHostname(configured) === hostname);
 }
 
 /** Reject browser cross-site API requests while preserving non-browser clients. */
@@ -113,6 +108,7 @@ export function isApiRequestAllowed(
 
 export function hasJsonContentType(request: Request): boolean {
   const mediaType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-  return mediaType === "application/json"
-    || Boolean(mediaType?.startsWith("application/") && mediaType.endsWith("+json"));
+  return (
+    mediaType === "application/json" || Boolean(mediaType?.startsWith("application/") && mediaType.endsWith("+json"))
+  );
 }

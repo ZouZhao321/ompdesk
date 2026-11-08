@@ -55,7 +55,6 @@ try {
   }
 }
 
-
 const { port, hostname, openBrowser, authenticated, resetPassword } = parseLaunchOptions();
 const bindingError = loopbackBindingError(hostname);
 if (bindingError) {
@@ -82,10 +81,12 @@ if (!bunPath) {
 /** Refuse to hang on a password prompt nobody is there to answer. */
 function requireTerminal(flag) {
   if (isInteractive()) return;
-  throw new Error([
-    `${flag} has to ask for a password, but ompdesk is not attached to a terminal.`,
-    "Run ompdesk once interactively to set the password, or pass OMPDESK_PASSWORD in the environment.",
-  ].join("\n"));
+  throw new Error(
+    [
+      `${flag} has to ask for a password, but ompdesk is not attached to a terminal.`,
+      "Run ompdesk once interactively to set the password, or pass OMPDESK_PASSWORD in the environment.",
+    ].join("\n"),
+  );
 }
 
 async function setPasswordInteractively(intro) {

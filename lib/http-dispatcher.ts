@@ -37,21 +37,11 @@ function withUndiciErrorListener<T extends Undici.Dispatcher>(dispatcher: T): T 
   return dispatcher;
 }
 
-function createUndiciClient(
-  undici: UndiciModule,
-  origin: string | URL,
-  options: object,
-): Undici.Dispatcher {
-  return withUndiciErrorListener(
-    new undici.Client(origin, options as Undici.Client.Options),
-  );
+function createUndiciClient(undici: UndiciModule, origin: string | URL, options: object): Undici.Dispatcher {
+  return withUndiciErrorListener(new undici.Client(origin, options as Undici.Client.Options));
 }
 
-function createUndiciOriginDispatcher(
-  undici: UndiciModule,
-  origin: string | URL,
-  options: object,
-): Undici.Dispatcher {
+function createUndiciOriginDispatcher(undici: UndiciModule, origin: string | URL, options: object): Undici.Dispatcher {
   const dispatcherOptions = options as Undici.Pool.Options;
   if (dispatcherOptions.connections === 1) {
     return createUndiciClient(undici, origin, dispatcherOptions);
@@ -60,8 +50,7 @@ function createUndiciOriginDispatcher(
   return withUndiciErrorListener(
     new undici.Pool(origin, {
       ...dispatcherOptions,
-      factory: (factoryOrigin, factoryOptions) =>
-        createUndiciClient(undici, factoryOrigin, factoryOptions),
+      factory: (factoryOrigin, factoryOptions) => createUndiciClient(undici, factoryOrigin, factoryOptions),
     }),
   );
 }
@@ -79,9 +68,7 @@ export function isBunRuntime(): boolean {
   return typeof process.versions.bun === "string";
 }
 
-export function configureHttpDispatcher(
-  timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS,
-): void | Promise<void> {
+export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void | Promise<void> {
   if (dispatcherGlobal.__ompdeskHttpDispatcherConfigured) return;
 
   const normalizedTimeoutMs = parseHttpIdleTimeoutMs(timeoutMs);
@@ -105,10 +92,8 @@ export function configureHttpDispatcher(
           allowH2: false,
           bodyTimeout: normalizedTimeoutMs,
           headersTimeout: normalizedTimeoutMs,
-          clientFactory: (origin, options) =>
-            createUndiciClient(undici, origin, options),
-          factory: (origin, options) =>
-            createUndiciOriginDispatcher(undici, origin, options),
+          clientFactory: (origin, options) => createUndiciClient(undici, origin, options),
+          factory: (origin, options) => createUndiciOriginDispatcher(undici, origin, options),
         }),
       );
       undici.setGlobalDispatcher(dispatcher);

@@ -25,9 +25,7 @@ interface Props {
 const SORT_MODES: readonly ProjectSortMode[] = ["time", "name"];
 
 /** 排序菜单里一次按键要做的动作：把焦点移到某一项，或关闭菜单。 */
-export type SortMenuKeyAction =
-  | { kind: "focus"; index: number }
-  | { kind: "close" };
+export type SortMenuKeyAction = { kind: "focus"; index: number } | { kind: "close" };
 
 /**
  * 排序菜单的键盘映射：方向键在选项间循环、Home/End 跳到首尾、
@@ -57,11 +55,7 @@ export function sortMenuKeyAction(key: string, currentIndex: number, count: numb
  * 或浏览器没有给出 relatedTarget（Safari/Firefox 点击不聚焦、触摸输入）
  * 都不收起：这些情况下焦点去向未知，收起会把随后的点击变成重新打开。
  */
-export function shouldDismissOnBlur(
-  open: boolean,
-  container: ParentNode | null,
-  relatedTarget: Node | null,
-): boolean {
+export function shouldDismissOnBlur(open: boolean, container: ParentNode | null, relatedTarget: Node | null): boolean {
   if (!open || relatedTarget === null || container === null) return false;
   return !container.contains(relatedTarget);
 }
@@ -94,36 +88,45 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
 
   // 键盘处理挂在包住触发按钮与菜单的外层：焦点停在触发按钮上时，
   // 方向键也能直接进入菜单，不必依赖打开后由 rAF 把焦点搬到菜单项。
-  const handleKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>((event) => {
-    if (!open) return;
-    const items = itemRefs.current;
-    const currentIndex = items.findIndex((item) => item === document.activeElement);
-    const action = sortMenuKeyAction(event.key, currentIndex, items.length);
-    if (action === null) return;
-    event.preventDefault();
-    if (action.kind === "focus") {
-      items[action.index]?.focus();
-      return;
-    }
-    // Escape 只收起菜单：阻止冒泡，避免全局 Esc 快捷键连带中止正在运行的 agent。
-    event.stopPropagation();
-    onDismiss();
-    triggerRef.current?.focus();
-  }, [open, onDismiss]);
+  const handleKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>(
+    (event) => {
+      if (!open) return;
+      const items = itemRefs.current;
+      const currentIndex = items.findIndex((item) => item === document.activeElement);
+      const action = sortMenuKeyAction(event.key, currentIndex, items.length);
+      if (action === null) return;
+      event.preventDefault();
+      if (action.kind === "focus") {
+        items[action.index]?.focus();
+        return;
+      }
+      // Escape 只收起菜单：阻止冒泡，避免全局 Esc 快捷键连带中止正在运行的 agent。
+      event.stopPropagation();
+      onDismiss();
+      triggerRef.current?.focus();
+    },
+    [open, onDismiss],
+  );
 
   // 选中即关闭菜单，焦点回到触发按钮，避免焦点随关闭的菜单项一起消失。
   // 收起统一走 onDismiss，即使父组件在选中时已经自己关过，重复调用也是幂等的。
-  const selectMode = useCallback((option: ProjectSortMode) => {
-    onSelectMode(option);
-    onDismiss();
-    triggerRef.current?.focus();
-  }, [onDismiss, onSelectMode]);
+  const selectMode = useCallback(
+    (option: ProjectSortMode) => {
+      onSelectMode(option);
+      onDismiss();
+      triggerRef.current?.focus();
+    },
+    [onDismiss, onSelectMode],
+  );
 
   // 焦点离开整个控件时才收起菜单：此时浏览器已经完成 Tab 的焦点移动，
   // 菜单项退出占位不会再把焦点甩到 body 上。
-  const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
-    if (shouldDismissOnBlur(open, event.currentTarget, event.relatedTarget as Node | null)) onDismiss();
-  }, [open, onDismiss]);
+  const handleBlur = useCallback(
+    (event: FocusEvent<HTMLDivElement>) => {
+      if (shouldDismissOnBlur(open, event.currentTarget, event.relatedTarget as Node | null)) onDismiss();
+    },
+    [open, onDismiss],
+  );
 
   return (
     <div
@@ -164,7 +167,17 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
           event.currentTarget.style.color = open ? "var(--accent)" : "var(--text-muted)";
         }}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <path d="M4 6h9M4 12h6M4 18h3" />
           <path d="M17 5v14M14 16l3 3 3-3" />
         </svg>
@@ -214,7 +227,17 @@ export function ProjectSortControl({ mode, open, menuRef, onToggle, onDismiss, o
           >
             <span style={{ display: "flex", width: 12, color: "var(--accent)", flexShrink: 0 }}>
               {mode === option && (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               )}

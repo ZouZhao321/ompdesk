@@ -14,14 +14,16 @@ const { ImagePreviewProvider } = await jiti.import("./ImageZoom.tsx");
 const { normalizeDisplayMath } = await jiti.import("../lib/markdown.ts");
 
 function renderMarkdown(markdown, { withPreview = true, sessionId } = {}) {
-  const body = React.createElement(MarkdownBody, {
-    cwd: "/home/me/project",
-    onOpenFile() {},
-    sessionId,
-  }, markdown);
-  const wrapped = withPreview
-    ? React.createElement(ImagePreviewProvider, null, body)
-    : body;
+  const body = React.createElement(
+    MarkdownBody,
+    {
+      cwd: "/home/me/project",
+      onOpenFile() {},
+      sessionId,
+    },
+    markdown,
+  );
+  const wrapped = withPreview ? React.createElement(ImagePreviewProvider, null, body) : body;
 
   return renderToStaticMarkup(React.createElement(I18nProvider, null, wrapped));
 }
@@ -147,8 +149,5 @@ test("degrades to plain images when no preview host is mounted", () => {
 test("passes the session id to local image urls", () => {
   const html = renderMarkdown("![shot](./assets/shot.png)", { sessionId: "sess-1" });
 
-  assert.match(
-    html,
-    /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read&amp;sessionId=sess-1"/,
-  );
+  assert.match(html, /src="\/api\/files\/home\/me\/project\/assets\/shot\.png\?type=read&amp;sessionId=sess-1"/);
 });

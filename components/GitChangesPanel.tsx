@@ -15,7 +15,11 @@ const POLL_INTERVAL_MS = 5_000;
 
 interface Props {
   cwd: string | null;
-  onOpenFile: (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => void;
+  onOpenFile: (
+    filePath: string,
+    fileName: string,
+    options?: { sourceSessionId?: string | null; modeHint?: "diff" },
+  ) => void;
   /** 面板是否可见；不可见时只停止轮询，保留已读取的状态。 */
   active?: boolean;
   /** 会话回合结束时递增，触发一次重新读取。 */
@@ -113,35 +117,38 @@ export function GitChangesPanel({ cwd, onOpenFile, active = true, refreshKey = 0
 
   useEffect(() => () => window.clearTimeout(refreshedTimerRef.current), []);
 
-  const load = useCallback(async (silent: boolean) => {
-    if (!cwd) {
-      requestIdRef.current++;
-      setStatus(null);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    // 轮询与切换标签可能同时触发；同一目录只保留一次请求。
-    if (inFlightCwdRef.current === cwd) return;
-    inFlightCwdRef.current = cwd;
-    const requestId = ++requestIdRef.current;
-    if (!silent) setLoading(true);
-    try {
-      const params = new URLSearchParams({ cwd });
-      const response = await fetch(`/api/git/status?${params.toString()}`);
-      if (!response.ok) throw new Error(t("git.loadFailed"));
-      const next = await response.json() as GitStatusResponse;
-      if (requestId !== requestIdRef.current) return;
-      setStatus(next);
-      setError(null);
-    } catch (cause) {
-      if (requestId !== requestIdRef.current) return;
-      setError(cause instanceof Error ? cause.message : t("git.loadFailed"));
-    } finally {
-      if (inFlightCwdRef.current === cwd) inFlightCwdRef.current = null;
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [cwd, t]);
+  const load = useCallback(
+    async (silent: boolean) => {
+      if (!cwd) {
+        requestIdRef.current++;
+        setStatus(null);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+      // 轮询与切换标签可能同时触发；同一目录只保留一次请求。
+      if (inFlightCwdRef.current === cwd) return;
+      inFlightCwdRef.current = cwd;
+      const requestId = ++requestIdRef.current;
+      if (!silent) setLoading(true);
+      try {
+        const params = new URLSearchParams({ cwd });
+        const response = await fetch(`/api/git/status?${params.toString()}`);
+        if (!response.ok) throw new Error(t("git.loadFailed"));
+        const next = (await response.json()) as GitStatusResponse;
+        if (requestId !== requestIdRef.current) return;
+        setStatus(next);
+        setError(null);
+      } catch (cause) {
+        if (requestId !== requestIdRef.current) return;
+        setError(cause instanceof Error ? cause.message : t("git.loadFailed"));
+      } finally {
+        if (inFlightCwdRef.current === cwd) inFlightCwdRef.current = null;
+        if (requestId === requestIdRef.current) setLoading(false);
+      }
+    },
+    [cwd, t],
+  );
 
   // 项目目录或回合结束刷新键变化时重新读取。
   useEffect(() => {
@@ -178,25 +185,29 @@ export function GitChangesPanel({ cwd, onOpenFile, active = true, refreshKey = 0
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        flexShrink: 0,
-        minHeight: 30,
-        padding: "2px 6px 2px 10px",
-      }}>
-        <div style={{
+      <div
+        style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
-          minWidth: 0,
-          flex: 1,
-          fontSize: 12,
-          color: "var(--text-dim)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-        }}>
+          gap: 8,
+          flexShrink: 0,
+          minHeight: 30,
+          padding: "2px 6px 2px 10px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            minWidth: 0,
+            flex: 1,
+            fontSize: 12,
+            color: "var(--text-dim)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+          }}
+        >
           {status?.isGitRepository && (
             <>
               <span>{t("git.changedCount", { count: files.length })}</span>
@@ -217,11 +228,29 @@ export function GitChangesPanel({ cwd, onOpenFile, active = true, refreshKey = 0
           background={refreshed ? "rgba(74,222,128,0.18)" : "none"}
         >
           {refreshed ? (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#4ade80"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="20 6 9 17 4 12" />
             </svg>
           ) : (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
             </svg>
@@ -241,9 +270,7 @@ export function GitChangesPanel({ cwd, onOpenFile, active = true, refreshKey = 0
         ) : files.length === 0 ? (
           <PanelMessage>{t("git.noChanges")}</PanelMessage>
         ) : (
-          files.map((file) => (
-            <ChangeRow key={file.filePath} status={file} cwd={cwd} onOpenFile={onOpenFile} />
-          ))
+          files.map((file) => <ChangeRow key={file.filePath} status={file} cwd={cwd} onOpenFile={onOpenFile} />)
         )}
       </div>
     </div>
