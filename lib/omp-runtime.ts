@@ -34,9 +34,10 @@ export interface OmpRuntime {
  * Settings alone, without the model catalog.
  *
  * `createRuntime` refreshes the model registry over the network on a cold start,
- * which costs seconds; transcript routes need one display flag and must not pay
- * that. Both halves await this same promise, so exactly one `Settings` — and one
- * SQLite handle on `agent.db` — is open per process.
+ * which costs seconds. Routes that only read or write a setting (the settings
+ * panel, the transcript collapse flag) start here instead, so a settings edit
+ * does not wait on that refresh. Both halves await this same promise, so exactly
+ * one `Settings` — and one SQLite handle on `agent.db` — is open per process.
  */
 export function getOmpSettings(): Promise<Settings> {
   globalThis.__ompSettingsPromise ??= Settings.init({ agentDir: getAgentDir() }).catch((error) => {
