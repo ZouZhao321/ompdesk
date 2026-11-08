@@ -20,6 +20,7 @@ import type { AuthStorage } from "@oh-my-pi/pi-coding-agent";
 
 declare global {
   var __ompRuntimePromise: Promise<OmpRuntime> | undefined;
+  var __ompSettingsPromise: Promise<Settings> | undefined;
 }
 
 export interface OmpRuntime {
@@ -29,9 +30,25 @@ export interface OmpRuntime {
   modelRegistry: ModelRegistry;
 }
 
+/**
+ * Settings alone, without the model catalog.
+ *
+ * `createRuntime` refreshes the model registry over the network on a cold start,
+ * which costs seconds; transcript routes need one display flag and must not pay
+ * that. Both halves await this same promise, so exactly one `Settings` — and one
+ * SQLite handle on `agent.db` — is open per process.
+ */
+export function getOmpSettings(): Promise<Settings> {
+  globalThis.__ompSettingsPromise ??= Settings.init({ agentDir: getAgentDir() }).catch((error) => {
+    globalThis.__ompSettingsPromise = undefined;
+    throw error;
+  });
+  return globalThis.__ompSettingsPromise;
+}
+
 async function createRuntime(): Promise<OmpRuntime> {
   const agentDir = getAgentDir();
-  const settings = await Settings.init({ agentDir });
+  const settings = await getOmpSettings();
   const authStorage = await discoverAuthStorage(agentDir);
   // Pinning the registry to this exact AuthStorage keeps credential_disabled
   // events flowing to the same instance the routes read from.
@@ -56,7 +73,7 @@ export function getOmpRuntime(): Promise<OmpRuntime> {
  * runtime overrides intact.
  */
 export async function getSettingsForCwd(cwd: string | undefined): Promise<Settings> {
-  const { settings } = await getOmpRuntime();
+  const settings = await getOmpSettings();
   if (!cwd || settings.getCwd() === cwd) return settings;
   return settings.cloneForCwd(cwd);
 }
@@ -64,4 +81,5 @@ export async function getSettingsForCwd(cwd: string | undefined): Promise<Settin
 /** Drop the cached runtime so the next request rebuilds it (config/auth edits). */
 export function invalidateOmpRuntime(): void {
   globalThis.__ompRuntimePromise = undefined;
+  globalThis.__ompSettingsPromise = undefined;
 }

@@ -343,18 +343,24 @@ function collectBranchPath(
  *
  * omp's `buildSessionContext` returns rendered messages but not the entry ids
  * behind them, and the browser needs those ids to fork and to navigate between
- * in-session branches. This mirrors omp's own live-chat transcript —
- * `{ transcript: true, collapseCompactedHistory: true }` — so the browser and
- * the TUI show the same thing: history replaced by the latest compaction is
- * elided, the summary renders at the compaction point, and everything kept or
- * newer follows.
+ * in-session branches.
+ *
+ * `collapseCompactedHistory` mirrors omp's live TUI: the history replaced by the
+ * latest compaction is elided and only the kept tail plus everything newer
+ * renders. Left off, every entry on the branch renders in order and the summary
+ * sits where the compaction fired — that is what the browser uses, because the
+ * prompt rail and the conversation map address every turn the session recorded.
+ * Collapsing drops those turns from the DOM, so their dots and map targets would
+ * have nowhere to go.
  */
 function collectDisplayEntries(
   entries: SessionEntry[],
   byId: Map<string, SessionEntry>,
   leafId?: string | null,
+  collapseCompactedHistory = false,
 ): SessionEntry[] {
   const path = collectBranchPath(entries, byId, leafId);
+  if (!collapseCompactedHistory) return path;
 
   // Only the latest compaction on the path is active; earlier ones were
   // themselves superseded.
@@ -387,27 +393,38 @@ function parseDefaultModel(models: Record<string, string>): { provider: string; 
   return { provider: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
 }
 
+export interface BuildSessionContextOptions {
+  deferThinking?: boolean;
+  deferToolResultImages?: boolean;
+  /**
+   * 折叠被最近一次压缩替换掉的历史，只保留保留段与压缩之后的条目。
+   * 默认 false：网页端按会话真实记录呈现每一轮，跳转条与会话地图才有落点。
+   */
+  collapseCompactedHistory?: boolean;
+}
+
 export function buildSessionContext(
   entries: SessionEntry[],
   leafId?: string | null,
-  options: { deferThinking?: boolean; deferToolResultImages?: boolean } = {},
+  options: BuildSessionContextOptions = {},
 ): SessionContext {
   const byId = new Map<string, SessionEntry>();
   for (const e of entries) byId.set(e.id, e);
 
+  const collapseCompactedHistory = options.collapseCompactedHistory === true;
   const ompEntries = entries as unknown as OmpSessionEntry[];
   const ompCtx = ompBuildSessionContext(
     ompEntries,
     leafId,
     byId as unknown as Map<string, OmpSessionEntry>,
-    { transcript: true, collapseCompactedHistory: true },
+    { transcript: true, collapseCompactedHistory },
   );
 
   // Convert the branch entries and their IDs together so fork/navigation
   // targets stay aligned with what the transcript renders.
   const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
-  for (const entry of collectDisplayEntries(entries, byId, leafId)) {
+  for (const entry of collectDisplayEntries(entries, byId, leafId, collapseCompactedHistory)) {
     const m = entryToUiMessage(entry, options);
     if (m) {
       messages.push(m);
