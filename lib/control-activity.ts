@@ -46,10 +46,14 @@ export function groupSessionActivity(
     byProject.set(projectPath, project);
   }
 
+  // Code-unit comparison, not `localeCompare`: this lands in a terminal, and the
+  // same sessions must print in the same order on every machine. `localeCompare`
+  // depends on the runtime's ICU data, which `lib/project-order.ts` also avoids
+  // for the same reason.
   const projects = [...byProject.values()].sort((left, right) => (
     right.running - left.running
     || right.waiting - left.waiting
-    || left.path.localeCompare(right.path)
+    || (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
   ));
 
   // Totals stay tied to the runtime snapshot, not to the project rows: the

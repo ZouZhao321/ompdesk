@@ -13,16 +13,27 @@
  */
 
 export const CONTROL_TOKEN_HEADER = "x-ompdesk-control-token";
-export const CONTROL_API_PREFIX = "/api/control/";
+export const CONTROL_TOKEN_ENV = "OMPDESK_CONTROL_TOKEN";
+
+/**
+ * Routes the launcher may reach without the web password.
+ *
+ * Listed one by one rather than matched by prefix: a route added under the same
+ * directory later must opt in here, so it cannot inherit the bypass by
+ * accident. `app/api/control/activity/route.ts` re-checks the token as well, so
+ * this list and that check are two independent gates on the same rule.
+ */
+export const CONTROL_ROUTES = new Set(["/api/control/activity"]);
 
 /**
  * Does the presented token equal the one this instance was started with?
  *
- * Not constant time, and not claimed to be: the loop exits early on a length
- * mismatch. That is acceptable here because the comparison is not a password
- * check — the token never leaves this machine, is compared only over loopback,
- * and both sides are fixed-length hex. `lib/web-auth.ts` keeps the constant-time
- * comparison where a real credential is at stake.
+ * The loop itself does no early exit — it reads every byte and accumulates the
+ * difference — but the length comparison before it returns immediately, so the
+ * function as a whole is not constant time. That is fine for this comparison: it
+ * is not a password check. The token never leaves this machine, is compared only
+ * over loopback, and both sides are fixed-length hex. `lib/web-auth.ts` keeps the
+ * constant-time comparison where a real credential is at stake.
  *
  * "Not configured" and "wrong token" both answer false on purpose: the caller
  * turns that into a bare 404, so an unauthenticated request cannot distinguish

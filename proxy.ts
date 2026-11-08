@@ -11,7 +11,12 @@ import {
   resolveForwardedAddress,
   type RequestActor,
 } from "@/lib/request-headers";
-import { CONTROL_API_PREFIX, CONTROL_TOKEN_HEADER, controlTokensMatch } from "@/lib/control-token";
+import {
+  CONTROL_ROUTES,
+  CONTROL_TOKEN_ENV,
+  CONTROL_TOKEN_HEADER,
+  controlTokensMatch,
+} from "@/lib/control-token";
 import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 
 /**
@@ -22,7 +27,8 @@ import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 const RECOVERY_PAGE = "/recover";
 const RECOVERY_API = "/api/web-access/recovery";
 
-const SECURITY_HEADERS = {
+/** Headers every refusal carries: the route-level guard reuses this exact set. */
+export const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
@@ -121,8 +127,8 @@ export function proxy(request: NextRequest) {
   // the CLI only ever holds a one-way digest of it. A per-start token, stored
   // owner-only next to the instance record, takes its place; anything without
   // it gets a 404 so the route does not advertise itself.
-  if (pathname.startsWith(CONTROL_API_PREFIX)) {
-    if (!controlTokensMatch(request.headers.get(CONTROL_TOKEN_HEADER), process.env.OMPDESK_CONTROL_TOKEN)) {
+  if (CONTROL_ROUTES.has(pathname)) {
+    if (!controlTokensMatch(request.headers.get(CONTROL_TOKEN_HEADER), process.env[CONTROL_TOKEN_ENV])) {
       // Recorded like every other denial: a silent 404 would make a repeated CLI
       // failure impossible to tell apart from a matcher change that never reaches
       // this branch. The token itself is never written.
