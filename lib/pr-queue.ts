@@ -2,7 +2,7 @@
  * 开放 PR 队列的判定规则。
  *
  * 只做判断，不读网络也不读磁盘：输入是一次探测得到的状态，输出是每个 PR 的
- * 阻塞原因、可合并的先后顺序，以及同一份改动被拆成多个 PR 的归并结果。
+ * 阻塞原因、可合并的先后顺序，以及同一份改动被分成多个 PR 的归并结果。
  */
 
 export type Mergeable = "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
@@ -23,7 +23,7 @@ export interface PullRequestState {
  checks: CheckState[];
  /** 与这个 PR 试合并会冲突的其他分支。 */
  conflictsWith: string[];
- /** 分支落后 main 多少个提交。 */
+ /** 分支比 main 少多少个提交。 */
  behindCommits: number;
  unresolvedThreads: number;
  changedFiles: number;
@@ -72,7 +72,7 @@ export function classifyPullRequest(pr: PullRequestState, required: string[]): V
  if (pr.behindCommits > 0) {
   blockers.push({
    kind: "behind",
-   detail: `落后 main ${pr.behindCommits} 个提交：合并目标要求分支最新，每次别人合并它都要重新同步`,
+   detail: `比 main 少 ${pr.behindCommits} 个提交：合并目标要求分支最新，每次别人合并它都要重新同步`,
    needsDecision: false,
   });
  }
@@ -120,7 +120,7 @@ export interface ContainmentGroup {
 /**
  * 找出被其他开放 PR 完全包含的 PR。
  *
- * 同一份改动被拆成多个 PR 且都以 main 为目标时，每个 PR 的差异里都带着前一个
+ * 同一份改动被分成多个 PR 且都以 main 为目标时，每个 PR 的差异里都带着前一个
  * 的全部提交：逐个合并会重复跑同一套检查与评审，还会互相冲突。只合并最上面的。
  */
 export function collapseContained(prs: PullRequestState[]): {

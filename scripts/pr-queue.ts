@@ -2,8 +2,8 @@
 /**
  * 开放 PR 队列体检：把「能机械解阻」与「要人决策」分开。
  *
- * 只读。PR、必需检查与未解决的讨论串走 `gh`；落后数、两两合并冲突与提交包含
- * 关系走 `git`。提交包含关系用祖先判定，不用差异比对：同一份改动被拆成多个
+ * 只读。PR、必需检查与未解决的讨论串走 `gh`；与 main 的差距、两两合并冲突与提交包含
+ * 关系走 `git`。提交包含关系用祖先判定，不用差异比对：同一份改动被分成多个
  * 都以 main 为目标的 PR 时，只有祖先判定能认出它们其实是同一批提交。
  *
  * 用法：bun run queue [--json]
@@ -176,7 +176,7 @@ if (process.argv.includes("--json")) {
  const out: string[] = [`开放 PR ${prs.length} 个，必需检查 ${required.length} 项`, ""];
 
  if (groups.length > 0) {
-  out.push("## 同一批提交拆成的多个 PR：只合并最上面那个");
+  out.push("## 同一批提交分成的多个 PR：只合并最上面那个");
   for (const group of groups) out.push(`- #${group.tip} 已包含 #${group.subset.join("、#")}`);
   out.push("");
  }

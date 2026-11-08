@@ -2,7 +2,7 @@
 /**
  * 只检查改动过的源码文件，并且只把本次改动真正引入的 error 算失败。
  *
- * 全仓 lint 还有存量 error（`react-hooks/preserve-manual-memoization`，落在
+ * 全仓 lint 还有存量 error（`react-hooks/preserve-manual-memoization`，位于
  * `components/ChatInput.tsx` 与 `hooks/useAgentSession.ts`）。只按行过滤不够：
  * 整文件排版会把没动过的代码也写进差异，那些行上没有新代码，却会把基准里早有
  * 的 error 重新算一次，让纯排版 PR 变红。所以候选 error 还要与基准版本的同一份
@@ -87,7 +87,7 @@ const ranges = new Map(
  ]),
 );
 
-/** 落在本次改动行上的候选 error，按文件归组。 */
+/** 位于本次改动行上的候选 error，按文件归组。 */
 const candidates = new Map();
 
 for (let index = 0; index < changed.length; index += BATCH) {
@@ -145,7 +145,7 @@ for (const [file, own] of candidates) {
 }
 
 if (failures.length > 0) {
- process.stderr.write(`[lint] ${failures.length} 个 error 落在改动行上\n`);
+ process.stderr.write(`[lint] ${failures.length} 个 error 发生在改动行上\n`);
  for (const failure of failures) process.stderr.write(`${failure}\n`);
  process.exit(1);
 }

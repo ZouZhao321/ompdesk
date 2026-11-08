@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * 把 origin/main 合进落后的开放 PR 分支，让必需检查重新开始上报。
+ * 把 origin/main 合进比 main 旧的开放 PR 分支，让必需检查重新开始上报。
  *
  * 只处理能干净合并的分支；冲突的跳过并列出。默认只打印计划，加 `--apply` 才执行。
  *
@@ -108,7 +108,7 @@ for (const pr of listed) {
   continue;
  }
 
- const plan = `#${pr.number} ${branch}：落后 ${behind} 个提交，可干净合并`;
+ const plan = `#${pr.number} ${branch}：比 main 少 ${behind} 个提交，可干净合并`;
  if (!apply) {
   report.push(`${plan}（未执行，加 --apply）`);
   continue;
