@@ -43,6 +43,8 @@ interface Props {
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   gitRefreshKey?: number;
   initialDisplayMode?: DisplayMode;
+  /** 打开请求的序号；同一个文件被再次要求切到指定显示模式时它会变化。 */
+  openSeq?: number;
   /** 面板中只有当前标签保持文件监听与快捷键；隐藏标签传 false。 */
   active?: boolean;
 }
@@ -717,7 +719,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, active = true }: Props
   );
 }
 
-export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode, active = true }: Props) {
+export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode, openSeq, active = true }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
@@ -727,10 +729,10 @@ export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMenti
   if (isDocumentPreviewPath(filePath)) {
     return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} active={active} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} onAtMention={onAtMention} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} active={active} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} onAtMention={onAtMention} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} openSeq={openSeq} active={active} />;
 }
 
-function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode, active = true }: Props) {
+function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode, openSeq, active = true }: Props) {
   const { isDark } = useTheme();
   const { t, locale } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
@@ -828,19 +830,19 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     if (!hasGitDiff && displayMode === "diff") setDisplayMode("source");
   }, [displayMode, hasGitDiff]);
 
-  // Opened from the Changes list (initialDisplayMode === "diff"): switch to the
-  // diff view once the git diff has resolved. We do this after the diff loads
-  // rather than at mount so files without a diff never flash an empty diff view.
-  const autoDiffAppliedRef = useRef(false);
+  // Opened from the Changes list or a written-file card (initialDisplayMode ===
+  // "diff"): switch to the diff view once the git diff has resolved. We do this
+  // after the diff loads rather than at mount so files without a diff never
+  // flash an empty diff view. A repeat open of the same file is a new request,
+  // so the guard keys on the open sequence as well as the path.
+  const autoDiffAppliedRef = useRef<string | null>(null);
   useEffect(() => {
-    autoDiffAppliedRef.current = false;
-  }, [filePath]);
-  useEffect(() => {
-    if (initialDisplayMode === "diff" && hasGitDiff && !autoDiffAppliedRef.current) {
-      autoDiffAppliedRef.current = true;
-      setDisplayMode("diff");
-    }
-  }, [initialDisplayMode, hasGitDiff]);
+    if (initialDisplayMode !== "diff" || !hasGitDiff) return;
+    const requestKey = `${filePath}#${openSeq ?? "none"}`;
+    if (autoDiffAppliedRef.current === requestKey) return;
+    autoDiffAppliedRef.current = requestKey;
+    setDisplayMode("diff");
+  }, [initialDisplayMode, hasGitDiff, filePath, openSeq]);
 
   const markdownPreview = useMemo(
     () => (data?.language === "markdown" ? normalizeDisplayMath(data.content) : ""),

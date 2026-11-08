@@ -13,6 +13,11 @@ export interface FileTab extends TabBase {
   label: string;
   filePath: string;
   initialDisplayMode?: "source" | "preview" | "diff";
+  /**
+   * 每次打开请求的序号。同一个文件被再次打开、且要求切到指定显示模式时，
+   * 序号变化会让面板正文重新应用该模式；只改文件路径无法表达这种重复请求。
+   */
+  openSeq?: number;
 }
 
 export interface ViewTab extends TabBase {

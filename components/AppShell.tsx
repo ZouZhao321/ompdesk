@@ -387,6 +387,8 @@ export function AppShell() {
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
   const languageBtnRef = useRef<HTMLButtonElement>(null);
+  // 文件标签的打开序号：让「同一个文件再次以差异模式打开」成为一次新请求。
+  const fileOpenSeqRef = useRef(0);
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
@@ -925,6 +927,8 @@ export function AppShell() {
     const sourceSessionId = options?.sourceSessionId;
     const modeHint = options?.modeHint;
     const tabId = `file:${filePath}`;
+    // 带显示模式提示的打开都是一次新请求，即使同一个文件已经打开过。
+    const openSeq = modeHint ? (fileOpenSeqRef.current += 1) : undefined;
     setPanelTabs((prev) => {
       const existing = prev.find((t) => t.id === tabId);
       if (!existing) {
@@ -935,17 +939,19 @@ export function AppShell() {
           filePath,
           sourceSessionId,
           initialDisplayMode: modeHint,
+          openSeq,
         } satisfies FileTab];
       }
       if (existing.kind !== "file") return prev;
       const sourceUnchanged = !sourceSessionId || existing.sourceSessionId === sourceSessionId;
       const modeUnchanged = !modeHint || existing.initialDisplayMode === modeHint;
-      if (sourceUnchanged && modeUnchanged) return prev;
+      if (sourceUnchanged && modeUnchanged && openSeq === existing.openSeq) return prev;
       return prev.map((t) => t.id === tabId && t.kind === "file"
         ? {
             ...t,
             ...(sourceSessionId ? { sourceSessionId } : {}),
             ...(modeHint ? { initialDisplayMode: modeHint } : {}),
+            ...(openSeq === undefined ? {} : { openSeq }),
           }
         : t);
     });
@@ -1070,6 +1076,7 @@ export function AppShell() {
             active={tab.id === activePanelTabId && rightPanelOpen}
             gitRefreshKey={explorerRefreshKey}
             initialDisplayMode={tab.initialDisplayMode}
+            openSeq={tab.openSeq}
             onMentionLines={handleFileLineMention}
             onAtMention={handleAtMention}
             onOpenFile={handleOpenFileFromViewer}
