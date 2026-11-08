@@ -27,7 +27,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { canApplySessionIdentity, type SessionIdentity } from "@/lib/agent-client";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
-import { PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type FileTab, type OpenFileOptions, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
+import { mergeOpenFileTab, PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type OpenFileOptions, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -929,32 +929,7 @@ export function AppShell() {
     const tabId = `file:${filePath}`;
     // 带显示模式提示的打开都是一次新请求，即使同一个文件已经打开过。
     const openSeq = modeHint ? (fileOpenSeqRef.current += 1) : undefined;
-    setPanelTabs((prev) => {
-      const existing = prev.find((t) => t.id === tabId);
-      if (!existing) {
-        return [...prev, {
-          id: tabId,
-          kind: "file",
-          label: fileName,
-          filePath,
-          sourceSessionId,
-          initialDisplayMode: modeHint,
-          openSeq,
-        } satisfies FileTab];
-      }
-      if (existing.kind !== "file") return prev;
-      const sourceUnchanged = !sourceSessionId || existing.sourceSessionId === sourceSessionId;
-      const modeUnchanged = !modeHint || existing.initialDisplayMode === modeHint;
-      if (sourceUnchanged && modeUnchanged && openSeq === existing.openSeq) return prev;
-      return prev.map((t) => t.id === tabId && t.kind === "file"
-        ? {
-            ...t,
-            ...(sourceSessionId ? { sourceSessionId } : {}),
-            ...(modeHint ? { initialDisplayMode: modeHint } : {}),
-            ...(openSeq === undefined ? {} : { openSeq }),
-          }
-        : t);
-    });
+    setPanelTabs((prev) => mergeOpenFileTab(prev, { filePath, label: fileName, sourceSessionId, modeHint, openSeq }));
     setActivePanelTabId(tabId);
     setRightPanelOpen(true);
     // On mobile the file panel is full-screen; close the drawer so it shows.

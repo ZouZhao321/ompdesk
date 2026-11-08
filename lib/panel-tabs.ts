@@ -25,11 +25,12 @@ export type DisplayMode = "source" | "preview" | "diff";
 
 /**
  * 打开文件入口的可选参数，标签栏、文件树、Git 面板与会话区的改动文件卡片共用。
- * `modeHint` 只在明确要求切换显示模式时给出，省略表示沿用标签当前状态。
+ * `modeHint` 只在明确要求切到差异视图时给出，省略表示沿用标签当前状态；
+ * 查看器目前只兑现差异这一种提示，类型不放开到其余显示模式。
  */
 export interface OpenFileOptions {
   sourceSessionId?: string | null;
-  modeHint?: DisplayMode;
+  modeHint?: "diff";
 }
 
 export interface ViewTab extends TabBase {
@@ -59,4 +60,58 @@ export const PANEL_VIEW_KINDS: PanelViewKind[] = ["explorer", "git", "subagents"
 
 export function panelViewTab(kind: PanelViewKind): ViewTab {
   return { id: PANEL_VIEW_TAB_IDS[kind], kind };
+}
+
+/**
+ * 一个打开文件请求。`openSeq` 由调用方在带上显示模式提示时递增，
+ * 用来把「同一个文件再开一次」与「重复的无变化请求」区分开。
+ */
+export interface OpenFileRequest {
+  filePath: string;
+  label: string;
+  sourceSessionId?: string | null;
+  modeHint?: "diff";
+  openSeq?: number;
+}
+
+/**
+ * 把一次打开请求并入标签列表。
+ *
+ * - 未见过的文件追加一个文件标签。
+ * - 无显示模式提示：沿用标签现状，不动列表，避免普通打开反复重建标签对象。
+ * - 带提示：每次都算新请求，就地改写显示模式与打开序号，不新增第二个标签。
+ */
+export function mergeOpenFileTab(tabs: Tab[], request: OpenFileRequest): Tab[] {
+  const tabId = `file:${request.filePath}`;
+  const existing = tabs.find((tab) => tab.id === tabId);
+  if (!existing) {
+    return [...tabs, {
+      id: tabId,
+      kind: "file",
+      label: request.label,
+      filePath: request.filePath,
+      sourceSessionId: request.sourceSessionId,
+      initialDisplayMode: request.modeHint,
+      openSeq: request.openSeq,
+    } satisfies FileTab];
+  }
+  if (existing.kind !== "file") return tabs;
+  const sourceUnchanged = !request.sourceSessionId || existing.sourceSessionId === request.sourceSessionId;
+  if (!request.modeHint) {
+    // 无提示的打开沿用标签现状：只有来源会话变了才改写，其余一律不动列表。
+    if (sourceUnchanged) return tabs;
+    return tabs.map((tab) => tab.id === tabId && tab.kind === "file"
+      ? { ...tab, sourceSessionId: request.sourceSessionId }
+      : tab);
+  }
+  const modeUnchanged = existing.initialDisplayMode === request.modeHint;
+  if (sourceUnchanged && modeUnchanged && request.openSeq === existing.openSeq) return tabs;
+  return tabs.map((tab) => tab.id === tabId && tab.kind === "file"
+    ? {
+      ...tab,
+      ...(sourceUnchanged ? {} : { sourceSessionId: request.sourceSessionId }),
+      initialDisplayMode: request.modeHint,
+      ...(request.openSeq === undefined ? {} : { openSeq: request.openSeq }),
+    }
+    : tab);
 }
