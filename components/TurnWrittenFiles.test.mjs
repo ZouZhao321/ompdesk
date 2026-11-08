@@ -43,3 +43,15 @@ test("long names truncate inside the chip instead of widening it", () => {
   assert.ok(html.includes(`title="/abs/out/${longName}"`), "full path must stay in title");
   assert.ok(html.includes(longName), "full name must stay readable to assistive tech");
 });
+
+test("same-named files render distinct visible text and distinct labels", () => {
+  const html = render({
+    files: [{ filePath: "/abs/alpha/notes.md" }, { filePath: "/abs/beta/notes.md" }],
+    onOpenFile() {},
+  });
+  assert.ok(html.includes("alpha/notes.md"), "first same-named file must show its parent segment");
+  assert.ok(html.includes("beta/notes.md"), "second same-named file must show its parent segment");
+  const labels = [...html.matchAll(/aria-label="([^"]*notes\.md)"/g)].map((m) => m[1]);
+  assert.equal(labels.length, 2, "both chips must carry an aria label");
+  assert.notEqual(labels[0], labels[1], "screen-reader labels must differ");
+});

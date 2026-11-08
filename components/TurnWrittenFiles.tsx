@@ -2,7 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { getFileName } from "@/lib/file-paths";
-import type { WrittenFile } from "@/lib/turn-written-files";
+import { writtenFileLabels, type WrittenFile } from "@/lib/turn-written-files";
 import { getFileIcon } from "./FileIcons";
 
 /**
@@ -16,18 +16,21 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
 }) {
   const { t } = useI18n();
   if (files.length === 0) return null;
+  // 同名文件靠路径片段区分：触屏没有悬停，读屏也不能拿到两个相同标签。
+  const labels = writtenFileLabels(files.map((file) => file.filePath));
 
   return (
     <div aria-label={t("chat.filesWritten")} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6 }}>
-      {files.map(({ filePath }) => {
+      {files.map(({ filePath }, index) => {
         const name = getFileName(filePath);
+        const label = labels[index] ?? name;
         return (
           <button
             key={filePath}
             type="button"
             className="file-chip-button"
             title={filePath}
-            aria-label={t("chat.openWrittenFile", { name })}
+            aria-label={t("chat.openWrittenFile", { name: label })}
             onClick={() => onOpenFile?.(filePath, { modeHint: "diff" })}
             style={{
               display: "inline-flex",
@@ -47,7 +50,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
             }}
           >
             {getFileIcon(name, 12)}
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{name}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{label}</span>
           </button>
         );
       })}

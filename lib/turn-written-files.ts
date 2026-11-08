@@ -58,3 +58,33 @@ export function extractTurnWrittenFiles(
 
   return writtenFiles;
 }
+
+/**
+ * Display labels for a turn's written files, in the same order as the input.
+ *
+ * A bare file name is enough while it is unique in the turn. When two entries
+ * share a name, each grows the shortest trailing path segments that tell them
+ * apart, so the label carries the difference itself instead of relying on the
+ * hover tooltip. Full paths stay the identity; only the visible text changes.
+ */
+export function writtenFileLabels(filePaths: string[]): string[] {
+  const segments = filePaths.map((filePath) => splitPathSegments(filePath));
+  return segments.map((parts, index) => {
+    for (let depth = 1; depth <= parts.length; depth += 1) {
+      const suffix = parts.slice(-depth).join("/");
+      const unique = segments.every(
+        (other, otherIndex) => otherIndex === index || other.slice(-depth).join("/") !== suffix,
+      );
+      if (unique) return suffix;
+    }
+    return parts.join("/");
+  });
+}
+
+function splitPathSegments(filePath: string): string[] {
+  return filePath
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
+    .split("/")
+    .filter(Boolean);
+}
