@@ -41,20 +41,23 @@ export async function shouldCollapseCompactedHistory(
   }
 }
 
+/** 入键的消息长度上限：保留区分度，又不让长消息把状态撑大。 */
+const FAILURE_KEY_MESSAGE_CHARS = 80;
+
 /**
  * 节流键：同一 cwd 与同一类错误算同一条。
  *
- * 错误文案里常带路径、行号、锁等待时长这类可变片段，直接入键会让每次都成为新键，
- * 节流随之失效、状态也不再有界。只用错误码与名称，取不到再退回截断后的消息。
+ * 只取错误码或名称会把不同原因并成一条（普通 `Error` 的 name 恒为 "Error"，锁冲突与
+ * 配置损坏就分不开），所以再带上截断后的消息；消息里的长路径与等待时长被截在 80 字符
+ * 以内，状态仍由 `FAILURE_LOG_MAX_KEYS` 约束。
  * @param error 失败原因
  */
 function failureKey(error: unknown): string {
   if (error instanceof Error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code) return code;
-    return error.name;
+    const code = (error as NodeJS.ErrnoException).code ?? error.name;
+    return `${code}\u0000${error.message.slice(0, FAILURE_KEY_MESSAGE_CHARS)}`;
   }
-  return String(error).slice(0, 80);
+  return String(error).slice(0, FAILURE_KEY_MESSAGE_CHARS);
 }
 
 /**
