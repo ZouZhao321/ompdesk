@@ -236,15 +236,26 @@ function projectLabel(projectPath) {
 }
 
 function describeActivity(activity) {
-  if (!activity || !Array.isArray(activity.projects) || activity.projects.length === 0) {
-    return ["No sessions yet."];
-  }
-  return activity.projects.map((project) => {
+  if (!activity || !Array.isArray(activity.projects)) return ["No sessions yet."];
+
+  const lines = activity.projects.map((project) => {
     const parts = [`${project.sessions} session${project.sessions === 1 ? "" : "s"}`];
     if (project.running > 0) parts.push(`${project.running} running`);
     if (project.waiting > 0) parts.push(`${project.waiting} waiting for input`);
     return `${projectLabel(project.path)}: ${parts.join(", ")}`;
   });
+  if (activity.projects.length === 0) lines.push("No sessions yet.");
+
+  // The running total comes from the runtime snapshot, the rows from the session
+  // list. A task can be running before its session is placeable, and `stop`
+  // refuses for it — say so here instead of leaving the two numbers to disagree
+  // with no explanation.
+  const placedRunning = activity.projects.reduce((total, project) => total + (project.running ?? 0), 0);
+  const unplacedRunning = (activity.running ?? 0) - placedRunning;
+  if (unplacedRunning > 0) {
+    lines.push(`${unplacedRunning} running session${unplacedRunning === 1 ? "" : "s"} not listed under a project yet`);
+  }
+  return lines;
 }
 
 function formatStatus(record, activity) {
