@@ -60,7 +60,10 @@ export function classifyPullRequest(pr: PullRequestState, required: string[]): V
  const blockers: Blocker[] = [];
 
  const reported = new Set(pr.checks.map((check) => check.name));
- const missing = required.filter((name) => !reported.has(name));
+ // 有检查还在跑时不下「不会上报」的结论：依赖前序作业的检查（例如打包冒烟要等
+ // 构建完成）此时还没出现在列表里，误报会让人去合并 main 做无用功。
+ const running = pr.checks.some((check) => check.conclusion === null);
+ const missing = running ? [] : required.filter((name) => !reported.has(name));
  if (missing.length > 0) {
   blockers.push({
    kind: "missing-checks",
