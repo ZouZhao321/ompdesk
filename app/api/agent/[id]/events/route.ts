@@ -1,23 +1,11 @@
 import { resolveSessionPath } from "@/lib/session-reader";
-import { getRpcSession, startRpcSession, type AgentEvent } from "@/lib/rpc-manager";
+import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
 import { isApiRequestAllowed } from "@/lib/request-security";
 import { withRequestLog } from "@/lib/api-request-log";
 import { openSseStream, type SseStreamSession } from "@/lib/sse-lifecycle";
+import { toClientEvent } from "@/lib/agent-client-events";
 
 export const dynamic = "force-dynamic";
-
-const OMITTED_EVENT_TYPES = new Set(["turn_start", "turn_end", "tool_execution_update"]);
-
-function toClientEvent(event: AgentEvent): AgentEvent | null {
-  if (OMITTED_EVENT_TYPES.has(event.type)) return null;
-  if (event.type === "message_update") {
-    const clientEvent = { ...event };
-    delete clientEvent.assistantMessageEvent;
-    return clientEvent;
-  }
-  if (event.type === "agent_end") return { type: "agent_end" };
-  return event;
-}
 
 // GET /api/agent/[id]/events - SSE stream of agent events.
 // The request wrapper completes when the response headers return; the stream

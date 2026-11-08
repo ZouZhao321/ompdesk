@@ -20,16 +20,18 @@ Pull requests are welcome for focused changes. Before opening one:
 bun install
 bun test
 bun run typecheck
-bunx eslint <changed files and directories>
+bun run lint:changed
 ```
 
-`bun run lint` still reports pre-existing errors in `components/` and `hooks/` (React compiler
-memoization checks), so it is not part of `bun run ci` or the CI job — reproduce with
-`bun run lint`, and judge the eslint result of the files you touched.
+`bun run lint:changed` only checks the files this branch touched, and only fails on errors
+that sit on changed lines. The whole-repository `bun run lint` still reports 8 pre-existing
+errors (`components/ChatInput.tsx` and `hooks/useAgentSession.ts`, React compiler memoization
+checks); checking whole files would block unrelated changes to those two files. CI runs the
+same script against the pull request's merge base.
 
-Match the surrounding code, keep one logical change per commit, and write commit titles as
-`type(scope): 中文描述` with `type` from `feat`, `fix`, `refactor`, `test`, `docs`, `chore`,
-`perf`.
+Commit titles are checked in CI: `type(scope): 中文描述` with `type` from `feat`, `fix`,
+`refactor`, `test`, `docs`, `chore`, `perf`. `Merge `, `Revert `, `fixup! `, `squash! ` and
+`amend! ` prefixes are skipped.
 
 ## Security
 

@@ -49,11 +49,17 @@ docker run --rm \
   ompdesk
 ```
 
-Arguments after the image name reach the launcher directly:
+Options after the image name reach the launcher directly:
 
 ```bash
 docker run --rm -p 127.0.0.1:8080:8080 -e PORT=8080 ompdesk --port 8080
 ```
+
+The image runs `ompdesk foreground`, so options land on that command. A
+subcommand does not work here — `docker run <image> status` becomes
+`foreground status` and is refused. Ask for status from the host instead: the
+instance record lives in the mounted `~/.omp/agent`, so `ompdesk status` outside
+the container reads the same record.
 
 ## File ownership
 

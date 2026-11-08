@@ -26,6 +26,7 @@ agent/[id]/events/route.ts      GET SSE 流
 agent/[id]/bash-output/route.ts GET 命令输出
 agent/running/route.ts          GET 运行中与等待输入的会话 id
 agent/running/events/route.ts   GET 同一份活动快照的 SSE 流
+control/activity/route.ts       GET 后台实例的活动视图，供 ompdesk status 与 stop 读取；只认启动时下发的控制令牌
 auth/all-providers/route.ts     GET API-key 提供方列表
 auth/api-key/[provider]/route.ts GET/POST/DELETE 提供方 API key 状态与存储
 auth/login/[provider]/route.ts  GET OAuth 登录 SSE | POST 手动 code
@@ -85,6 +86,8 @@ comment-translation-generation.ts 勾选条目的批量译文生成：字典命�
 comment-translation-validation.ts 译文逐字片段校验：路径、标识符、数字与括号片段
 comment-translation-route.ts 生成接口的请求校验与处理器
 comment-translation-model.ts 生成接口的模型接线：可见模型选择与 completeSimple 调用
+control-activity.ts 按工作区汇总会话数、运行中与等待输入，供 /api/control/activity 使用；工作区键与侧边栏同一规则
+control-token.ts     后台实例的控制令牌：请求头名、路径前缀与常量时间比较
 git-env.ts           createGitEnv()：git 子进程环境，剥离钩子注入的仓库定位变量
 git-ignore.ts        checkIgnoredEntries：git check-ignore 批量判定目录项是否被忽略，不可判定返回 null
 git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文件，非仓库返回 null
@@ -207,10 +210,10 @@ useTheme.ts         主题状态
 不在上述四组里、但改代码时会碰到的入口与配置。
 
 ```
-proxy.ts            访问控制：密码校验、主机与跨站检查
+proxy.ts            访问控制：密码校验、主机与跨站检查；控制令牌通道在这里放行
 instrumentation.ts  启动时接线（代理、日志）
 next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
-bin/                启动器、密码存储、Bun 定位
+bin/                启动器（start/status/stop/foreground）、实例记录、密码存储、Bun 定位
 scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息）
 test-support/       测试样本：会话夹具经 SessionManager 生成，测试与手工验证共用同一入口
 ```

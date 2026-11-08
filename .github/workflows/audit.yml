@@ -1,0 +1,53 @@
+name: Dependency audit
+
+# `bun audit` 在本机跑不了：~/.npmrc 把源设成 npmmirror，它没有安全通告接口，
+# 请求会直接 404。CI 默认走 registry.npmjs.org，所以这项检查只能放在这里。
+#
+# 门槛设在 high。仓库当前有一个 high 通告（zod，经 eslint-config-next 与
+# omp SDK 的 puppeteer-core 传递引入），两条依赖链都不在我们自己的范围内，
+# 修它需要上游升级，因此显式忽略并在下面写明原因；出现新的 high 仍会拦下来。
+# 全部级别的通告另外由仓库的 Dependabot 提醒呈现。
+
+on:
+  pull_request:
+    paths:
+      - package.json
+      - bun.lock
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+      - bun.lock
+  schedule:
+    # 每周一 04:23 UTC：通告库随时更新，固定频率复查。
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Audit
+        run: >-
+          bun audit
+          --registry https://registry.npmjs.org
+          --audit-level=high
+          --ignore=GHSA-mrhx-c7xc-m3w5
