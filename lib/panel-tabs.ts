@@ -63,16 +63,19 @@ export function panelViewTab(kind: PanelViewKind): ViewTab {
 }
 
 /**
- * 一个打开文件请求。`openSeq` 由调用方在带上显示模式提示时递增，
- * 用来把「同一个文件再开一次」与「重复的无变化请求」区分开。
+ * 一个打开文件请求。
+ *
+ * `openSeq` 是「这是第几次打开这个文件」的序号：带上显示模式提示时由调用方递增，
+ * 让同一个文件再开一次成为新请求；省略表示沿用标签现状。
  */
-export interface OpenFileRequest {
+export type OpenFileRequest = {
   filePath: string;
   label: string;
   sourceSessionId?: string | null;
-  modeHint?: "diff";
-  openSeq?: number;
-}
+} & (
+  | { modeHint?: undefined; openSeq?: undefined }
+  | { modeHint: "diff"; openSeq: number }
+);
 
 /**
  * 把一次打开请求并入标签列表。
@@ -96,7 +99,10 @@ export function mergeOpenFileTab(tabs: Tab[], request: OpenFileRequest): Tab[] {
     } satisfies FileTab];
   }
   if (existing.kind !== "file") return tabs;
-  const sourceUnchanged = !request.sourceSessionId || existing.sourceSessionId === request.sourceSessionId;
+  // undefined 表示调用方没有意见；null 是显式清空（当前没有选中会话），
+  // 两者不能混为一谈，否则会话被删后标签会一直留着旧 sessionId。
+  const sourceSpecified = request.sourceSessionId !== undefined;
+  const sourceUnchanged = !sourceSpecified || existing.sourceSessionId === request.sourceSessionId;
   if (!request.modeHint) {
     // 无提示的打开沿用标签现状：只有来源会话变了才改写，其余一律不动列表。
     if (sourceUnchanged) return tabs;

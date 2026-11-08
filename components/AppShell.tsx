@@ -927,9 +927,10 @@ export function AppShell() {
     const sourceSessionId = options?.sourceSessionId;
     const modeHint = options?.modeHint;
     const tabId = `file:${filePath}`;
-    // 带显示模式提示的打开都是一次新请求，即使同一个文件已经打开过。
-    const openSeq = modeHint ? (fileOpenSeqRef.current += 1) : undefined;
-    setPanelTabs((prev) => mergeOpenFileTab(prev, { filePath, label: fileName, sourceSessionId, modeHint, openSeq }));
+    setPanelTabs((prev) => mergeOpenFileTab(prev, modeHint
+      // 带显示模式提示的打开都是一次新请求，即使同一个文件已经打开过。
+      ? { filePath, label: fileName, sourceSessionId, modeHint, openSeq: (fileOpenSeqRef.current += 1) }
+      : { filePath, label: fileName, sourceSessionId }));
     setActivePanelTabId(tabId);
     setRightPanelOpen(true);
     // On mobile the file panel is full-screen; close the drawer so it shows.
