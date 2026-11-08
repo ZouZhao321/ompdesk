@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { isBlockingExtensionUiRequest } from "@/lib/browser-notifications";
 import { normalizeToolCalls } from "@/lib/normalize";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { stripAnsi } from "@/lib/ansi";
 import { canApplySessionIdentity, isPromptRejectedError, sendAgentCommand, type RuntimeSessionBinding } from "@/lib/agent-client";
 import { normalizeRewindCommand, planRewindCommand } from "@/lib/rewind";
@@ -140,6 +141,11 @@ export interface QueuedMessages {
   followUp: string[];
 }
 
+interface QueuedRestoredMessage {
+  text: string;
+  images?: Array<{ type: "image"; data: string; mimeType: string }>;
+}
+
 function normalizeQueuedMessages(q?: { steering?: string[]; followUp?: string[] } | null): QueuedMessages {
   return { steering: q?.steering ?? [], followUp: q?.followUp ?? [] };
 }
@@ -165,6 +171,14 @@ type ExtensionUiDialogRequest = Extract<
 >;
 type ExtensionUiCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
 export type NoticeType = "info" | "success" | "warning" | "error";
+
+/** 技能指令未生效的提示文案，键与 `SkillFallbackReason` 对齐。 */
+const SKILL_UNAVAILABLE_MESSAGE_KEYS: Record<string, string> = {
+  disabled: "chat.skillCommandDisabled",
+  unreadable: "chat.skillCommandUnreadable",
+  dropped: "chat.skillCommandDropped",
+  unknown: "chat.skillCommandUnknown",
+};
 
 export type NoticeItem = {
   id: string;
@@ -380,9 +394,8 @@ export interface ChatInputHandle {
   focus: () => void;
   insertText: (text: string) => void;
   insertIfEmpty: (content: string) => void;
-  prependText: (text: string) => void;
   addImages: (files: File[]) => void;
-  restoreSubmission: (text: string, images?: Array<{ data: string; mimeType: string }>, targetDraftKey?: string) => void;
+  restoreSubmission: (text: string, images?: Array<{ data: string; mimeType: string }>, targetDraftKey?: string) => number;
   rekeyDraft?: (previousKey: string, nextKey: string) => void;
 }
 
@@ -532,7 +545,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // 观测自己收回，最坏也只是这段窗口内的位置不参与判定。
   const followObservationHoldUntilRef = useRef(0);
   // Forward reference: handleSend/executeBash are declared above applyFollow.
-  const applyFollowRef = useRef<(event: FollowEvent) => void>(() => {});
+  const applyFollowRef = useRef<(event: FollowEvent) => void>(() => { });
   // 列表句柄由界面装进来；滚动位置只归列表管，hook 不直接改滚动元素。
   const scrollTranscriptToEndRef = useRef(opts.scrollTranscriptToEnd);
   scrollTranscriptToEndRef.current = opts.scrollTranscriptToEnd;
@@ -542,6 +555,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const newSessionModelOverrideRef = useRef<SelectedModel | null>(null);
   const thinkingLevelOverrideRef = useRef<ThinkingLevelOption | null>(null);
   const promptRunIdRef = useRef(0);
+  const promptSettleKeysRef = useRef(new Set<string>());
   const contextUsageRequestIdRef = useRef(0);
   const optimisticUserMessageKeyRef = useRef<string | null>(null);
   const modelSwitchPendingRef = useRef(false);
@@ -562,7 +576,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     let toolResults = 0;
     let toolCalls = 0;
     for (const msg of messages) {
-      if (msg.role === "user") userMessages += 1;
+      if (msg.role === "user" || (msg.role === "custom" && isUserSkillPrompt(msg))) userMessages += 1;
       if (msg.role === "toolResult") toolResults += 1;
       if (msg.role !== "assistant") continue;
       assistantMessages += 1;
@@ -965,7 +979,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     eventSourceSessionIdRef.current = sid;
     eventSourceRuntimeIdRef.current = runtimeIdRef.current;
 
-    let cancel = () => {};
+    let cancel = () => { };
     const promise = new Promise<EventStreamConnectionResult>((resolve) => {
       let settled = false;
       let receivedConnected = false;
@@ -1311,43 +1325,50 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sdkAgentActiveRef.current = false;
       optimisticUserMessageKeyRef.current = null;
       const wasRunning = settleUiStage();
-      if (promptWasPending) {
+      if (promptWasPending || (agentWasActive && wasRunning)) {
         notifyPromptStage(runId);
-      } else if (agentWasActive && wasRunning) {
-        onAgentEnd?.(sessionIdRef.current ?? undefined);
       }
       if (sid) scheduleEventStreamClose(sid);
     }
-  }, [loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, settleUiStage]);
+  }, [loadSession, notifyPromptStage, scheduleEventStreamClose, settleUiStage]);
 
   const waitForPromptSettlement = useCallback(async (sid: string, runId?: number) => {
-    await delay(PROMPT_SETTLE_INITIAL_DELAY_MS);
-    const startedAt = Date.now();
+    const settleKey = `${sid}:${runId ?? "auto"}`;
+    if (promptSettleKeysRef.current.has(settleKey)) return;
+    promptSettleKeysRef.current.add(settleKey);
+    try {
+      await delay(PROMPT_SETTLE_INITIAL_DELAY_MS);
+      const startedAt = Date.now();
 
-    while (agentRunningRef.current && Date.now() - startedAt < PROMPT_SETTLE_MAX_MS) {
-      if (!mountedRef.current || sessionIdRef.current !== sid) return;
-      if (runId !== undefined && promptRunIdRef.current !== runId) return;
-      try {
-        const requestedRuntimeId = runtimeIdRef.current;
-        const res = await fetch(`/api/agent/${encodeURIComponent(requestedRuntimeId ?? sid)}`);
-        if (res.ok) {
-          const data = await res.json() as { running?: boolean; state?: AgentStateResponse };
-          if (runId !== undefined && promptRunIdRef.current !== runId) return;
-          const state = data.state;
-          if (followRuntimeState(state, sid, requestedRuntimeId)) {
-            await delay(PROMPT_SETTLE_POLL_MS);
-            continue;
+      while (agentRunningRef.current && Date.now() - startedAt < PROMPT_SETTLE_MAX_MS) {
+        if (!mountedRef.current || sessionIdRef.current !== sid) return;
+        if (runId !== undefined && promptRunIdRef.current !== runId) return;
+        try {
+          const requestedRuntimeId = runtimeIdRef.current;
+          const res = await fetch(`/api/agent/${encodeURIComponent(requestedRuntimeId ?? sid)}`);
+          if (res.ok) {
+            const data = await res.json() as { running?: boolean; state?: AgentStateResponse };
+            if (runId !== undefined && promptRunIdRef.current !== runId) return;
+            const state = data.state;
+            if (followRuntimeState(state, sid, requestedRuntimeId)) {
+              await delay(PROMPT_SETTLE_POLL_MS);
+              continue;
+            }
+            sid = sessionIdRef.current ?? sid;
+            const busy = Boolean(data.running && state
+              && (state.isStreaming || state.isPromptRunning || state.isCompacting || state.isHandoffRunning));
+            if (!busy) {
+              await finishPromptWithoutStream(sid, runId);
+              return;
+            }
           }
-          sid = sessionIdRef.current ?? sid;
-          if (!data.running || !state || (!state.isStreaming && !state.isPromptRunning)) {
-            await finishPromptWithoutStream(sid, runId);
-            return;
-          }
+        } catch {
+          // SSE remains the primary completion path.
         }
-      } catch {
-        // SSE remains the primary completion path.
+        await delay(PROMPT_SETTLE_POLL_MS);
       }
-      await delay(PROMPT_SETTLE_POLL_MS);
+    } finally {
+      promptSettleKeysRef.current.delete(settleKey);
     }
   }, [finishPromptWithoutStream, followRuntimeState]);
 
@@ -1506,13 +1527,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "start" });
         break;
       case "agent_end":
-        // One logical prompt can emit multiple agent_end events before retrying,
-        // compacting, or continuing messages queued by extension handlers.
-        // Keep the stream open until prompt_done/agent_settled and the idle grace.
+        // A run can end several times before the prompt is really over:
+        // retries, compaction continuations and queued extension messages all
+        // resume with a new agent_start. Only a terminal end means the agent is
+        // idle, so settle on it instead of waiting for the 15s reconcile. That
+        // wait is what leaves the composer stuck in steer/follow-up mode after
+        // the run finished or the operator pressed Stop.
         if (!agentRunningRef.current) break;
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
+        // `undefined` means an older projection omitted the flags; only an
+        // explicit false says the agent will resume (retry, compaction, …).
+        const terminalEnd = event.isTerminal !== false && event.yielded !== false;
+        if (terminalEnd) {
+          sdkAgentActiveRef.current = false;
+          settleUiStage();
+          notifyPromptStage(promptRunIdRef.current);
+          if (sessionIdRef.current) scheduleEventStreamClose(sessionIdRef.current);
+        }
         if (sessionIdRef.current) {
           const sid = sessionIdRef.current;
           loadSession(sid);
@@ -1524,33 +1557,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
               if (d.state?.extensionWidgets !== undefined) setExtensionWidgets(d.state.extensionWidgets ?? []);
+              if (d.state?.isCompacting !== undefined) setIsCompacting(d.state.isCompacting);
               if (d.state?.subagents !== undefined) setSubagents((current) => mergeSubagentSnapshots(current, d.state?.subagents ?? []));
               if (d.state?.goal !== undefined) setGoalStatus(d.state.goal ?? null);
               // Aborted turns can leave messages queued in pi (delivered with the
               // next turn); dead wrapper (no state) means the queue is gone.
               setQueuedMessages(normalizeQueuedMessages(d.state?.queuedMessages));
             })
-            .catch(() => {});
+            .catch(() => { });
         }
         break;
       case "goal_status":
         setGoalStatus((event.status as GoalStatusInfo | null | undefined) ?? null);
         break;
-      case "agent_settled": {
-        const agentWasActive = sdkAgentActiveRef.current;
-        sdkAgentActiveRef.current = false;
-        if (!agentWasActive || rpcPromptPendingRef.current) break;
-
-        const sid = sessionIdRef.current;
-        const wasRunning = settleUiStage();
-        setIsCompacting(false);
-        if (sid) {
-          void loadSession(sid);
-          scheduleEventStreamClose(sid);
-        }
-        if (wasRunning) onAgentEnd?.(sessionIdRef.current ?? undefined);
-        break;
-      }
       case "prompt_done":
         {
           const runId = promptRunIdRef.current;
@@ -1562,18 +1581,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
           const sid = sessionIdRef.current;
           if (sid) void loadSession(sid);
-          // An extension-injected agent may already have started before the
-          // command's prompt_done. Keep that active stage visible and let its
-          // agent_settled event perform the next completion transition.
           if (!sdkAgentActiveRef.current) {
             settleUiStage();
             if (sid) scheduleEventStreamClose(sid);
+          } else if (sid) {
+            // An extension-injected agent may already have started before the
+            // command's prompt_done, so the UI must stay busy for it. The abort
+            // path emits no agent_end, so ask the server whether anything is
+            // still running instead of trusting the SDK stage.
+            void waitForPromptSettlement(sid, runId);
           }
         }
         break;
       case "prompt_error":
         addNotice({ type: "error", message: (event.errorMessage as string | undefined) ?? "Command failed" });
         break;
+      case "skill_command_unavailable": {
+        const reason = event.reason as string | undefined;
+        const messageKey =
+          SKILL_UNAVAILABLE_MESSAGE_KEYS[reason ?? ""] ?? SKILL_UNAVAILABLE_MESSAGE_KEYS.unknown;
+        addNotice({
+          type: "warning",
+          message: t(messageKey, { skill: (event.skill as string | undefined) ?? "" }),
+        });
+        break;
+      }
       case "extension_error":
         addNotice({
           type: "error",
@@ -1621,7 +1653,28 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             return [...prev, delivered];
           });
         } else if (completed) {
-          setMessages((prev) => [...prev, normalizeToolCalls(completed)]);
+          const delivered = normalizeToolCalls(completed);
+          if (isUserSkillPrompt(delivered as CustomMessage)) {
+            // 技能指令替换乐观气泡，避免同一句指令显示两遍。
+            const command = skillPromptCommandLabel(
+              (delivered as CustomMessage).details as SkillPromptDetailsLike | undefined,
+            );
+            const optimisticKey = optimisticUserMessageKeyRef.current;
+            optimisticUserMessageKeyRef.current = null;
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              // 带图片发送时乐观 key 含图片签名，与纯文本命令行不相等；
+              // 两种命中都算同一条气泡，避免指令显示两遍。
+              const lastIsOptimistic = last?.role === "user"
+                && (userMessageKey(last) === optimisticKey || extractMessageText(last) === command);
+              if (optimisticKey && lastIsOptimistic) {
+                return [...prev.slice(0, -1), delivered];
+              }
+              return [...prev, delivered];
+            });
+          } else {
+            setMessages((prev) => [...prev, delivered]);
+          }
         }
         const sid = sessionIdRef.current;
         if (sid) void refreshContextUsage(sid);
@@ -1768,7 +1821,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage]);
+  }, [addNotice, cancelEventStreamGrace, handleExtensionUiRequest, loadSession, notifyPromptStage, waitForPromptSettlement, followSessionIdentity, followRuntimeState, refreshContextUsage, scheduleEventStreamClose, settleUiStage, t]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -2486,19 +2539,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      const result = await sendAgentCommand<{ steering?: string[]; followUp?: string[] }>(sid, { type: "clear_queue" }, runtimeIdRef);
+      const result = await sendAgentCommand<{ steering?: QueuedRestoredMessage[]; followUp?: QueuedRestoredMessage[] }>(sid, { type: "clear_queue" }, runtimeIdRef);
       // clearQueue also emits an empty queue_update, but that only reaches us
       // while SSE is connected — clear locally so idle recalls update the UI.
       setQueuedMessages({ steering: [], followUp: [] });
-      const texts = [...(result?.steering ?? []), ...(result?.followUp ?? [])];
-      if (mountedRef.current && texts.length > 0) {
-        opts.chatInputRef?.current?.prependText(texts.join("\n\n"));
+      const recalled = [...(result?.steering ?? []), ...(result?.followUp ?? [])];
+      const text = recalled.map((entry) => entry.text).filter((part) => part.trim()).join("\n\n");
+      const images = recalled
+        .flatMap((entry) => entry.images ?? [])
+        .map(({ data, mimeType }) => ({ data, mimeType }));
+      if (mountedRef.current && (text || images.length > 0)) {
+        const dropped = opts.chatInputRef?.current?.restoreSubmission(text, images.length ? images : undefined) ?? 0;
+        if (dropped > 0) {
+          addNotice({ type: "error", message: t("chat.recallDropped", { count: dropped }) });
+        }
       }
     } catch (e) {
       console.error("Failed to recall queued messages:", e);
       addNotice({ type: "error", message: "Failed to recall queued messages" });
     }
-  }, [opts.chatInputRef, addNotice]);
+  }, [opts.chatInputRef, addNotice, t]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     setThinkingLevel(level);
