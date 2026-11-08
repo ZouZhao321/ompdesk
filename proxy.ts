@@ -123,7 +123,17 @@ export function proxy(request: NextRequest) {
   // it gets a 404 so the route does not advertise itself.
   if (pathname.startsWith(CONTROL_API_PREFIX)) {
     if (!controlTokensMatch(request.headers.get(CONTROL_TOKEN_HEADER), process.env.OMPDESK_CONTROL_TOKEN)) {
-      return NextResponse.json({ error: "Not found" }, { status: 404, headers: SECURITY_HEADERS });
+      // Recorded like every other denial: a silent 404 would make a repeated CLI
+      // failure impossible to tell apart from a matcher change that never reaches
+      // this branch. The token itself is never written.
+      logEvent("warn", "security", "security.control.denied", {
+        ...securityFields,
+        reason: request.headers.get(CONTROL_TOKEN_HEADER) ? "invalid-token" : "missing-token",
+      });
+      return NextResponse.json(
+        { error: "Not found" },
+        { status: 404, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } },
+      );
     }
     logEvent("info", "security", "security.control.access", {
       ...securityFields,

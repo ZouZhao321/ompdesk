@@ -19,12 +19,21 @@ export const GET = withRequestLog("/api/control/activity", getRouteHandler);
 
 async function getRouteHandler(request: Request) {
   // Defence in depth: proxy.ts already gates this prefix, and the route refuses
-  // on its own so a matcher change cannot silently expose it. The headers match
-  // the proxy's refusal so a misconfiguration degrades to the same response.
+  // on its own so a matcher change cannot silently expose it. The headers mirror
+  // the proxy's refusal verbatim so a misconfiguration degrades to the same
+  // response instead of a weaker one.
   if (!controlTokensMatch(request.headers.get(CONTROL_TOKEN_HEADER), process.env.OMPDESK_CONTROL_TOKEN)) {
     return NextResponse.json(
       { error: "Not found" },
-      { status: 404, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } },
+      {
+        status: 404,
+        headers: {
+          "X-Frame-Options": "DENY",
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "no-referrer",
+          "Cache-Control": "no-store",
+        },
+      },
     );
   }
 

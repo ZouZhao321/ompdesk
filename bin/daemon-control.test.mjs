@@ -131,6 +131,12 @@ test("有任务在跑时拒绝停止，端点不响应时要求显式强制", ()
   assert.match(stopRefusal(null), /--force/);
 });
 
+test("运行数缺失或不是整数时同样拒绝，不把不确定当成可以中断", () => {
+  for (const activity of [{ projects: [] }, { running: "2", projects: [] }, { running: null }, { running: -1 }]) {
+    assert.match(stopRefusal(activity), /--force/, JSON.stringify(activity));
+  }
+});
+
 test("状态输出包含地址、进程与按项目的活动", () => {
   const lines = formatStatus(record(), {
     running: 1,
@@ -175,6 +181,13 @@ test("没有可归位会话时不打印自相矛盾的空行", () => {
   assert.deepEqual(describeActivity({ running: 1, waiting: 2, projects: [] }), [
     "Not listed under a project yet: 1 running, 2 waiting for input sessions.",
   ]);
+  assert.deepEqual(describeActivity({ running: 3, waiting: 0, projects: [] }), [
+    "Not listed under a project yet: 3 running sessions.",
+  ]);
+  assert.deepEqual(describeActivity({ running: 2, waiting: 3, projects: [] }), [
+    "Not listed under a project yet: 2 running, 3 waiting for input sessions.",
+  ]);
+  assert.deepEqual(describeActivity({ running: 2, waiting: 0 }), ["State incomplete: 2 running."]);
 });
 
 test("活动输出区分运行、等待与只是有会话的项目", () => {

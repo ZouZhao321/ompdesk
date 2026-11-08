@@ -271,6 +271,7 @@ is never bundled into the proxy bundle.
 | `security.recovery.access` | info | The `/recover` page or recovery API was reached while locked. `reason: "recovery-surface"`, and the request proceeds as actor `recovery`. |
 | `security.control.access` | info | The launcher's control channel answered a token-bearing request (`reason: "control-token"`). Tokens match only while `OMPDESK_CONTROL_TOKEN` is set, so a request without it is refused with 404 before this point. |
 | `security.recovery.code.issued` | info / warn | `ok`, plus `expiresAt` on success or `reason`/`retryAfterMs` on failure. |
+| `security.control.denied` | warn | A `/api/control/*` request carried no token or the wrong one. `reason` is `missing-token` or `invalid-token`; the token is never recorded. |
 | `security.recovery.code.redeemed` | info / warn | `ok`, plus `reason` when redemption fails. The submitted code and the new password are not recorded. |
 
 ### `client`

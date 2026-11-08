@@ -39,7 +39,7 @@ function recordFile(stateDirPath, port) {
 }
 
 function logFile(stateDirPath, port) {
-  return path.join(stateDirPath, `ompdesk-daemon-${port}.log`);
+  return path.join(stateDirPath, `${RECORD_PREFIX}${port}.log`);
 }
 
 function createControlToken() {
@@ -74,7 +74,13 @@ function removeRecord(file) {
   }
 }
 
-/** Every record in the state directory, ordered by port. The port selects an instance. */
+/**
+ * Every usable record in the state directory, ordered by port.
+ *
+ * A record without a port or a host is unreadable rather than merely idle:
+ * every caller probes or prints `host`, so keeping it would turn `status` into a
+ * TypeError. Unusable records are dropped here instead.
+ */
 function listRecords(stateDirPath) {
   let names;
   try {
@@ -86,7 +92,9 @@ function listRecords(stateDirPath) {
   for (const name of names) {
     if (!name.startsWith(RECORD_PREFIX) || !name.endsWith(RECORD_SUFFIX)) continue;
     const record = readRecord(path.join(stateDirPath, name));
-    if (record && Number.isInteger(record.port)) records.push(record);
+    if (!record) continue;
+    if (!Number.isInteger(record.port) || typeof record.host !== "string" || record.host === "") continue;
+    records.push(record);
   }
   return records.sort((left, right) => left.port - right.port);
 }
@@ -102,10 +110,22 @@ function isProcessAlive(pid) {
   }
 }
 
+/**
+ * The address a client can actually connect to.
+ *
+ * `0.0.0.0` / `::` mean "listen everywhere" and are not connect targets; a
+ * record written from `-H 0.0.0.0` is reached over loopback instead. IPv6
+ * brackets are URL syntax, not socket syntax, so they come off here.
+ */
+function connectableHost(host) {
+  const bare = String(host ?? "").replace(/^\[|\]$/g, "");
+  if (bare === "0.0.0.0" || bare === "::" || bare === "") return "127.0.0.1";
+  return bare;
+}
 /** TCP connect probe: the port answers, or it does not. */
 function probePort(host, port, timeoutMs = PROBE_TIMEOUT_MS) {
   return new Promise((resolve) => {
-    const socket = net.connect({ host: host.replace(/^\[|\]$/g, ""), port });
+    const socket = net.connect({ host: connectableHost(host), port });
     let settled = false;
     const finish = (reachable) => {
       if (settled) return;
@@ -136,7 +156,8 @@ async function waitForPort(host, port, timeoutMs, expectOpen) {
 
 /** IPv6 hosts need brackets in a URL; the loopback check accepts `::1` and `[::1]`. */
 function buildUrl(host, port) {
-  const bracketed = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+  const bare = connectableHost(host);
+  const bracketed = bare.includes(":") ? `[${bare}]` : bare;
   return `http://${bracketed}:${port}`;
 }
 
@@ -162,7 +183,7 @@ function fetchActivity(record, timeoutMs = 5_000) {
     };
 
     const request = http.request({
-      hostname: record.host.replace(/^\[|\]$/g, ""),
+      hostname: connectableHost(record.host),
       port: record.port,
       path: "/api/control/activity",
       headers: { [CONTROL_TOKEN_HEADER]: record.controlToken },
@@ -231,12 +252,24 @@ function terminateInstance(pid, force) {
  * two lines, so it stays duplicated here rather than forcing a build step.
  */
 function projectLabel(projectPath) {
-  const normalized = String(projectPath ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
-  return normalized.slice(normalized.lastIndexOf("/") + 1) || normalized || "(unknown)";
+  const raw = String(projectPath ?? "").replace(/\\/g, "/");
+  // The filesystem root keeps its slash: stripping it would leave an empty name
+  // and print "(unknown)" for a project that does have a name.
+  if (raw === "/") return "/";
+  const trimmed = raw.replace(/\/+$/, "");
+  return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed || "(unknown)";
 }
 
 function describeActivity(activity) {
-  if (!activity || !Array.isArray(activity.projects)) return ["No sessions yet."];
+  if (!activity) return ["No sessions yet."];
+  if (!Array.isArray(activity.projects)) {
+    // The rows are missing but the totals may still be known; saying "no
+    // sessions" here would contradict the refusal `stop` is making.
+    const lines = [];
+    if (activity.running > 0) lines.push(`${activity.running} running`);
+    if (activity.waiting > 0) lines.push(`${activity.waiting} waiting for input`);
+    return lines.length > 0 ? [`State incomplete: ${lines.join(", ")}.`] : ["No sessions yet."];
+  }
 
   const lines = activity.projects.map((project) => {
     const parts = [`${project.sessions} session${project.sessions === 1 ? "" : "s"}`];
@@ -257,7 +290,8 @@ function describeActivity(activity) {
   if (unplacedRunning > 0) unplaced.push(`${unplacedRunning} running`);
   if (unplacedWaiting > 0) unplaced.push(`${unplacedWaiting} waiting for input`);
   if (unplaced.length > 0) {
-    const noun = unplaced.length === 1 ? "session" : "sessions";
+    const total = unplacedRunning > 0 ? unplacedRunning + (unplacedWaiting > 0 ? unplacedWaiting : 0) : unplacedWaiting;
+    const noun = total === 1 ? "session" : "sessions";
     lines.push(`Not listed under a project yet: ${unplaced.join(", ")} ${noun}.`);
   }
 
@@ -282,11 +316,20 @@ function formatStatus(record, activity) {
 }
 
 /** Stop refuses while any session is mid-turn; `--force` is the explicit override. */
+const UNKNOWN_TASK_STATE = "Session state is unavailable, so ompdesk cannot tell whether a task is running. Re-run with --force to stop anyway.";
+
+/**
+ * Should `stop` refuse?
+ *
+ * Only a well-formed zero allows the stop. A response that omits `running`, or
+ * carries something other than a count, means the CLI cannot tell — and an
+ * unclear state must not become permission to interrupt work, so it refuses the
+ * same way an unreachable endpoint does.
+ */
 function stopRefusal(activity) {
-  if (!activity) {
-    return "Session state is unavailable, so ompdesk cannot tell whether a task is running. Re-run with --force to stop anyway.";
-  }
-  if (!Number.isInteger(activity.running) || activity.running <= 0) return null;
+  if (!activity || !Number.isInteger(activity.running)) return UNKNOWN_TASK_STATE;
+  if (activity.running < 0) return UNKNOWN_TASK_STATE;
+  if (activity.running === 0) return null;
   const label = activity.running === 1 ? "task is" : "tasks are";
   return `${activity.running} ${label} still running. Wait for them to finish, or re-run with --force to interrupt.`;
 }
@@ -294,6 +337,7 @@ function stopRefusal(activity) {
 module.exports = {
   CONTROL_TOKEN_HEADER,
   buildUrl,
+  connectableHost,
   createControlToken,
   describeActivity,
   fetchActivity,
