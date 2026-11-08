@@ -244,17 +244,23 @@ function describeActivity(activity) {
     if (project.waiting > 0) parts.push(`${project.waiting} waiting for input`);
     return `${projectLabel(project.path)}: ${parts.join(", ")}`;
   });
-  if (activity.projects.length === 0) lines.push("No sessions yet.");
 
-  // The running total comes from the runtime snapshot, the rows from the session
-  // list. A task can be running before its session is placeable, and `stop`
-  // refuses for it — say so here instead of leaving the two numbers to disagree
-  // with no explanation.
+  // The totals come from the runtime snapshot, the rows from the session list. A
+  // turn can be busy before its session is placeable, and `stop` refuses for it —
+  // say so here instead of leaving the two numbers to disagree with no reason.
+  // Only the difference is printed, so a quiet instance stays one line.
   const placedRunning = activity.projects.reduce((total, project) => total + (project.running ?? 0), 0);
+  const placedWaiting = activity.projects.reduce((total, project) => total + (project.waiting ?? 0), 0);
+  const unplaced = [];
   const unplacedRunning = (activity.running ?? 0) - placedRunning;
-  if (unplacedRunning > 0) {
-    lines.push(`${unplacedRunning} running session${unplacedRunning === 1 ? "" : "s"} not listed under a project yet`);
+  const unplacedWaiting = (activity.waiting ?? 0) - placedWaiting;
+  if (unplacedRunning > 0) unplaced.push(`${unplacedRunning} running`);
+  if (unplacedWaiting > 0) unplaced.push(`${unplacedWaiting} waiting for input`);
+  if (unplaced.length > 0) {
+    lines.push(`${unplaced.join(", ")} not listed under a project yet`);
   }
+
+  if (lines.length === 0) return ["No sessions yet."];
   return lines;
 }
 

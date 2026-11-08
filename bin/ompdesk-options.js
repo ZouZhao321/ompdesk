@@ -7,6 +7,9 @@ const { isIP } = require("net");
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
+const DEFAULT_PORT = "30141";
+const COMMANDS = ["start", "status", "stop", "foreground"];
+
 function isEnabled(value) {
   return typeof value === "string" && TRUE_VALUES.has(value.trim().toLowerCase());
 }
@@ -38,23 +41,49 @@ function loopbackBindingError(hostname, env = process.env) {
   ].join("\n");
 }
 
-const COMMANDS = ["start", "status", "stop", "foreground"];
-
 /**
  * First positional argument selects the command; none means `start`.
  *
- * Exactly one positional is accepted. A second one is a mistake worth reporting
- * rather than ignoring: `ompdesk stop status` reads as one intention and means
- * another.
+ * The first positional is checked before the count: `ompdesk bogus status`
+ * should say the command is unknown, not complain about the extra word.
  */
 function readCommand(positionals) {
   const [first, ...rest] = positionals;
+  if (first && !COMMANDS.includes(first)) {
+    return { error: `Unknown command: ${first}. Use ${COMMANDS.join(", ")}.` };
+  }
   if (rest.length > 0) {
     return { error: `Unexpected argument "${rest.join(" ")}"; one command at a time.` };
   }
-  if (!first) return { command: "start" };
-  if (COMMANDS.includes(first)) return { command: first };
-  return { error: `Unknown command: ${first}. Use ${COMMANDS.join(", ")}.` };
+  return { command: first ?? "start" };
+}
+
+/**
+ * Explain a `parseArgs` rejection without echoing its whole paragraph.
+ *
+ * The error codes are the stable part; the message regexes only catch older
+ * runtimes that do not set them.
+ */
+function describeParseError(error) {
+  const code = error && typeof error === "object" ? error.code : undefined;
+  const message = error instanceof Error ? error.message : String(error);
+
+  // The code is the stable part; the message regexes cover runtimes that do not
+  // set it, and the flag name is read from whichever of the two is present.
+  const named = /'([^']+)'/.exec(message);
+  if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION") {
+    return `Unknown option: ${named ? named[1] : "?"}. Run \`ompdesk --help\` for the supported options.`;
+  }
+  if (code === "ERR_PARSE_ARGS_INVALID_OPTION_VALUE") {
+    return `Option ${named ? named[1] : "?"} needs a value.`;
+  }
+  if (/Unknown option '[^']+'/.test(message)) {
+    return `Unknown option: ${named ? named[1] : "?"}. Run \`ompdesk --help\` for the supported options.`;
+  }
+  if (/Option '[^']+' argument/.test(message)) {
+    return `Option ${named ? named[1] : "?"} needs a value.`;
+  }
+  return message;
 }
 
 /**
@@ -87,26 +116,12 @@ function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
       allowPositionals: true,
     });
   } catch (error) {
-    // `parseArgs` explains the fix at length; keep only the flag it named.
-    const message = error instanceof Error ? error.message : String(error);
-    const unknown = /Unknown option '([^']+)'/.exec(message);
-    const invalid = /Option '([^']+)' argument/.exec(message);
-    return withDefaults({
-      command: "start",
-      env,
-      error: unknown
-        ? `Unknown option: ${unknown[1]}. Run \`ompdesk --help\` for the supported options.`
-        : invalid
-          ? `Option ${invalid[1]} needs a value.`
-          : message,
-    });
+    return withDefaults({ error: describeParseError(error), env });
   }
 
   const { values: cliArgs, positionals } = parsed;
   const command = readCommand(positionals);
-  if (command.error) {
-    return withDefaults({ command: "start", env, error: command.error });
-  }
+  if (command.error) return withDefaults({ error: command.error, env });
 
   return withDefaults({
     command: command.command,
@@ -116,7 +131,7 @@ function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
   });
 }
 
-function withDefaults({ command, env, cliArgs = {}, help = false, error }) {
+function withDefaults({ command = "start", env, cliArgs = {}, help = false, error }) {
   const options = {
     command,
     force: Boolean(cliArgs.force),
@@ -124,7 +139,7 @@ function withDefaults({ command, env, cliArgs = {}, help = false, error }) {
     // otherwise cover every recorded instance. An inherited `PORT` sets the
     // default port for `start`, not which instances the other commands look at.
     portExplicit: cliArgs.port !== undefined,
-    port: cliArgs.port ?? env.PORT ?? "30141",
+    port: cliArgs.port ?? env.PORT ?? DEFAULT_PORT,
     hostname: cliArgs.hostname ?? env.OMPDESK_HOSTNAME ?? "127.0.0.1",
     openBrowser: !cliArgs["no-open"] && !isEnabled(env.OMPDESK_NO_OPEN),
     authenticated: Boolean(cliArgs.authenticated) || isEnabled(env.OMPDESK_AUTHENTICATED),
@@ -134,4 +149,26 @@ function withDefaults({ command, env, cliArgs = {}, help = false, error }) {
   return error ? { ...options, error } : options;
 }
 
-module.exports = { parseLaunchOptions, loopbackBindingError };
+/** Help text, built from the same constants the parser uses. */
+function usageText() {
+  return [
+    "Usage: ompdesk [command] [options]",
+    "",
+    "Commands:",
+    "  start       Start in the background and return to the prompt (default).",
+    "  status      Report each recorded instance: running or not, address, pid, log, per-project sessions.",
+    "  stop        Stop the recorded instances. Refuses while a session is mid-turn.",
+    "  foreground  Run attached to this terminal, for containers and service managers.",
+    "",
+    "Options:",
+    `  -p, --port <port>       Listen port (default ${DEFAULT_PORT}); selects one instance for status/stop.`,
+    "  -H, --hostname <host>   Listen address; non-loopback values are refused unless allowed.",
+    "  -f, --force             With stop: interrupt running tasks instead of refusing.",
+    "      --no-open           Do not open the browser.",
+    "      --authenticated     Turn the password lock on, now and for later runs.",
+    "      --reset-password    Replace the stored password without knowing the old one.",
+    "  -h, --help              Show this message.",
+  ].join("\n");
+}
+
+module.exports = { COMMANDS, DEFAULT_PORT, parseLaunchOptions, loopbackBindingError, usageText };

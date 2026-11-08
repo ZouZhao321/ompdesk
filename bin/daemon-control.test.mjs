@@ -164,7 +164,17 @@ test("运行总数与项目行不一致时单独说明，不停留在无法定�
   });
   assert.deepEqual(lines, [
     "a: 1 session, 1 running",
-    "1 running session not listed under a project yet",
+    "1 running not listed under a project yet",
+  ]);
+});
+
+test("没有可归位会话时不打印自相矛盾的空行", () => {
+  assert.deepEqual(describeActivity({ running: 1, waiting: 0, projects: [] }), [
+    "1 running not listed under a project yet",
+  ]);
+  assert.deepEqual(describeActivity({ running: 0, waiting: 0, projects: [] }), ["No sessions yet."]);
+  assert.deepEqual(describeActivity({ running: 1, waiting: 2, projects: [] }), [
+    "1 running, 2 waiting for input not listed under a project yet",
   ]);
 });
 
