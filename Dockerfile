@@ -82,4 +82,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 # variables as a local `ompdesk` — including `--authenticated`. `foreground`
 # keeps the server in the entrypoint process instead of detaching: a container
 # whose PID 1 exits would be torn down with it.
-ENTRYPOINT ["bun", "/app/bin/ompdesk.js", "foreground"]
+#
+# It lives in CMD, not ENTRYPOINT, so `docker run <image> status` still reaches
+# the launcher as a command instead of becoming `foreground status`.
+ENTRYPOINT ["bun", "/app/bin/ompdesk.js"]
+CMD ["foreground"]
