@@ -413,11 +413,13 @@ export function buildSessionContext(
 
   const collapseCompactedHistory = options.collapseCompactedHistory === true;
   const ompEntries = entries as unknown as OmpSessionEntry[];
+  // 这次调用的 messages 全部丢弃，只取元数据；展开与否不影响 thinkingLevel 与
+  // models，因此固定折叠，避免默认路径上把压缩前的整段历史渲染一遍再扔掉。
   const ompCtx = ompBuildSessionContext(
     ompEntries,
     leafId,
     byId as unknown as Map<string, OmpSessionEntry>,
-    { transcript: true, collapseCompactedHistory },
+    { transcript: true, collapseCompactedHistory: true },
   );
 
   // Convert the branch entries and their IDs together so fork/navigation
