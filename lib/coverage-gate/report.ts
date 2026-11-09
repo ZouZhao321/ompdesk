@@ -111,13 +111,8 @@ function renderExceptionEntry(entry: ExceptionEntry, suffix = ""): string[] {
 
 function renderExceptions(resolution: ExceptionResolution): string[] {
   const lines = [`豁免清单（${EXCEPTIONS_FILE}，复核日期 ${resolution.today}）`];
-  if (!resolution.present) {
-    lines.push("  清单文件不存在，按没有登记处理。");
-    return lines;
-  }
-
   if (resolution.active.length === 0 && resolution.expired.length === 0 && resolution.problems.length === 0) {
-    lines.push("  没有登记豁免。");
+    lines.push(resolution.present ? "  没有登记豁免。" : "  清单文件不存在，按没有登记处理。");
     return lines;
   }
 
