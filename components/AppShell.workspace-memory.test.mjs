@@ -39,6 +39,10 @@ test("workspace restoration stays within the cross-project flow", () => {
   // before the restore call.
   assert.match(
     callbackBody("handleCwdChange", "handleSelectSession"),
-    /if \(currentProject !== null && normalizeProjectKey\(currentProject\) === normalizeProjectKey\(newProject\)\) \{\s*return;\s*\}[\s\S]*?restoreWorkspaceContext\(newProject\);/,
+    /if \(currentProject !== null && normalizeProjectKey\(currentProject\) === normalizeProjectKey\(newProject\)\) \{[\s\S]*?return;[\s\S]*?\}[\s\S]*?restoreWorkspaceContext\(newProject\);/,
+  );
+  assert.match(
+    callbackBody("handleCwdChange", "handleSelectSession"),
+    /if \(currentProject !== null && normalizeProjectKey\(currentProject\) === normalizeProjectKey\(newProject\)\) \{[\s\S]*?setNewSessionCwd\(\(prev\) => \(prev === null \? prev : cwd\)\);/,
   );
 });

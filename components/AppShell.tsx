@@ -705,6 +705,9 @@ export function AppShell() {
       // within the same project (e.g. switching worktree, or clicking a session
       // that lives in another worktree) must not close the open session.
       if (currentProject !== null && normalizeProjectKey(currentProject) === normalizeProjectKey(newProject)) {
+        // Switching worktree inside one project keeps the open session, but an
+        // empty chat must be created in the checkout just switched to.
+        setNewSessionCwd((prev) => (prev === null ? prev : cwd));
         return;
       }
       // Close any session that belongs to a different project — it no longer
