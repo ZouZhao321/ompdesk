@@ -76,7 +76,9 @@ export interface ExportAnalysis {
   scannedFiles: number;
   /** 基线文件存在但无法解析时的说明；有值时规则把它报成失败。 */
   baselineError?: string;
-  /** 读取失败的文件与原因；有值时引用索引不完整，规则把它报成失败。 */
+  /** 整次分析失败的原因；有值时规则按流水线问题报一条，不再逐符号判定。 */
+  analysisError?: string;
+  /** 单个文件读取失败的文件与原因；有值时判定数据不全，规则把它报成失败。 */
   readFailures: readonly string[];
 }
 
@@ -302,7 +304,8 @@ function lazySpecifier(call: ts.CallExpression): string | null {
   const isRequire = ts.isIdentifier(call.expression) && call.expression.text === "require";
   if (!isDynamicImport && !isRequire) return null;
   const [argument] = call.arguments;
-  return argument !== undefined && ts.isStringLiteral(argument) ? argument.text : null;
+  // 无插值模板字面量与普通字符串等价，模块解析结果相同。
+  return argument !== undefined && ts.isStringLiteralLike(argument) ? argument.text : null;
 }
 
 /**
@@ -547,7 +550,11 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
   // 改动清单里的未跟踪新文件不在 `git ls-files` 里，但要一并扫描：本地运行时规则
   // 与检查里看到同一批文件。
   const paths = new Set(options.managedFiles);
-  for (const change of options.changedFiles) paths.add(change.path);
+  const changedPaths = new Set<string>();
+  for (const change of options.changedFiles) {
+    paths.add(change.path);
+    changedPaths.add(change.path);
+  }
 
   const scans = new Map<string, ModuleScan>();
   const readFailures: string[] = [];
@@ -557,7 +564,11 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
       try {
         text = await options.readers.readWorkspace(filePath);
       } catch (error) {
-        if (!isMissingFile(error)) readFailures.push(`${filePath}：${errorMessage(error)}`);
+        // 工作区里删掉的文件按不存在处理；改动清单里的文件本该在，读不到就是数据不全，
+        // 不能静默跳过，否则它的新增导出会从判定里消失。
+        if (!isMissingFile(error) || changedPaths.has(filePath)) {
+          readFailures.push(`${filePath}：${errorMessage(error)}`);
+        }
         return;
       }
       scans.set(filePath, scanModule(filePath, text));
@@ -586,7 +597,7 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
     try {
       baseText = change.status === "added" ? null : await options.readers.readAtMergeBase(basePath);
     } catch (error) {
-      readFailures.push(`${basePath}：${errorMessage(error)}`);
+      readFailures.push(`分叉点 ${basePath}：${errorMessage(error)}`);
       continue;
     }
     const baseKeys = new Set(
@@ -615,7 +626,14 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
   };
 }
 
-/** 导出分析整体没跑起来时的空结果：规则据 `readFailures` 报成流水线问题。 */
+/** 导出分析整体没跑起来时的空结果：规则据 `analysisError` 报成流水线问题。 */
 export function exportUsageFailure(detail: string): ExportAnalysis {
-  return { added: [], references: new Map(), baseline: new Set(), scannedFiles: 0, readFailures: [detail] };
+  return {
+    added: [],
+    references: new Map(),
+    baseline: new Set(),
+    scannedFiles: 0,
+    readFailures: [],
+    analysisError: detail,
+  };
 }

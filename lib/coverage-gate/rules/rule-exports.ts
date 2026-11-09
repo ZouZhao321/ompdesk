@@ -149,13 +149,26 @@ export const ruleExports: CoverageRule = {
       });
     }
 
+    if (analysis.analysisError !== undefined) {
+      findings.push({
+        rule: RULE_EXPORTS,
+        file: "（导出分析）",
+        numbers: "导出引用分析未完成，没有判定数据",
+        reason: `规则三无法判定，属流水线问题：${analysis.analysisError}`,
+        fix: "按上面的原因排查导出分析（基线读取、目录权限或 CLI 环境），修好后重跑覆盖率门禁",
+      });
+      return findings;
+    }
+
     if (analysis.readFailures.length > 0) {
       findings.push({
         rule: RULE_EXPORTS,
         file: "（受管源文件）",
-        numbers: `读取失败 ${analysis.readFailures.length} 个文件，引用索引不完整`,
-        reason: `引用索引缺这些文件，规则三无法判定，属流水线问题：${analysis.readFailures.join("；")}`,
-        fix: "确认这些文件存在且可读；工作区里已删除的文件先提交删除，再重跑覆盖率门禁",
+        numbers: `读取失败 ${analysis.readFailures.length} 处，判定数据不全`,
+        reason: `规则三无法判定，属流水线问题：${analysis.readFailures.join("；")}`,
+        fix:
+          "确认这些文件存在且可读；工作区里已删除的文件先提交删除；" +
+          "分叉点版本读不到时确认检出带完整历史（fetch-depth: 0）",
       });
       return findings;
     }
