@@ -127,16 +127,26 @@ function isPowerOfTwo(value) {
 
 /** A digest read back from disk is untrusted input: shape and cost are both checked. */
 function isUsableDigest(digest) {
-  return Boolean(digest)
-    && typeof digest === "object"
-    && digest.algorithm === "scrypt"
-    && typeof digest.salt === "string" && digest.salt.length > 0
-    && typeof digest.hash === "string" && digest.hash.length > 0
-    && isPowerOfTwo(digest.cost) && digest.cost <= MAX_SCRYPT_COST
-    && Number.isInteger(digest.blockSize) && digest.blockSize >= 1 && digest.blockSize <= MAX_SCRYPT_BLOCK_SIZE
-    && Number.isInteger(digest.parallelization) && digest.parallelization >= 1
-    && digest.parallelization <= MAX_SCRYPT_PARALLELIZATION
-    && Number.isInteger(digest.keyLength) && digest.keyLength >= 16 && digest.keyLength <= MAX_SCRYPT_KEY_LENGTH;
+  return (
+    Boolean(digest) &&
+    typeof digest === "object" &&
+    digest.algorithm === "scrypt" &&
+    typeof digest.salt === "string" &&
+    digest.salt.length > 0 &&
+    typeof digest.hash === "string" &&
+    digest.hash.length > 0 &&
+    isPowerOfTwo(digest.cost) &&
+    digest.cost <= MAX_SCRYPT_COST &&
+    Number.isInteger(digest.blockSize) &&
+    digest.blockSize >= 1 &&
+    digest.blockSize <= MAX_SCRYPT_BLOCK_SIZE &&
+    Number.isInteger(digest.parallelization) &&
+    digest.parallelization >= 1 &&
+    digest.parallelization <= MAX_SCRYPT_PARALLELIZATION &&
+    Number.isInteger(digest.keyLength) &&
+    digest.keyLength >= 16 &&
+    digest.keyLength <= MAX_SCRYPT_KEY_LENGTH
+  );
 }
 
 /** Derive a storable digest. The plaintext is used here and nowhere else. */
@@ -240,7 +250,9 @@ function currentConfig(file, { replaceUnreadable = false } = {}) {
   const state = readWebAuthState(file);
   if (state.status === "unreadable") {
     if (replaceUnreadable) return { version: WEB_AUTH_VERSION };
-    throw new Error(`The ompdesk credential file at ${file} could not be read. Run \`ompdesk --reset-password\` to replace it.`);
+    throw new Error(
+      `The ompdesk credential file at ${file} could not be read. Run \`ompdesk --reset-password\` to replace it.`,
+    );
   }
   return state.config ?? { version: WEB_AUTH_VERSION };
 }
@@ -390,14 +402,17 @@ function setWebPassword(password, options = {}) {
   if (invalid) throw new Error(invalid);
 
   const config = currentConfig(file, { replaceUnreadable: true });
-  writeWebAuthConfig({
-    ...config,
-    version: WEB_AUTH_VERSION,
-    enabled: true,
-    password: createDigest(password, options.params),
-    updatedAt: timestamp(),
-    recovery: undefined,
-  }, file);
+  writeWebAuthConfig(
+    {
+      ...config,
+      version: WEB_AUTH_VERSION,
+      enabled: true,
+      password: createDigest(password, options.params),
+      updatedAt: timestamp(),
+      recovery: undefined,
+    },
+    file,
+  );
   clearVerificationCache();
   return getWebAuthStatus({ ...options, file });
 }
@@ -419,14 +434,17 @@ function setWebPasswordEnabled(enabled, options = {}) {
 function clearWebPassword(options = {}) {
   const file = options.file ?? resolveWebAuthFile(options.env ?? process.env);
   const config = currentConfig(file);
-  writeWebAuthConfig({
-    ...config,
-    version: WEB_AUTH_VERSION,
-    enabled: false,
-    password: undefined,
-    recovery: undefined,
-    updatedAt: timestamp(),
-  }, file);
+  writeWebAuthConfig(
+    {
+      ...config,
+      version: WEB_AUTH_VERSION,
+      enabled: false,
+      password: undefined,
+      recovery: undefined,
+      updatedAt: timestamp(),
+    },
+    file,
+  );
   clearVerificationCache();
   return getWebAuthStatus({ ...options, file });
 }
@@ -475,16 +493,19 @@ function issueRecoveryCode(options = {}) {
   // byte is reduced modulo 32, which is exact.
   const code = formatRecoveryCode(randomBytes(RECOVERY_GROUPS * RECOVERY_GROUP_LENGTH));
   const expiresAt = now + RECOVERY_CODE_TTL_MS;
-  writeWebAuthConfig({
-    ...config,
-    version: WEB_AUTH_VERSION,
-    recovery: {
-      ...createDigest(normalizeRecoveryCode(code), options.params),
-      issuedAt: now,
-      expiresAt,
-      attempts: 0,
+  writeWebAuthConfig(
+    {
+      ...config,
+      version: WEB_AUTH_VERSION,
+      recovery: {
+        ...createDigest(normalizeRecoveryCode(code), options.params),
+        issuedAt: now,
+        expiresAt,
+        attempts: 0,
+      },
     },
-  }, file);
+    file,
+  );
 
   return { ok: true, code, expiresAt };
 }
@@ -515,10 +536,13 @@ function consumeRecoveryCode(code, password, options = {}) {
 
   if (!verifyDigest(normalizeRecoveryCode(code), pending)) {
     const remaining = RECOVERY_MAX_ATTEMPTS - attempts - 1;
-    writeWebAuthConfig({
-      ...config,
-      recovery: remaining > 0 ? { ...pending, attempts: attempts + 1 } : undefined,
-    }, file);
+    writeWebAuthConfig(
+      {
+        ...config,
+        recovery: remaining > 0 ? { ...pending, attempts: attempts + 1 } : undefined,
+      },
+      file,
+    );
     return { ok: false, reason: "invalid-code", remainingAttempts: Math.max(remaining, 0) };
   }
 

@@ -1,11 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  generateBaseCoverage,
-  readSourcePair,
-  type BaseCoverageLoader,
-  type SourceReader,
-} from "./base-coverage";
+import { generateBaseCoverage, readSourcePair, type BaseCoverageLoader, type SourceReader } from "./base-coverage";
 import {
   isManagedSourceFile,
   listChangedFiles,
@@ -64,11 +59,7 @@ function errorMessage(error: unknown): string {
 }
 
 function renderUnavailable(detail: string): string {
-  return [
-    "覆盖率门禁未能运行",
-    `  ${detail}`,
-    "  没有判定结果，退出码为 0。",
-  ].join("\n");
+  return ["覆盖率门禁未能运行", `  ${detail}`, "  没有判定结果，退出码为 0。"].join("\n");
 }
 
 /**
@@ -94,8 +85,7 @@ export async function runCoverageGate(
     return {
       exitCode: 0,
       report: renderUnavailable(
-        `覆盖率产物缺失：${options.lcovPath}（${errorMessage(error)}）。`
-          + "先运行 bun run coverage:gate 生成 lcov。",
+        `覆盖率产物缺失：${options.lcovPath}（${errorMessage(error)}）。` + "先运行 bun run coverage:gate 生成 lcov。",
       ),
     };
   }
@@ -111,16 +101,12 @@ export async function runCoverageGate(
   try {
     root = await git.repositoryRoot(options.cwd);
     mergeBase = await git.mergeBase(options.cwd, baseRef);
-    [changedFiles, managedFiles] = await Promise.all([
-      git.changedFiles(root, mergeBase),
-      git.managedSourceFiles(root),
-    ]);
+    [changedFiles, managedFiles] = await Promise.all([git.changedFiles(root, mergeBase), git.managedSourceFiles(root)]);
   } catch (error) {
     return {
       exitCode: 0,
       report: renderUnavailable(
-        `git 数据读取失败：${errorMessage(error)}。`
-          + "分叉点需要完整检出，actions/checkout 需设 fetch-depth: 0。",
+        `git 数据读取失败：${errorMessage(error)}。` + "分叉点需要完整检出，actions/checkout 需设 fetch-depth: 0。",
       ),
     };
   }

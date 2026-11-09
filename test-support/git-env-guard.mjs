@@ -44,13 +44,7 @@ function scriptKindFor(filename) {
 
 /** 解析源码；`filename` 只用于选择解析模式与报错定位。 */
 function parseSource(source, filename) {
-  return ts.createSourceFile(
-    filename,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKindFor(filename),
-  );
+  return ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, scriptKindFor(filename));
 }
 
 /** 调用点在源码里的行号（从 1 起），用于报错定位。 */
@@ -67,8 +61,13 @@ function declarationScopes(sourceFile) {
   const collect = (node) => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
       let scope = node.parent;
-      while (scope && !ts.isBlock(scope) && !ts.isSourceFile(scope)
-        && !ts.isModuleBlock(scope) && !ts.isCaseBlock(scope)) {
+      while (
+        scope &&
+        !ts.isBlock(scope) &&
+        !ts.isSourceFile(scope) &&
+        !ts.isModuleBlock(scope) &&
+        !ts.isCaseBlock(scope)
+      ) {
         scope = scope.parent;
       }
       if (scope) {
@@ -90,9 +89,7 @@ function resolveObjectLiteral(node, scopes) {
   for (let scope = node.parent; scope; scope = scope.parent) {
     const declaration = scopes.get(scope)?.get(node.text);
     if (declaration) {
-      return ts.isObjectLiteralExpression(declaration.initializer)
-        ? declaration.initializer
-        : null;
+      return ts.isObjectLiteralExpression(declaration.initializer) ? declaration.initializer : null;
     }
   }
   return null;
@@ -103,8 +100,7 @@ function resolveObjectLiteral(node, scopes) {
  */
 function isGitLiteral(node) {
   if (!node) return false;
-  return (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-    && node.text === "git";
+  return (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === "git";
 }
 
 /**
@@ -216,13 +212,13 @@ export function subprocessCallSiteLines(source, filename = "source.ts") {
 export function hasCreateGitEnvProperty(objectLiteral) {
   return objectLiteral.properties.some((property) => {
     if (!ts.isPropertyAssignment(property)) return false;
-    const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
-      ? property.name.text
-      : null;
-    return name === "env"
-      && ts.isCallExpression(property.initializer)
-      && ts.isIdentifier(property.initializer.expression)
-      && property.initializer.expression.text === "createGitEnv";
+    const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : null;
+    return (
+      name === "env" &&
+      ts.isCallExpression(property.initializer) &&
+      ts.isIdentifier(property.initializer.expression) &&
+      property.initializer.expression.text === "createGitEnv"
+    );
   });
 }
 

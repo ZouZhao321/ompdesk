@@ -1,8 +1,4 @@
-import {
-  SessionManager,
-  buildSessionContext as ompBuildSessionContext,
-  getAgentDir,
-} from "@oh-my-pi/pi-coding-agent";
+import { SessionManager, buildSessionContext as ompBuildSessionContext, getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { Tokenizer } from "@oh-my-pi/pi-agent-core";
 import type { AgentMessage as OmpAgentMessage } from "@oh-my-pi/pi-agent-core";
 import { calculatePromptTokens, hasContextTokenUsage } from "@oh-my-pi/pi-agent-core/compaction";
@@ -14,6 +10,7 @@ import type { SessionEntry as OmpSessionEntry, SessionInfo as OmpSessionInfo } f
 import { getOmpRuntime } from "./omp-runtime";
 import { normalizeToolCalls } from "./normalize";
 import { sessionPathKey } from "./session-path";
+import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "./slash-display";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
@@ -21,9 +18,11 @@ export { getAgentDir };
 export async function attachSessionProjectInfo(sessions: SessionInfo[]): Promise<SessionInfo[]> {
   const uniqueCwds = [...new Set(sessions.map((s) => s.cwd).filter(Boolean))];
   const projectByCwd = new Map<string, ProjectInfo>();
-  await Promise.all(uniqueCwds.map(async (cwd) => {
-    projectByCwd.set(cwd, await resolveProject(cwd));
-  }));
+  await Promise.all(
+    uniqueCwds.map(async (cwd) => {
+      projectByCwd.set(cwd, await resolveProject(cwd));
+    }),
+  );
 
   return sessions.map((session) => {
     const project = session.cwd ? projectByCwd.get(session.cwd) : undefined;
@@ -46,6 +45,75 @@ export function mergeSessionLists(
   return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
 }
 
+/** 首条消息扫描的上限：技能正文可能很长，按块读满这个额度为止。 */
+const FIRST_MESSAGE_SCAN_BYTES = 1024 * 1024;
+const FIRST_MESSAGE_SCAN_CHUNK = 64 * 1024;
+
+/**
+ * `/skill:name args` when a session opens with a user-invoked skill command.
+ *
+ * omp 的列表只认 `message` 条目：技能指令落盘为 `custom_message`，要么被读成
+ * 「没有消息」，要么被下一条助手回复顶替，两种都不该拿来当标题。这里按行读到
+ * 第一条用户回合为止，不按固定字节窗口截断（技能正文常常超过窗口）。
+ * 坏文件只丢一个标题：读取或解析失败一律按「没有首条消息」处理。
+ */
+function readLeadingSkillCommand(filePath: string): string | undefined {
+  if (!existsSync(filePath)) return undefined;
+  let handle: number;
+  try {
+    handle = openSync(filePath, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const chunk = Buffer.allocUnsafe(FIRST_MESSAGE_SCAN_CHUNK);
+    let carry = "";
+    let offset = 0;
+    while (offset < FIRST_MESSAGE_SCAN_BYTES) {
+      const bytesRead = readSync(handle, chunk, 0, chunk.length, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+      const lines = (carry + chunk.subarray(0, bytesRead).toString("utf8")).split("\n");
+      carry = lines.pop() ?? "";
+      const verdict = inspectLeadingLines(lines);
+      if (verdict !== undefined) return verdict ?? undefined;
+    }
+    return inspectLeadingLines([carry]) ?? undefined;
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(handle);
+  }
+}
+
+/**
+ * `undefined`：还没遇到用户回合，继续读；`null`：遇到用户或助手消息，停止；
+ * 字符串：命令行标签。
+ */
+function inspectLeadingLines(lines: readonly string[]): string | null | undefined {
+  for (const line of lines) {
+    if (!line.includes('"type"')) continue;
+    let entry: {
+      type?: string;
+      customType?: string;
+      attribution?: string;
+      details?: unknown;
+      message?: { role?: string };
+    };
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      // 半条记录或外部生成的历史文件：跳过这一行，不影响其它会话。
+      continue;
+    }
+    if (entry.type === "custom_message" && isUserSkillPrompt(entry)) {
+      return skillPromptCommandLabel(entry.details as SkillPromptDetailsLike | undefined);
+    }
+    if (entry.type === "message" && entry.message?.role !== "bashExecution") return null;
+  }
+  return undefined;
+}
+
 async function loadAllSessions(): Promise<SessionInfo[]> {
   // Property access (not a bound import) so tests can stub SessionManager.listAll.
   const ompSessions: OmpSessionInfo[] = await SessionManager.listAll();
@@ -55,25 +123,29 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   // stores an absolute path. Both forms must resolve to a parent row.
   const idSet = new Set(ompSessions.map((s) => s.id));
 
-  const sessions = ompSessions.map((s) => {
-    cacheSessionPath(s.id, s.path);
-    return {
-      path: s.path,
-      id: s.id,
-      cwd: s.cwd,
-      name: s.title,
-      created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
-      modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
-      messageCount: s.messageCount,
-      firstMessage: s.firstMessage || "(no messages)",
-      parentSessionId: s.parentSessionPath
-        ? pathToId.get(sessionPathKey(s.parentSessionPath))
-          ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
-        : undefined,
-      transient: false,
-      ...(s.status ? { status: s.status } : {}),
-    };
-  });
+  const sessions = await Promise.all(
+    ompSessions.map(async (s) => {
+      cacheSessionPath(s.id, s.path);
+      const listedFirstMessage = s.firstMessage || "(no messages)";
+      const skillCommand = readLeadingSkillCommand(s.path);
+      return {
+        path: s.path,
+        id: s.id,
+        cwd: s.cwd,
+        name: s.title,
+        created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
+        modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
+        messageCount: s.messageCount,
+        firstMessage: skillCommand ?? listedFirstMessage,
+        parentSessionId: s.parentSessionPath
+          ? (pathToId.get(sessionPathKey(s.parentSessionPath)) ??
+            (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined))
+          : undefined,
+        transient: false,
+        ...(s.status ? { status: s.status } : {}),
+      };
+    }),
+  );
   return attachSessionProjectInfo(sessions);
 }
 
@@ -83,7 +155,10 @@ export async function listAllSessions(options: { force?: boolean } = {}): Promis
 
   // Return cached result if still fresh (avoids re-scanning session files
   // and re-spawning git processes on every page load).
-  if (globalThis.__ompSessionListCache && Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS) {
+  if (
+    globalThis.__ompSessionListCache &&
+    Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS
+  ) {
     return globalThis.__ompSessionListCache.data;
   }
 
@@ -271,18 +346,24 @@ function collectBranchPath(
  *
  * omp's `buildSessionContext` returns rendered messages but not the entry ids
  * behind them, and the browser needs those ids to fork and to navigate between
- * in-session branches. This mirrors omp's own live-chat transcript —
- * `{ transcript: true, collapseCompactedHistory: true }` — so the browser and
- * the TUI show the same thing: history replaced by the latest compaction is
- * elided, the summary renders at the compaction point, and everything kept or
- * newer follows.
+ * in-session branches.
+ *
+ * `collapseCompactedHistory` mirrors omp's live TUI: the history replaced by the
+ * latest compaction is elided and only the kept tail plus everything newer
+ * renders. Left off, every entry on the branch renders in order and the summary
+ * sits where the compaction fired — that is what the browser uses, because the
+ * prompt rail and the conversation map address every turn the session recorded.
+ * Collapsing drops those turns from the DOM, so their dots and map targets would
+ * have nowhere to go.
  */
 function collectDisplayEntries(
   entries: SessionEntry[],
   byId: Map<string, SessionEntry>,
   leafId?: string | null,
+  collapseCompactedHistory = false,
 ): SessionEntry[] {
   const path = collectBranchPath(entries, byId, leafId);
+  if (!collapseCompactedHistory) return path;
 
   // Only the latest compaction on the path is active; earlier ones were
   // themselves superseded.
@@ -315,27 +396,38 @@ function parseDefaultModel(models: Record<string, string>): { provider: string; 
   return { provider: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
 }
 
+export interface BuildSessionContextOptions {
+  deferThinking?: boolean;
+  deferToolResultImages?: boolean;
+  /**
+   * 折叠被最近一次压缩替换掉的历史，只保留保留段与压缩之后的条目。
+   * 默认 false：网页端按会话真实记录呈现每一轮，跳转条与会话地图才有落点。
+   */
+  collapseCompactedHistory?: boolean;
+}
+
 export function buildSessionContext(
   entries: SessionEntry[],
   leafId?: string | null,
-  options: { deferThinking?: boolean; deferToolResultImages?: boolean } = {},
+  options: BuildSessionContextOptions = {},
 ): SessionContext {
   const byId = new Map<string, SessionEntry>();
   for (const e of entries) byId.set(e.id, e);
 
+  const collapseCompactedHistory = options.collapseCompactedHistory === true;
   const ompEntries = entries as unknown as OmpSessionEntry[];
-  const ompCtx = ompBuildSessionContext(
-    ompEntries,
-    leafId,
-    byId as unknown as Map<string, OmpSessionEntry>,
-    { transcript: true, collapseCompactedHistory: true },
-  );
+  // 这次调用的 messages 全部丢弃，只取元数据；展开与否不影响 thinkingLevel 与
+  // models，因此固定折叠，避免默认路径上把压缩前的整段历史渲染一遍再扔掉。
+  const ompCtx = ompBuildSessionContext(ompEntries, leafId, byId as unknown as Map<string, OmpSessionEntry>, {
+    transcript: true,
+    collapseCompactedHistory: true,
+  });
 
   // Convert the branch entries and their IDs together so fork/navigation
   // targets stay aligned with what the transcript renders.
   const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
-  for (const entry of collectDisplayEntries(entries, byId, leafId)) {
+  for (const entry of collectDisplayEntries(entries, byId, leafId, collapseCompactedHistory)) {
     const m = entryToUiMessage(entry, options);
     if (m) {
       messages.push(m);
@@ -415,10 +507,10 @@ export async function getHistoricalContextUsage(
     const assistant = entry.message as unknown as HistoricalAssistantMessage;
     const snapshot = readContextSnapshot(assistant);
     if (
-      assistant.stopReason === "aborted"
-      || assistant.stopReason === "error"
-      || !assistant.usage
-      || (!snapshot && !hasContextTokenUsage(assistant.usage))
+      assistant.stopReason === "aborted" ||
+      assistant.stopReason === "error" ||
+      !assistant.usage ||
+      (!snapshot && !hasContextTokenUsage(assistant.usage))
     ) {
       continue;
     }
@@ -429,9 +521,10 @@ export async function getHistoricalContextUsage(
 
   const snapshot = readContextSnapshot(anchor);
   const snapshotPromptTokens = snapshot?.promptTokens;
-  const promptTokens = typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
-    ? snapshotPromptTokens
-    : calculatePromptTokens(anchor.usage);
+  const promptTokens =
+    typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
+      ? snapshotPromptTokens
+      : calculatePromptTokens(anchor.usage);
 
   if (!Number.isFinite(promptTokens) || promptTokens < 0) return undefined;
 
@@ -439,13 +532,7 @@ export async function getHistoricalContextUsage(
   let anchorIndex = -1;
   for (let index = activeMessages.length - 1; index >= 0; index -= 1) {
     const message = activeMessages[index];
-    if (
-      message === anchor
-      || (
-        message.role === "assistant"
-        && message.timestamp === anchor.timestamp
-      )
-    ) {
+    if (message === anchor || (message.role === "assistant" && message.timestamp === anchor.timestamp)) {
       anchorIndex = index;
       break;
     }
@@ -490,7 +577,7 @@ function base64ImageInfo(block: unknown): { bytes: number; mime?: string } | nul
   if (!data) return null;
 
   const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-  return { bytes: Math.max(0, Math.floor(data.length * 3 / 4) - padding), mime };
+  return { bytes: Math.max(0, Math.floor((data.length * 3) / 4) - padding), mime };
 }
 
 function omitToolResultBase64Images(message: AgentMessage): AgentMessage {
@@ -536,11 +623,11 @@ function entryToUiMessage(
       if (!options.deferThinking || message.role !== "assistant") return message;
       return {
         ...message,
-        content: message.content.map((block) => (
+        content: message.content.map((block) =>
           block.type === "thinking" && block.thinking.trim() !== ""
             ? { ...block, thinking: "", deferred: true }
-            : block
-        )),
+            : block,
+        ),
       };
     }
     case "compaction":
@@ -568,6 +655,7 @@ function entryToUiMessage(
         customType: entry.customType,
         content: entry.content,
         display: entry.display,
+        attribution: entry.attribution,
         details: entry.details,
         timestamp: parseEntryTimestamp(entry.timestamp),
       };

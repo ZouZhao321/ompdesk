@@ -71,17 +71,12 @@ export function readDefaultModelRole(settings: Settings): { provider: string; mo
  * Every role omp knows about, with its configured selector and what that
  * selector resolves to against the currently available models.
  */
-export function listModelRoles(
-  settings: Settings,
-  availableModels: Model<Api>[],
-): ModelRoleAssignment[] {
+export function listModelRoles(settings: Settings, availableModels: Model<Api>[]): ModelRoleAssignment[] {
   const builtinIds = new Set<string>(MODEL_ROLE_IDS);
   return getKnownRoleIds(settings).map((role) => {
     const info = getRoleInfo(role, settings);
     const selector = settings.getModelRole(role);
-    const resolution = selector
-      ? resolveModelRoleValue(selector, availableModels, { settings })
-      : undefined;
+    const resolution = selector ? resolveModelRoleValue(selector, availableModels, { settings }) : undefined;
 
     return {
       role,
@@ -122,10 +117,7 @@ export function writeModelRole(
 }
 
 /** Format a model plus optional thinking level back into a role selector. */
-export function formatRoleSelector(
-  model: { provider: string; modelId: string },
-  thinkingLevel?: string,
-): string {
+export function formatRoleSelector(model: { provider: string; modelId: string }, thinkingLevel?: string): string {
   const base = `${model.provider}/${model.modelId}`;
   return thinkingLevel && thinkingLevel !== "off" ? `${base}:${thinkingLevel}` : base;
 }

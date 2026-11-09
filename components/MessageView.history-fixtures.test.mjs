@@ -8,10 +8,13 @@ import { loadEntriesFromFile, migrateToCurrentVersion } from "@oh-my-pi/pi-codin
 import { renderMessage, visibleText } from "../lib/testing/render-harness.mjs";
 
 const jiti = createJiti(import.meta.url);
-const { buildSessionContext, invalidateSessionListCache, listAllSessions } = await jiti.import("../lib/session-reader.ts");
+const { buildSessionContext, invalidateSessionListCache, listAllSessions } =
+  await jiti.import("../lib/session-reader.ts");
 const { getDisplayableAssistantBlocks } = await jiti.import("../lib/message-display.ts");
 const { seedSessions } = await jiti.import("../test-support/session-fixtures.ts");
-const { SandboxDirectoryCreateError, createAgentDirSandbox, switchAgentDir } = await jiti.import("../test-support/agent-dir-sandbox.ts");
+const { SandboxDirectoryCreateError, createAgentDirSandbox, switchAgentDir } = await jiti.import(
+  "../test-support/agent-dir-sandbox.ts",
+);
 
 /** 按 mtime 从新到旧扫描时，最多检查多少个候选会话就放弃。 */
 const CANDIDATE_LIMIT = 10;
@@ -102,13 +105,9 @@ async function selectLocalFixture() {
     } catch (error) {
       if (isMissingPathError(error)) {
         // 列出与读取之间文件没了：不是回归，换下一个候选，最终没有可用的就走样本。
-        console.log(
-          `[history-fixtures] 会话文件在列出之后消失，跳过 ${session.path}: ${error.message}`,
-        );
+        console.log(`[history-fixtures] 会话文件在列出之后消失，跳过 ${session.path}: ${error.message}`);
       } else if (isUnreadableStoreError(error)) {
-        console.log(
-          `[history-fixtures] 跳过无法读取的会话 ${session.path}: ${error.message}`,
-        );
+        console.log(`[history-fixtures] 跳过无法读取的会话 ${session.path}: ${error.message}`);
       } else {
         throw error;
       }
@@ -200,12 +199,15 @@ function contentFragments(message) {
         if (typeof name !== "string") continue;
         const normalized = name.toLowerCase();
         const input = block.input ?? block.arguments;
-        if (normalized === "bash" || normalized.startsWith("bash ")
-          || normalized.endsWith(".bash") || normalized.endsWith("_bash")) {
+        if (
+          normalized === "bash" ||
+          normalized.startsWith("bash ") ||
+          normalized.endsWith(".bash") ||
+          normalized.endsWith("_bash")
+        ) {
           // bash 走 ConsoleOutputPreview，只渲染命令与输出，不渲染工具名。
           addText(input?.command);
-        } else if (normalized === "todo" || normalized.endsWith(".todo")
-          || normalized.endsWith("_todo")) {
+        } else if (normalized === "todo" || normalized.endsWith(".todo") || normalized.endsWith("_todo")) {
           // 无结果时走通用头部（显示工具名）；有 phases 时标题为 Todo。
           addText(name);
           addText("Todo");
@@ -225,44 +227,48 @@ const localFixture = await selectLocalFixture();
 // Bun 的 reporter 只打印 skip 计数，不显示 skip 选项里的原因；这里把它写进输出。
 if (localFixture.reason) console.log(`[history-fixtures] ${localFixture.reason}`);
 
-test("历史会话的消息（至多 20 条）都能渲染出消息自身内容", { skip: localFixture.environmentError ?? false }, async (t) => {
-  const fixture = localFixture.fixture ?? await seedFixture(t);
-  if (!fixture) {
-    // 沙箱目录建不出来只有跑到这里才知道，没法挪到注册期；Bun 的 node:test 兼容层里
-    // `t.skip()` 会抛 NotImplementedError，所以打印原因后直接返回，不写成跳过。
-    console.log("[history-fixtures] 临时目录里无法铺设会话样本，跳过历史会话夹具");
-    return;
-  }
-  const { session, messages } = fixture;
-
-  assert.ok(messages.length > 0, `${session.path} 没有可渲染的消息`);
-
-  for (const [index, message] of messages.entries()) {
-    const label = `消息 #${index}（role=${message.role}${message.customType ? `, customType=${message.customType}` : ""}）`;
-
-    let html;
-    assert.doesNotThrow(() => {
-      html = renderMessage(message);
-    }, `${label} 渲染时抛错，来源 ${session.path}`);
-
-    if (rendersNothingStandalone(message)) {
-      assert.equal(html, "", `${label} 按设计不独立渲染，却产出了标记`);
-      continue;
+test(
+  "历史会话的消息（至多 20 条）都能渲染出消息自身内容",
+  { skip: localFixture.environmentError ?? false },
+  async (t) => {
+    const fixture = localFixture.fixture ?? (await seedFixture(t));
+    if (!fixture) {
+      // 沙箱目录建不出来只有跑到这里才知道，没法挪到注册期；Bun 的 node:test 兼容层里
+      // `t.skip()` 会抛 NotImplementedError，所以打印原因后直接返回，不写成跳过。
+      console.log("[history-fixtures] 临时目录里无法铺设会话样本，跳过历史会话夹具");
+      return;
     }
+    const { session, messages } = fixture;
 
-    const text = visibleText(html);
-    const fragments = contentFragments(message);
-    if (fragments.length === 0) {
-      assert.ok(text.trim().length > 0, `${label} 的可见文本为空，来源 ${session.path}`);
-      continue;
+    assert.ok(messages.length > 0, `${session.path} 没有可渲染的消息`);
+
+    for (const [index, message] of messages.entries()) {
+      const label = `消息 #${index}（role=${message.role}${message.customType ? `, customType=${message.customType}` : ""}）`;
+
+      let html;
+      assert.doesNotThrow(() => {
+        html = renderMessage(message);
+      }, `${label} 渲染时抛错，来源 ${session.path}`);
+
+      if (rendersNothingStandalone(message)) {
+        assert.equal(html, "", `${label} 按设计不独立渲染，却产出了标记`);
+        continue;
+      }
+
+      const text = visibleText(html);
+      const fragments = contentFragments(message);
+      if (fragments.length === 0) {
+        assert.ok(text.trim().length > 0, `${label} 的可见文本为空，来源 ${session.path}`);
+        continue;
+      }
+      const rendered = fragments.some((fragment) =>
+        fragment === IMAGE_FRAGMENT ? /<img\b/.test(html) : text.includes(fragment),
+      );
+      assert.ok(
+        rendered,
+        `${label} 的可见文本没有包含消息自身内容` +
+          `（片段：${fragments.slice(0, 5).join("、")}），来源 ${session.path}`,
+      );
     }
-    const rendered = fragments.some((fragment) => (
-      fragment === IMAGE_FRAGMENT ? /<img\b/.test(html) : text.includes(fragment)
-    ));
-    assert.ok(
-      rendered,
-      `${label} 的可见文本没有包含消息自身内容`
-        + `（片段：${fragments.slice(0, 5).join("、")}），来源 ${session.path}`,
-    );
-  }
-});
+  },
+);

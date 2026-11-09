@@ -13,29 +13,22 @@ export const modelProviders: Record<string, string> = {
   "settings.field.hideThinkingBlock.label": "隐藏思考块",
   "settings.field.hideThinkingBlock.description": "在助手回复中隐藏思考块",
   "settings.field.expandThinkingBlocks.label": "展开思考块",
-  "settings.field.expandThinkingBlocks.description":
-    "回合结束时保持已完成的思考块展开，而不是折叠起来",
+  "settings.field.expandThinkingBlocks.description": "回合结束时保持已完成的思考块展开，而不是折叠起来",
   "settings.field.proseOnlyThinking.label": "思考仅保留正文",
-  "settings.field.proseOnlyThinking.description":
-    "从思考摘要中省略代码块，并用省略号代替",
+  "settings.field.proseOnlyThinking.description": "从思考摘要中省略代码块，并用省略号代替",
   "settings.field.omitThinking.label": "省略思考摘要",
-  "settings.field.omitThinking.description":
-    "指示上游 Provider 在响应中完全省略思考摘要（若支持）",
+  "settings.field.omitThinking.description": "指示上游 Provider 在响应中完全省略思考摘要（若支持）",
   "settings.field.externalThinking.label": "外部思考",
-  "settings.field.externalThinking.description":
-    "私有草稿区，不向用户显示。会禁用受支持的 GPT、Claude 和 Gemini 推理",
+  "settings.field.externalThinking.description": "私有草稿区，不向用户显示。会禁用受支持的 GPT、Claude 和 Gemini 推理",
   "settings.field.model.loopGuard.enabled.label": "循环防护",
-  "settings.field.model.loopGuard.enabled.description":
-    "为模型推理和正文启用自动流循环检测",
+  "settings.field.model.loopGuard.enabled.description": "为模型推理和正文启用自动流循环检测",
   "settings.field.model.loopGuard.checkAssistantContent.label": "循环防护扫描正文",
-  "settings.field.model.loopGuard.checkAssistantContent.description":
-    "除思考日志外，也对助手的正文消息应用循环防护",
+  "settings.field.model.loopGuard.checkAssistantContent.description": "除思考日志外，也对助手的正文消息应用循环防护",
   "settings.field.model.loopGuard.toolCallReminder.label": "循环防护工具调用提醒",
   "settings.field.model.loopGuard.toolCallReminder.description":
     "当 Gemini 推理流连续输出多个规划标题却未调用工具时，中断它并注入要求发起工具调用的提醒（需启用循环防护）",
   "settings.field.model.toolCallLoopGuard.enabled.label": "工具调用循环防护",
-  "settings.field.model.toolCallLoopGuard.enabled.description":
-    "检测跨回合连续重复的工具调用，并注入纠正性引导",
+  "settings.field.model.toolCallLoopGuard.enabled.description": "检测跨回合连续重复的工具调用，并注入纠正性引导",
   "settings.field.providers.autoThinkingMaxEffort.label": "Auto 思考上限",
   "settings.field.providers.autoThinkingMaxEffort.description":
     "`auto` 分类器可解析的最高力度。`xhigh` 让分类器始终低于最高档，因此只有显式的 `ultrathink` 才会达到 `max`；`max` 则允许分类器判定为例外的回合在支持最高档的模型上使用最高档。",
@@ -82,8 +75,7 @@ export const modelProviders: Record<string, string> = {
   "settings.field.includeWorkspaceTree.description":
     "在系统提示词中渲染工作区目录树。警告：文件被修改时，这可能跨会话破坏提示词缓存。",
   "settings.field.skillful.label": "在提示词中列出技能",
-  "settings.field.skillful.description":
-    "在系统提示词中列出可用技能；禁用可节省上下文，也可按会话通过 /skillful 切换",
+  "settings.field.skillful.description": "在系统提示词中列出可用技能；禁用可节省上下文，也可按会话通过 /skillful 切换",
   "settings.field.personality.label": "个性",
   "settings.field.personality.description": "渲染到系统提示词个性块中的沟通风格",
 
@@ -115,8 +107,7 @@ export const modelProviders: Record<string, string> = {
     "当 Claude Fable 5 / Mythos 5 请求被 Anthropic 的安全分类器拦截时，在服务端改用 Claude Opus 5 重试（Anthropic `server-side-fallback-2026-06-01` beta）。需主动启用——保持关闭会为所有请求保留回退之前的行为。",
 
   "settings.field.advisor.enabled.label": "启用顾问",
-  "settings.field.advisor.enabled.description":
-    "配对第二个模型（分配给 'advisor' 角色），被动审查每个回合并注入提示。",
+  "settings.field.advisor.enabled.description": "配对第二个模型（分配给 'advisor' 角色），被动审查每个回合并注入提示。",
   "settings.field.advisor.syncBacklog.label": "顾问积压同步",
   "settings.field.advisor.syncBacklog.description":
     "暂停主 Agent，直到顾问积压低于阈值。数值表示最多等待 30 秒；strict 会等待所有已排期的审查，没有实际时间上限。Off 关闭追赶延迟。中止、失败和释放都会解除等待。",
@@ -147,8 +138,7 @@ export const modelProviders: Record<string, string> = {
   "settings.field.images.urls.enabled.description":
     "通过已配置的后端链发布外发图片，并向支持 URL 拉取的 Provider 发送短 URL，而不是内联 base64。所有后端或某个 Provider 拉取失败时自动回退为内联",
   "settings.field.images.urls.backends.label": "图片 URL 后端",
-  "settings.field.images.urls.backends.description":
-    "为 Provider 访问发布图片时依次尝试的目标",
+  "settings.field.images.urls.backends.description": "为 Provider 访问发布图片时依次尝试的目标",
   "settings.field.images.urls.command.label": "图片上传命令",
   "settings.field.images.urls.command.description":
     "command 后端的 Argv 模板；{file} 是图片路径，{mime}/{ext} 可选。使用 stdout 上打印的最后一个 URL（例如 pasta -b -f {file}）",
@@ -180,11 +170,9 @@ export const modelProviders: Record<string, string> = {
   "settings.field.live.voice.label": "实时语音",
   "settings.field.live.voice.description": "由 Codex 支持的实时语音会话使用的声音",
   "settings.field.tts.localVoice.label": "本地 TTS 语音",
-  "settings.field.tts.localVoice.description":
-    "本地 TTS 后端使用的 Kokoro 声音（美式/英式，女声/男声）",
+  "settings.field.tts.localVoice.description": "本地 TTS 后端使用的 Kokoro 声音（美式/英式，女声/男声）",
   "settings.field.tts.localSpeed.label": "本地 TTS 语速",
-  "settings.field.tts.localSpeed.description":
-    "本地 TTS 后端的语速（tts 工具、omp say）。1 = 正常；限制在 0.5–2.5",
+  "settings.field.tts.localSpeed.description": "本地 TTS 后端的语速（tts 工具、omp say）。1 = 正常；限制在 0.5–2.5",
   "settings.field.speech.enabled.label": "语音朗读",
   "settings.field.speech.enabled.description": "在助手输出流式生成时通过扬声器朗读",
   "settings.field.speech.mode.label": "语音朗读模式",
@@ -196,8 +184,7 @@ export const modelProviders: Record<string, string> = {
   "settings.field.speech.voice.label": "语音朗读声音",
   "settings.field.speech.voice.description": "朗读助手输出时使用的 Kokoro 声音",
   "settings.field.speech.speed.label": "语音朗读语速",
-  "settings.field.speech.speed.description":
-    "朗读助手输出时的语速。1 = 正常；限制在 0.5–2.5",
+  "settings.field.speech.speed.description": "朗读助手输出时的语速。1 = 正常；限制在 0.5–2.5",
   "settings.field.providers.fetch.label": "抓取 Provider",
   "settings.field.providers.fetch.description": "fetch/read URL 工具的读取器后端优先级",
   "settings.field.codexResets.autoRedeem.label": "Codex 自动兑换已保存的重置",
@@ -223,8 +210,7 @@ export const modelProviders: Record<string, string> = {
     "本地小型模型的 ONNX 量化/精度。默认使用各模型自带的 dtype（q4）；精度越低速度越快，越高越忠实。MLX 后端忽略此项（其仓库已预量化为 4-bit）。环境变量 PI_TINY_DTYPE 会覆盖此设置。",
 
   "settings.field.providers.kimiApiFormat.label": "Kimi API 格式",
-  "settings.field.providers.kimiApiFormat.description":
-    "Kimi Code Provider 的 API 格式（auto 跟随实时模型元数据）",
+  "settings.field.providers.kimiApiFormat.description": "Kimi Code Provider 的 API 格式（auto 跟随实时模型元数据）",
   "settings.field.providers.openaiWebsockets.label": "OpenAI WebSockets",
   "settings.field.providers.openaiWebsockets.description":
     "OpenAI Codex 模型的 WebSocket 策略（auto 使用模型默认值，on 强制启用，off 禁用）",
@@ -258,6 +244,5 @@ export const modelProviders: Record<string, string> = {
   "settings.field.telemetry.otlpExportEnabled.description":
     "允许 OMP 使用 OTEL_* 端点导出 trace、日志和指标。更改在下次启动时生效。",
   "settings.field.secrets.enabled.label": "隐藏密钥",
-  "settings.field.secrets.enabled.description":
-    "混淆已配置的密钥，并在发送给 AI Provider 前遮盖凭据形式的 Token",
+  "settings.field.secrets.enabled.description": "混淆已配置的密钥，并在发送给 AI Provider 前遮盖凭据形式的 Token",
 };

@@ -66,19 +66,15 @@ function probeCaseInsensitiveVolume() {
 const CASE_INSENSITIVE_VOLUME = probeCaseInsensitiveVolume();
 const CASE_SKIP_REASON = "卷大小写敏感：大小写变体指向不同目录，前提不成立";
 
-test(
-  "已存在的目录经符号链接归一到真实路径",
-  { skip: SYMLINKS_SUPPORTED ? false : SYMLINK_SKIP_REASON },
-  (t) => {
-    const root = createTempRoot(t);
-    const target = join(root, "target");
-    mkdirSync(target);
-    const link = join(root, "link");
-    symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+test("已存在的目录经符号链接归一到真实路径", { skip: SYMLINKS_SUPPORTED ? false : SYMLINK_SKIP_REASON }, (t) => {
+  const root = createTempRoot(t);
+  const target = join(root, "target");
+  mkdirSync(target);
+  const link = join(root, "link");
+  symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
 
-    assert.equal(comparableDirectory(link), comparableDirectory(target));
-  },
-);
+  assert.equal(comparableDirectory(link), comparableDirectory(target));
+});
 
 test(
   "缺失的尾段拼在最近的已存在祖先之后，祖先里的符号链接同样解析",

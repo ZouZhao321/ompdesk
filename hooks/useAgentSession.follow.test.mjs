@@ -3,13 +3,9 @@ import test from "node:test";
 import ts from "typescript";
 import { FOLLOW_BOTTOM_THRESHOLD_PX, FOLLOW_OBSERVATION_HOLD_MS, reduceFollow } from "../lib/transcript-follow.ts";
 import { source, callbackSource } from "./useAgentSession.test-support.mjs";
+import { flattenSource } from "../test-support/source-text.ts";
 
-const CALLBACKS = [
-  "applyFollow",
-  "holdFollowObservation",
-  "releaseFollowObservation",
-  "handleScrollPositionChange",
-];
+const CALLBACKS = ["applyFollow", "holdFollowObservation", "releaseFollowObservation", "handleScrollPositionChange"];
 
 // 只剥掉 TypeScript 语法；判定（reduceFollow）、抑制器与滚动观测的接线都是真的，
 // 意图窗口、滚动元素、滚动入口与状态落点是 doubles。
@@ -143,11 +139,14 @@ test("keeps a jump paused when its landing sits inside the bottom threshold", ()
 });
 
 test("reads the scroll position no matter whether the session is running", () => {
-  const handler = callbackSource("handleScrollPositionChange");
+  const handler = flattenSource(callbackSource("handleScrollPositionChange"));
 
   // 按运行状态早退会让空闲期跳转停掉的跟随永远等不到恢复：观测本身与运行状态无关。
   assert.doesNotMatch(handler, /agentRunningRef|bashRunningRef/);
-  assert.match(handler, /if \(followObservationHeldRef\.current && Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/);
+  assert.match(
+    handler,
+    /if \(followObservationHeldRef\.current && Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/,
+  );
   // 到期收回走同一个松开入口：合上状态与截止时间的写入只有 releaseFollowObservation 一处。
   assert.match(handler, /if \(followObservationHeldRef\.current\) \{[\s\S]*?releaseFollowObservation\(\);/);
   assert.match(handler, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
@@ -156,15 +155,18 @@ test("reads the scroll position no matter whether the session is running", () =>
 test("bounds the observation hold with a deadline", () => {
   // 抑制器只能由外部松开：漏配对时它必须自己到点失效，否则跟随既不能暂停也不能恢复。
   // 截止时长只有 lib/transcript-follow.ts 一处来源，hook 与测试共用。
-  assert.match(source, /import \{ FOLLOW_OBSERVATION_HOLD_MS, reduceFollow, type FollowEvent \} from "@\/lib\/transcript-follow";/);
   assert.match(
-    callbackSource("holdFollowObservation"),
-    /followObservationHeldRef\.current = true;\s*followObservationHoldUntilRef\.current = Date\.now\(\) \+ FOLLOW_OBSERVATION_HOLD_MS;/,
+    flattenSource(source),
+    /import \{ FOLLOW_OBSERVATION_HOLD_MS, reduceFollow, type FollowEvent \} from "@\/lib\/transcript-follow";/,
+  );
+  assert.match(
+    flattenSource(callbackSource("holdFollowObservation")),
+    /followObservationHeldRef\.current = true; followObservationHoldUntilRef\.current = Date\.now\(\) \+ FOLLOW_OBSERVATION_HOLD_MS;/,
   );
   // 正常松开时把截止时间一起清掉，下一次合上重新计时。
   assert.match(
-    callbackSource("releaseFollowObservation"),
-    /followObservationHeldRef\.current = false;\s*followObservationHoldUntilRef\.current = 0;/,
+    flattenSource(callbackSource("releaseFollowObservation")),
+    /followObservationHeldRef\.current = false; followObservationHoldUntilRef\.current = 0;/,
   );
 });
 

@@ -62,11 +62,7 @@ export interface SourcePair {
   head: string | null;
 }
 
-export type SourceReader = (
-  repositoryRoot: string,
-  mergeBase: string,
-  file: ChangedFile,
-) => Promise<SourcePair>;
+export type SourceReader = (repositoryRoot: string, mergeBase: string, file: ChangedFile) => Promise<SourcePair>;
 
 function errorMessage(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
@@ -87,9 +83,7 @@ async function git(cwd: string, args: string[]): Promise<void> {
  * 建分叉点工作副本、跑测试、读 lcov。任何一步失败都返回失败结果并说明是哪一步，
  * 工作副本在 `finally` 里删掉，失败时也不留下垃圾。
  */
-export async function generateBaseCoverage(
-  request: BaseCoverageRequest,
-): Promise<BaseCoverageResult> {
+export async function generateBaseCoverage(request: BaseCoverageRequest): Promise<BaseCoverageResult> {
   const startedAt = Date.now();
   const worktreePath = path.join(
     request.scratchRoot,
@@ -132,8 +126,9 @@ export async function generateBaseCoverage(
     } catch (error) {
       return {
         ok: false,
-        detail: `分叉点 ${request.mergeBase.slice(0, 7)} 的覆盖率产物缺失：`
-          + `${path.join(coverageDir, LCOV_FILE_NAME)}（${errorMessage(error)}）`,
+        detail:
+          `分叉点 ${request.mergeBase.slice(0, 7)} 的覆盖率产物缺失：` +
+          `${path.join(coverageDir, LCOV_FILE_NAME)}（${errorMessage(error)}）`,
         durationMs: elapsed(),
       };
     }

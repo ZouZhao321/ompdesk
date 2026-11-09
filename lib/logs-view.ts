@@ -177,8 +177,7 @@ export interface LogScrollMetrics {
  * yanked back on every poll.
  */
 export function isScrolledToBottom(metrics: LogScrollMetrics): boolean {
-  return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight
-    <= LOG_SCROLL_BOTTOM_TOLERANCE_PX;
+  return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= LOG_SCROLL_BOTTOM_TOLERANCE_PX;
 }
 
 /**

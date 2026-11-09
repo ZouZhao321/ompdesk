@@ -56,14 +56,7 @@ async function ensureSdkLogger(): Promise<SdkLogger | undefined> {
 /** Marks every record written through this module. */
 export const LOG_SOURCE = "ompdesk";
 
-export type LogSubsystem =
-  | "process"
-  | "http"
-  | "agent"
-  | "audit"
-  | "security"
-  | "client"
-  | "system";
+export type LogSubsystem = "process" | "http" | "agent" | "audit" | "security" | "client" | "system";
 
 /** Correlation fields a request wrapper can attach to every nested log call. */
 export interface LogContext {
@@ -206,7 +199,7 @@ function resolveStdoutWriter(): SyncFileWriter | undefined {
   const getBuiltin = (process as NodeJS.Process & { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule;
   if (typeof getBuiltin !== "function") return undefined;
   const fsModule = getBuiltin("node:fs") as Partial<SyncFileWriter> | undefined;
-  return fsModule && typeof fsModule.writeSync === "function" ? fsModule as SyncFileWriter : undefined;
+  return fsModule && typeof fsModule.writeSync === "function" ? (fsModule as SyncFileWriter) : undefined;
 }
 
 const stdoutWriter = resolveStdoutWriter();
@@ -397,9 +390,7 @@ function sanitizeValue(value: unknown, depth: number, seen: WeakSet<object>): un
 
   try {
     if (Array.isArray(value)) {
-      const items = value
-        .slice(0, MAX_ARRAY_ITEMS)
-        .map((item) => sanitizeValue(item, depth + 1, seen));
+      const items = value.slice(0, MAX_ARRAY_ITEMS).map((item) => sanitizeValue(item, depth + 1, seen));
       if (value.length > MAX_ARRAY_ITEMS) items.push(`[+${value.length - MAX_ARRAY_ITEMS} more]`);
       return items;
     }
@@ -434,16 +425,11 @@ export function sanitizeLogContext(context: Record<string, unknown> | undefined)
   if (!context) return {};
   const sanitized = sanitizeValue(context, 0, new WeakSet());
   return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
-    ? sanitized as Record<string, unknown>
+    ? (sanitized as Record<string, unknown>)
     : {};
 }
 
-function writeThrough(
-  sdk: SdkLogger,
-  level: LogLevel,
-  message: string,
-  context: Record<string, unknown>,
-): void {
+function writeThrough(sdk: SdkLogger, level: LogLevel, message: string, context: Record<string, unknown>): void {
   switch (level) {
     case "error":
       sdk.error(message, context);

@@ -111,18 +111,10 @@ export function recordAudit(input: AuditInput | undefined): void {
   }
 }
 
-export function auditSuccess(
-  action: string,
-  target?: unknown,
-  details?: Record<string, unknown>,
-): void {
+export function auditSuccess(action: string, target?: unknown, details?: Record<string, unknown>): void {
   recordAudit({ action, target, outcome: "success", details });
 }
 
-export function auditFailure(
-  action: string,
-  target?: unknown,
-  details?: Record<string, unknown>,
-): void {
+export function auditFailure(action: string, target?: unknown, details?: Record<string, unknown>): void {
   recordAudit({ action, target, outcome: "failure", details });
 }

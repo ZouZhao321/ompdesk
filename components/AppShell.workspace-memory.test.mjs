@@ -6,7 +6,7 @@ const source = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8"
 
 function callbackBody(name, nextName) {
   const start = source.indexOf(`const ${name} = useCallback`);
-  const end = source.indexOf(`\n  const ${nextName}`, start);
+  const end = source.indexOf(`const ${nextName} = useCallback`, start);
   assert.notEqual(start, -1, `${name} callback not found`);
   assert.notEqual(end, -1, `${nextName} callback not found after ${name}`);
   return source.slice(start, end);
@@ -30,14 +30,19 @@ test("explicit context changes invalidate a pending workspace restore", () => {
 test("all active-session transitions share one persistence effect", () => {
   assert.match(
     source,
-    /useEffect\(\(\) => \{\s+if \(!selectedSession\) return;[\s\S]*?setLastOpenSession\(projectKey, selectedSession\.id\);\s+\}, \[selectedSession\]\);/,
+    /useEffect\(\(\) => \{\s+if \(!selectedSession\) return;[\s\S]*?setLastOpenSession\(normalizeProjectKey\(projectKey\), selectedSession\.id\);\s+\}, \[selectedSession\]\);/,
   );
 });
 
 test("workspace restoration stays within the cross-project flow", () => {
-  // ompdesk returns early on same-project moves before the restore call.
+  // ompdesk returns early on same-project moves (compared by normalized key)
+  // before the restore call.
   assert.match(
     callbackBody("handleCwdChange", "handleSelectSession"),
-    /if \(currentProject === newProject\) \{\s*return;\s*\}[\s\S]*?restoreWorkspaceContext\(newProject\);/,
+    /if \(currentProject !== null && normalizeProjectKey\(currentProject\) === normalizeProjectKey\(newProject\)\) \{[\s\S]*?return;[\s\S]*?\}[\s\S]*?restoreWorkspaceContext\(newProject\);/,
+  );
+  assert.match(
+    callbackBody("handleCwdChange", "handleSelectSession"),
+    /if \(currentProject !== null && normalizeProjectKey\(currentProject\) === normalizeProjectKey\(newProject\)\) \{[\s\S]*?setNewSessionCwd\(\(prev\) => \(prev === null \? prev : cwd\)\);/,
   );
 });
