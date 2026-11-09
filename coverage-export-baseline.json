@@ -1,0 +1,1839 @@
+{
+  "symbols": [
+    {
+      "path": "components/BranchNavigator.tsx",
+      "name": "compressChain",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/BranchNavigator.tsx",
+      "name": "selectTopLevelBranches",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "AttachedImage",
+      "kind": "type"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "buildSlashCommandLayout",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "BUILTIN_SLASH_COMMANDS",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "canRestoreUserMessage",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "ContextUsageMeter",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "filterModelOptions",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "getUserMessageDraftImages",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "getUserMessageText",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "ModelErrorBanner",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ChatInput.tsx",
+      "name": "ModelScopeWarningBanner",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ExtensionStatusBar.tsx",
+      "name": "formatExtensionStatusLine",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ExtensionStatusBar.tsx",
+      "name": "sanitizeExtensionStatusText",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/FileIcons.tsx",
+      "name": "GenericFileIcon",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/GitStatusBadge.tsx",
+      "name": "GIT_STATUS_KEYS",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ImageZoom.tsx",
+      "name": "ImagePreviewDialog",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ImageZoom.tsx",
+      "name": "ImagePreviewRequest",
+      "kind": "type"
+    },
+    {
+      "path": "components/ImageZoom.tsx",
+      "name": "useImagePreview",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/LogsPanel.tsx",
+      "name": "LogsClient",
+      "kind": "type"
+    },
+    {
+      "path": "components/LogsPanel.tsx",
+      "name": "LogsClientInput",
+      "kind": "type"
+    },
+    {
+      "path": "components/LogsPanelView.tsx",
+      "name": "LogsPanelStyles",
+      "kind": "type"
+    },
+    {
+      "path": "components/LogsPanelView.tsx",
+      "name": "LogsPanelViewProps",
+      "kind": "type"
+    },
+    {
+      "path": "components/models-config-helpers.ts",
+      "name": "CompatEntry",
+      "kind": "type"
+    },
+    {
+      "path": "components/ProjectSortControl.tsx",
+      "name": "shouldDismissOnBlur",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ProjectSortControl.tsx",
+      "name": "sortMenuKeyAction",
+      "kind": "runtime"
+    },
+    {
+      "path": "components/ProjectSortControl.tsx",
+      "name": "SortMenuKeyAction",
+      "kind": "type"
+    },
+    {
+      "path": "components/SearchableSelect.tsx",
+      "name": "SearchableSelectOption",
+      "kind": "type"
+    },
+    {
+      "path": "components/SourceCodeView.tsx",
+      "name": "SourceViewProps",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useAgentSession.test-support.mjs",
+      "name": "ast",
+      "kind": "runtime"
+    },
+    {
+      "path": "hooks/useAgentSession.test-support.mjs",
+      "name": "callback",
+      "kind": "runtime"
+    },
+    {
+      "path": "hooks/useAgentSession.test-support.mjs",
+      "name": "callbacks",
+      "kind": "runtime"
+    },
+    {
+      "path": "hooks/useAgentSession.test-support.mjs",
+      "name": "callbackSource",
+      "kind": "runtime"
+    },
+    {
+      "path": "hooks/useAgentSession.test-support.mjs",
+      "name": "declarations",
+      "kind": "runtime"
+    },
+    {
+      "path": "hooks/useAgentSession.test-support.mjs",
+      "name": "source",
+      "kind": "runtime"
+    },
+    {
+      "path": "hooks/useAgentSession.ts",
+      "name": "AttachedImage",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useAgentSession.ts",
+      "name": "ChatInputHandle",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useAgentSession.ts",
+      "name": "NoticeType",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useAgentSession.ts",
+      "name": "SessionData",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useAgentSession.ts",
+      "name": "ThinkingLevelOption",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useAgentSession.ts",
+      "name": "UseAgentSessionOptions",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useCommentTranslation.ts",
+      "name": "useCommentDictionaryVersion",
+      "kind": "runtime"
+    },
+    {
+      "path": "hooks/usePopupPlacement.ts",
+      "name": "PopupSizing",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useTheme.ts",
+      "name": "ResolvedTheme",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useTheme.ts",
+      "name": "ThemePreference",
+      "kind": "type"
+    },
+    {
+      "path": "hooks/useViewportHeight.ts",
+      "name": "shouldUseVisualViewportHeight",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-client.ts",
+      "name": "AgentCommandError",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AGENT_COMPACTION_END",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AGENT_COMPACTION_START",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AGENT_RUN_COMMAND",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AGENT_RUN_END",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AGENT_RUN_START",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AGENT_TOOL_END",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AGENT_TOOL_INCOMPLETE",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AgentRunCommand",
+      "kind": "type"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AgentRunCommandResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AgentRunEventLike",
+      "kind": "type"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AgentRunOutcome",
+      "kind": "type"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AgentRunRecord",
+      "kind": "type"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AgentRunStopReason",
+      "kind": "type"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "AgentRunTrackerOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/agent-run-log.ts",
+      "name": "ToolOutputSize",
+      "kind": "type"
+    },
+    {
+      "path": "lib/ansi.ts",
+      "name": "ansi256Color",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/ansi.ts",
+      "name": "AnsiSegment",
+      "kind": "type"
+    },
+    {
+      "path": "lib/api-request-log.ts",
+      "name": "DEFAULT_SLOW_REQUEST_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/api-request-log.ts",
+      "name": "resolveSlowRequestMs",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/api-types.ts",
+      "name": "OmpdeskInstallPlanReason",
+      "kind": "type"
+    },
+    {
+      "path": "lib/api-types.ts",
+      "name": "OmpdeskUpdateAvailability",
+      "kind": "type"
+    },
+    {
+      "path": "lib/api-types.ts",
+      "name": "PluginResourceKind",
+      "kind": "type"
+    },
+    {
+      "path": "lib/api-types.ts",
+      "name": "ResourceDiagnostic",
+      "kind": "type"
+    },
+    {
+      "path": "lib/api-types.ts",
+      "name": "SkillUpdateState",
+      "kind": "type"
+    },
+    {
+      "path": "lib/audit-log.ts",
+      "name": "AuditInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/audit-log.ts",
+      "name": "AuditOutcome",
+      "kind": "type"
+    },
+    {
+      "path": "lib/audit-log.ts",
+      "name": "recordAudit",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/audit-log.ts",
+      "name": "sanitizeAuditDetails",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/audit-log.ts",
+      "name": "sanitizeAuditTarget",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/browser-notifications.ts",
+      "name": "BrowserNotificationEnvironment",
+      "kind": "type"
+    },
+    {
+      "path": "lib/browser-notifications.ts",
+      "name": "BrowserNotificationOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/browser-notifications.ts",
+      "name": "NotificationDelivery",
+      "kind": "type"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "buildClientErrorReport",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "CLIENT_ERROR_DUPLICATE_CAPACITY",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "CLIENT_ERROR_DUPLICATE_WINDOW_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "CLIENT_ERROR_KINDS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "CLIENT_ERROR_REPORT_LIMIT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "CLIENT_ERROR_REPORT_WINDOW_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "CLIENT_LOG_ENDPOINT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "ClientErrorDeduplicator",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "ClientErrorInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "ClientErrorKind",
+      "kind": "type"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "InstallClientErrorReporterOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "RateLimitDecision",
+      "kind": "type"
+    },
+    {
+      "path": "lib/client-error-report.ts",
+      "name": "readSessionId",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "CLIENT_ERROR_ADDRESS_RATE_LIMIT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "CLIENT_ERROR_EVENT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "CLIENT_ERROR_GLOBAL_RATE_LIMIT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "CLIENT_ERROR_RATE_LIMIT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "CLIENT_ERROR_RATE_WINDOW_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "CLIENT_ERROR_SUBSYSTEM",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "CLIENT_LOG_MAX_BODY_BYTES",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "ClientLogHandlerOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "ClientLogValidationError",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "parseClientErrorReport",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/client-logs.ts",
+      "name": "recordClientError",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/comment-dictionary.ts",
+      "name": "commentDictionaryFilePath",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/comment-dictionary.ts",
+      "name": "CommentTranslationInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-dictionary.ts",
+      "name": "CommentTranslationOrigin",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-entries.ts",
+      "name": "CommentExtraction",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-sources.ts",
+      "name": "listCommentSourcePaths",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/comment-sources.ts",
+      "name": "walkCommentSourcePaths",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/comment-translation-generation.ts",
+      "name": "CommentTranslationEntryResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-translation-generation.ts",
+      "name": "CommentTranslationFailureReason",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-translation-generation.ts",
+      "name": "CommentTranslationGeneration",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-translation-generation.ts",
+      "name": "GenerateCommentTranslationsOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-translation-preference.ts",
+      "name": "COMMENT_TRANSLATION_STORAGE_KEY",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/comment-translation-render.ts",
+      "name": "CommentTranslationRow",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-translation-route.ts",
+      "name": "CommentTranslationHandlerDeps",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-translation-route.ts",
+      "name": "CommentTranslationModelResolver",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-translation-validation.ts",
+      "name": "ProtectedFragmentKind",
+      "kind": "type"
+    },
+    {
+      "path": "lib/comment-translation-validation.ts",
+      "name": "protectedFragments",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/comment-translation-validation.ts",
+      "name": "TranslationValidation",
+      "kind": "type"
+    },
+    {
+      "path": "lib/compaction-summary.ts",
+      "name": "ParsedCompactionSummary",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "CoverageGateDependencies",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "CoverageGateOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "CoverageGateResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "DEFAULT_BASE_REF",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "GitQueries",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "runCoverageGate",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/coverage-gate/git.ts",
+      "name": "parseChangedFiles",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/coverage-gate/lcov.ts",
+      "name": "LcovParseResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/report.ts",
+      "name": "ReportInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/rules/index.ts",
+      "name": "RULES",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/coverage-gate/rules/rule-new-files.ts",
+      "name": "RULE_NEW_FILES",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/custom-ui-terminal.ts",
+      "name": "DEFAULT_CUSTOM_UI_ROWS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/custom-ui-terminal.ts",
+      "name": "HeadlessCustomUiTerminal",
+      "kind": "type"
+    },
+    {
+      "path": "lib/custom-ui-terminal.ts",
+      "name": "HeadlessCustomUiTui",
+      "kind": "type"
+    },
+    {
+      "path": "lib/directory-browser.ts",
+      "name": "BrowsableDirectory",
+      "kind": "type"
+    },
+    {
+      "path": "lib/directory-browser.ts",
+      "name": "getWindowsDriveCandidates",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/directory-browser.ts",
+      "name": "isWindowsPathInput",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/draft-store.ts",
+      "name": "ChatDraft",
+      "kind": "type"
+    },
+    {
+      "path": "lib/draft-store.ts",
+      "name": "restoreDraftSubmission",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/file-fuzzy.ts",
+      "name": "AT_RESULT_LIMIT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/file-fuzzy.ts",
+      "name": "AtInsertion",
+      "kind": "type"
+    },
+    {
+      "path": "lib/file-paths.ts",
+      "name": "encodeFilePathForApi",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/file-paths.ts",
+      "name": "FileApiType",
+      "kind": "type"
+    },
+    {
+      "path": "lib/file-types.ts",
+      "name": "AUDIO_EXT_TO_MIME",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/file-types.ts",
+      "name": "DOCUMENT_EXT_TO_MIME",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/file-types.ts",
+      "name": "DocumentPreviewKind",
+      "kind": "type"
+    },
+    {
+      "path": "lib/file-types.ts",
+      "name": "IMAGE_EXT_TO_MIME",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/file-upload.ts",
+      "name": "UPLOAD_CONFLICT_STRATEGIES",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/file-upload.ts",
+      "name": "UploadConflictStrategy",
+      "kind": "type"
+    },
+    {
+      "path": "lib/file-upload.ts",
+      "name": "UploadTargetInspection",
+      "kind": "type"
+    },
+    {
+      "path": "lib/frontmatter.ts",
+      "name": "FrontmatterResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/git-env.ts",
+      "name": "REPO_LOCATION_CONFIG_KEYS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/git-env.ts",
+      "name": "REPO_LOCATION_ENV_KEYS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/git-env.ts",
+      "name": "stripRepoLocationEnv",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "formatGoalStatus",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "GOAL_CONTINUATION_DELAY_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "GoalCommandResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "goalFromModeData",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "GoalModeControllerOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "GoalStatusInfo",
+      "kind": "type"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "GoalSubcommand",
+      "kind": "type"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "isGoalContinuationEnabled",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "parseGoalBudget",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "parseGoalCommand",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/goal-mode.ts",
+      "name": "toGoalStatus",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/http-dispatcher.ts",
+      "name": "DEFAULT_HTTP_IDLE_TIMEOUT_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/http-dispatcher.ts",
+      "name": "isBunRuntime",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/i18n/format.ts",
+      "name": "formatRelativeTime",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/i18n/format.ts",
+      "name": "interpolateMessage",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/i18n/messages/settings/en/index.ts",
+      "name": "settingsEnParts",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/i18n/messages/settings/zh-CN/index.ts",
+      "name": "settingsZhParts",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/i18n/registry.ts",
+      "name": "registerLocale",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/i18n/settings.ts",
+      "name": "groupSlug",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/i18n/settings.ts",
+      "name": "SettingSearchField",
+      "kind": "type"
+    },
+    {
+      "path": "lib/image-attachments.ts",
+      "name": "Base64ImageAttachment",
+      "kind": "type"
+    },
+    {
+      "path": "lib/image-attachments.ts",
+      "name": "getBase64DecodedByteLength",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/image-zoom.ts",
+      "name": "clampCamera",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/image-zoom.ts",
+      "name": "clampZoom",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/image-zoom.ts",
+      "name": "PinchFrame",
+      "kind": "type"
+    },
+    {
+      "path": "lib/initial-navigation.ts",
+      "name": "InitialNavigation",
+      "kind": "type"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "completeLinesEnd",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "DEFAULT_LOG_PAGE_LIMIT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "listLogFiles",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "LogDownload",
+      "kind": "type"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "MAX_LOG_DOWNLOAD_BYTES",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "MAX_LOG_PAGE_LIMIT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "ParsedLogsQuery",
+      "kind": "type"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "parseLogEntry",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "ReadLogPageOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/log-query.ts",
+      "name": "validateLogFileName",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "buildProcessStartFields",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "describeRuntime",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "ProcessStartFields",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "ProcessStartInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "readAppVersion",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "resolveListenAddress",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "resolveStartupMode",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "StartLoggingOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logging-startup.ts",
+      "name": "StartupMode",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logging.ts",
+      "name": "ConfigureLoggingOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logging.ts",
+      "name": "flushLogs",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging.ts",
+      "name": "LOG_SOURCE",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging.ts",
+      "name": "LogContext",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logging.ts",
+      "name": "LogSubsystem",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logging.ts",
+      "name": "sanitizeLogContext",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logging.ts",
+      "name": "shouldMirrorStdout",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "DescribeLogsStateInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "LOG_SCROLL_BOTTOM_TOLERANCE_PX",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "LogLevelOption",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "LOGS_ENDPOINT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "LogScrollMetrics",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "LogsEmptyKind",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "LogsRequestInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "LogsStateDescription",
+      "kind": "type"
+    },
+    {
+      "path": "lib/logs-view.ts",
+      "name": "MAX_VISIBLE_ENTRIES",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/map-layout.ts",
+      "name": "LANE_GAP",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/map-layout.ts",
+      "name": "LayoutCard",
+      "kind": "type"
+    },
+    {
+      "path": "lib/map-layout.ts",
+      "name": "LayoutEdge",
+      "kind": "type"
+    },
+    {
+      "path": "lib/map-layout.ts",
+      "name": "LayoutInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/map-layout.ts",
+      "name": "LayoutResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/map-layout.ts",
+      "name": "ROW_GAP",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "DEFAULT_MEMORY_SAMPLE_INTERVAL_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "MEMORY_SAMPLE_INTERVAL_ENV",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "MemoryMonitorClock",
+      "kind": "type"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "MemoryMonitorOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "MemorySample",
+      "kind": "type"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "MemoryUsageLike",
+      "kind": "type"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "MIN_MEMORY_SAMPLE_INTERVAL_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "readMemorySample",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "resolveMemorySampleIntervalMs",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/memory-monitor.ts",
+      "name": "stopMemoryMonitor",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/message-display.ts",
+      "name": "isEmptyThinkingBlock",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/message-display.ts",
+      "name": "ThinkingDisplay",
+      "kind": "type"
+    },
+    {
+      "path": "lib/mobile-layout.ts",
+      "name": "MOBILE_COARSE_MAX_WIDTH",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/model-catalog.ts",
+      "name": "ModelCatalogCost",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-catalog.ts",
+      "name": "ModelCatalogMatchMethod",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-catalog.ts",
+      "name": "ModelCatalogPriceRecommendation",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-discovery-auth.ts",
+      "name": "ModelDiscoveryAuth",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-discovery-auth.ts",
+      "name": "ModelDiscoveryAuthDeps",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-role-selection.ts",
+      "name": "MODEL_ROLE_THINKING_LEVELS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/model-roles.ts",
+      "name": "describeModelRole",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/model-roles.ts",
+      "name": "ModelRoleModelRef",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-scope.ts",
+      "name": "InitialModelScopeOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-scope.ts",
+      "name": "InitialModelScopeResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-scope.ts",
+      "name": "ModelScopeRegistry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/model-scope.ts",
+      "name": "ModelScopeResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/npx.ts",
+      "name": "RunNpxOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/npx.ts",
+      "name": "RunNpxResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/omp-runtime.ts",
+      "name": "OmpRuntime",
+      "kind": "type"
+    },
+    {
+      "path": "lib/omp-settings.ts",
+      "name": "SettingTab",
+      "kind": "type"
+    },
+    {
+      "path": "lib/omp-theme.ts",
+      "name": "getWebThemePalette",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/omp-types.ts",
+      "name": "GoalRuntimeLike",
+      "kind": "type"
+    },
+    {
+      "path": "lib/omp-types.ts",
+      "name": "ModelLike",
+      "kind": "type"
+    },
+    {
+      "path": "lib/omp-types.ts",
+      "name": "NavigateTreeResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/omp-types.ts",
+      "name": "SlashCommandOrigin",
+      "kind": "type"
+    },
+    {
+      "path": "lib/omp-types.ts",
+      "name": "SlashCommandSource",
+      "kind": "type"
+    },
+    {
+      "path": "lib/omp-updates.ts",
+      "name": "buildInstallPlan",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/omp-updates.ts",
+      "name": "compareVersions",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/omp-updates.ts",
+      "name": "OMPDESK_GITHUB_RELEASE_API_URL",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/omp-updates.ts",
+      "name": "OMPDESK_NPM_LATEST_URL",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/omp-updates.ts",
+      "name": "OmpdeskUpdateInstallResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/panel-layout.ts",
+      "name": "SPLIT_PANEL_MIN_WIDTH",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/panel-tabs.ts",
+      "name": "PANEL_VIEW_TAB_IDS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/panel-tabs.ts",
+      "name": "TabKind",
+      "kind": "type"
+    },
+    {
+      "path": "lib/panel-tabs.ts",
+      "name": "ViewTab",
+      "kind": "type"
+    },
+    {
+      "path": "lib/patch.ts",
+      "name": "SplitDiffCellType",
+      "kind": "type"
+    },
+    {
+      "path": "lib/patch.ts",
+      "name": "SplitDiffFile",
+      "kind": "type"
+    },
+    {
+      "path": "lib/patch.ts",
+      "name": "SplitDiffRow",
+      "kind": "type"
+    },
+    {
+      "path": "lib/path-security.ts",
+      "name": "isPathWithinRoots",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/popup-placement.ts",
+      "name": "POPUP_MIN_HEIGHT_PX",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/popup-placement.ts",
+      "name": "POPUP_VIEWPORT_MARGIN_PX",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/project-tree.ts",
+      "name": "MAX_PROJECTED_TREE_DEPTH",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/project-trust.ts",
+      "name": "DiscoveredProjectCode",
+      "kind": "type"
+    },
+    {
+      "path": "lib/project-trust.ts",
+      "name": "DiscoveredToolPath",
+      "kind": "type"
+    },
+    {
+      "path": "lib/project-trust.ts",
+      "name": "hasTrustRequiringProjectResources",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/project-trust.ts",
+      "name": "isInsideProject",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/project-trust.ts",
+      "name": "UntrustedProjectSessionOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/provider-listing.ts",
+      "name": "ApiKeyProviderListing",
+      "kind": "type"
+    },
+    {
+      "path": "lib/provider-listing.ts",
+      "name": "OAuthProviderListing",
+      "kind": "type"
+    },
+    {
+      "path": "lib/request-headers.ts",
+      "name": "trustsForwardedAddress",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/request-security.ts",
+      "name": "isApiRequestOriginAllowed",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/request-security.ts",
+      "name": "shouldCheckApiRequestOrigin",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/rewind.ts",
+      "name": "RewindPlan",
+      "kind": "type"
+    },
+    {
+      "path": "lib/rpc-manager.ts",
+      "name": "AgentSessionWrapper",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/rpc-manager.ts",
+      "name": "BROWSER_NATIVE_SLASH_COMMANDS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/rpc-manager.ts",
+      "name": "getAvailableSlashCommands",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/rpc-manager.ts",
+      "name": "notifyRunningChange",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/rpc-manager.ts",
+      "name": "resolveForkEntryId",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/rpc-manager.ts",
+      "name": "RpcSessionStartOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-file-references.ts",
+      "name": "isFilePathReferencedByEntries",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/session-map.ts",
+      "name": "turnsFromEntries",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/session-marker.ts",
+      "name": "FinishedRuns",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-marker.ts",
+      "name": "FinishedRunsInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-marker.ts",
+      "name": "SessionMarker",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-marker.ts",
+      "name": "SessionMarkerInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-marker.ts",
+      "name": "shouldMarkSessionUnread",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/session-marker.ts",
+      "name": "StaticMarkerAppearance",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-marker.ts",
+      "name": "TaskEndAttribution",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-row-context-menu.ts",
+      "name": "SESSION_ROW_CONTEXT_MENU_EVENT",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/session-row-context-menu.ts",
+      "name": "SessionRowContextMenuDetail",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-system-prompt.ts",
+      "name": "ResolvedSessionSystemPrompts",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-title.ts",
+      "name": "findFirstUserMessage",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/session-title.ts",
+      "name": "SessionTitleSource",
+      "kind": "type"
+    },
+    {
+      "path": "lib/settings-api.ts",
+      "name": "McpTransport",
+      "kind": "type"
+    },
+    {
+      "path": "lib/settings-api.ts",
+      "name": "SettingsTab",
+      "kind": "type"
+    },
+    {
+      "path": "lib/skill-lock.ts",
+      "name": "getGlobalSkillsLockPath",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/skill-updates.ts",
+      "name": "checkSkillUpdate",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/skill-updates.ts",
+      "name": "skillUpdateKey",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/sse-lifecycle.ts",
+      "name": "resolveSseRequestId",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/sse-lifecycle.ts",
+      "name": "SSE_HEARTBEAT_MS",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/sse-lifecycle.ts",
+      "name": "SseStreamController",
+      "kind": "type"
+    },
+    {
+      "path": "lib/sse-lifecycle.ts",
+      "name": "SseStreamOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/startup-preferences.ts",
+      "name": "EffectiveStartupPreferences",
+      "kind": "type"
+    },
+    {
+      "path": "lib/startup-preferences.ts",
+      "name": "ExplicitStartupPreferences",
+      "kind": "type"
+    },
+    {
+      "path": "lib/telemetry.ts",
+      "name": "settleTelemetryInit",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/terminal-input.ts",
+      "name": "TerminalKeyEventLike",
+      "kind": "type"
+    },
+    {
+      "path": "lib/testing/mock-session-harness.mjs",
+      "name": "collectUntilPromptDone",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/mock-session-harness.mjs",
+      "name": "createMockModelForFailure",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/mock-session-harness.mjs",
+      "name": "createMockModelForReply",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/mock-session-harness.mjs",
+      "name": "createMockModelForScript",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/mock-session-harness.mjs",
+      "name": "disposeMockSession",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/mock-session-harness.mjs",
+      "name": "makeSandbox",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/mock-session-harness.mjs",
+      "name": "startMockSession",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/mock-session-harness.mjs",
+      "name": "textOf",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/render-harness.mjs",
+      "name": "renderMessage",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/testing/render-harness.mjs",
+      "name": "visibleText",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/tool-presets.ts",
+      "name": "getPresetFromTools",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/tool-presets.ts",
+      "name": "PRESET_NONE",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/tool-presets.ts",
+      "name": "ToolPreset",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-follow.ts",
+      "name": "FollowOutcome",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-items.ts",
+      "name": "isGroupAnchor",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/transcript-items.ts",
+      "name": "TranscriptItemsOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-live-tail.ts",
+      "name": "TranscriptLiveTailItem",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-rail-jump.ts",
+      "name": "RailJumpSettlement",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-rail.ts",
+      "name": "RAIL_MIN_PITCH_PX",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/transcript-rail.ts",
+      "name": "RailStepDirection",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-view-state.ts",
+      "name": "createTranscriptViewStore",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/transcript-view-state.ts",
+      "name": "DeferredContentPlan",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-view-state.ts",
+      "name": "MAX_VIEW_ENTRIES",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/transcript-view-state.ts",
+      "name": "TranscriptViewStore",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-virtual-list.ts",
+      "name": "TranscriptListItemKey",
+      "kind": "type"
+    },
+    {
+      "path": "lib/transcript-virtual-list.ts",
+      "name": "VirtualTranscriptModel",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "BranchSummaryEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "CompactionEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "CustomEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "CustomMessageEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "ExtensionAskDialogOption",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "ExtensionAskDialogResultItem",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "FileEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "LabelEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "ModelChangeEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "SessionEntryBase",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "SessionInfoEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "SubagentProgress",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "SubagentStatus",
+      "kind": "type"
+    },
+    {
+      "path": "lib/types.ts",
+      "name": "ThinkingLevelChangeEntry",
+      "kind": "type"
+    },
+    {
+      "path": "lib/web-auth.ts",
+      "name": "authorizeWebRequest",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/web-auth.ts",
+      "name": "isValidBasicAuthorization",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/web-auth.ts",
+      "name": "isWebPasswordEnabled",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/web-auth.ts",
+      "name": "OMPDESK_AUTH_USERNAME",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/web-auth.ts",
+      "name": "parseBasicCredentials",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/web-auth.ts",
+      "name": "WebAuthAuthorization",
+      "kind": "type"
+    },
+    {
+      "path": "lib/web-auth.ts",
+      "name": "WebAuthDecision",
+      "kind": "type"
+    },
+    {
+      "path": "lib/workspace-activity.ts",
+      "name": "WorkspaceActivity",
+      "kind": "type"
+    },
+    {
+      "path": "lib/worktree.ts",
+      "name": "addWorktree",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/worktree.ts",
+      "name": "invalidateProjectCache",
+      "kind": "runtime"
+    }
+  ]
+}

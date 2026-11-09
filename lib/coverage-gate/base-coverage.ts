@@ -27,7 +27,7 @@ const LCOV_FILE_NAME = "lcov.info";
 /** 基准运行用的测试命令与本次覆盖率一致，产物目录由调用方给出。 */
 const BASE_TEST_ARGS = ["test", "--coverage", "--coverage-reporter=lcov"];
 
-export interface BaseCoverageRequest {
+interface BaseCoverageRequest {
   /** 仓库根目录，工作副本登记在它名下；`.tmp` 也在它下面。 */
   repositoryRoot: string;
   /** 分叉点提交。 */
@@ -36,7 +36,7 @@ export interface BaseCoverageRequest {
   scratchRoot: string;
 }
 
-export interface BaseCoverageSuccess {
+interface BaseCoverageSuccess {
   ok: true;
   coverage: ReadonlyMap<string, FileCoverage>;
   /** 基准运行耗时，毫秒；报告里给出，便于核对门禁的时间预算。 */
@@ -45,7 +45,7 @@ export interface BaseCoverageSuccess {
   worktreePath: string;
 }
 
-export interface BaseCoverageFailure {
+interface BaseCoverageFailure {
   ok: false;
   /** 失败原因，直接进报告；不含实现层堆栈。 */
   detail: string;

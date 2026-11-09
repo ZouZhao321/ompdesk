@@ -16,14 +16,14 @@
 
 import ts from "typescript";
 
-export interface FunctionSurface {
+interface FunctionSurface {
   /** 本文件定义的函数名。 */
   defined: Set<string>;
   /** 重导出的名字，含 `export * as ns` 的命名空间名。 */
   reExported: Set<string>;
 }
 
-export interface FunctionSurfaceDiff {
+interface FunctionSurfaceDiff {
   added: string[];
   removed: string[];
   addedReExports: string[];
