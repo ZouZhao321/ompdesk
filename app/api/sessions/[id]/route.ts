@@ -17,6 +17,7 @@ import { sessionPathKey } from "@/lib/session-path";
 import { setSessionArchived } from "@/lib/session-archive";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { shouldCollapseCompactedHistory } from "@/lib/transcript-collapse";
 import { projectTreeForResponse } from "@/lib/project-tree";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 
@@ -47,14 +48,18 @@ async function getRouteHandler(
     const searchParams = new URL(req.url).searchParams;
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
-    const context = buildSessionContext(entries, leafId, { deferThinking, deferToolResultImages });
+    const header = sm.getHeader();
+    const context = buildSessionContext(entries, leafId, {
+      deferThinking,
+      deferToolResultImages,
+      collapseCompactedHistory: await shouldCollapseCompactedHistory(header?.cwd),
+    });
     // A runtime fallback can differ from the last persisted model selector.
     if (liveRpc?.inner.model) {
       context.model = { provider: liveRpc.inner.model.provider, modelId: liveRpc.inner.model.id };
     }
     const contextUsage = await getHistoricalContextUsage(entries, leafId);
     const totalActiveMs = computeSessionTotalActiveMs(entries);
-    const header = sm.getHeader();
     let modified = header?.timestamp ?? new Date().toISOString();
     try { modified = statSync(filePath).mtime.toISOString(); } catch { /* use header timestamp */ }
     const parentSessionId = header?.parentSession
