@@ -289,6 +289,13 @@ export function ConversationMap({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [selectedId]);
 
+  /** 弹层内的 Esc 只关闭弹层：stopPropagation 挡住 window 上的全局 Esc（中止运行中的回答）。 */
+  const handleDialogKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    setSelectedId(null);
+  }, []);
+
   const onPointerDownBackground = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
@@ -807,6 +814,7 @@ export function ConversationMap({
               role="dialog"
               aria-modal="true"
               aria-labelledby="map-turn-dialog-title"
+              onKeyDown={handleDialogKeyDown}
               onPointerDown={(event) => event.stopPropagation()}
               style={{
                 width: "min(720px, 100%)",
