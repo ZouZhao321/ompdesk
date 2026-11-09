@@ -28,10 +28,11 @@ import { canApplySessionIdentity, type SessionIdentity } from "@/lib/agent-clien
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import {
+  mergeOpenFileTab,
   PANEL_VIEW_KINDS,
   PANEL_VIEW_LABEL_KEYS,
   panelViewTab,
-  type FileTab,
+  type OpenFileOptions,
   type PanelViewKind,
   type Tab,
 } from "@/lib/panel-tabs";
@@ -425,6 +426,8 @@ export function AppShell() {
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
   const languageBtnRef = useRef<HTMLButtonElement>(null);
+  // 文件标签的打开序号：让「同一个文件再次以差异模式打开」成为一次新请求。
+  const fileOpenSeqRef = useRef(0);
 
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
@@ -1030,39 +1033,17 @@ export function AppShell() {
   );
 
   const handleOpenFile = useCallback(
-    (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => {
+    (filePath: string, fileName: string, options?: OpenFileOptions) => {
       const sourceSessionId = options?.sourceSessionId;
       const modeHint = options?.modeHint;
       const tabId = `file:${filePath}`;
-      setPanelTabs((prev) => {
-        const existing = prev.find((t) => t.id === tabId);
-        if (!existing) {
-          return [
-            ...prev,
-            {
-              id: tabId,
-              kind: "file",
-              label: fileName,
-              filePath,
-              sourceSessionId,
-              initialDisplayMode: modeHint,
-            } satisfies FileTab,
-          ];
-        }
-        if (existing.kind !== "file") return prev;
-        const sourceUnchanged = !sourceSessionId || existing.sourceSessionId === sourceSessionId;
-        const modeUnchanged = !modeHint || existing.initialDisplayMode === modeHint;
-        if (sourceUnchanged && modeUnchanged) return prev;
-        return prev.map((t) =>
-          t.id === tabId && t.kind === "file"
-            ? {
-                ...t,
-                ...(sourceSessionId ? { sourceSessionId } : {}),
-                ...(modeHint ? { initialDisplayMode: modeHint } : {}),
-              }
-            : t,
-        );
-      });
+      // 序号在 updater 之外先算好：状态更新函数必须是纯函数，
+      // StrictMode 会重复调用它，写在里面会让序号多自增。
+      const request = modeHint
+        ? // 带显示模式提示的打开都是一次新请求，即使同一个文件已经打开过。
+          { filePath, label: fileName, sourceSessionId, modeHint, openSeq: (fileOpenSeqRef.current += 1) }
+        : { filePath, label: fileName, sourceSessionId };
+      setPanelTabs((prev) => mergeOpenFileTab(prev, request));
       setActivePanelTabId(tabId);
       setRightPanelOpen(true);
       // On mobile the file panel is full-screen; close the drawer so it shows.
@@ -1072,8 +1053,8 @@ export function AppShell() {
   );
 
   const handleOpenLinkedFile = useCallback(
-    (filePath: string) => {
-      handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
+    (filePath: string, options?: OpenFileOptions) => {
+      handleOpenFile(filePath, getFileName(filePath), { ...options, sourceSessionId: selectedSession?.id ?? null });
     },
     [handleOpenFile, selectedSession?.id],
   );
@@ -1197,6 +1178,7 @@ export function AppShell() {
             active={tab.id === activePanelTabId && rightPanelOpen}
             gitRefreshKey={explorerRefreshKey}
             initialDisplayMode={tab.initialDisplayMode}
+            openSeq={tab.openSeq}
             onMentionLines={handleFileLineMention}
             onAtMention={handleAtMention}
             onOpenFile={handleOpenFileFromViewer}

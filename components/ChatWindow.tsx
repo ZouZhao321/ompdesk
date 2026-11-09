@@ -30,6 +30,7 @@ import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { buildRewindEntries } from "@/lib/rewind";
 import type { DisplayOptions } from "@/lib/message-display";
+import type { OpenFileOptions } from "@/lib/panel-tabs";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { buildTranscriptItems } from "@/lib/transcript-items";
@@ -90,7 +91,7 @@ interface Props {
   onContextUsageChange?: (
     usage: { percent: number | null; contextWindow: number; tokens: number | null } | null,
   ) => void;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   onSubagentsChange?: (subagents: SubagentSnapshot[]) => void;
   /** Completion sound state + controls, owned by AppShell so tasks finishing in
    *  a non-active workspace can still ring. */
@@ -301,7 +302,7 @@ interface TranscriptRowContext {
   isNew: boolean;
   forkingEntryId: string | null;
   isStreaming: boolean;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   onFork: (entryId: string) => void;
   onNavigate: (entryId: string) => void;
   onEditContent: (message: UserMessage) => void;

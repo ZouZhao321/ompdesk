@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
 import { auditFailure, auditSuccess } from "@/lib/audit-log";
 import {
-  getDefault,
   getEnumValues,
   getPathsForTab,
   getSettingsFieldType,
@@ -17,9 +16,11 @@ import {
   getSetting,
   isSettingConfigured,
   setSetting,
+  getSettingForWeb,
+  getDefaultForWeb,
   type SettingPath,
 } from "@/lib/omp-settings";
-import { getOmpRuntime, getSettingsForCwd } from "@/lib/omp-runtime";
+import { getOmpSettings, getSettingsForCwd } from "@/lib/omp-runtime";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { getAvailableWebThemes, getWebThemeConfig } from "@/lib/omp-theme";
 import type { SettingsField, SettingsOption, SettingsResponse, SettingsValue } from "@/lib/settings-api";
@@ -130,8 +131,8 @@ async function getRouteHandler(req: Request) {
           label: ui.label,
           description: ui.description,
           type: fieldType,
-          value: secret ? null : serializableValue(getSetting(settings, path)),
-          defaultValue: secret ? null : serializableValue(getDefault(path)),
+          value: secret ? null : serializableValue(getSettingForWeb(settings, path)),
+          defaultValue: secret ? null : serializableValue(getDefaultForWeb(path)),
           configured: isSettingConfigured(settings, path),
           options: optionsFor(path, themeNames),
           ordered: ui.ordered === true,
@@ -170,7 +171,7 @@ export const PATCH = withRequestLog("/api/settings", async (req: Request) => {
     ) {
       throw new Error("Unknown omp theme");
     }
-    const { settings } = await getOmpRuntime();
+    const settings = await getOmpSettings();
     setSetting(settings, path, value);
     await settings.flush();
     auditSuccess("settings.write", path);

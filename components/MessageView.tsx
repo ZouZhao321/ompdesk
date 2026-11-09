@@ -23,6 +23,7 @@ import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
 import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
+import type { OpenFileOptions } from "@/lib/panel-tabs";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import type {
   AgentMessage,
@@ -200,7 +201,7 @@ interface Props {
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
   cwd?: string;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
@@ -378,7 +379,7 @@ function UserMessageView({
 }: {
   message: UserMessage;
   cwd?: string;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
@@ -690,7 +691,7 @@ function AssistantMessageView({
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
   cwd?: string;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
@@ -1043,7 +1044,7 @@ function BlockView({
   streamingDuration?: number;
   toolCallDurations?: Map<string, number>;
   cwd?: string;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   sessionId?: string;
   entryId?: string;
   turnAnchorEntryId?: string;
@@ -1099,7 +1100,7 @@ function TextBlock({
   block: TextContent;
   isStreaming?: boolean;
   cwd?: string;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   sessionId?: string;
 }) {
   return (
@@ -2319,7 +2320,7 @@ function SkillPromptMessageView({
 }: {
   message: CustomMessage;
   cwd?: string;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   sessionId?: string;
 }) {
   const { t } = useI18n();
@@ -2437,7 +2438,7 @@ function CustomMessageView({
 }: {
   message: CustomMessage;
   cwd?: string;
-  onOpenFile?: (filePath: string) => void;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
   sessionId?: string;
 }) {
   const { t } = useI18n();
