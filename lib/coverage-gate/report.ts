@@ -22,7 +22,24 @@ export interface ReportInput {
   functionDelta?: FunctionDeltaData;
   /** 有效豁免已从 `findings` 里剔除，随这里的豁免段一并展示。 */
   exceptions?: ExceptionResolution;
+  /** 分段耗时；命令行入口实测后传入，纯渲染的测试可以不提供。 */
+  timings?: ReportTimings;
   findings: readonly Finding[];
+}
+
+/** 门禁新增步骤的耗时预算：3 分钟。超出时报告给出超出量，不改变退出码。 */
+const GATE_BUDGET_MS = 180_000;
+
+/** 三段耗时，毫秒。`testMs` 缺失表示报告不是由命令行入口产生的。 */
+export interface ReportTimings {
+  /** 本次带覆盖率的测试运行。 */
+  testMs?: number;
+  /** 分叉点基准运行；跳过时为 0。 */
+  baseMs: number;
+  /** 基准运行没有发生，报告里写明原因。 */
+  baseSkipped: boolean;
+  /** 判定分析，不含基准运行。 */
+  analysisMs: number;
 }
 
 const STATUS_LABELS: Record<ChangeStatus, string> = {
@@ -143,6 +160,32 @@ function renderExceptions(resolution: ExceptionResolution): string[] {
   return lines;
 }
 
+/** 秒保留一位小数，三段的单位与粒度一致。 */
+function seconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} 秒`;
+}
+
+/**
+ * 分段耗时：本次测试运行、基准运行、分析。门禁新增的步骤就是这三段，合计与预算放在
+ * 最后一行；超出预算时单独说明超出量，便于先定位最慢的一段。
+ */
+function renderTimings(timings: ReportTimings): string[] {
+  const total = (timings.testMs ?? 0) + timings.baseMs + timings.analysisMs;
+  const lines = [
+    "耗时",
+    timings.testMs === undefined
+      ? "  本次测试运行 —（报告不是由命令行入口产生）"
+      : `  本次测试运行 ${seconds(timings.testMs)}`,
+    timings.baseSkipped ? "  基准运行 —（本次没有需要比对的改动文件，跳过）" : `  基准运行 ${seconds(timings.baseMs)}`,
+    `  分析 ${seconds(timings.analysisMs)}（不含基准运行）`,
+    `  门禁合计 ${seconds(total)}，预算 ${seconds(GATE_BUDGET_MS)}`,
+  ];
+  if (total > GATE_BUDGET_MS) {
+    lines.push(`  超出预算 ${seconds(total - GATE_BUDGET_MS)}：按上方分段定位最慢的一段`);
+  }
+  return lines;
+}
+
 /** 把一次门禁运行的数据渲染成一段可直接贴进检查日志的文本。 */
 export function renderReport(input: ReportInput): string {
   const failed = input.findings.length > 0;
@@ -186,6 +229,7 @@ export function renderReport(input: ReportInput): string {
   for (const finding of input.findings) lines.push(...renderFinding(finding));
 
   if (input.exceptions) lines.push("", ...renderExceptions(input.exceptions));
+  if (input.timings) lines.push("", ...renderTimings(input.timings));
 
   const findings = input.findings.length;
   lines.push(

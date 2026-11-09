@@ -15,10 +15,11 @@ import {
   type ChangedFile,
 } from "./git";
 import { aggregateCoverage, indexByPath, parseLcov } from "./lcov";
-import { renderReport } from "./report";
+import { renderReport, type ReportTimings } from "./report";
 import { evaluateRules } from "./rules";
 import { buildFunctionDelta, type FunctionDeltaData } from "./rules/rule-function-delta";
 import { collectTestImports } from "./test-imports";
+import { LCOV_PATH } from "./test-command";
 
 /** git 查询的注入点：命令行用默认实现，测试用固定样本，不读真实仓库状态。 */
 export interface GitQueries {
@@ -43,10 +44,12 @@ const GIT_QUERIES: GitQueries = {
 
 export interface CoverageGateOptions {
   cwd: string;
-  /** lcov 产物路径，由测试命令的 `--coverage-dir` 决定。 */
-  lcovPath: string;
+  /** lcov 产物路径；省略时取共享定义的默认位置，与测试命令的产物目录一致。 */
+  lcovPath?: string;
   /** 合并目标分支，默认 `origin/main`。 */
   baseRef?: string;
+  /** 本次带覆盖率的测试运行耗时，命令行入口实测后传入，报告里作为分段耗时展示。 */
+  testDurationMs?: number;
 }
 
 export interface CoverageGateDependencies {
@@ -168,15 +171,18 @@ export async function runCoverageGate(
   const readExceptions = dependencies.readExceptions ?? readExceptionsFile;
   const git = dependencies.git ?? GIT_QUERIES;
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
+  const lcovPath = options.lcovPath ?? LCOV_PATH;
+  // 分析的计时从读产物开始，基准运行的耗时从 `generateBaseCoverage` 的结果里扣出来。
+  const analysisStartedAt = Date.now();
 
   let lcovText: string;
   try {
-    lcovText = await readText(options.lcovPath);
+    lcovText = await readText(lcovPath);
   } catch (error) {
     return {
       exitCode: 0,
       report: renderUnavailable(
-        `覆盖率产物缺失：${options.lcovPath}（${errorMessage(error)}）。` + "先运行 bun run coverage:gate 生成 lcov。",
+        `覆盖率产物缺失：${lcovPath}（${errorMessage(error)}）。` + "先运行 bun run coverage:gate 生成 lcov。",
       ),
     };
   }
@@ -318,6 +324,14 @@ export async function runCoverageGate(
   // 有效豁免只放行登记的那一条规则与那一个文件；已到期条目不放行任何判定。
   const { blocking, exceptions } = applyExceptions(findings, exceptionResolution);
 
+  const baseMs = functionDelta?.baseCoverage.durationMs ?? 0;
+  const timings: ReportTimings = {
+    ...(options.testDurationMs === undefined ? {} : { testMs: options.testDurationMs }),
+    baseMs,
+    baseSkipped: functionDelta === undefined,
+    analysisMs: Math.max(0, Date.now() - analysisStartedAt - baseMs),
+  };
+
   const report = renderReport({
     baseRef,
     mergeBase,
@@ -330,6 +344,7 @@ export async function runCoverageGate(
     missingManagedFiles: managedFiles.filter((file) => !coverage.has(file)),
     functionDelta,
     exceptions,
+    timings,
     findings: blocking,
   });
 

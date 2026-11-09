@@ -54,11 +54,24 @@ jobs:
 
       # 流水线只在 package.json 的 `ci` 脚本里定义一次（format → typecheck → test →
       # coverage:gate → build → smoke:dev）；本地 `bun run verify` 与推送前钩子用的是同一份
-      # 定义，改流程只改那一处，CI 与本地不会再分叉。
+      # 定义，改流程只改那一处，CI 与本地不会再分叉。`lib/coverage-gate/ci-pipeline.test.mjs`
+      # 直接读这份工作流与 package.json，锁住 verify 作业只调用 `bun run ci` 一个入口，
+      # 以及静态检查在前、构建与冒烟在后的步骤顺序，任一步失败都不再往下跑。
       #
-      # coverage:gate 复用同一条测试命令产出 lcov，再渲染本次改动的覆盖率数字并执行
-      # 覆盖率规则。规则有判定结果时这一步以非零退出码结束，合并检查随之变红；测试
-      # 失败仍由前面的 test 步骤决定。本地单独复现用 `bun run coverage:gate`。
+      # 两次测试运行是刻意的，不合并：
+      #
+      # - `test` 是「测试是否通过」的判据，不开覆盖率插桩，失败信息与本地 `bun test`
+      #   完全一致；
+      # - `coverage:gate` 跑的是带插桩的全套测试，产物 lcov 与分叉点基准运行必须是同
+      #   一条命令，否则两侧函数计数不可比。
+      #
+      # 合并成一次会让「测试失败」与「覆盖率判定」互相绑架：插桩后的失败信息与本地
+      # 不一致，基准运行也失去了独立可比的对侧命令。所以保留两次，代价是约一次测试
+      # 运行的时间。
+      #
+      # coverage:gate 的三段耗时（本次测试运行、基准运行、分析）由报告自己打印，合计
+      # 超过 3 分钟时报告里单独说明超出量。规则有判定结果时这一步以非零退出码结束，
+      # 合并检查随之变红；本地单独复现用 `bun run coverage:gate`。
       #
       # 第一步排版是写入模式：只改写不判定，排版差异不会让 CI 失败。需要单独的判定用
       # `bun run format:check`。
@@ -91,6 +104,19 @@ jobs:
           path: .tmp/pack-check/tarball/*.tgz
           if-no-files-found: error
           retention-days: 1
+
+      # 覆盖率产物随构建一起保留，事后可以拿同一份 lcov 复核报告里的数字。路径与
+      # `lib/coverage-gate/test-command.ts` 里的 LCOV_PATH 一致，测试锁住这两处不脱节。
+      # 判定失败时产物同样要留下，所以这里不看前一步的结论；排在打包之后，
+      # 上传抖动不会连带跳过打包与下游的平台冒烟。
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: .tmp/coverage-gate/lcov.info
+          retention-days: 7
+          if-no-files-found: warn
 
   package-smoke:
     name: Package smoke (${{ matrix.os }})
