@@ -29,11 +29,7 @@ function readOption(args, flag, fallback) {
 }
 
 const args = process.argv.slice(2);
-const baseRef = readOption(
-  args,
-  "--base",
-  process.env.COVERAGE_GATE_BASE ?? DEFAULT_BASE_REF,
-);
+const baseRef = readOption(args, "--base", process.env.COVERAGE_GATE_BASE ?? DEFAULT_BASE_REF);
 
 const testStartedAt = Date.now();
 const testRun = spawnSync(process.execPath, coverageTestArgs(), {
@@ -43,9 +39,7 @@ const testRun = spawnSync(process.execPath, coverageTestArgs(), {
 const testDurationMs = Date.now() - testStartedAt;
 
 if (testRun.status !== 0) {
-  process.stderr.write(
-    `\n覆盖率门禁：测试运行失败（退出码 ${testRun.status ?? "未知"}），本次不产出判定。\n`,
-  );
+  process.stderr.write(`\n覆盖率门禁：测试运行失败（退出码 ${testRun.status ?? "未知"}），本次不产出判定。\n`);
   process.exit(testRun.status ?? 1);
 }
 

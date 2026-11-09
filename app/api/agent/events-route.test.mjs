@@ -7,10 +7,9 @@ const runningEventsSource = await readFile(new URL("./running/events/route.ts", 
 const lifecycleSource = await readFile(new URL("../../../lib/sse-lifecycle.ts", import.meta.url), "utf8");
 
 test("agent SSE projects SDK events onto the fields consumed by the web client", () => {
-  assert.match(agentEventsSource, /OMITTED_EVENT_TYPES = new Set\(\["turn_start", "turn_end", "tool_execution_update"\]\)/);
-  assert.match(agentEventsSource, /delete clientEvent\.assistantMessageEvent/);
-  assert.match(agentEventsSource, /event\.type === "agent_end"\) return \{ type: "agent_end" \}/);
+  assert.match(agentEventsSource, /import \{ toClientEvent \} from "@\/lib\/agent-client-events"/);
   assert.match(agentEventsSource, /const clientEvent = toClientEvent\(event\)/);
+  assert.doesNotMatch(agentEventsSource, /function toClientEvent/);
 });
 
 test("SSE routes delegate frame encoding to one shared stream lifecycle", () => {

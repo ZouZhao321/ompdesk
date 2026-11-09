@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import {
-  getCommentDictionaryVersion,
-  subscribeCommentDictionary,
-} from "@/lib/comment-dictionary-version";
+import { getCommentDictionaryVersion, subscribeCommentDictionary } from "@/lib/comment-dictionary-version";
 import {
   getCommentTranslationPreference,
   subscribeCommentTranslationPreference,
@@ -12,11 +9,7 @@ import {
 
 /** 查看器顶部的译文开关，默认关闭。 */
 export function useCommentTranslationPreference(): boolean {
-  return useSyncExternalStore(
-    subscribeCommentTranslationPreference,
-    getCommentTranslationPreference,
-    () => false,
-  );
+  return useSyncExternalStore(subscribeCommentTranslationPreference, getCommentTranslationPreference, () => false);
 }
 
 /** 字典版本；保存译文后递增，用作译文渲染缓存的依赖。 */

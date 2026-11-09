@@ -59,8 +59,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.composer.predictions.description":
     "After a completed turn, ask the active model to predict your next message and show it as ghost text in the empty composer; Tab or Right inserts it without sending. Extra usage: every completed turn sends one more billed request over the whole conversation (counted in /stats)",
   "settings.field.spelling.autocorrect.label": "Autocorrect (macOS)",
-  "settings.field.spelling.autocorrect.description":
-    "Apply confident macOS spelling corrections after completed words",
+  "settings.field.spelling.autocorrect.description": "Apply confident macOS spelling corrections after completed words",
   "settings.field.emojiAutocomplete.label": "Emoji Autocomplete",
   "settings.field.emojiAutocomplete.description":
     "Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
@@ -102,8 +101,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.collab.webUrl.description":
     "Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is localhost-only",
   "settings.field.collab.displayName.label": "Display Name",
-  "settings.field.collab.displayName.description":
-    "Name shown to other collab participants (default: OS username)",
+  "settings.field.collab.displayName.description": "Name shown to other collab participants (default: OS username)",
   "settings.field.collab.autoStart.label": "Auto Start",
   "settings.field.collab.autoStart.description":
     "Host every interactive session via collab.relayUrl as it starts and publish it to the local registry (omp collab list); rooms rotate on session switch",
@@ -137,21 +135,18 @@ export const interactionTasks: Record<string, string> = {
     "Let standalone jevify append its hidden bulk-judge classification notice",
 
   "settings.field.autoResume.label": "Auto Resume",
-  "settings.field.autoResume.description":
-    "Automatically resume the most recent session in the current directory",
+  "settings.field.autoResume.description": "Automatically resume the most recent session in the current directory",
   "settings.field.startup.quiet.label": "Quiet Startup",
   "settings.field.startup.quiet.description": "Skip welcome screen and startup status messages",
   "settings.field.startup.showSplash.label": "Show Startup Splash",
   "settings.field.startup.showSplash.description":
     "Show the full animated setup splash on normal interactive startup without rerunning setup. Quiet Startup still suppresses it.",
   "settings.field.startup.setupWizard.label": "Setup Wizard",
-  "settings.field.startup.setupWizard.description":
-    "Show newly added onboarding steps once per setup version",
+  "settings.field.startup.setupWizard.description": "Show newly added onboarding steps once per setup version",
   "settings.field.startup.checkUpdate.label": "Check for Updates",
   "settings.field.startup.checkUpdate.description": "Check for omp updates on startup",
   "settings.field.update.channel.label": "Update Channel",
-  "settings.field.update.channel.description":
-    "Update channel used by omp update and the startup update check",
+  "settings.field.update.channel.description": "Update channel used by omp update and the startup update check",
   "settings.field.marketplace.autoUpdate.label": "Marketplace Auto-Update",
   "settings.field.marketplace.autoUpdate.description": "Check for plugin updates on startup",
   "settings.field.startup.changelogMode.label": "Startup Changelog",
@@ -178,8 +173,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.task.isolation.enabled.description":
     "Run subagents in an isolated copy of the checkout and integrate their changes afterwards",
   "settings.field.isolation.backend.label": "Isolation Backend",
-  "settings.field.isolation.backend.description":
-    "Backend used for subagent isolation and worktree cloning",
+  "settings.field.isolation.backend.description": "Backend used for subagent isolation and worktree cloning",
   "settings.field.worktree.clone.label": "Clone Checkout into Worktrees",
   "settings.field.worktree.clone.description":
     "New worktrees from `github pr_checkout` and `git worktree add` in bash start as a copy-on-write clone of the current checkout so ignored build artifacts (node_modules, target) carry over; falls back to a plain checkout when the filesystem cannot clone",
@@ -187,8 +181,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.worktree.cleanSource.description":
     "When creating a worktree with `/wt`, reset tracked changes and remove untracked files from the original checkout after carrying them over",
   "settings.field.worktree.onStart.label": "Worktree on Start",
-  "settings.field.worktree.onStart.description":
-    "Whether fresh interactive sessions start in a new linked worktree",
+  "settings.field.worktree.onStart.description": "Whether fresh interactive sessions start in a new linked worktree",
   "settings.field.worktree.onExit.label": "Worktree on Exit",
   "settings.field.worktree.onExit.description":
     "What to do on exit with worktrees created since omp started (on start or with `/wt`)",
@@ -225,8 +218,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.task.enableLsp.description":
     "Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.",
   "settings.field.task.maxRecursionDepth.label": "Max Task Recursion",
-  "settings.field.task.maxRecursionDepth.description":
-    "How many levels deep subagents can spawn their own subagents",
+  "settings.field.task.maxRecursionDepth.description": "How many levels deep subagents can spawn their own subagents",
   "settings.field.task.maxRuntimeMs.label": "Max Subagent Runtime",
   "settings.field.task.maxRuntimeMs.description":
     "Hard wall-clock limit per subagent (ms). 0 disables it. Defense-in-depth against provider-side stream hangs that escape the inference-layer watchdog; triggers a normal subagent abort with a 'timed out' reason.",
@@ -247,25 +239,20 @@ export const interactionTasks: Record<string, string> = {
     "Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.",
 
   "settings.field.plan.enabled.label": "Plan Mode",
-  "settings.field.plan.enabled.description":
-    "Enable plan mode for read-only exploration and planning before execution",
+  "settings.field.plan.enabled.description": "Enable plan mode for read-only exploration and planning before execution",
   "settings.field.plan.defaultOnStartup.label": "Start in Plan Mode",
-  "settings.field.plan.defaultOnStartup.description":
-    "Automatically enter plan mode at the start of every new session",
+  "settings.field.plan.defaultOnStartup.description": "Automatically enter plan mode at the start of every new session",
   "settings.field.plan.autosave.label": "Autosave Plans",
-  "settings.field.plan.autosave.description":
-    "Automatically save approved plans to disk when plan mode completes",
+  "settings.field.plan.autosave.description": "Automatically save approved plans to disk when plan mode completes",
   "settings.field.plan.autosaveDir.label": "Autosave Directory",
   "settings.field.plan.autosaveDir.description":
     "Directory for autosaved plans. Supports ~, absolute, and cwd-relative paths. Empty uses <project>/.omp/plans/.",
   "settings.field.goal.enabled.label": "Goal Mode",
   "settings.field.goal.enabled.description": "Enable per-session goal mode and the hidden goal tool",
   "settings.field.goal.statusInFooter.label": "Goal Status in Footer",
-  "settings.field.goal.statusInFooter.description":
-    "Show token budget alongside the goal indicator in the status line",
+  "settings.field.goal.statusInFooter.description": "Show token budget alongside the goal indicator in the status line",
   "settings.field.title.generator.label": "Title Generator",
-  "settings.field.title.generator.description":
-    "What names an untitled session from the user's messages",
+  "settings.field.title.generator.description": "What names an untitled session from the user's messages",
   "settings.field.title.refreshOnReplan.label": "Refresh Title on Replan",
   "settings.field.title.refreshOnReplan.description":
     "Refresh generated session titles after todo init replans unless the title was set by the user",
@@ -277,8 +264,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.commands.enableClaudeProject.label": "Claude Project Commands",
   "settings.field.commands.enableClaudeProject.description": "Load commands from .claude/commands/",
   "settings.field.commands.enableOpencodeUser.label": "OpenCode User Commands",
-  "settings.field.commands.enableOpencodeUser.description":
-    "Load commands from ~/.config/opencode/commands/",
+  "settings.field.commands.enableOpencodeUser.description": "Load commands from ~/.config/opencode/commands/",
   "settings.field.commands.enableOpencodeProject.label": "OpenCode Project Commands",
   "settings.field.commands.enableOpencodeProject.description": "Load commands from .opencode/commands/",
 };

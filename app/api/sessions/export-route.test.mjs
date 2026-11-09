@@ -14,8 +14,11 @@ const { GET: getExport } = await jiti.import("./[id]/export/route.ts");
 
 function exportFixture(t) {
   const stateKeys = [
-    "__ompSessions", "__ompFinalSessionIds", "__ompSessionPathCache",
-    "__ompPathToSessionIdCache", "__ompSessionListCache",
+    "__ompSessions",
+    "__ompFinalSessionIds",
+    "__ompSessionPathCache",
+    "__ompPathToSessionIdCache",
+    "__ompSessionListCache",
   ];
   const previousState = stateKeys.map((key) => [key, globalThis[key]]);
   const dir = mkdtempSync(join(tmpdir(), "ompdesk-export-test-"));
@@ -27,21 +30,34 @@ function exportFixture(t) {
   for (const id of [a, b]) {
     const path = join(dir, `${id}.jsonl`);
     paths.set(id, path);
-    writeFileSync(path, [
-      { type: "session", version: 3, id, timestamp, cwd: dir },
-      {
-        type: "message", id: "u1", parentId: null, timestamp,
-        message: { role: "user", content: `transcript ${id}` },
-      },
-    ].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+    writeFileSync(
+      path,
+      [
+        { type: "session", version: 3, id, timestamp, cwd: dir },
+        {
+          type: "message",
+          id: "u1",
+          parentId: null,
+          timestamp,
+          message: { role: "user", content: `transcript ${id}` },
+        },
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join("\n") + "\n",
+    );
   }
-  globalThis.__ompSessions = new Map([[a, {
-    sessionId: b,
-    runtimeId,
-    sessionFile: paths.get(b),
-    isAlive: () => true,
-    syncSessionIdentity: () => {},
-  }]]);
+  globalThis.__ompSessions = new Map([
+    [
+      a,
+      {
+        sessionId: b,
+        runtimeId,
+        sessionFile: paths.get(b),
+        isAlive: () => true,
+        syncSessionIdentity: () => {},
+      },
+    ],
+  ]);
   globalThis.__ompFinalSessionIds = new Map();
   globalThis.__ompSessionPathCache = new Map(paths);
   globalThis.__ompPathToSessionIdCache = new Map([...paths].map(([id, path]) => [path, id]));
@@ -70,7 +86,10 @@ async function assertTranscript(response, id) {
   assert.ok(encoded, "export contains the SDK's embedded transcript");
   const data = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
   assert.equal(data.header.id, id);
-  assert.deepEqual(data.entries.map((entry) => entry.message?.content), [`transcript ${id}`]);
+  assert.deepEqual(
+    data.entries.map((entry) => entry.message?.content),
+    [`transcript ${id}`],
+  );
 }
 
 test("export follows a live runtime to its current transcript after a missed identity update", async (t) => {

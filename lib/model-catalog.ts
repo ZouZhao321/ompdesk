@@ -93,19 +93,29 @@ function readCost(value: unknown): ModelCatalogCost {
 
 function readInputModalities(value: unknown): string[] | undefined {
   if (!isRecord(value) || !Array.isArray(value.input)) return undefined;
-  const input = Array.from(new Set(value.input
-    .filter((entry): entry is string => typeof entry === "string")
-    .map((entry) => entry.trim().toLocaleLowerCase())
-    .filter((entry) => SUPPORTED_INPUT_MODALITIES.has(entry))));
+  const input = Array.from(
+    new Set(
+      value.input
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim().toLocaleLowerCase())
+        .filter((entry) => SUPPORTED_INPUT_MODALITIES.has(entry)),
+    ),
+  );
   return input.length ? input : undefined;
 }
 
 function normalizeProvider(value: string): string {
-  return value.trim().toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+  return value
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function normalizeModelId(value: string): string {
-  return value.trim().toLocaleLowerCase().replace(/^models\//, "");
+  return value
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/^models\//, "");
 }
 
 function hostname(value: string | undefined): string | undefined {
@@ -124,8 +134,9 @@ function hostMatches(actual: string, expected: string): boolean {
 function providerMatches(entry: ModelCatalogEntry, providerHint: string): boolean {
   const normalizedHint = normalizeProvider(providerHint);
   if (!normalizedHint) return false;
-  return normalizeProvider(entry.providerId) === normalizedHint
-    || normalizeProvider(entry.providerName) === normalizedHint;
+  return (
+    normalizeProvider(entry.providerId) === normalizedHint || normalizeProvider(entry.providerName) === normalizedHint
+  );
 }
 
 function baseUrlMatches(entry: ModelCatalogEntry, baseUrl: string): boolean {
@@ -133,8 +144,9 @@ function baseUrlMatches(entry: ModelCatalogEntry, baseUrl: string): boolean {
   if (!actualHost) return false;
   const knownHosts = KNOWN_PROVIDER_HOSTS[normalizeProvider(entry.providerId)] ?? [];
   const providerHost = hostname(entry.providerBaseUrl);
-  return [...knownHosts, ...(providerHost ? [providerHost] : [])]
-    .some((candidate) => hostMatches(actualHost, candidate));
+  return [...knownHosts, ...(providerHost ? [providerHost] : [])].some((candidate) =>
+    hostMatches(actualHost, candidate),
+  );
 }
 
 function exactModelMatches(entry: ModelCatalogEntry, query: string): boolean {
@@ -151,11 +163,7 @@ function validPrice(entry: ModelCatalogEntry): entry is ModelCatalogEntry & {
   return entry.cost.input !== undefined && entry.cost.output !== undefined;
 }
 
-function modeValue<T>(
-  values: readonly T[],
-  total: number,
-  keyFor: (value: T) => string,
-): T | undefined {
+function modeValue<T>(values: readonly T[], total: number, keyFor: (value: T) => string): T | undefined {
   if (values.length === 0 || total <= 0) return undefined;
   const groups = new Map<string, { value: T; count: number }>();
   for (const value of values) {
@@ -193,24 +201,28 @@ function metadataFromEntry(entry: ModelCatalogEntry): ModelCatalogPreset {
 function consensusMetadata(entries: readonly ModelCatalogEntry[]): ModelCatalogPreset {
   const total = entries.length;
   return {
-    name: modeValue(entries.map((entry) => entry.name), total, (value) => value.toLocaleLowerCase()),
+    name: modeValue(
+      entries.map((entry) => entry.name),
+      total,
+      (value) => value.toLocaleLowerCase(),
+    ),
     reasoning: modeValue(
-      entries.flatMap((entry) => entry.reasoning === undefined ? [] : [entry.reasoning]),
+      entries.flatMap((entry) => (entry.reasoning === undefined ? [] : [entry.reasoning])),
       total,
       String,
     ),
     input: modeValue(
-      entries.flatMap((entry) => entry.input ? [entry.input] : []),
+      entries.flatMap((entry) => (entry.input ? [entry.input] : [])),
       total,
       (value) => [...value].sort().join(","),
     ),
     contextWindow: modeValue(
-      entries.flatMap((entry) => entry.contextWindow === undefined ? [] : [entry.contextWindow]),
+      entries.flatMap((entry) => (entry.contextWindow === undefined ? [] : [entry.contextWindow])),
       total,
       String,
     ),
     maxTokens: modeValue(
-      entries.flatMap((entry) => entry.maxTokens === undefined ? [] : [entry.maxTokens]),
+      entries.flatMap((entry) => (entry.maxTokens === undefined ? [] : [entry.maxTokens])),
       total,
       String,
     ),
@@ -262,8 +274,12 @@ function consensusPrice(entries: readonly ModelCatalogEntry[]): ModelCatalogPric
     };
   }
 
-  const cacheRead = modeNumber(winner.flatMap((entry) => entry.cost.cacheRead === undefined ? [] : [entry.cost.cacheRead]));
-  const cacheWrite = modeNumber(winner.flatMap((entry) => entry.cost.cacheWrite === undefined ? [] : [entry.cost.cacheWrite]));
+  const cacheRead = modeNumber(
+    winner.flatMap((entry) => (entry.cost.cacheRead === undefined ? [] : [entry.cost.cacheRead])),
+  );
+  const cacheWrite = modeNumber(
+    winner.flatMap((entry) => (entry.cost.cacheWrite === undefined ? [] : [entry.cost.cacheWrite])),
+  );
   return {
     status: "reliable",
     method: "consensus",
@@ -395,10 +411,13 @@ export function searchModelCatalog(
   return entries
     .map((entry) => ({ entry, rank: matchRank(entry, normalizedQuery, normalizedProvider) }))
     .filter(({ rank }) => !normalizedQuery || rank < 20)
-    .sort((a, b) => a.rank - b.rank
-      || a.entry.providerName.localeCompare(b.entry.providerName, undefined, { sensitivity: "base" })
-      || a.entry.name.localeCompare(b.entry.name, undefined, { numeric: true, sensitivity: "base" })
-      || a.entry.id.localeCompare(b.entry.id, undefined, { numeric: true, sensitivity: "base" }))
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        a.entry.providerName.localeCompare(b.entry.providerName, undefined, { sensitivity: "base" }) ||
+        a.entry.name.localeCompare(b.entry.name, undefined, { numeric: true, sensitivity: "base" }) ||
+        a.entry.id.localeCompare(b.entry.id, undefined, { numeric: true, sensitivity: "base" }),
+    )
     .slice(0, cappedLimit)
     .map(({ entry }) => entry);
 }

@@ -175,7 +175,7 @@ export const POST = withRequestLog("/api/plugins", async (req: Request) => {
   let cwd: string | undefined;
   let source: string | undefined;
   try {
-    const body = await req.json() as {
+    const body = (await req.json()) as {
       action?: PluginAction;
       source?: string;
       cwd?: string;

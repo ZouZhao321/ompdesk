@@ -1,18 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
-import {
-  generateBaseCoverage,
-  readSourcePair,
-  type BaseCoverageLoader,
-  type SourceReader,
-} from "./base-coverage";
-import {
-  applyExceptions,
-  EXCEPTIONS_FILE,
-  localTodayIso,
-  resolveExceptions,
-} from "./exceptions";
-import { BASELINE_FILE, collectExportUsage, type ExportAnalysis } from "./exports";
+import { generateBaseCoverage, readSourcePair, type BaseCoverageLoader, type SourceReader } from "./base-coverage";
+import { applyExceptions, EXCEPTIONS_FILE, localTodayIso, resolveExceptions } from "./exceptions";
+import { BASELINE_FILE, collectExportUsage, exportUsageFailure, type ExportAnalysis } from "./exports";
 import {
   isManagedSourceFile,
   listChangedFiles,
@@ -92,28 +82,30 @@ function errorMessage(error: unknown): string {
 }
 
 function renderUnavailable(detail: string): string {
-  return [
-    "覆盖率门禁未能运行",
-    `  ${detail}`,
-    "  没有判定结果，退出码为 0。",
-  ].join("\n");
+  return ["覆盖率门禁未能运行", `  ${detail}`, "  没有判定结果，退出码为 0。"].join("\n");
 }
 
 /**
- * 测试文件的导入索引。git 查询的桩没有 `testFiles` 时返回空索引，被动覆盖检查随之跳过。
+ * 测试文件的导入索引。git 查询的桩没有 `testFiles` 时返回 undefined，被动覆盖检查随之跳过：
+ * 空索引会被当成「没有任何测试导入过这个符号」，与桩缺少这项查询的语义相反。
  */
 async function collectTestImportIndex(
   git: GitQueries,
   root: string,
   readText: (filePath: string) => Promise<string>,
-): Promise<ReadonlyMap<string, ReadonlySet<string>>> {
-  if (!git.testFiles) return new Map();
+): Promise<ReadonlyMap<string, ReadonlySet<string>> | undefined> {
+  if (!git.testFiles) return undefined;
 
   const testFiles = await git.testFiles(root);
   const sources = new Map<string, string>();
   await Promise.all(
     testFiles.map(async (filePath) => {
-      sources.set(filePath, await readText(join(root, filePath)));
+      try {
+        sources.set(filePath, await readText(join(root, filePath)));
+      } catch (error) {
+        // git 索引里仍列着工作区已删除的文件，缺文件不该让整次门禁退化成「未能运行」。
+        if (!isMissingFile(error)) throw new Error(`${filePath}：${errorMessage(error)}`);
+      }
     }),
   );
   return collectTestImports(sources);
@@ -164,9 +156,10 @@ async function readExceptionsFile(root: string): Promise<string | null> {
  * 编排一次门禁运行：读 lcov、取分叉点与改动清单、现场生成基准覆盖率、聚合、判定、
  * 渲染报告。
  *
- * 产物缺失、git 读不到分叉点或导出分析读不出源码时把原因写进报告而不是抛出，退出码
- * 保持 0：门禁本身没跑起来不等于代码没被测试。规则有判定结果或豁免清单校验失败时退出
- * 码为 1，检查随之变红。基准运行失败不在此列，它由规则二报成流水线问题并参与退出码。
+ * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出，退出码保持 0：门禁本身
+ * 没跑起来不等于代码没被测试。规则有判定结果或豁免清单校验失败时退出码为 1，检查随之
+ * 变红。基准运行失败由规则二报成流水线问题，导出分析失败由规则三报成流水线问题，两者
+ * 都参与退出码：数据不全时放过合并，等于把「没读到引用」当成「没有引用」。
  */
 export async function runCoverageGate(
   options: CoverageGateOptions,
@@ -189,8 +182,7 @@ export async function runCoverageGate(
     return {
       exitCode: 0,
       report: renderUnavailable(
-        `覆盖率产物缺失：${lcovPath}（${errorMessage(error)}）。`
-          + "先运行 bun run coverage:gate 生成 lcov。",
+        `覆盖率产物缺失：${lcovPath}（${errorMessage(error)}）。` + "先运行 bun run coverage:gate 生成 lcov。",
       ),
     };
   }
@@ -216,8 +208,7 @@ export async function runCoverageGate(
     return {
       exitCode: 0,
       report: renderUnavailable(
-        `git 数据读取失败：${errorMessage(error)}。`
-          + "分叉点需要完整检出，actions/checkout 需设 fetch-depth: 0。",
+        `git 数据读取失败：${errorMessage(error)}。` + "分叉点需要完整检出，actions/checkout 需设 fetch-depth: 0。",
       ),
     };
   }
@@ -231,10 +222,7 @@ export async function runCoverageGate(
   } catch (error) {
     exceptionReadError = errorMessage(error);
   }
-  const exceptionResolution = resolveExceptions(
-    exceptionsText,
-    dependencies.today ?? localTodayIso(),
-  );
+  const exceptionResolution = resolveExceptions(exceptionsText, dependencies.today ?? localTodayIso());
   if (exceptionReadError !== undefined) {
     exceptionResolution.problems.push({
       index: 0,
@@ -254,13 +242,11 @@ export async function runCoverageGate(
       baselineText: await readBaseline(root),
     });
   } catch (error) {
-    return {
-      exitCode: 0,
-      report: renderUnavailable(`导出引用分析失败：${errorMessage(error)}。`),
-    };
+    // 分析整体失败也走规则：规则三把它报成流水线问题，规则一与规则二的判定照常输出。
+    exportUsage = exportUsageFailure(`导出引用分析失败：${errorMessage(error)}`);
   }
 
-  let testImports: ReadonlyMap<string, ReadonlySet<string>>;
+  let testImports: ReadonlyMap<string, ReadonlySet<string>> | undefined;
   try {
     testImports = await collectTestImportIndex(git, root, readText);
   } catch (error) {
@@ -276,29 +262,54 @@ export async function runCoverageGate(
   const hasAdded = relevantChanges.some((file) => file.status === "added");
   let functionDelta: FunctionDeltaData | undefined;
   if (hasChanged || (hasAdded && deletedFiles.length > 0)) {
-    const baseCoverage = await (dependencies.baseCoverage ?? generateBaseCoverage)({
-      repositoryRoot: root,
+    // 基准数据获取与正文读取都可能直接抛异常，按阶段兜底，报告照常输出。
+    const pipelineFailure = (detail: string): FunctionDeltaData => ({
       mergeBase,
-      scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
+      baseCoverage: { ok: false, detail, durationMs: 0 },
+      rows: [],
+      notes: [],
+      lineFallbacks: [],
     });
-    const [pairs, deletedSources] = await Promise.all([
+    const [baseOutcome, sourcesOutcome, deletedOutcome] = await Promise.allSettled([
+      (dependencies.baseCoverage ?? generateBaseCoverage)({
+        repositoryRoot: root,
+        mergeBase,
+        scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
+      }),
       Promise.all(
         relevantChanges.map(async (file) => {
-          const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
-          return [file.path, pair] as const;
+          try {
+            const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
+            return [file.path, pair] as const;
+          } catch (error) {
+            // 底层读取错误常常不带路径，这里补上，报告里能直接定位是哪个文件。
+            throw new Error(`${file.path}：${errorMessage(error)}`);
+          }
         }),
       ),
       readDeletedSources(deletedFiles, root, mergeBase, readBaseText),
     ]);
-    functionDelta = buildFunctionDelta({
-      changedFiles: relevantChanges,
-      coverage,
-      baseCoverage,
-      mergeBase,
-      sources: new Map(pairs),
-      managedFiles,
-      deletedSources,
-    });
+    if (baseOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`基准覆盖率获取异常：${errorMessage(baseOutcome.reason)}`);
+    } else if (sourcesOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`两版正文读取异常：${errorMessage(sourcesOutcome.reason)}`);
+    } else if (deletedOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`已删除文件正文读取异常：${errorMessage(deletedOutcome.reason)}`);
+    } else {
+      try {
+        functionDelta = buildFunctionDelta({
+          changedFiles: relevantChanges,
+          coverage,
+          baseCoverage: baseOutcome.value,
+          mergeBase,
+          sources: new Map(sourcesOutcome.value),
+          managedFiles,
+          deletedSources: deletedOutcome.value,
+        });
+      } catch (error) {
+        functionDelta = pipelineFailure(`函数结构比对异常：${errorMessage(error)}`);
+      }
+    }
   }
 
   const findings = evaluateRules({
