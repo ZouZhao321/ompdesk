@@ -117,35 +117,42 @@ export async function runCoverageGate(
   const deltaFiles = relevantChanges.filter((file) => file.status !== "added");
   let functionDelta: FunctionDeltaData | undefined;
   if (deltaFiles.length > 0) {
-    try {
-      const [baseCoverage, pairs] = await Promise.all([
-        (dependencies.baseCoverage ?? generateBaseCoverage)({
-          repositoryRoot: root,
-          mergeBase,
-          scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
+    // 基准数据获取与正文读取都可能直接抛异常，按阶段兜底，报告照常输出。
+    const pipelineFailure = (detail: string): FunctionDeltaData => ({
+      mergeBase,
+      baseCoverage: { ok: false, detail, durationMs: 0 },
+      rows: [],
+    });
+    const [baseOutcome, sourcesOutcome] = await Promise.allSettled([
+      (dependencies.baseCoverage ?? generateBaseCoverage)({
+        repositoryRoot: root,
+        mergeBase,
+        scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
+      }),
+      Promise.all(
+        deltaFiles.map(async (file) => {
+          const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
+          return [file.path, pair] as const;
         }),
-        Promise.all(
-          deltaFiles.map(async (file) => {
-            const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
-            return [file.path, pair] as const;
-          }),
-        ),
-      ]);
-      functionDelta = buildFunctionDelta({
-        changedFiles: deltaFiles,
-        coverage,
-        baseCoverage,
-        mergeBase,
-        sources: new Map(pairs),
-      });
-    } catch (error) {
-      // 基准数据获取阶段抛出的异常不该让门禁消失：转成失败结果交给规则二，
-      // 报告照常输出、退出码为 1，失败原因原样写进报告。
-      functionDelta = {
-        mergeBase,
-        baseCoverage: { ok: false, detail: `基准数据获取异常：${errorMessage(error)}`, durationMs: 0 },
-        rows: [],
-      };
+      ),
+    ]);
+
+    if (baseOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`基准覆盖率获取异常：${errorMessage(baseOutcome.reason)}`);
+    } else if (sourcesOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`两版正文读取异常：${errorMessage(sourcesOutcome.reason)}`);
+    } else {
+      try {
+        functionDelta = buildFunctionDelta({
+          changedFiles: deltaFiles,
+          coverage,
+          baseCoverage: baseOutcome.value,
+          mergeBase,
+          sources: new Map(sourcesOutcome.value),
+        });
+      } catch (error) {
+        functionDelta = pipelineFailure(`函数结构比对异常：${errorMessage(error)}`);
+      }
     }
   }
 

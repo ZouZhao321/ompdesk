@@ -81,7 +81,7 @@ async function git(cwd: string, args: string[]): Promise<void> {
 
 /**
  * 建分叉点工作副本、跑测试、读 lcov。任何一步失败都返回失败结果并说明是哪一步，
- * 工作副本跑完就删，失败时也不留下垃圾。
+ * 工作副本建出来后必定删掉，失败时也不留下垃圾。
  */
 export async function generateBaseCoverage(request: BaseCoverageRequest): Promise<BaseCoverageResult> {
   const startedAt = Date.now();
@@ -89,22 +89,9 @@ export async function generateBaseCoverage(request: BaseCoverageRequest): Promis
     request.scratchRoot,
     `${request.mergeBase.slice(0, 12)}-${process.pid}-${startedAt.toString(36)}`,
   );
-  const elapsed = (): number => Date.now() - startedAt;
-
-  const result = await runInWorktree(request, worktreePath, elapsed);
-  const cleanupProblem = await discardWorktree(request.repositoryRoot, worktreePath);
-  // 清理失败不影响已经得出的结果；判定本身失败时把清理问题补在原因后面。
-  if (result.ok || cleanupProblem === null) return result;
-  return { ...result, detail: `${result.detail}；${cleanupProblem}` };
-}
-
-async function runInWorktree(
-  request: BaseCoverageRequest,
-  worktreePath: string,
-  elapsed: () => number,
-): Promise<BaseCoverageResult> {
-  const baseLabel = request.mergeBase.slice(0, 7);
   const coverageDir = path.join(worktreePath, ".coverage-base");
+  const baseLabel = request.mergeBase.slice(0, 7);
+  const elapsed = (): number => Date.now() - startedAt;
 
   try {
     await mkdir(request.scratchRoot, { recursive: true });
@@ -127,47 +114,54 @@ async function runInWorktree(
   }
 
   try {
-    await execFileAsync(
-      // 门禁本身在 bun 下运行，基准运行直接复用当前进程的可执行文件。
-      process.versions.bun ? process.execPath : "bun",
-      [...BASE_TEST_ARGS, `--coverage-dir=${coverageDir}`],
-      { cwd: worktreePath, timeout: BASE_TEST_TIMEOUT_MS, maxBuffer: MAX_BUFFER },
-    );
-  } catch (error) {
-    return {
-      ok: false,
-      detail: `分叉点 ${baseLabel} 的测试运行失败：${errorMessage(error)}`,
-      durationMs: elapsed(),
-    };
-  }
+    try {
+      await execFileAsync(
+        // 门禁本身在 bun 下运行，基准运行直接复用当前进程的可执行文件。
+        process.versions.bun ? process.execPath : "bun",
+        [...BASE_TEST_ARGS, `--coverage-dir=${coverageDir}`],
+        { cwd: worktreePath, timeout: BASE_TEST_TIMEOUT_MS, maxBuffer: MAX_BUFFER },
+      );
+    } catch (error) {
+      return {
+        ok: false,
+        detail: `分叉点 ${baseLabel} 的测试运行失败：${errorMessage(error)}`,
+        durationMs: elapsed(),
+      };
+    }
 
-  let lcovText: string;
-  try {
-    lcovText = await readFile(path.join(coverageDir, LCOV_FILE_NAME), "utf8");
-  } catch (error) {
-    return {
-      ok: false,
-      detail:
-        `分叉点 ${baseLabel} 的覆盖率产物缺失：` +
-        `${path.join(coverageDir, LCOV_FILE_NAME)}（${errorMessage(error)}）`,
-      durationMs: elapsed(),
-    };
-  }
+    let lcovText: string;
+    try {
+      lcovText = await readFile(path.join(coverageDir, LCOV_FILE_NAME), "utf8");
+    } catch (error) {
+      return {
+        ok: false,
+        detail:
+          `分叉点 ${baseLabel} 的覆盖率产物缺失：` +
+          `${path.join(coverageDir, LCOV_FILE_NAME)}（${errorMessage(error)}）`,
+        durationMs: elapsed(),
+      };
+    }
 
-  const parsed = parseLcov(lcovText);
-  return {
-    ok: true,
-    coverage: indexByPath(parsed.files),
-    durationMs: elapsed(),
-    worktreePath,
-  };
+    const parsed = parseLcov(lcovText);
+    return {
+      ok: true,
+      coverage: indexByPath(parsed.files),
+      durationMs: elapsed(),
+      worktreePath,
+    };
+  } finally {
+    // 清理是尽力而为：删不掉的工作副本登记由 prune 清掉，清理问题只在终端上说明，
+    // 不替换已经得出的判定结果。
+    const problems = await discardWorktree(request.repositoryRoot, worktreePath);
+    if (problems.length > 0) console.error("[ompdesk] 覆盖率门禁清理工作副本失败：", problems.join("；"));
+  }
 }
 
 /**
- * 删工作副本再 prune，删不掉的残留登记由 prune 清掉。清理失败不替换已得出的判定，
- * 原因汇总成一句话返回，由调用方决定写在哪里。
+ * 删工作副本再 prune，删不掉的残留登记由 prune 清掉。返回清理期间遇到的问题，
+ * 由调用方决定记在哪里。
  */
-async function discardWorktree(repositoryRoot: string, worktreePath: string): Promise<string | null> {
+async function discardWorktree(repositoryRoot: string, worktreePath: string): Promise<string[]> {
   const problems: string[] = [];
   try {
     await rm(worktreePath, { recursive: true, force: true });
@@ -179,16 +173,18 @@ async function discardWorktree(repositoryRoot: string, worktreePath: string): Pr
   } catch (error) {
     problems.push(`工作副本登记清理失败：${errorMessage(error)}`);
   }
-  return problems.length > 0 ? problems.join("；") : null;
+  return problems;
 }
+
+/** 这些读取失败说明该版本的正文本身缺席或不可读，交给规则二判定；其余错误照常抛出。 */
+const UNREADABLE_CODES: Record<string, true> = { ENOENT: true, EISDIR: true, ENOTDIR: true, EACCES: true };
 
 async function readWorkingTreeFile(absolutePath: string): Promise<string | null> {
   try {
     return await readFile(absolutePath, "utf8");
-  } catch {
-    // 读不到（缺席、权限、路径是目录）一律按缺席处理：规则二会把本次版本读不到
-    // 正文单独报成判定结果，不让这里抛异常把整份报告带走。
-    return null;
+  } catch (error) {
+    if (UNREADABLE_CODES[(error as NodeJS.ErrnoException).code ?? ""] === true) return null;
+    throw error;
   }
 }
 
