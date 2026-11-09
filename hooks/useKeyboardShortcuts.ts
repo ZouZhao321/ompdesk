@@ -46,6 +46,8 @@ export function useGlobalKeyboardShortcuts(options: UseGlobalKeyboardShortcutsOp
     const handler = (e: KeyboardEvent): void => {
       // ---- Esc: stop agent ----
       if (e.key === "Escape") {
+        // A modal owns Esc: closing it must not also abort the running answer.
+        if (document.querySelector('[aria-modal="true"]')) return;
         if (!globalAbortHandler) return;
 
         const tag = (e.target as HTMLElement)?.tagName;
