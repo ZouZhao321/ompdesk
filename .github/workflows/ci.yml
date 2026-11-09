@@ -87,18 +87,6 @@ jobs:
           COVERAGE_GATE_BASE: origin/${{ github.base_ref || 'main' }}
         run: bun run ci
 
-      # 覆盖率产物随构建一起保留，事后可以拿同一份 lcov 复核报告里的数字。路径与
-      # `lib/coverage-gate/test-command.ts` 里的 LCOV_PATH 一致，测试锁住这两处不脱节。
-      # 判定失败时产物同样要留下，所以这里不看前一步的结论。
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-lcov
-          path: .tmp/coverage-gate/lcov.info
-          retention-days: 7
-          if-no-files-found: warn
-
       # `bun run build` 的产物留在工作区，这里打 tgz 并交给三个平台的冒烟作业：
       # `npm pack` 决定 `files` 清单，打包本身也在这一层验证。
       - name: Pack the tarball
@@ -116,6 +104,19 @@ jobs:
           path: .tmp/pack-check/tarball/*.tgz
           if-no-files-found: error
           retention-days: 1
+
+      # 覆盖率产物随构建一起保留，事后可以拿同一份 lcov 复核报告里的数字。路径与
+      # `lib/coverage-gate/test-command.ts` 里的 LCOV_PATH 一致，测试锁住这两处不脱节。
+      # 判定失败时产物同样要留下，所以这里不看前一步的结论；排在打包之后，
+      # 上传抖动不会连带跳过打包与下游的平台冒烟。
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: .tmp/coverage-gate/lcov.info
+          retention-days: 7
+          if-no-files-found: warn
 
   package-smoke:
     name: Package smoke (${{ matrix.os }})
