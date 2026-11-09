@@ -171,9 +171,10 @@ function collectExports(source: ts.SourceFile, localKinds: ReadonlyMap<string, E
 
   for (const statement of source.statements) {
     if (ts.isExportDeclaration(statement)) {
-      const specifier = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
-        ? statement.moduleSpecifier.text
-        : null;
+      const specifier =
+        statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+          ? statement.moduleSpecifier.text
+          : null;
       const clause = statement.exportClause;
       // `export * from` 的导出名无法静态得知，引用索引按「引用全部」处理。
       if (!clause) continue;
@@ -182,15 +183,10 @@ function collectExports(source: ts.SourceFile, localKinds: ReadonlyMap<string, E
         continue;
       }
       for (const element of clause.elements) {
-        const localName = element.propertyName && ts.isIdentifier(element.propertyName)
-          ? element.propertyName.text
-          : element.name.text;
+        const localName =
+          element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName.text : element.name.text;
         const typeOnly = statement.isTypeOnly || element.isTypeOnly;
-        const kind: ExportKind = typeOnly
-          ? "type"
-          : specifier
-            ? "runtime"
-            : localKinds.get(localName) ?? "runtime";
+        const kind: ExportKind = typeOnly ? "type" : specifier ? "runtime" : (localKinds.get(localName) ?? "runtime");
         push(element.name.text, kind, specifier ? "re-export" : "alias");
       }
       continue;
@@ -259,9 +255,11 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
       if (bindings && ts.isNamespaceImport(bindings)) namespaceRef = true;
       if (bindings && ts.isNamedImports(bindings)) {
         for (const element of bindings.elements) {
-          named.push(element.propertyName && ts.isIdentifier(element.propertyName)
-            ? element.propertyName.text
-            : element.name.text);
+          named.push(
+            element.propertyName && ts.isIdentifier(element.propertyName)
+              ? element.propertyName.text
+              : element.name.text,
+          );
         }
       }
       imports.push({ specifier, named, defaultRef: clause.name !== undefined, namespaceRef });
@@ -283,9 +281,8 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
     }
     const named: string[] = [];
     for (const element of clause.elements) {
-      const name = element.propertyName && ts.isIdentifier(element.propertyName)
-        ? element.propertyName.text
-        : element.name.text;
+      const name =
+        element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName.text : element.name.text;
       named.push(name);
       reExports.push({ specifier, name });
     }
@@ -297,13 +294,7 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
 
 /** 扫描一个文件：导出、对外引用、转出口。 */
 function scanModule(filePath: string, sourceText: string): ModuleScan {
-  const source = ts.createSourceFile(
-    filePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    false,
-    scriptKindOf(filePath),
-  );
+  const source = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, false, scriptKindOf(filePath));
   const localKinds = collectLocalKinds(source);
   const { imports, reExports, stars } = collectImports(source);
   return { exports: collectExports(source, localKinds), imports, reExports, stars };
@@ -526,10 +517,12 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
   for (const change of options.changedFiles) paths.add(change.path);
 
   const scans = new Map<string, ModuleScan>();
-  const texts = await Promise.all([...paths].sort().map(async (filePath) => {
-    const text = await options.readers.readWorkspace(filePath);
-    return [filePath, text] as const;
-  }));
+  const texts = await Promise.all(
+    [...paths].sort().map(async (filePath) => {
+      const text = await options.readers.readWorkspace(filePath);
+      return [filePath, text] as const;
+    }),
+  );
   for (const [filePath, text] of texts) scans.set(filePath, scanModule(filePath, text));
 
   const baseline = new Set<string>();
@@ -551,9 +544,11 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
 
     const basePath = change.previousPath ?? change.path;
     const baseText = change.status === "added" ? null : await options.readers.readAtMergeBase(basePath);
-    const baseKeys = new Set((baseText === null ? [] : extractExports(basePath, baseText)).map(
-      (symbol) => `${symbol.name}\u0000${symbol.kind}`,
-    ));
+    const baseKeys = new Set(
+      (baseText === null ? [] : extractExports(basePath, baseText)).map(
+        (symbol) => `${symbol.name}\u0000${symbol.kind}`,
+      ),
+    );
     for (const symbol of headExports) {
       if (!baseKeys.has(`${symbol.name}\u0000${symbol.kind}`)) added.push({ file: change.path, symbol });
     }

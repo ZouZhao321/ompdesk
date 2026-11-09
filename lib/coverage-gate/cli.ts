@@ -1,11 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
-import {
-  generateBaseCoverage,
-  readSourcePair,
-  type BaseCoverageLoader,
-  type SourceReader,
-} from "./base-coverage";
+import { generateBaseCoverage, readSourcePair, type BaseCoverageLoader, type SourceReader } from "./base-coverage";
 import { BASELINE_FILE, collectExportUsage, type ExportAnalysis } from "./exports";
 import {
   isManagedSourceFile,
@@ -70,11 +65,7 @@ function errorMessage(error: unknown): string {
 }
 
 function renderUnavailable(detail: string): string {
-  return [
-    "覆盖率门禁未能运行",
-    `  ${detail}`,
-    "  没有判定结果，退出码为 0。",
-  ].join("\n");
+  return ["覆盖率门禁未能运行", `  ${detail}`, "  没有判定结果，退出码为 0。"].join("\n");
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -115,8 +106,7 @@ export async function runCoverageGate(
     return {
       exitCode: 0,
       report: renderUnavailable(
-        `覆盖率产物缺失：${options.lcovPath}（${errorMessage(error)}）。`
-          + "先运行 bun run coverage:gate 生成 lcov。",
+        `覆盖率产物缺失：${options.lcovPath}（${errorMessage(error)}）。` + "先运行 bun run coverage:gate 生成 lcov。",
       ),
     };
   }
@@ -132,16 +122,12 @@ export async function runCoverageGate(
   try {
     root = await git.repositoryRoot(options.cwd);
     mergeBase = await git.mergeBase(options.cwd, baseRef);
-    [changedFiles, managedFiles] = await Promise.all([
-      git.changedFiles(root, mergeBase),
-      git.managedSourceFiles(root),
-    ]);
+    [changedFiles, managedFiles] = await Promise.all([git.changedFiles(root, mergeBase), git.managedSourceFiles(root)]);
   } catch (error) {
     return {
       exitCode: 0,
       report: renderUnavailable(
-        `git 数据读取失败：${errorMessage(error)}。`
-          + "分叉点需要完整检出，actions/checkout 需设 fetch-depth: 0。",
+        `git 数据读取失败：${errorMessage(error)}。` + "分叉点需要完整检出，actions/checkout 需设 fetch-depth: 0。",
       ),
     };
   }
@@ -170,7 +156,13 @@ export async function runCoverageGate(
   const deltaFiles = relevantChanges.filter((file) => file.status !== "added");
   let functionDelta: FunctionDeltaData | undefined;
   if (deltaFiles.length > 0) {
-    const [baseCoverage, pairs] = await Promise.all([
+    // 基准数据获取与正文读取都可能直接抛异常，按阶段兜底，报告照常输出。
+    const pipelineFailure = (detail: string): FunctionDeltaData => ({
+      mergeBase,
+      baseCoverage: { ok: false, detail, durationMs: 0 },
+      rows: [],
+    });
+    const [baseOutcome, sourcesOutcome] = await Promise.allSettled([
       (dependencies.baseCoverage ?? generateBaseCoverage)({
         repositoryRoot: root,
         mergeBase,
@@ -178,18 +170,34 @@ export async function runCoverageGate(
       }),
       Promise.all(
         deltaFiles.map(async (file) => {
-          const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
-          return [file.path, pair] as const;
+          try {
+            const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
+            return [file.path, pair] as const;
+          } catch (error) {
+            // 底层读取错误常常不带路径，这里补上，报告里能直接定位是哪个文件。
+            throw new Error(`${file.path}：${errorMessage(error)}`);
+          }
         }),
       ),
     ]);
-    functionDelta = buildFunctionDelta({
-      changedFiles: deltaFiles,
-      coverage,
-      baseCoverage,
-      mergeBase,
-      sources: new Map(pairs),
-    });
+
+    if (baseOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`基准覆盖率获取异常：${errorMessage(baseOutcome.reason)}`);
+    } else if (sourcesOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`两版正文读取异常：${errorMessage(sourcesOutcome.reason)}`);
+    } else {
+      try {
+        functionDelta = buildFunctionDelta({
+          changedFiles: deltaFiles,
+          coverage,
+          baseCoverage: baseOutcome.value,
+          mergeBase,
+          sources: new Map(sourcesOutcome.value),
+        });
+      } catch (error) {
+        functionDelta = pipelineFailure(`函数结构比对异常：${errorMessage(error)}`);
+      }
+    }
   }
 
   const findings = evaluateRules({

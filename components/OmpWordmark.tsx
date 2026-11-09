@@ -8,13 +8,7 @@ type OmpWordmarkProps = {
   labelStyle?: CSSProperties;
 };
 
-export function OmpWordmark({
-  label = "omp",
-  markSize = 22,
-  gap = 10,
-  style,
-  labelStyle,
-}: OmpWordmarkProps) {
+export function OmpWordmark({ label = "omp", markSize = 22, gap = 10, style, labelStyle }: OmpWordmarkProps) {
   const gradientId = `omp-pi-gradient-${useId().replaceAll(":", "")}`;
 
   return (
@@ -28,13 +22,7 @@ export function OmpWordmark({
         ...style,
       }}
     >
-      <svg
-        viewBox="0 0 64 64"
-        width={markSize}
-        height={markSize}
-        aria-hidden="true"
-        style={{ flexShrink: 0 }}
-      >
+      <svg viewBox="0 0 64 64" width={markSize} height={markSize} aria-hidden="true" style={{ flexShrink: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="oklch(0.7 0.24 340)" />

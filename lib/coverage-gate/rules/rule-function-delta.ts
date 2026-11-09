@@ -70,12 +70,8 @@ export function buildFunctionDelta(input: FunctionDeltaBuildInput): FunctionDelt
       const basePath = file.previousPath ?? file.path;
       const baseMetrics = baseCoverage.get(basePath);
       const headMetrics = input.coverage.get(file.path);
-      const baseSurface = pair.base === null
-        ? EMPTY_SURFACE
-        : collectFunctionSurface(pair.base, basePath);
-      const headSurface = pair.head === null
-        ? EMPTY_SURFACE
-        : collectFunctionSurface(pair.head, file.path);
+      const baseSurface = pair.base === null ? EMPTY_SURFACE : collectFunctionSurface(pair.base, basePath);
+      const headSurface = pair.head === null ? EMPTY_SURFACE : collectFunctionSurface(pair.head, file.path);
       const diff = diffFunctionSurface(baseSurface, headSurface);
 
       return {
@@ -103,22 +99,26 @@ function contrast(row: FunctionDeltaRow): string {
 
 function judgeRow(row: FunctionDeltaRow): Finding[] {
   if (row.headSourceMissing) {
-    return [{
-      rule: RULE_ID,
-      file: row.file,
-      numbers: contrast(row),
-      reason: "本次版本的文件正文读取失败，函数结构无法比对",
-      fix: "确认文件仍在工作区且可读，然后重跑覆盖率门禁",
-    }];
+    return [
+      {
+        rule: RULE_ID,
+        file: row.file,
+        numbers: contrast(row),
+        reason: "本次版本的文件正文读取失败，函数结构无法比对",
+        fix: "确认文件仍在工作区且可读，然后重跑覆盖率门禁",
+      },
+    ];
   }
   if (row.baseSourceMissing) {
-    return [{
-      rule: RULE_ID,
-      file: row.file,
-      numbers: contrast(row),
-      reason: "分叉点版本的文件正文读取失败，基准缺失，属流水线问题",
-      fix: "确认检出包含分叉点提交（fetch-depth: 0），然后重跑覆盖率门禁",
-    }];
+    return [
+      {
+        rule: RULE_ID,
+        file: row.file,
+        numbers: contrast(row),
+        reason: "分叉点版本的文件正文读取失败，基准缺失，属流水线问题",
+        fix: "确认检出包含分叉点提交（fetch-depth: 0），然后重跑覆盖率门禁",
+      },
+    ];
   }
 
   const findings: Finding[] = [];
@@ -130,12 +130,14 @@ function judgeRow(row: FunctionDeltaRow): Finding[] {
       rule: RULE_ID,
       file: row.file,
       numbers: `${contrast(row)}，函数总数减少 ${-foundDelta}`,
-      reason: row.removed.length > 0
-        ? `函数总数减少，删除的函数与测试不再对应：${row.removed.join("、")}`
-        : "函数总数减少，但两版结构里没有删除的函数名，覆盖率计数与结构不一致",
-      fix: row.removed.length > 0
-        ? "把删除函数的测试一并移除，或在豁免清单登记本次删除"
-        : "确认该文件的加载路径是否变化，计数与结构不一致时按流水线问题排查",
+      reason:
+        row.removed.length > 0
+          ? `函数总数减少，删除的函数与测试不再对应：${row.removed.join("、")}`
+          : "函数总数减少，但两版结构里没有删除的函数名，覆盖率计数与结构不一致",
+      fix:
+        row.removed.length > 0
+          ? "把删除函数的测试一并移除，或在豁免清单登记本次删除"
+          : "确认该文件的加载路径是否变化，计数与结构不一致时按流水线问题排查",
     });
   }
 
@@ -161,22 +163,26 @@ export const functionDeltaRule: CoverageRule = {
 
     const data = input.functionDelta;
     if (!data) {
-      return [{
-        rule: RULE_ID,
-        file: "（基准覆盖率）",
-        numbers: "改动文件未取得基准数据",
-        reason: "规则二没有拿到分叉点的覆盖率与文件正文，无法判定，属流水线问题",
-        fix: "确认覆盖率门禁接入了基准数据获取后再重跑",
-      }];
+      return [
+        {
+          rule: RULE_ID,
+          file: "（基准覆盖率）",
+          numbers: "改动文件未取得基准数据",
+          reason: "规则二没有拿到分叉点的覆盖率与文件正文，无法判定，属流水线问题",
+          fix: "确认覆盖率门禁接入了基准数据获取后再重跑",
+        },
+      ];
     }
     if (!data.baseCoverage.ok) {
-      return [{
-        rule: RULE_ID,
-        file: "（基准覆盖率）",
-        numbers: `分叉点 ${data.mergeBase.slice(0, 7)} 的基准运行未产出覆盖率`,
-        reason: `基准运行失败，属流水线问题：${data.baseCoverage.detail}`,
-        fix: "修复分叉点工作副本或测试命令后重跑；基准缺失不能当作通过",
-      }];
+      return [
+        {
+          rule: RULE_ID,
+          file: "（基准覆盖率）",
+          numbers: `分叉点 ${data.mergeBase.slice(0, 7)} 的基准运行未产出覆盖率`,
+          reason: `基准运行失败，属流水线问题：${data.baseCoverage.detail}`,
+          fix: "修复分叉点工作副本或测试命令后重跑；基准缺失不能当作通过",
+        },
+      ];
     }
     return data.rows.flatMap(judgeRow);
   },

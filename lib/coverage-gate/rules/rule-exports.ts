@@ -161,12 +161,13 @@ export const ruleExports: CoverageRule = {
       findings.push({
         rule: RULE_EXPORTS,
         file: item.file,
-        numbers: `新增运行时导出 ${count.runtime} 个、仅类型导出 ${count.type} 个；`
-          + `${item.symbol.name}（${KIND_LABELS[item.symbol.kind]}）生产引用 0`,
-        reason: `新增导出 ${item.symbol.name} 是${DECLARATION_LABELS[item.symbol.declaration]}，`
-          + "在受管源文件里没有任何引用；测试文件不计入生产引用",
-        fix: `在受管源码里使用 ${item.symbol.name}，或去掉 export；`
-          + "由框架按路径调用的导出须在豁免清单登记",
+        numbers:
+          `新增运行时导出 ${count.runtime} 个、仅类型导出 ${count.type} 个；` +
+          `${item.symbol.name}（${KIND_LABELS[item.symbol.kind]}）生产引用 0`,
+        reason:
+          `新增导出 ${item.symbol.name} 是${DECLARATION_LABELS[item.symbol.declaration]}，` +
+          "在受管源文件里没有任何引用；测试文件不计入生产引用",
+        fix: `在受管源码里使用 ${item.symbol.name}，或去掉 export；` + "由框架按路径调用的导出须在豁免清单登记",
       });
     }
 

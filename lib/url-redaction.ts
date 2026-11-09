@@ -88,9 +88,7 @@ function redactUrl(raw: string): string {
     // Rebuild the query instead of `set`-ing each key: `set` collapses a
     // repeated parameter (`?a=1&a=2`) into one, which loses the recorded URL's
     // shape. This keeps every key and its order, with only values redacted.
-    url.search = new URLSearchParams(
-      [...url.searchParams].map(([key]) => [key, REDACTED]),
-    ).toString();
+    url.search = new URLSearchParams([...url.searchParams].map(([key]) => [key, REDACTED])).toString();
     const rendered = url.toString();
     return protocolRelative ? rendered.replace(PROTOCOL_PREFIX, "") : rendered;
   } catch {

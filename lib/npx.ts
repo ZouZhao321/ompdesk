@@ -70,11 +70,13 @@ export function getSafeNpxEnv(overrides: Record<string, string | undefined> = {}
 /** Redact inherited credentials before subprocess output reaches the browser. */
 export function redactNpxOutput(value: string, env: Record<string, string | undefined> = process.env): string {
   let redacted = value;
-  const secrets = [...new Set(
-    Object.entries(env)
-      .filter(([name, secret]) => isSensitiveEnvName(name) && typeof secret === "string" && secret.length >= 4)
-      .map(([, secret]) => secret as string),
-  )].sort((a, b) => b.length - a.length);
+  const secrets = [
+    ...new Set(
+      Object.entries(env)
+        .filter(([name, secret]) => isSensitiveEnvName(name) && typeof secret === "string" && secret.length >= 4)
+        .map(([, secret]) => secret as string),
+    ),
+  ].sort((a, b) => b.length - a.length);
   for (const secret of secrets) redacted = redacted.replaceAll(secret, "[REDACTED]");
   return redacted.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [REDACTED]");
 }

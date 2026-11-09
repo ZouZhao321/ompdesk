@@ -62,11 +62,7 @@ export interface SourcePair {
   head: string | null;
 }
 
-export type SourceReader = (
-  repositoryRoot: string,
-  mergeBase: string,
-  file: ChangedFile,
-) => Promise<SourcePair>;
+export type SourceReader = (repositoryRoot: string, mergeBase: string, file: ChangedFile) => Promise<SourcePair>;
 
 function errorMessage(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
@@ -85,20 +81,27 @@ async function git(cwd: string, args: string[]): Promise<void> {
 
 /**
  * 建分叉点工作副本、跑测试、读 lcov。任何一步失败都返回失败结果并说明是哪一步，
- * 工作副本在 `finally` 里删掉，失败时也不留下垃圾。
+ * 工作副本建出来后必定删掉，失败时也不留下垃圾。
  */
-export async function generateBaseCoverage(
-  request: BaseCoverageRequest,
-): Promise<BaseCoverageResult> {
+export async function generateBaseCoverage(request: BaseCoverageRequest): Promise<BaseCoverageResult> {
   const startedAt = Date.now();
   const worktreePath = path.join(
     request.scratchRoot,
     `${request.mergeBase.slice(0, 12)}-${process.pid}-${startedAt.toString(36)}`,
   );
   const coverageDir = path.join(worktreePath, ".coverage-base");
+  const baseLabel = request.mergeBase.slice(0, 7);
   const elapsed = (): number => Date.now() - startedAt;
 
-  await mkdir(request.scratchRoot, { recursive: true });
+  try {
+    await mkdir(request.scratchRoot, { recursive: true });
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `无法创建工作副本目录 ${request.scratchRoot}：${errorMessage(error)}`,
+      durationMs: elapsed(),
+    };
+  }
 
   try {
     try {
@@ -106,7 +109,7 @@ export async function generateBaseCoverage(
     } catch (error) {
       return {
         ok: false,
-        detail: `无法为分叉点 ${request.mergeBase.slice(0, 7)} 创建工作副本：${errorMessage(error)}`,
+        detail: `无法为分叉点 ${baseLabel} 创建工作副本：${errorMessage(error)}`,
         durationMs: elapsed(),
       };
     }
@@ -121,7 +124,7 @@ export async function generateBaseCoverage(
     } catch (error) {
       return {
         ok: false,
-        detail: `分叉点 ${request.mergeBase.slice(0, 7)} 的测试运行失败：${errorMessage(error)}`,
+        detail: `分叉点 ${baseLabel} 的测试运行失败：${errorMessage(error)}`,
         durationMs: elapsed(),
       };
     }
@@ -132,8 +135,9 @@ export async function generateBaseCoverage(
     } catch (error) {
       return {
         ok: false,
-        detail: `分叉点 ${request.mergeBase.slice(0, 7)} 的覆盖率产物缺失：`
-          + `${path.join(coverageDir, LCOV_FILE_NAME)}（${errorMessage(error)}）`,
+        detail:
+          `分叉点 ${baseLabel} 的覆盖率产物缺失：` +
+          `${path.join(coverageDir, LCOV_FILE_NAME)}（${errorMessage(error)}）`,
         durationMs: elapsed(),
       };
     }
@@ -146,17 +150,47 @@ export async function generateBaseCoverage(
       worktreePath,
     };
   } finally {
-    // 工作副本按路径删除后再 prune，删不掉的残留登记由 prune 清掉。
-    await rm(worktreePath, { recursive: true, force: true });
-    await git(request.repositoryRoot, ["worktree", "prune"]);
+    // 清理是尽力而为：删不掉的工作副本登记由 prune 清掉，清理问题只在终端上说明，
+    // 不替换已经得出的判定结果。
+    const problems = await discardWorktree(request.repositoryRoot, worktreePath);
+    if (problems.length > 0) console.error("[ompdesk] 覆盖率门禁清理工作副本失败：", problems.join("；"));
   }
 }
+
+/**
+ * 删工作副本再 prune，删不掉的残留登记由 prune 清掉。返回清理期间遇到的问题，
+ * 由调用方决定记在哪里。
+ */
+async function discardWorktree(repositoryRoot: string, worktreePath: string): Promise<string[]> {
+  const problems: string[] = [];
+  try {
+    await rm(worktreePath, { recursive: true, force: true });
+  } catch (error) {
+    problems.push(`工作副本残留未删除：${errorMessage(error)}`);
+  }
+  try {
+    await git(repositoryRoot, ["worktree", "prune"]);
+  } catch (error) {
+    problems.push(`工作副本登记清理失败：${errorMessage(error)}`);
+  }
+  return problems;
+}
+
+/** 这些读取失败说明该版本的正文本身缺席或不可读，交给规则二判定；其余错误照常抛出。 */
+const UNREADABLE_CODES: Record<string, true> = {
+  ENOENT: true,
+  EISDIR: true,
+  ENOTDIR: true,
+  EACCES: true,
+  EPERM: true,
+  ELOOP: true,
+};
 
 async function readWorkingTreeFile(absolutePath: string): Promise<string | null> {
   try {
     return await readFile(absolutePath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (UNREADABLE_CODES[(error as NodeJS.ErrnoException).code ?? ""] === true) return null;
     throw error;
   }
 }

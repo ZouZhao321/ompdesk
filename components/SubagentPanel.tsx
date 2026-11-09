@@ -44,21 +44,43 @@ function SubagentStatusGlyph({ subagent }: { subagent: SubagentSnapshot }) {
     return (
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ color }}>
         <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.8" strokeDasharray="22 13">
-          <animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.9s" repeatCount="indefinite" />
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            from="0 8 8"
+            to="360 8 8"
+            dur="0.9s"
+            repeatCount="indefinite"
+          />
         </circle>
       </svg>
     );
   }
-  return <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 12%, transparent)` }} />;
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 8,
+        height: 8,
+        borderRadius: "50%",
+        background: color,
+        boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 12%, transparent)`,
+      }}
+    />
+  );
 }
 
 function subagentTitle(subagent: SubagentSnapshot, fallback: string): string {
   return subagent.task ?? subagent.assignment ?? subagent.description ?? fallback;
 }
 
-function subagentActivity(subagent: SubagentSnapshot, t: (key: string, params?: Record<string, string | number>) => string): string {
+function subagentActivity(
+  subagent: SubagentSnapshot,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
   const progress = subagent.progress;
-  if (progress?.retryState) return t("subagents.retrying", { attempt: progress.retryState.attempt, max: progress.retryState.maxAttempts });
+  if (progress?.retryState)
+    return t("subagents.retrying", { attempt: progress.retryState.attempt, max: progress.retryState.maxAttempts });
   if (isSubagentActive(subagent)) {
     if (progress?.currentTool) return t("subagents.usingTool", { tool: progress.currentTool });
     return progress?.lastIntent || t("subagents.running");
@@ -106,23 +128,33 @@ function SubagentDetail({
     inFlightRef.current = true;
     const requestId = requestRef.current;
     try {
-      const result = await sendAgentCommand<SubagentTranscriptResult>(sessionId, {
-        type: "get_subagent_messages",
-        subagentId: subagent.id,
-        fromByte: nextByteRef.current,
-      }, { current: runtimeId ?? null, onIdentity: (identity, request) => {
-        if (requestId !== requestRef.current) return false;
-        return onRuntimeIdentity?.(identity, request);
-      } });
+      const result = await sendAgentCommand<SubagentTranscriptResult>(
+        sessionId,
+        {
+          type: "get_subagent_messages",
+          subagentId: subagent.id,
+          fromByte: nextByteRef.current,
+        },
+        {
+          current: runtimeId ?? null,
+          onIdentity: (identity, request) => {
+            if (requestId !== requestRef.current) return false;
+            return onRuntimeIdentity?.(identity, request);
+          },
+        },
+      );
       if (requestId !== requestRef.current) return;
       const chunk = result.entries.flatMap((entry, index) =>
         entry.type === "message" && entry.message
-          ? [{
-              id: entry.id ?? `${result.fromByte}:${index}`,
-              message: normalizeToolCalls(entry.message),
-            }]
-          : []);
-      setEntries((current) => result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk]);
+          ? [
+              {
+                id: entry.id ?? `${result.fromByte}:${index}`,
+                message: normalizeToolCalls(entry.message),
+              },
+            ]
+          : [],
+      );
+      setEntries((current) => (result.reset || result.fromByte === 0 ? chunk : [...current, ...chunk]));
       nextByteRef.current = result.nextByte;
       setTranscriptError(null);
     } catch (error) {
@@ -154,7 +186,12 @@ function SubagentDetail({
     prevVisibleRef.current = false;
   }, [loadTranscript]);
 
-  useEffect(() => () => { requestRef.current += 1; }, []);
+  useEffect(
+    () => () => {
+      requestRef.current += 1;
+    },
+    [],
+  );
 
   // 可见时运行中每秒补拉；重新可见或运行结束时补读一次尾部，隐藏的标签不发请求。
   useEffect(() => {
@@ -197,35 +234,115 @@ function SubagentDetail({
   const progress = subagent.progress;
 
   return (
-    <div role="dialog" aria-label={t("subagents.details")} style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 12px", borderBottom: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+    <div
+      role="dialog"
+      aria-label={t("subagents.details")}
+      style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 9,
+          padding: "11px 12px",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg-panel)",
+        }}
+      >
         <button
           type="button"
           onClick={onBack}
           title={t("subagents.back")}
           aria-label={t("subagents.back")}
-          style={{ display: "grid", placeItems: "center", width: 25, height: 25, padding: 0, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+          style={{
+            display: "grid",
+            placeItems: "center",
+            width: 25,
+            height: 25,
+            padding: 0,
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            background: "var(--bg)",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
         >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <path d="M10.5 3 5.5 8l5 5" />
           </svg>
         </button>
-        <span style={{ width: 8, height: 8, marginTop: 6, borderRadius: "50%", background: color, boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 12%, transparent)`, flexShrink: 0 }} />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            marginTop: 6,
+            borderRadius: "50%",
+            background: color,
+            boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 12%, transparent)`,
+            flexShrink: 0,
+          }}
+        />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text)", fontSize: 12, fontWeight: 700 }}>{subagent.id}</span>
-            <span style={{ padding: "1px 5px", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", fontSize: 9 }}>{subagent.agent}</span>
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                color: "var(--text)",
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {subagent.id}
+            </span>
+            <span
+              style={{
+                padding: "1px 5px",
+                border: "1px solid var(--border)",
+                borderRadius: 4,
+                color: "var(--text-dim)",
+                fontSize: 9,
+              }}
+            >
+              {subagent.agent}
+            </span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 11px", padding: "7px 12px", borderBottom: "1px solid var(--border)", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 9, fontVariantNumeric: "tabular-nums" }}>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "4px 11px",
+          padding: "7px 12px",
+          borderBottom: "1px solid var(--border)",
+          color: "var(--text-dim)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
         <span style={{ color }}>{active ? t("subagents.running") : subagentActivity(subagent, t)}</span>
         <span>{formatSubagentDuration(progress?.durationMs)}</span>
         <span>{t("subagents.tools", { count: progress?.toolCount ?? 0 })}</span>
         <span>{t("subagents.tokens", { count: progress?.tokens ?? 0 })}</span>
         {progress?.resolvedModel && <span>{progress.resolvedModel}</span>}
-        {progress?.currentTool && <span style={{ color: "var(--text-muted)" }}>{t("subagents.usingTool", { tool: progress.currentTool })}</span>}
+        {progress?.currentTool && (
+          <span style={{ color: "var(--text-muted)" }}>{t("subagents.usingTool", { tool: progress.currentTool })}</span>
+        )}
       </div>
 
       <div
@@ -236,26 +353,59 @@ function SubagentDetail({
         }}
         style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px 16px" }}
       >
-        {entries.length > 0 ? entries.map((entry, index) => (
-          <MessageView
-            key={entry.id}
-            message={entry.message}
-            toolResults={toolResults}
-            cwd={cwd}
-            showTimestamp
-            prevTimestamp={entries[index - 1]?.message.timestamp}
-          />
-        )) : (
-          <div style={{ padding: "24px 8px", color: "var(--text-muted)", fontSize: 10.5, lineHeight: 1.6, textAlign: "center" }}>
-            {loadingTranscript
-              ? t("subagents.loadingTranscript")
-              : progress?.recentOutput?.length
-                ? <pre style={{ margin: 0, textAlign: "left", whiteSpace: "pre-wrap", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>{progress.recentOutput.join("\n")}</pre>
-                : t("subagents.noTranscript")}
+        {entries.length > 0 ? (
+          entries.map((entry, index) => (
+            <MessageView
+              key={entry.id}
+              message={entry.message}
+              toolResults={toolResults}
+              cwd={cwd}
+              showTimestamp
+              prevTimestamp={entries[index - 1]?.message.timestamp}
+            />
+          ))
+        ) : (
+          <div
+            style={{
+              padding: "24px 8px",
+              color: "var(--text-muted)",
+              fontSize: 10.5,
+              lineHeight: 1.6,
+              textAlign: "center",
+            }}
+          >
+            {loadingTranscript ? (
+              t("subagents.loadingTranscript")
+            ) : progress?.recentOutput?.length ? (
+              <pre
+                style={{
+                  margin: 0,
+                  textAlign: "left",
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--text-muted)",
+                }}
+              >
+                {progress.recentOutput.join("\n")}
+              </pre>
+            ) : (
+              t("subagents.noTranscript")
+            )}
           </div>
         )}
         {transcriptError && (
-          <div role="status" style={{ marginTop: 8, padding: "7px 9px", border: "1px solid color-mix(in srgb, var(--warning) 35%, var(--border))", borderRadius: 6, color: "var(--warning)", fontSize: 9.5, overflowWrap: "anywhere" }}>
+          <div
+            role="status"
+            style={{
+              marginTop: 8,
+              padding: "7px 9px",
+              border: "1px solid color-mix(in srgb, var(--warning) 35%, var(--border))",
+              borderRadius: 6,
+              color: "var(--warning)",
+              fontSize: 9.5,
+              overflowWrap: "anywhere",
+            }}
+          >
             {t("subagents.transcriptUnavailable")}
           </div>
         )}
@@ -264,7 +414,15 @@ function SubagentDetail({
   );
 }
 
-function SubagentRow({ subagent, selected, onSelect }: { subagent: SubagentSnapshot; selected: boolean; onSelect: () => void }) {
+function SubagentRow({
+  subagent,
+  selected,
+  onSelect,
+}: {
+  subagent: SubagentSnapshot;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const { t } = useI18n();
   const progress = subagent.progress;
   const active = isSubagentActive(subagent);
@@ -293,24 +451,80 @@ function SubagentRow({ subagent, selected, onSelect }: { subagent: SubagentSnaps
         textAlign: "left",
       }}
     >
-      <span style={{ gridRow: "1 / span 2", display: "grid", placeItems: "center", width: 18, height: 18 }}><SubagentStatusGlyph subagent={subagent} /></span>
-      <span style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, fontWeight: 650 }}>{subagent.id}</span>
-        <span style={{ padding: "1px 4px", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", fontSize: 8.5, lineHeight: 1.3 }}>{subagent.agent}</span>
+      <span style={{ gridRow: "1 / span 2", display: "grid", placeItems: "center", width: 18, height: 18 }}>
+        <SubagentStatusGlyph subagent={subagent} />
       </span>
-      <span style={{ color: "var(--text-dim)", fontSize: 9, fontVariantNumeric: "tabular-nums" }}>{formatSubagentDuration(progress?.durationMs)}</span>
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: progress?.retryState ? "var(--warning)" : active ? "var(--text-muted)" : color, fontSize: 9.5 }}>{activity}</span>
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 2 7 5 3 8" /></svg>
+      <span style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+        <span
+          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, fontWeight: 650 }}
+        >
+          {subagent.id}
+        </span>
+        <span
+          style={{
+            padding: "1px 4px",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+            color: "var(--text-dim)",
+            fontSize: 8.5,
+            lineHeight: 1.3,
+          }}
+        >
+          {subagent.agent}
+        </span>
+      </span>
+      <span style={{ color: "var(--text-dim)", fontSize: 9, fontVariantNumeric: "tabular-nums" }}>
+        {formatSubagentDuration(progress?.durationMs)}
+      </span>
+      <span
+        style={{
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          color: progress?.retryState ? "var(--warning)" : active ? "var(--text-muted)" : color,
+          fontSize: 9.5,
+        }}
+      >
+        {activity}
+      </span>
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 10 10"
+        fill="none"
+        stroke="var(--text-dim)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <polyline points="3 2 7 5 3 8" />
+      </svg>
     </button>
   );
 }
 
-export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, subagents, active = true }: { sessionId: string | null; runtimeId?: string; onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"]; cwd?: string; subagents: SubagentSnapshot[]; active?: boolean }) {
+export function SubagentPanel({
+  sessionId,
+  runtimeId,
+  onRuntimeIdentity,
+  cwd,
+  subagents,
+  active = true,
+}: {
+  sessionId: string | null;
+  runtimeId?: string;
+  onRuntimeIdentity?: RuntimeSessionBinding["onIdentity"];
+  cwd?: string;
+  subagents: SubagentSnapshot[];
+  active?: boolean;
+}) {
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const running = subagents.filter(isSubagentActive);
   const finished = subagents.filter((subagent) => !isSubagentActive(subagent));
-  const selected = selectedId ? subagents.find((subagent) => subagent.id === selectedId) ?? null : null;
+  const selected = selectedId ? (subagents.find((subagent) => subagent.id === selectedId) ?? null) : null;
 
   useEffect(() => {
     setSelectedId(null);
@@ -324,26 +538,94 @@ export function SubagentPanel({ sessionId, runtimeId, onRuntimeIdentity, cwd, su
   if (!sessionId || subagents.length === 0) {
     body = <div style={{ padding: "12px 11px", color: "var(--text-dim)", fontSize: 12 }}>{t("subagents.none")}</div>;
   } else if (selected) {
-    body = <SubagentDetail sessionId={sessionId} runtimeId={runtimeId} onRuntimeIdentity={onRuntimeIdentity} cwd={cwd} subagent={selected} visible={active} onBack={() => setSelectedId(null)} />;
+    body = (
+      <SubagentDetail
+        sessionId={sessionId}
+        runtimeId={runtimeId}
+        onRuntimeIdentity={onRuntimeIdentity}
+        cwd={cwd}
+        subagent={selected}
+        visible={active}
+        onBack={() => setSelectedId(null)}
+      />
+    );
   } else {
     body = (
       <>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexShrink: 0, minHeight: 28, padding: "0 11px", fontSize: 9.5, fontVariantNumeric: "tabular-nums" }}>
-          <span style={{ color: running.length > 0 ? "var(--accent)" : "var(--text-dim)" }}>{t("subagents.runningCount", { count: running.length })}</span>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 7,
+            flexShrink: 0,
+            minHeight: 28,
+            padding: "0 11px",
+            fontSize: 9.5,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          <span style={{ color: running.length > 0 ? "var(--accent)" : "var(--text-dim)" }}>
+            {t("subagents.runningCount", { count: running.length })}
+          </span>
           <span style={{ color: "var(--text-dim)" }}>{t("subagents.finishedCount", { count: finished.length })}</span>
         </div>
 
         <div style={{ minHeight: 0, overflowY: "auto", padding: "7px 6px 8px" }}>
           {running.length > 0 && (
             <div role="list" aria-label={t("subagents.running")}>
-              <div style={{ padding: "0 7px 4px", color: "var(--accent)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.running")}</div>
-              {running.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
+              <div
+                style={{
+                  padding: "0 7px 4px",
+                  color: "var(--accent)",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.07em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {t("subagents.running")}
+              </div>
+              {running.map((subagent) => (
+                <SubagentRow
+                  key={subagent.id}
+                  subagent={subagent}
+                  selected={false}
+                  onSelect={() => setSelectedId(subagent.id)}
+                />
+              ))}
             </div>
           )}
           {finished.length > 0 && (
-            <div role="list" aria-label={t("subagents.history")} style={{ marginTop: running.length > 0 ? 8 : 0, paddingTop: running.length > 0 ? 8 : 0, borderTop: running.length > 0 ? "1px solid var(--border)" : "none" }}>
-              <div style={{ padding: "0 7px 4px", color: "var(--text-dim)", fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase" }}>{t("subagents.history")}</div>
-              {finished.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} selected={false} onSelect={() => setSelectedId(subagent.id)} />)}
+            <div
+              role="list"
+              aria-label={t("subagents.history")}
+              style={{
+                marginTop: running.length > 0 ? 8 : 0,
+                paddingTop: running.length > 0 ? 8 : 0,
+                borderTop: running.length > 0 ? "1px solid var(--border)" : "none",
+              }}
+            >
+              <div
+                style={{
+                  padding: "0 7px 4px",
+                  color: "var(--text-dim)",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.07em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {t("subagents.history")}
+              </div>
+              {finished.map((subagent) => (
+                <SubagentRow
+                  key={subagent.id}
+                  subagent={subagent}
+                  selected={false}
+                  onSelect={() => setSelectedId(subagent.id)}
+                />
+              ))}
             </div>
           )}
         </div>

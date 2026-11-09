@@ -31,9 +31,7 @@ async function getOmpPackageDir(): Promise<string | null> {
 }
 
 function encodeHeaderValue(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (ch) =>
-    `%${ch.charCodeAt(0).toString(16).toUpperCase()}`
-  );
+  return encodeURIComponent(value).replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 function getContentDisposition(fileName: string, inline: boolean): string {
@@ -51,9 +49,11 @@ async function getOmpCliPath(): Promise<string | null> {
   }
 
   try {
-    const resolver = (import.meta as ImportMeta & {
-      resolve?: (specifier: string) => string | Promise<string>;
-    }).resolve;
+    const resolver = (
+      import.meta as ImportMeta & {
+        resolve?: (specifier: string) => string | Promise<string>;
+      }
+    ).resolve;
     if (typeof resolver === "function") {
       const indexUrl = await resolver("@oh-my-pi/pi-coding-agent");
       candidates.add(join(dirname(fileURLToPath(indexUrl)), "cli.js"));
@@ -62,23 +62,13 @@ async function getOmpCliPath(): Promise<string | null> {
     // Next.js production bundles can strip import.meta.resolve.
   }
 
-  candidates.add(
-    join(
-      process.cwd(),
-      "node_modules",
-      "@oh-my-pi",
-      "pi-coding-agent",
-      "dist",
-      "cli.js"
-    )
-  );
+  candidates.add(join(process.cwd(), "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js"));
 
   for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate;
   }
   return null;
 }
-
 
 async function exportSession(filePath: string, outputPath: string): Promise<void> {
   const cliPath = await getOmpCliPath();
@@ -106,10 +96,7 @@ async function exportSession(filePath: string, outputPath: string): Promise<void
 
 export const GET = withRequestLog("/api/sessions/[id]/export", getRouteHandler);
 
-async function getRouteHandler(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function getRouteHandler(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
@@ -118,8 +105,8 @@ async function getRouteHandler(
   const inline = new URL(req.url).searchParams.get("inline") === "1";
 
   try {
-    const canonicalId = getRpcSession(id)?.sessionId ?? getFinalRpcSessionId(id)
-      ?? (id.startsWith("runtime:") ? undefined : id);
+    const canonicalId =
+      getRpcSession(id)?.sessionId ?? getFinalRpcSessionId(id) ?? (id.startsWith("runtime:") ? undefined : id);
     const filePath = canonicalId ? await resolveSessionPath(canonicalId) : null;
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
