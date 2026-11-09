@@ -50,11 +50,12 @@ export function groupSessionActivity(
   // same sessions must print in the same order on every machine. `localeCompare`
   // depends on the runtime's ICU data, which `lib/project-order.ts` also avoids
   // for the same reason.
-  const projects = [...byProject.values()].sort((left, right) => (
-    right.running - left.running
-    || right.waiting - left.waiting
-    || (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
-  ));
+  const projects = [...byProject.values()].sort(
+    (left, right) =>
+      right.running - left.running ||
+      right.waiting - left.waiting ||
+      (left.path < right.path ? -1 : left.path > right.path ? 1 : 0),
+  );
 
   // Totals stay tied to the runtime snapshot, not to the project rows: the
   // snapshot also holds sessions this list cannot place (running before the

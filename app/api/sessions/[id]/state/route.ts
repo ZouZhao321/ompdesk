@@ -5,10 +5,7 @@ import { resolveSessionPath } from "@/lib/session-reader";
 
 export const GET = withRequestLog("/api/sessions/[id]/state", getRouteHandler);
 
-async function getRouteHandler(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+async function getRouteHandler(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
     const rpc = getRpcSession(id);
@@ -17,7 +14,7 @@ async function getRouteHandler(
       return NextResponse.json({ running: true, state });
     }
 
-    if (!await resolveSessionPath(id)) {
+    if (!(await resolveSessionPath(id))) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
     return NextResponse.json({ running: false });

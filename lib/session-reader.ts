@@ -1,8 +1,4 @@
-import {
-  SessionManager,
-  buildSessionContext as ompBuildSessionContext,
-  getAgentDir,
-} from "@oh-my-pi/pi-coding-agent";
+import { SessionManager, buildSessionContext as ompBuildSessionContext, getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { Tokenizer } from "@oh-my-pi/pi-agent-core";
 import type { AgentMessage as OmpAgentMessage } from "@oh-my-pi/pi-agent-core";
 import { calculatePromptTokens, hasContextTokenUsage } from "@oh-my-pi/pi-agent-core/compaction";
@@ -22,9 +18,11 @@ export { getAgentDir };
 export async function attachSessionProjectInfo(sessions: SessionInfo[]): Promise<SessionInfo[]> {
   const uniqueCwds = [...new Set(sessions.map((s) => s.cwd).filter(Boolean))];
   const projectByCwd = new Map<string, ProjectInfo>();
-  await Promise.all(uniqueCwds.map(async (cwd) => {
-    projectByCwd.set(cwd, await resolveProject(cwd));
-  }));
+  await Promise.all(
+    uniqueCwds.map(async (cwd) => {
+      projectByCwd.set(cwd, await resolveProject(cwd));
+    }),
+  );
 
   return sessions.map((session) => {
     const project = session.cwd ? projectByCwd.get(session.cwd) : undefined;
@@ -125,27 +123,29 @@ async function loadAllSessions(): Promise<SessionInfo[]> {
   // stores an absolute path. Both forms must resolve to a parent row.
   const idSet = new Set(ompSessions.map((s) => s.id));
 
-  const sessions = await Promise.all(ompSessions.map(async (s) => {
-    cacheSessionPath(s.id, s.path);
-    const listedFirstMessage = s.firstMessage || "(no messages)";
-    const skillCommand = readLeadingSkillCommand(s.path);
-    return {
-      path: s.path,
-      id: s.id,
-      cwd: s.cwd,
-      name: s.title,
-      created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
-      modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
-      messageCount: s.messageCount,
-      firstMessage: skillCommand ?? listedFirstMessage,
-      parentSessionId: s.parentSessionPath
-        ? pathToId.get(sessionPathKey(s.parentSessionPath))
-          ?? (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined)
-        : undefined,
-      transient: false,
-      ...(s.status ? { status: s.status } : {}),
-    };
-  }));
+  const sessions = await Promise.all(
+    ompSessions.map(async (s) => {
+      cacheSessionPath(s.id, s.path);
+      const listedFirstMessage = s.firstMessage || "(no messages)";
+      const skillCommand = readLeadingSkillCommand(s.path);
+      return {
+        path: s.path,
+        id: s.id,
+        cwd: s.cwd,
+        name: s.title,
+        created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
+        modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
+        messageCount: s.messageCount,
+        firstMessage: skillCommand ?? listedFirstMessage,
+        parentSessionId: s.parentSessionPath
+          ? (pathToId.get(sessionPathKey(s.parentSessionPath)) ??
+            (idSet.has(s.parentSessionPath) ? s.parentSessionPath : undefined))
+          : undefined,
+        transient: false,
+        ...(s.status ? { status: s.status } : {}),
+      };
+    }),
+  );
   return attachSessionProjectInfo(sessions);
 }
 
@@ -155,7 +155,10 @@ export async function listAllSessions(options: { force?: boolean } = {}): Promis
 
   // Return cached result if still fresh (avoids re-scanning session files
   // and re-spawning git processes on every page load).
-  if (globalThis.__ompSessionListCache && Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS) {
+  if (
+    globalThis.__ompSessionListCache &&
+    Date.now() - globalThis.__ompSessionListCache.ts < SESSION_LIST_CACHE_TTL_MS
+  ) {
     return globalThis.__ompSessionListCache.data;
   }
 
@@ -343,18 +346,24 @@ function collectBranchPath(
  *
  * omp's `buildSessionContext` returns rendered messages but not the entry ids
  * behind them, and the browser needs those ids to fork and to navigate between
- * in-session branches. This mirrors omp's own live-chat transcript —
- * `{ transcript: true, collapseCompactedHistory: true }` — so the browser and
- * the TUI show the same thing: history replaced by the latest compaction is
- * elided, the summary renders at the compaction point, and everything kept or
- * newer follows.
+ * in-session branches.
+ *
+ * `collapseCompactedHistory` mirrors omp's live TUI: the history replaced by the
+ * latest compaction is elided and only the kept tail plus everything newer
+ * renders. Left off, every entry on the branch renders in order and the summary
+ * sits where the compaction fired — that is what the browser uses, because the
+ * prompt rail and the conversation map address every turn the session recorded.
+ * Collapsing drops those turns from the DOM, so their dots and map targets would
+ * have nowhere to go.
  */
 function collectDisplayEntries(
   entries: SessionEntry[],
   byId: Map<string, SessionEntry>,
   leafId?: string | null,
+  collapseCompactedHistory = false,
 ): SessionEntry[] {
   const path = collectBranchPath(entries, byId, leafId);
+  if (!collapseCompactedHistory) return path;
 
   // Only the latest compaction on the path is active; earlier ones were
   // themselves superseded.
@@ -387,27 +396,38 @@ function parseDefaultModel(models: Record<string, string>): { provider: string; 
   return { provider: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
 }
 
+export interface BuildSessionContextOptions {
+  deferThinking?: boolean;
+  deferToolResultImages?: boolean;
+  /**
+   * 折叠被最近一次压缩替换掉的历史，只保留保留段与压缩之后的条目。
+   * 默认 false：网页端按会话真实记录呈现每一轮，跳转条与会话地图才有落点。
+   */
+  collapseCompactedHistory?: boolean;
+}
+
 export function buildSessionContext(
   entries: SessionEntry[],
   leafId?: string | null,
-  options: { deferThinking?: boolean; deferToolResultImages?: boolean } = {},
+  options: BuildSessionContextOptions = {},
 ): SessionContext {
   const byId = new Map<string, SessionEntry>();
   for (const e of entries) byId.set(e.id, e);
 
+  const collapseCompactedHistory = options.collapseCompactedHistory === true;
   const ompEntries = entries as unknown as OmpSessionEntry[];
-  const ompCtx = ompBuildSessionContext(
-    ompEntries,
-    leafId,
-    byId as unknown as Map<string, OmpSessionEntry>,
-    { transcript: true, collapseCompactedHistory: true },
-  );
+  // 这次调用的 messages 全部丢弃，只取元数据；展开与否不影响 thinkingLevel 与
+  // models，因此固定折叠，避免默认路径上把压缩前的整段历史渲染一遍再扔掉。
+  const ompCtx = ompBuildSessionContext(ompEntries, leafId, byId as unknown as Map<string, OmpSessionEntry>, {
+    transcript: true,
+    collapseCompactedHistory: true,
+  });
 
   // Convert the branch entries and their IDs together so fork/navigation
   // targets stay aligned with what the transcript renders.
   const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
-  for (const entry of collectDisplayEntries(entries, byId, leafId)) {
+  for (const entry of collectDisplayEntries(entries, byId, leafId, collapseCompactedHistory)) {
     const m = entryToUiMessage(entry, options);
     if (m) {
       messages.push(m);
@@ -487,10 +507,10 @@ export async function getHistoricalContextUsage(
     const assistant = entry.message as unknown as HistoricalAssistantMessage;
     const snapshot = readContextSnapshot(assistant);
     if (
-      assistant.stopReason === "aborted"
-      || assistant.stopReason === "error"
-      || !assistant.usage
-      || (!snapshot && !hasContextTokenUsage(assistant.usage))
+      assistant.stopReason === "aborted" ||
+      assistant.stopReason === "error" ||
+      !assistant.usage ||
+      (!snapshot && !hasContextTokenUsage(assistant.usage))
     ) {
       continue;
     }
@@ -501,9 +521,10 @@ export async function getHistoricalContextUsage(
 
   const snapshot = readContextSnapshot(anchor);
   const snapshotPromptTokens = snapshot?.promptTokens;
-  const promptTokens = typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
-    ? snapshotPromptTokens
-    : calculatePromptTokens(anchor.usage);
+  const promptTokens =
+    typeof snapshotPromptTokens === "number" && Number.isFinite(snapshotPromptTokens)
+      ? snapshotPromptTokens
+      : calculatePromptTokens(anchor.usage);
 
   if (!Number.isFinite(promptTokens) || promptTokens < 0) return undefined;
 
@@ -511,13 +532,7 @@ export async function getHistoricalContextUsage(
   let anchorIndex = -1;
   for (let index = activeMessages.length - 1; index >= 0; index -= 1) {
     const message = activeMessages[index];
-    if (
-      message === anchor
-      || (
-        message.role === "assistant"
-        && message.timestamp === anchor.timestamp
-      )
-    ) {
+    if (message === anchor || (message.role === "assistant" && message.timestamp === anchor.timestamp)) {
       anchorIndex = index;
       break;
     }
@@ -562,7 +577,7 @@ function base64ImageInfo(block: unknown): { bytes: number; mime?: string } | nul
   if (!data) return null;
 
   const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-  return { bytes: Math.max(0, Math.floor(data.length * 3 / 4) - padding), mime };
+  return { bytes: Math.max(0, Math.floor((data.length * 3) / 4) - padding), mime };
 }
 
 function omitToolResultBase64Images(message: AgentMessage): AgentMessage {
@@ -608,11 +623,11 @@ function entryToUiMessage(
       if (!options.deferThinking || message.role !== "assistant") return message;
       return {
         ...message,
-        content: message.content.map((block) => (
+        content: message.content.map((block) =>
           block.type === "thinking" && block.thinking.trim() !== ""
             ? { ...block, thinking: "", deferred: true }
-            : block
-        )),
+            : block,
+        ),
       };
     }
     case "compaction":

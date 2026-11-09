@@ -32,10 +32,7 @@ async function getRouteHandler(request: Request) {
   }
 
   try {
-    const [persisted, runtime] = await Promise.all([
-      listAllSessions(),
-      attachSessionProjectInfo(getRpcSessionInfos()),
-    ]);
+    const [persisted, runtime] = await Promise.all([listAllSessions(), attachSessionProjectInfo(getRpcSessionInfos())]);
     const snapshot = getRpcSessionActivitySnapshot();
 
     return NextResponse.json(

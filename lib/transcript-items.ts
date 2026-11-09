@@ -1,10 +1,4 @@
-import type {
-  AgentMessage,
-  AssistantContentBlock,
-  AssistantMessage,
-  CustomMessage,
-  ToolResultMessage,
-} from "./types";
+import type { AgentMessage, AssistantContentBlock, AssistantMessage, CustomMessage, ToolResultMessage } from "./types";
 import {
   countToolCallBlocks,
   getAssistantErrorMessage,
@@ -93,9 +87,9 @@ export function isGroupAnchor(message: AgentMessage): boolean {
 
 function hasFinalAssistantAnswer(message: AgentMessage, options: DisplayOptions): boolean {
   if (message.role !== "assistant") return false;
-  return splitFinalAssistantBlocks(message as AssistantMessage, options).answerBlocks.some((block) => (
-    block.type === "image" || (block.type === "text" && block.text.trim().length > 0)
-  ));
+  return splitFinalAssistantBlocks(message as AssistantMessage, options).answerBlocks.some(
+    (block) => block.type === "image" || (block.type === "text" && block.text.trim().length > 0),
+  );
 }
 
 function findFinalAssistantIndex(
@@ -128,8 +122,10 @@ function hasDisplayableProcessMessage(message: AgentMessage, options: DisplayOpt
     const assistant = message as AssistantMessage;
     // 内容块为空时 MessageView 仍会渲染 provider 错误横幅：只看内容块的话，
     // 夹在轮中部的错误消息既不算过程项也不算正式回答，整条消失。
-    return getDisplayableAssistantBlocks(assistant, options).length > 0
-      || getAssistantErrorMessage(assistant, options) !== null;
+    return (
+      getDisplayableAssistantBlocks(assistant, options).length > 0 ||
+      getAssistantErrorMessage(assistant, options) !== null
+    );
   }
   // 自定义消息与 shell 执行都在过程区间里渲染：前者承载 compaction 之外的说明，
   // 后者是用户自己敲下的命令与输出，折叠时漏掉它们等于把这段过程删掉。
@@ -137,15 +133,10 @@ function hasDisplayableProcessMessage(message: AgentMessage, options: DisplayOpt
 }
 
 /** 这些过程消息里有没有 provider 错误：横幅只在展开的组里才看得见。 */
-function hasProviderError(
-  messages: AgentMessage[],
-  indices: readonly number[],
-  options: DisplayOptions,
-): boolean {
+function hasProviderError(messages: AgentMessage[], indices: readonly number[], options: DisplayOptions): boolean {
   return indices.some((index) => {
     const message = messages[index];
-    return message?.role === "assistant"
-      && getAssistantErrorMessage(message as AssistantMessage, options) !== null;
+    return message?.role === "assistant" && getAssistantErrorMessage(message as AssistantMessage, options) !== null;
   });
 }
 
@@ -202,15 +193,14 @@ function buildTurn(
 ): TranscriptItem {
   const finalAssistantIndex = findFinalAssistantIndex(messages, anchorIndex, endIndex, displayOptions);
   // 运行中的最后一轮不折叠：用户要看到过程消息一条条冒出来。
-  const isLiveTail = Boolean(options.busy || options.isStreaming)
-    && anchorIndex === lastAnchorIndex
-    && endIndex === messages.length;
+  const isLiveTail =
+    Boolean(options.busy || options.isStreaming) && anchorIndex === lastAnchorIndex && endIndex === messages.length;
   const isLastTurn = anchorIndex === lastAnchorIndex;
 
   const processIndices = sequence(anchorIndex + 1, finalAssistantIndex === -1 ? endIndex : finalAssistantIndex);
-  const visibleProcessIndices = processIndices.filter((processIdx) => (
-    hasDisplayableProcessMessage(messages[processIdx], displayOptions)
-  ));
+  const visibleProcessIndices = processIndices.filter((processIdx) =>
+    hasDisplayableProcessMessage(messages[processIdx], displayOptions),
+  );
 
   if (finalAssistantIndex === -1) {
     return {
@@ -235,12 +225,14 @@ function buildTurn(
 
   const finalAssistant = messages[finalAssistantIndex] as AssistantMessage;
   const finalSplit = splitFinalAssistantBlocks(finalAssistant, displayOptions);
-  const finalProcessMessage = finalSplit.processBlocks.length > 0
-    ? withAssistantBlocks(finalAssistant, finalSplit.processBlocks, { omitUsage: true })
-    : null;
-  const finalAnswerMessage = finalSplit.answerBlocks.length > 0 || getAssistantErrorMessage(finalAssistant, displayOptions)
-    ? withAssistantBlocks(finalAssistant, finalSplit.answerBlocks)
-    : null;
+  const finalProcessMessage =
+    finalSplit.processBlocks.length > 0
+      ? withAssistantBlocks(finalAssistant, finalSplit.processBlocks, { omitUsage: true })
+      : null;
+  const finalAnswerMessage =
+    finalSplit.answerBlocks.length > 0 || getAssistantErrorMessage(finalAssistant, displayOptions)
+      ? withAssistantBlocks(finalAssistant, finalSplit.answerBlocks)
+      : null;
 
   const isStandalone = isLiveTail;
   const writtenFiles = finalAnswerMessage
@@ -258,8 +250,8 @@ function buildTurn(
     processMessageCount: visibleProcessIndices.length + (finalProcessMessage ? 1 : 0),
     hasProcessError: hasProviderError(messages, visibleProcessIndices, displayOptions),
     isLastTurn,
-    toolCallCount: countToolCalls(messages, visibleProcessIndices, displayOptions)
-      + countToolCallBlocks(finalSplit.processBlocks),
+    toolCallCount:
+      countToolCalls(messages, visibleProcessIndices, displayOptions) + countToolCallBlocks(finalSplit.processBlocks),
     writtenFiles,
     tailIndices: sequence(finalAssistantIndex + 1, endIndex),
     isLiveTail,
@@ -313,7 +305,7 @@ export function buildTranscriptItems(
   }
 
   const items: TranscriptItem[] = [];
-  for (let index = 0; index < messages.length;) {
+  for (let index = 0; index < messages.length; ) {
     if (!isGroupAnchor(messages[index])) {
       items.push(buildStandaloneMessageItem(entryIds, index));
       index += 1;

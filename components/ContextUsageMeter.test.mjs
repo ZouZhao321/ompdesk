@@ -34,10 +34,7 @@ test("draws a ring whose arc matches the used share", () => {
   const [, progress] = readArcs(html);
   assert.ok(progress.dasharray > 0);
   const expected = progress.dasharray * 0.5;
-  assert.ok(
-    Math.abs(progress.dashoffset - expected) < 1e-6,
-    `dashoffset ${progress.dashoffset} != ${expected}`,
-  );
+  assert.ok(Math.abs(progress.dashoffset - expected) < 1e-6, `dashoffset ${progress.dashoffset} != ${expected}`);
   assert.equal(progress.stroke, "var(--text-muted)");
 });
 

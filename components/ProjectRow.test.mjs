@@ -78,28 +78,26 @@ function renderRow(overrides = {}, locale) {
 
 /** 按给定路径顺序渲染一组项目行，置顶集合决定图钉标记。 */
 function renderRows(paths, pinned, locale) {
-  const rows = paths.map((path) => React.createElement(ProjectRow, {
-    key: path,
-    project: path,
-    name: projectDisplayName(path),
-    isSelected: false,
-    isCollapsed: false,
-    isPinned: pinned.includes(path),
-    hovered: false,
-    menuOpen: false,
-    onToggleCollapse() {},
-    onSelect() {},
-    onNewSession() {},
-    onToggleMenu() {},
-    onHoverChange() {},
-  }));
+  const rows = paths.map((path) =>
+    React.createElement(ProjectRow, {
+      key: path,
+      project: path,
+      name: projectDisplayName(path),
+      isSelected: false,
+      isCollapsed: false,
+      isPinned: pinned.includes(path),
+      hovered: false,
+      menuOpen: false,
+      onToggleCollapse() {},
+      onSelect() {},
+      onNewSession() {},
+      onToggleMenu() {},
+      onHoverChange() {},
+    }),
+  );
 
   return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      { initialLocale: locale },
-      React.createElement(React.Fragment, null, ...rows),
-    ),
+    React.createElement(I18nProvider, { initialLocale: locale }, React.createElement(React.Fragment, null, ...rows)),
   );
 }
 
@@ -107,10 +105,7 @@ test("renders the project name and exposes the full path as the project button t
   const html = renderRow();
 
   assert.ok(html.includes(">my-app<"), "expected the project name to be rendered");
-  assert.ok(
-    html.includes(`title="${PROJECT_PATH}"`),
-    "expected the project button title to be the full project path",
-  );
+  assert.ok(html.includes(`title="${PROJECT_PATH}"`), "expected the project button title to be the full project path");
 });
 
 test("collapse button mirrors isCollapsed through aria-expanded and its label", () => {
@@ -287,7 +282,11 @@ test("renders no pin mark when isPinned is false or absent", () => {
     const html = renderRow(overrides);
 
     assert.ok(!html.includes(PIN_MARK_LABEL), "expected the pin mark label to be absent");
-    assert.deepEqual(roleImgTags(html).filter((tag) => tag.includes("Pin")), [], "expected no pin glyph");
+    assert.deepEqual(
+      roleImgTags(html).filter((tag) => tag.includes("Pin")),
+      [],
+      "expected no pin glyph",
+    );
   }
 });
 
@@ -296,7 +295,11 @@ test("keeps the activity badges alongside the pin mark", () => {
   const pinned = renderRow({ isPinned: true, activity });
   const unpinned = renderRow({ activity });
 
-  assert.equal(roleImgTags(pinned).length, roleImgTags(unpinned).length + 1, "expected the pin mark on top of the badges");
+  assert.equal(
+    roleImgTags(pinned).length,
+    roleImgTags(unpinned).length + 1,
+    "expected the pin mark on top of the badges",
+  );
   assert.equal(
     roleImgTags(pinned).filter((tag) => tag.includes(`aria-label="${PIN_MARK_LABEL}"`)).length,
     1,
