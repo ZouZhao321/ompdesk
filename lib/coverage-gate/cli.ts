@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { generateBaseCoverage, readSourcePair, type BaseCoverageLoader, type SourceReader } from "./base-coverage";
+import { applyExceptions, EXCEPTIONS_FILE, localTodayIso, resolveExceptions } from "./exceptions";
 import { BASELINE_FILE, collectExportUsage, exportUsageFailure, type ExportAnalysis } from "./exports";
 import {
   isManagedSourceFile,
@@ -54,6 +55,10 @@ export interface CoverageGateDependencies {
   readBaseText?: (root: string, revision: string, filePath: string) => Promise<string | null>;
   /** 读取基线文件；不存在时返回 null，解析交给规则。 */
   readBaseline?: (root: string) => Promise<string | null>;
+  /** 读取豁免清单；文件不存在时返回 null。 */
+  readExceptions?: (root: string) => Promise<string | null>;
+  /** 豁免复核日期 `YYYY-MM-DD`，默认取运行当天；测试注入固定值。 */
+  today?: string;
   git?: GitQueries;
   /** 分叉点基准覆盖率的获取；命令行默认现场生成，测试注入固定样本。 */
   baseCoverage?: BaseCoverageLoader;
@@ -62,7 +67,7 @@ export interface CoverageGateDependencies {
 }
 
 export interface CoverageGateResult {
-  /** 有判定结果时非零，用来让合并检查变红；产物或 git 数据不可用时保持 0。 */
+  /** 有判定结果或豁免清单校验失败时非零，用来让合并检查变红；产物或 git 数据不可用时保持 0。 */
   exitCode: number;
   report: string;
 }
@@ -135,14 +140,23 @@ async function readBaselineFile(root: string): Promise<string | null> {
   }
 }
 
+async function readExceptionsFile(root: string): Promise<string | null> {
+  try {
+    return await readFile(join(root, EXCEPTIONS_FILE), "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return null;
+    throw error;
+  }
+}
+
 /**
  * 编排一次门禁运行：读 lcov、取分叉点与改动清单、现场生成基准覆盖率、聚合、判定、
  * 渲染报告。
  *
  * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出，退出码保持 0：门禁本身
- * 没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之变红。基准运行
- * 失败由规则二报成流水线问题，导出分析失败由规则三报成流水线问题，两者都参与退出码：
- * 数据不全时放过合并，等于把「没读到引用」当成「没有引用」。
+ * 没跑起来不等于代码没被测试。规则有判定结果或豁免清单校验失败时退出码为 1，检查随之
+ * 变红。基准运行失败由规则二报成流水线问题，导出分析失败由规则三报成流水线问题，两者
+ * 都参与退出码：数据不全时放过合并，等于把「没读到引用」当成「没有引用」。
  */
 export async function runCoverageGate(
   options: CoverageGateOptions,
@@ -151,6 +165,7 @@ export async function runCoverageGate(
   const readText = dependencies.readText ?? ((filePath: string) => readFile(filePath, "utf8"));
   const readBaseText = dependencies.readBaseText ?? readFileAtRevision;
   const readBaseline = dependencies.readBaseline ?? readBaselineFile;
+  const readExceptions = dependencies.readExceptions ?? readExceptionsFile;
   const git = dependencies.git ?? GIT_QUERIES;
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
 
@@ -193,6 +208,21 @@ export async function runCoverageGate(
   }
 
   const relevantChanges = changedFiles.filter((file) => isManagedSourceFile(file.path));
+
+  let exceptionsText: string | null = null;
+  let exceptionReadError: string | undefined;
+  try {
+    exceptionsText = await readExceptions(root);
+  } catch (error) {
+    exceptionReadError = errorMessage(error);
+  }
+  const exceptionResolution = resolveExceptions(exceptionsText, dependencies.today ?? localTodayIso());
+  if (exceptionReadError !== undefined) {
+    exceptionResolution.problems.push({
+      index: 0,
+      message: `读取失败：${exceptionReadError}`,
+    });
+  }
 
   let exportUsage: ExportAnalysis;
   try {
@@ -285,6 +315,8 @@ export async function runCoverageGate(
     testImports,
     exportUsage,
   });
+  // 有效豁免只放行登记的那一条规则与那一个文件；已到期条目不放行任何判定。
+  const { blocking, exceptions } = applyExceptions(findings, exceptionResolution);
 
   const report = renderReport({
     baseRef,
@@ -297,8 +329,10 @@ export async function runCoverageGate(
     managedFileCount: managedFiles.length,
     missingManagedFiles: managedFiles.filter((file) => !coverage.has(file)),
     functionDelta,
-    findings,
+    exceptions,
+    findings: blocking,
   });
 
-  return { exitCode: findings.length > 0 ? 1 : 0, report };
+  const exitCode = blocking.length > 0 || exceptions.problems.length > 0 ? 1 : 0;
+  return { exitCode, report };
 }
