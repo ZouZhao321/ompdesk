@@ -117,26 +117,36 @@ export async function runCoverageGate(
   const deltaFiles = relevantChanges.filter((file) => file.status !== "added");
   let functionDelta: FunctionDeltaData | undefined;
   if (deltaFiles.length > 0) {
-    const [baseCoverage, pairs] = await Promise.all([
-      (dependencies.baseCoverage ?? generateBaseCoverage)({
-        repositoryRoot: root,
-        mergeBase,
-        scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
-      }),
-      Promise.all(
-        deltaFiles.map(async (file) => {
-          const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
-          return [file.path, pair] as const;
+    try {
+      const [baseCoverage, pairs] = await Promise.all([
+        (dependencies.baseCoverage ?? generateBaseCoverage)({
+          repositoryRoot: root,
+          mergeBase,
+          scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
         }),
-      ),
-    ]);
-    functionDelta = buildFunctionDelta({
-      changedFiles: deltaFiles,
-      coverage,
-      baseCoverage,
-      mergeBase,
-      sources: new Map(pairs),
-    });
+        Promise.all(
+          deltaFiles.map(async (file) => {
+            const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
+            return [file.path, pair] as const;
+          }),
+        ),
+      ]);
+      functionDelta = buildFunctionDelta({
+        changedFiles: deltaFiles,
+        coverage,
+        baseCoverage,
+        mergeBase,
+        sources: new Map(pairs),
+      });
+    } catch (error) {
+      // 基准数据获取阶段抛出的异常不该让门禁消失：转成失败结果交给规则二，
+      // 报告照常输出、退出码为 1，失败原因原样写进报告。
+      functionDelta = {
+        mergeBase,
+        baseCoverage: { ok: false, detail: `基准数据获取异常：${errorMessage(error)}`, durationMs: 0 },
+        rows: [],
+      };
+    }
   }
 
   const findings = evaluateRules({
