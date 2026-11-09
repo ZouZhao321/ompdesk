@@ -8,7 +8,7 @@ import {
 } from "../exports";
 import type { CoverageRule, Finding, RuleInput } from "./index";
 
-export const RULE_EXPORTS = "rule-3";
+const RULE_EXPORTS = "rule-3";
 
 const RULE_TITLE = "新增导出必须有生产引用";
 
@@ -98,7 +98,7 @@ function baseName(file: string): string {
 }
 
 /** 框架按文件名或路径调用、不需要 import 的导出。 */
-export function isFrameworkExport(file: string, symbol: ExportedSymbol): boolean {
+function isFrameworkExport(file: string, symbol: ExportedSymbol): boolean {
   if (file.startsWith("bin/")) return true;
 
   const name = baseName(file);
@@ -122,11 +122,15 @@ export function isFrameworkExport(file: string, symbol: ExportedSymbol): boolean
  *
  * 新增的判定是分叉点版本与工作区两侧的导出结构对比，只拦本次新增。上线前的存量
  * 无引用导出记录在仓库根的基线文件里，命中基线的不判失败：改名识别失败的路径只能
- * 按新增文件处理，基线让这类重构不至于把存量代码变成新的失败。
+ * 按新增文件处理，基线让这类重构不至于把存量代码变成新的失败。基线只豁免分叉点
+ * 之前就存在的符号，本次新增的导出即便写进基线也不放行，规则不能靠改基线自我豁免。
  *
  * 框架按文件名或路径调用的导出（路由方法、页面与布局的默认导出、配置文件、命令行
  * 入口）不产生 import 语句，直接跳过。仅类型导出与运行时导出分开统计，输出里带上
  * 符号的名字与声明形式。
+ *
+ * 引用索引读不全时不做逐符号判定，只报一条流水线问题，检查随之变红：拿不完整的数据
+ * 判定会把「没读到引用」当成「没有引用」。
  */
 export const ruleExports: CoverageRule = {
   id: RULE_EXPORTS,
@@ -143,6 +147,17 @@ export const ruleExports: CoverageRule = {
         reason: `基线文件无法解析：${analysis.baselineError}`,
         fix: `修复 ${BASELINE_FILE} 的 JSON 结构，或按说明重新生成基线`,
       });
+    }
+
+    if (analysis.readFailures.length > 0) {
+      findings.push({
+        rule: RULE_EXPORTS,
+        file: "（受管源文件）",
+        numbers: `读取失败 ${analysis.readFailures.length} 个文件，引用索引不完整`,
+        reason: `引用索引缺这些文件，规则三无法判定，属流水线问题：${analysis.readFailures.join("；")}`,
+        fix: "确认这些文件存在且可读；工作区里已删除的文件先提交删除，再重跑覆盖率门禁",
+      });
+      return findings;
     }
 
     const judged = analysis.added.filter((item) => !isFrameworkExport(item.file, item.symbol));

@@ -76,6 +76,8 @@ export interface ExportAnalysis {
   scannedFiles: number;
   /** 基线文件存在但无法解析时的说明；有值时规则把它报成失败。 */
   baselineError?: string;
+  /** 读取失败的文件与原因；有值时引用索引不完整，规则把它报成失败。 */
+  readFailures: readonly string[];
 }
 
 /** 基线条目的值。 */
@@ -289,7 +291,33 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
     imports.push({ specifier, named, defaultRef: false, namespaceRef: false });
   }
 
+  collectLazyImports(source, imports);
+
   return { imports, reExports, stars };
+}
+
+/** 动态导入或 `require` 调用里的模块说明符；取不到字符串字面量时返回 null。 */
+function lazySpecifier(call: ts.CallExpression): string | null {
+  const isDynamicImport = call.expression.kind === ts.SyntaxKind.ImportKeyword;
+  const isRequire = ts.isIdentifier(call.expression) && call.expression.text === "require";
+  if (!isDynamicImport && !isRequire) return null;
+  const [argument] = call.arguments;
+  return argument !== undefined && ts.isStringLiteral(argument) ? argument.text : null;
+}
+
+/**
+ * 惰性加载同样是对模块导出的引用。取到的名字不固定，按「引用了该模块全部导出」记，
+ * 只求不漏报：宁可少拦一条，也不把只在动态加载里用到的导出判成 0 引用。
+ */
+function collectLazyImports(source: ts.SourceFile, imports: ModuleImport[]): void {
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const specifier = lazySpecifier(node);
+      if (specifier !== null) imports.push({ specifier, named: [], defaultRef: false, namespaceRef: true });
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(source, visit);
 }
 
 /** 扫描一个文件：导出、对外引用、转出口。 */
@@ -301,7 +329,7 @@ function scanModule(filePath: string, sourceText: string): ModuleScan {
 }
 
 /** 只取导出符号。 */
-export function extractExports(filePath: string, sourceText: string): ExportedSymbol[] {
+function extractExports(filePath: string, sourceText: string): ExportedSymbol[] {
   return scanModule(filePath, sourceText).exports;
 }
 
@@ -444,13 +472,6 @@ function buildReferenceIndex(scans: ReadonlyMap<string, ModuleScan>): ReferenceI
   return index;
 }
 
-/** 从源码文本建引用索引。 */
-export function indexReferences(sources: ReadonlyMap<string, string>): ReferenceIndex {
-  const scans = new Map<string, ModuleScan>();
-  for (const [filePath, sourceText] of sources) scans.set(filePath, scanModule(filePath, sourceText));
-  return buildReferenceIndex(scans);
-}
-
 /** 某个导出在受管源码里的引用方文件，去重后按路径排序。 */
 export function referencesFor(index: ReferenceIndex, file: string, name: string): readonly string[] {
   const byName = index.get(file);
@@ -506,9 +527,21 @@ interface CollectExportUsageOptions {
   baselineText: string | null;
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** 目标文件不存在：工作区里已删除的受管文件会走到这里，不算读取失败。 */
+function isMissingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
 /**
  * 采集一次判定所需的全部数据：工作区源码的引用索引、改动文件两侧的导出对比、
  * 基线里的存量条目。
+ *
+ * 单个文件读不出来不放弃整次分析：工作区里已删除的受管文件按不存在处理，其余读取
+ * 失败记进 `readFailures`，由规则报成流水线问题，别的规则照常判定。
  */
 export async function collectExportUsage(options: CollectExportUsageOptions): Promise<ExportAnalysis> {
   // 改动清单里的未跟踪新文件不在 `git ls-files` 里，但要一并扫描：本地运行时规则
@@ -517,13 +550,19 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
   for (const change of options.changedFiles) paths.add(change.path);
 
   const scans = new Map<string, ModuleScan>();
-  const texts = await Promise.all(
+  const readFailures: string[] = [];
+  await Promise.all(
     [...paths].sort().map(async (filePath) => {
-      const text = await options.readers.readWorkspace(filePath);
-      return [filePath, text] as const;
+      let text: string;
+      try {
+        text = await options.readers.readWorkspace(filePath);
+      } catch (error) {
+        if (!isMissingFile(error)) readFailures.push(`${filePath}：${errorMessage(error)}`);
+        return;
+      }
+      scans.set(filePath, scanModule(filePath, text));
     }),
   );
-  for (const [filePath, text] of texts) scans.set(filePath, scanModule(filePath, text));
 
   const baseline = new Set<string>();
   let baselineError: string | undefined;
@@ -543,22 +582,40 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
     if (headExports.length === 0) continue;
 
     const basePath = change.previousPath ?? change.path;
-    const baseText = change.status === "added" ? null : await options.readers.readAtMergeBase(basePath);
+    let baseText: string | null;
+    try {
+      baseText = change.status === "added" ? null : await options.readers.readAtMergeBase(basePath);
+    } catch (error) {
+      readFailures.push(`${basePath}：${errorMessage(error)}`);
+      continue;
+    }
     const baseKeys = new Set(
       (baseText === null ? [] : extractExports(basePath, baseText)).map(
         (symbol) => `${symbol.name}\u0000${symbol.kind}`,
       ),
     );
     for (const symbol of headExports) {
-      if (!baseKeys.has(`${symbol.name}\u0000${symbol.kind}`)) added.push({ file: change.path, symbol });
+      if (baseKeys.has(`${symbol.name}\u0000${symbol.kind}`)) continue;
+      added.push({ file: change.path, symbol });
+      // 基线只豁免分叉点之前就存在的符号。本次新增的导出即使出现在基线里也不放行，
+      // 否则改一次基线就能让规则三自我豁免。
+      baseline.delete(baselineKey(change.path, symbol.name, symbol.kind));
     }
   }
+
+  readFailures.sort();
 
   return {
     added,
     references: buildReferenceIndex(scans),
     baseline,
     scannedFiles: scans.size,
+    readFailures,
     ...(baselineError === undefined ? {} : { baselineError }),
   };
+}
+
+/** 导出分析整体没跑起来时的空结果：规则据 `readFailures` 报成流水线问题。 */
+export function exportUsageFailure(detail: string): ExportAnalysis {
+  return { added: [], references: new Map(), baseline: new Set(), scannedFiles: 0, readFailures: [detail] };
 }

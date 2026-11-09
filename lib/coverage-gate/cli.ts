@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { generateBaseCoverage, readSourcePair, type BaseCoverageLoader, type SourceReader } from "./base-coverage";
-import { BASELINE_FILE, collectExportUsage, type ExportAnalysis } from "./exports";
+import { BASELINE_FILE, collectExportUsage, exportUsageFailure, type ExportAnalysis } from "./exports";
 import {
   isManagedSourceFile,
   listChangedFiles,
@@ -85,9 +85,10 @@ async function readBaselineFile(root: string): Promise<string | null> {
  * 编排一次门禁运行：读 lcov、取分叉点与改动清单、现场生成基准覆盖率、聚合、判定、
  * 渲染报告。
  *
- * 产物缺失、git 读不到分叉点或导出分析读不出源码时把原因写进报告而不是抛出，退出码
- * 保持 0：门禁本身没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之
- * 变红。基准运行失败不在此列，它由规则二报成流水线问题并参与退出码。
+ * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出，退出码保持 0：门禁本身
+ * 没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之变红。基准运行
+ * 失败由规则二报成流水线问题，导出分析失败由规则三报成流水线问题，两者都参与退出码：
+ * 数据不全时放过合并，等于把「没读到引用」当成「没有引用」。
  */
 export async function runCoverageGate(
   options: CoverageGateOptions,
@@ -146,10 +147,8 @@ export async function runCoverageGate(
       baselineText: await readBaseline(root),
     });
   } catch (error) {
-    return {
-      exitCode: 0,
-      report: renderUnavailable(`导出引用分析失败：${errorMessage(error)}。`),
-    };
+    // 分析整体失败也走规则：规则三把它报成流水线问题，规则一与规则二的判定照常输出。
+    exportUsage = exportUsageFailure(`导出引用分析失败：${errorMessage(error)}`);
   }
 
   // 规则二只判改动过的文件：新增文件走规则一，没有可判的文件时不跑基准，省一次测试运行。
