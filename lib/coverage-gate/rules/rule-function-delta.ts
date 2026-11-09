@@ -162,8 +162,12 @@ export function buildFunctionDelta(input: FunctionDeltaBuildInput): FunctionDelt
             return [{ path, names: collectFunctionSurface(text, path).defined }];
           });
 
+  // 两侧都没有覆盖率记录时「净增量为零」平凡成立，那不是替换失真，而是这个文件从未被加载，
+  // 不能借此豁免本规则，否则未测文件里的替换会静默通过。
   const replacements = rows
-    .filter((row) => row.added.length > 0 && row.removed.length > 0 && row.headFound - row.baseFound === 0)
+    .filter(
+      (row) => row.added.length > 0 && row.removed.length > 0 && row.baseFound > 0 && row.headFound === row.baseFound,
+    )
     .map((row) => ({ path: row.file, added: row.added, removed: row.removed }));
 
   const distortion = analyzeDistortion({

@@ -78,20 +78,26 @@ function renderUnavailable(detail: string): string {
 }
 
 /**
- * 测试文件的导入索引。git 查询的桩没有 `testFiles` 时返回空索引，被动覆盖检查随之跳过。
+ * 测试文件的导入索引。git 查询的桩没有 `testFiles` 时返回 undefined，被动覆盖检查随之跳过：
+ * 空索引会被当成「没有任何测试导入过这个符号」，与桩缺少这项查询的语义相反。
  */
 async function collectTestImportIndex(
   git: GitQueries,
   root: string,
   readText: (filePath: string) => Promise<string>,
-): Promise<ReadonlyMap<string, ReadonlySet<string>>> {
-  if (!git.testFiles) return new Map();
+): Promise<ReadonlyMap<string, ReadonlySet<string>> | undefined> {
+  if (!git.testFiles) return undefined;
 
   const testFiles = await git.testFiles(root);
   const sources = new Map<string, string>();
   await Promise.all(
     testFiles.map(async (filePath) => {
-      sources.set(filePath, await readText(join(root, filePath)));
+      try {
+        sources.set(filePath, await readText(join(root, filePath)));
+      } catch (error) {
+        // git 索引里仍列着工作区已删除的文件，缺文件不该让整次门禁退化成「未能运行」。
+        if (!isMissingFile(error)) throw error;
+      }
     }),
   );
   return collectTestImports(sources);
@@ -204,7 +210,7 @@ export async function runCoverageGate(
     exportUsage = exportUsageFailure(`导出引用分析失败：${errorMessage(error)}`);
   }
 
-  let testImports: ReadonlyMap<string, ReadonlySet<string>>;
+  let testImports: ReadonlyMap<string, ReadonlySet<string>> | undefined;
   try {
     testImports = await collectTestImportIndex(git, root, readText);
   } catch (error) {
