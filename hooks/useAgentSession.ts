@@ -227,11 +227,7 @@ export interface UseAgentSessionOptions {
   onSessionForked?: (newSessionId: string, runtimeId?: string | null) => void;
   modelsRefreshKey?: number;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
-  onBranchDataChange?: (
-    tree: SessionTreeNode[],
-    activeLeafId: string | null,
-    onLeafChange: (leafId: string | null) => void,
-  ) => void;
+  onBranchDataChange?: (activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
   onSessionStatsPanelOpen?: () => void;
   setToolPreset?: (preset: "none" | "default" | "full") => void;
   /**
@@ -3013,8 +3009,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   useEffect(() => {
     if (!onBranchDataChange) return;
-    onBranchDataChange(data?.tree ?? [], activeLeafId, handleLeafChange);
-  }, [data?.tree, activeLeafId, handleLeafChange, onBranchDataChange]);
+    onBranchDataChange(activeLeafId, handleLeafChange);
+  }, [activeLeafId, handleLeafChange, onBranchDataChange]);
 
   useEffect(() => {
     window.addEventListener("keydown", markUserScrollIntent);

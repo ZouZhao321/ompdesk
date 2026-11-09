@@ -152,8 +152,7 @@ SessionSidebar.tsx  会话树
 ChatWindow.tsx      聊天组合
 ChatInput.tsx       输入栏 + 模型/角色/思考/tools/compact 控件
 MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
-BranchNavigator.tsx 会话内分支切换器
-ConversationMap.tsx 会话地图：卡片、连线、缩放、分叉与切换
+ConversationMap.tsx 分支地图：卡片、连线、缩放、弹窗详情、分叉与切换
 SubagentPanel.tsx   子代理标签页：运行与历史列表、执行详情
 CommentTranslationPanel.tsx 注释互译标签页：中英两栏词条、勾选生成、分批请求与字典管理
 CommentTranslationPreview.tsx 面板底部预览：用查看器同一份源码视图渲染选中词条

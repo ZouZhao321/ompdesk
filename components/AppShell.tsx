@@ -15,7 +15,6 @@ import { PanelViewIcon } from "./PanelViewIcon";
 import { SettingsConfig } from "./SettingsConfig";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { OmpUpdateIndicator } from "./OmpUpdateIndicator";
-import { BranchNavigator } from "./BranchNavigator";
 import { ConversationMap } from "./ConversationMap";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
@@ -67,7 +66,7 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
-import type { BlockingExtensionUiRequest, SessionInfo, SessionTreeNode, SubagentSnapshot } from "@/lib/types";
+import type { BlockingExtensionUiRequest, SessionInfo, SubagentSnapshot } from "@/lib/types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/omp-types";
@@ -429,8 +428,8 @@ export function AppShell() {
   // 文件标签的打开序号：让「同一个文件再次以差异模式打开」成为一次新请求。
   const fileOpenSeqRef = useRef(0);
 
-  // Branch navigator state — populated by ChatWindow via onBranchDataChange
-  const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
+  // Branch state — the map is the branch navigator; ChatWindow pushes the
+  // active leaf and the switch callback.
   const [branchActiveLeafId, setBranchActiveLeafId] = useState<string | null>(null);
   const branchLeafChangeFnRef = useRef<((leafId: string | null) => void) | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
@@ -439,8 +438,7 @@ export function AppShell() {
   }, [selectedSession?.id]);
 
   const handleBranchDataChange = useCallback(
-    (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
-      setBranchTree(tree);
+    (activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
       setBranchActiveLeafId(activeLeafId);
       branchLeafChangeFnRef.current = onLeafChange;
     },
@@ -494,11 +492,11 @@ export function AppShell() {
   );
 
   // Single active panel — only one dropdown open at a time
-  const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "session" | "language" | null>(null);
+  const [activeTopPanel, setActiveTopPanel] = useState<"session" | "language" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const toggleTopPanel = useCallback(
-    (panel: "branches" | "session" | "language") => {
+    (panel: "session" | "language") => {
       if (isMobile) setSidebarOpen(false);
       setActiveTopPanel((cur) => (cur === panel ? null : panel));
     },
@@ -716,7 +714,6 @@ export function AppShell() {
         return prev;
       });
       setSessionKey((k) => k + 1);
-      setBranchTree([]);
       setBranchActiveLeafId(null);
       setActiveTopPanel(null);
       // Tabs are keyed by absolute path, so tabs opened in the previous project
@@ -785,7 +782,6 @@ export function AppShell() {
       setSelectedSession(null);
       setNewSessionCwd(cwd);
       setSessionKey((k) => k + 1);
-      setBranchTree([]);
       setBranchActiveLeafId(null);
       setActiveTopPanel(null);
       if (isMobile) setSidebarOpen(false);
@@ -1023,7 +1019,6 @@ export function AppShell() {
         setSelectedSession(null);
         setNewSessionCwd(cwd ?? null);
         setSessionKey((k) => k + 1);
-        setBranchTree([]);
         setBranchActiveLeafId(null);
         setActiveTopPanel(null);
         router.replace("/", { scroll: false });
@@ -1486,8 +1481,8 @@ export function AppShell() {
         background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 24%, transparent), transparent);
         animation: session-info-light-wash 620ms ease-out both;
       }
-      /* 手机档顶栏的分支入口与图标按钮保持同一命中区。 */
-      .mobile-topbar-branch-button {
+      /* 手机档顶栏的地图入口与图标按钮保持同一命中区。 */
+      .mobile-topbar-map-button {
         min-width: ${MOBILE_HIT_TARGET_PX}px;
         justify-content: center;
       }
@@ -1902,65 +1897,54 @@ export function AppShell() {
                       variant="top-bar"
                       onClick={() => void handleAutoName()}
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTopPanel(null);
-                        setMapOpen((open) => !open);
-                      }}
-                      title={translate("map.title")}
-                      aria-pressed={mapOpen}
-                      aria-expanded={mapOpen}
-                      aria-label={translate("map.title")}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        height: "100%",
-                        padding: "0 12px",
-                        background: mapOpen ? "var(--bg-selected)" : "none",
-                        border: "none",
-                        borderTop: mapOpen ? "2px solid var(--accent)" : "2px solid transparent",
-                        borderRight: "1px solid var(--border)",
-                        cursor: "pointer",
-                        color: mapOpen ? "var(--text)" : "var(--text-muted)",
-                        fontSize: 11,
-                        whiteSpace: "nowrap",
-                        transition: "color 0.1s, background 0.1s",
-                      }}
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="5" cy="6" r="2" />
-                        <circle cx="12" cy="18" r="2" />
-                        <circle cx="19" cy="9" r="2" />
-                        <path d="M6.7 7.1 10.4 16.4M13.7 17.3 17.5 10.6M7 6h10" />
-                      </svg>
-                      <span>{translate("map.open")}</span>
-                    </button>
                   </>
                 )}
-                <BranchNavigator
-                  tree={branchTree}
-                  activeLeafId={branchActiveLeafId}
-                  onLeafChange={handleBranchLeafChange}
-                  inline
-                  compact={isMobile}
-                  buttonClassName={isMobile ? "mobile-topbar-branch-button" : undefined}
-                  containerRef={topBarRef}
-                  open={activeTopPanel === "branches"}
-                  onToggle={() => toggleTopPanel("branches")}
-                  hasSession
-                />
+                <button
+                  type="button"
+                  className={isMobile ? "mobile-topbar-map-button" : undefined}
+                  onClick={() => {
+                    setActiveTopPanel(null);
+                    setMapOpen((open) => !open);
+                  }}
+                  title={translate("map.title")}
+                  aria-pressed={mapOpen}
+                  aria-expanded={mapOpen}
+                  aria-label={translate("map.title")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    height: "100%",
+                    padding: isMobile ? "0 10px" : "0 12px",
+                    background: mapOpen ? "var(--bg-selected)" : "none",
+                    border: "none",
+                    borderTop: mapOpen ? "2px solid var(--accent)" : "2px solid transparent",
+                    borderRight: "1px solid var(--border)",
+                    cursor: "pointer",
+                    color: mapOpen ? "var(--text)" : "var(--text-muted)",
+                    fontSize: 11,
+                    whiteSpace: "nowrap",
+                    transition: "color 0.1s, background 0.1s",
+                  }}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="5" cy="6" r="2" />
+                    <circle cx="12" cy="18" r="2" />
+                    <circle cx="19" cy="9" r="2" />
+                    <path d="M6.7 7.1 10.4 16.4M13.7 17.3 17.5 10.6M7 6h10" />
+                  </svg>
+                  {!isMobile && <span>{translate("map.open")}</span>}
+                </button>
               </div>
             )}
             {/* Session stats — right-aligned in top bar */}
