@@ -93,7 +93,11 @@ export function resolveLocalFileHref(
 
   if (lowerHref.startsWith("/api/") || lowerHref.startsWith("/_next/")) return null;
   if (!isBackslashUncPath && normalizedHref.startsWith("//")) return null;
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(normalizedHref) && !lowerHref.startsWith("file:") && !/^[a-zA-Z]:\//.test(normalizedHref)) {
+  if (
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(normalizedHref) &&
+    !lowerHref.startsWith("file:") &&
+    !/^[a-zA-Z]:\//.test(normalizedHref)
+  ) {
     return null;
   }
 
@@ -122,10 +126,11 @@ export function resolveLocalFileHref(
 export function resolveLocalFilePath(filePath: string | undefined, baseDir?: string): string | null {
   if (!filePath) return null;
 
-  const windowsStyle = /^[a-zA-Z]:[\\/]/.test(filePath) ||
+  const windowsStyle =
+    /^[a-zA-Z]:[\\/]/.test(filePath) ||
     filePath.startsWith("\\\\") ||
     (baseDir !== undefined && (/^[a-zA-Z]:[\\/]/.test(baseDir) || baseDir.startsWith("\\\\")));
-  const normalizeSlashes = (value: string) => windowsStyle ? value.replace(/\\/g, "/") : value;
+  const normalizeSlashes = (value: string) => (windowsStyle ? value.replace(/\\/g, "/") : value);
   const normalizedPath = normalizeSlashes(filePath);
   const normalizedBase = baseDir ? normalizeSlashes(baseDir).replace(/\/+$/, "") : undefined;
 
@@ -136,8 +141,8 @@ export function resolveLocalFilePath(filePath: string | undefined, baseDir?: str
   if (isDriveAbsolute || isUncAbsolute) {
     candidate = normalizedPath;
   } else if (normalizedPath.startsWith("/")) {
-    const windowsRoot = normalizedBase?.match(/^([a-zA-Z]:)(?:\/|$)/)?.[1]
-      ?? normalizedBase?.match(/^(\/\/[^/]+\/[^/]+)(?:\/|$)/)?.[1];
+    const windowsRoot =
+      normalizedBase?.match(/^([a-zA-Z]:)(?:\/|$)/)?.[1] ?? normalizedBase?.match(/^(\/\/[^/]+\/[^/]+)(?:\/|$)/)?.[1];
     candidate = windowsRoot ? `${windowsRoot}${normalizedPath}` : normalizedPath;
   } else {
     if (!normalizedBase) return null;

@@ -91,10 +91,10 @@ description: 在本仓库（ompdesk）里开发的入口——改哪一块、动
 
 ### 7. 会话浏览只读文件，发消息才建立会话
 
-- 行为：列表与转写只解析 `.jsonl`，浏览时不构造会话对象；发消息时才在进程内建立。记录顺序跟随 omp
-  的实时记录语义（`{ transcript: true, collapseCompactedHistory: true }`），摘要出现在压缩发生的
-  位置而非开头；工具调用字段差异由统一归一化处理。会话文件头的 `parentSession` 只是显示用元数据，
-  整文件重写是安全的。
+- 行为：列表与转写只解析 `.jsonl`，浏览时不构造会话对象；发消息时才在进程内建立。转写按分支上的
+  全部条目渲染，摘要出现在压缩发生的位置而非开头，压缩前的提问因此仍然占一个圆点与会话地图落点；
+  `display.collapseCompacted` 显式开启时才退回 omp 的保留段语义（未配置时网页端取 `false`）。
+  工具调用字段差异由统一归一化处理。会话文件头的 `parentSession` 只是显示用元数据，整文件重写是安全的。
 - 定位：`git grep -rn "startRpcSession" -- lib app`。
 - 判警：`lib/session-reader.test.mjs`、`lib/rpc-manager.test.mjs`。
 

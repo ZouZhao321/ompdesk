@@ -34,9 +34,10 @@ test("写出沙箱的子目录按代码错误抛出，且不建临时目录", ()
   for (const dir of outsideSandbox) {
     assert.throws(
       () => createAgentDirSandbox(unusedContext, { prefix, dirs: [dir] }),
-      (error) => error instanceof Error
-        && !(error instanceof SandboxDirectoryCreateError)
-        && error.message.includes("沙箱内的相对路径"),
+      (error) =>
+        error instanceof Error &&
+        !(error instanceof SandboxDirectoryCreateError) &&
+        error.message.includes("沙箱内的相对路径"),
       `${dir} 必须被拒绝`,
     );
   }

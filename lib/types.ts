@@ -92,6 +92,8 @@ export interface CustomMessage {
   content: string | (TextContent | ImageContent)[];
   display: boolean;
   details?: unknown;
+  /** `"user"` 表示这条自定义消息是用户发起的回合，例如手动调用的技能指令。 */
+  attribution?: "user" | "agent";
   timestamp?: number;
 }
 
@@ -133,9 +135,7 @@ export interface ExtensionAskDialogResultItem {
   note?: string;
 }
 
-export type ExtensionAskDialogResult =
-  | { kind: "submit"; results: ExtensionAskDialogResultItem[] }
-  | { kind: "chat" };
+export type ExtensionAskDialogResult = { kind: "submit"; results: ExtensionAskDialogResultItem[] } | { kind: "chat" };
 
 export type SubagentStatus = "pending" | "running" | "completed" | "failed" | "aborted";
 
@@ -189,7 +189,6 @@ export interface SubagentSnapshot {
   progress?: SubagentProgress;
   parentToolCallId?: string;
 }
-
 
 export type ExtensionUiRequest =
   | {
@@ -352,6 +351,7 @@ export interface CustomMessageEntry extends SessionEntryBase {
   content: string | (TextContent | ImageContent)[];
   details?: unknown;
   display: boolean;
+  attribution?: "user" | "agent";
 }
 
 export interface LabelEntry extends SessionEntryBase {
@@ -392,13 +392,7 @@ export interface SessionTreeNode {
 }
 
 /** omp 按会话文件末尾算出的最后状态；`unknown` 表示判断不出来。 */
-export type SessionStatus =
-  | "complete"
-  | "interrupted"
-  | "aborted"
-  | "error"
-  | "pending"
-  | "unknown";
+export type SessionStatus = "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
 
 export interface SessionInfo {
   /** Client continuation handle; never a persisted transcript ID or history alias. */

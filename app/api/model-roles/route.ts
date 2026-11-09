@@ -32,7 +32,11 @@ async function getRouteHandler(req: Request) {
   try {
     const { modelRegistry } = await getOmpRuntime();
     const settings = await getSettingsForCwd(result.cwd);
-    const { visible } = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
+    const { visible } = await resolveVisibleModels(
+      modelRegistry,
+      getSetting<string[]>(settings, "enabledModels"),
+      settings,
+    );
     return NextResponse.json({ roles: listModelRoles(settings, [...visible]) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
@@ -59,7 +63,7 @@ export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
   let selector: string | undefined;
   let scope: ModelRoleScope = "global";
   try {
-    const body = await req.json() as {
+    const body = (await req.json()) as {
       cwd?: string;
       role?: string;
       selector?: string | null;
@@ -84,9 +88,7 @@ export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
     selector = typeof body.selector === "string" ? body.selector.trim() : undefined;
 
     const runtime = await getOmpRuntime();
-    const settingsToWrite = scope === "global"
-      ? runtime.settings
-      : await getSettingsForCwd(result.cwd);
+    const settingsToWrite = scope === "global" ? runtime.settings : await getSettingsForCwd(result.cwd);
     writeModelRole(settingsToWrite, role, selector || undefined, scope);
     await settingsToWrite.flush();
     invalidateModelsCache();
@@ -96,7 +98,11 @@ export const PUT = withRequestLog("/api/model-roles", async (req: Request) => {
     // the response and in the next modal load.
     const settings = await getSettingsForCwd(result.cwd);
     const { modelRegistry } = runtime;
-    const { visible } = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
+    const { visible } = await resolveVisibleModels(
+      modelRegistry,
+      getSetting<string[]>(settings, "enabledModels"),
+      settings,
+    );
     auditSuccess("models.role.write", role, { scope, selector: selector || null, cwd: result.cwd });
     return NextResponse.json({ roles: listModelRoles(settings, [...visible]) });
   } catch (error) {

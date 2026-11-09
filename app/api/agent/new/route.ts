@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/api-request-log";
-import { parseConfiguredThinkingLevel as parseOmpThinkingLevel, type ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
+import {
+  parseConfiguredThinkingLevel as parseOmpThinkingLevel,
+  type ConfiguredThinkingLevel,
+} from "@oh-my-pi/pi-tui/thinking";
 import { existsSync } from "fs";
 import { randomUUID } from "crypto";
 import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
@@ -30,25 +33,27 @@ export const POST = withRequestLog("/api/agent/new", async (req: Request) => {
   let commandType: string | undefined;
   let promptAccepted = false;
   try {
-    const body = await req.json() as { cwd?: string; [key: string]: unknown };
+    const body = (await req.json()) as { cwd?: string; [key: string]: unknown };
     const { cwd, ...command } = body;
     commandType = typeof command.type === "string" ? command.type : undefined;
 
     if (!cwd || typeof cwd !== "string") {
-      return NextResponse.json({
-        error: "cwd is required",
-        ...(commandType === "prompt"
-          ? { code: "prompt_rejected", accepted: false }
-          : {}),
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "cwd is required",
+          ...(commandType === "prompt" ? { code: "prompt_rejected", accepted: false } : {}),
+        },
+        { status: 400 },
+      );
     }
     if (!existsSync(cwd)) {
-      return NextResponse.json({
-        error: `Directory does not exist: ${cwd}`,
-        ...(commandType === "prompt"
-          ? { code: "prompt_rejected", accepted: false }
-          : {}),
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: `Directory does not exist: ${cwd}`,
+          ...(commandType === "prompt" ? { code: "prompt_rejected", accepted: false } : {}),
+        },
+        { status: 400 },
+      );
     }
     const allowedRoots = await getAllowedFileRoots();
     if (!isExistingFilePathAllowed(cwd, allowedRoots)) {
@@ -56,7 +61,13 @@ export const POST = withRequestLog("/api/agent/new", async (req: Request) => {
     }
 
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
-    const { provider, modelId, toolNames, thinkingLevel, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[]; thinkingLevel?: unknown; [key: string]: unknown };
+    const { provider, modelId, toolNames, thinkingLevel, ...promptCommand } = command as {
+      provider?: string;
+      modelId?: string;
+      toolNames?: string[];
+      thinkingLevel?: unknown;
+      [key: string]: unknown;
+    };
     if ((provider && !modelId) || (!provider && modelId)) {
       throw new Error("provider and modelId must be provided together");
     }
@@ -78,7 +89,7 @@ export const POST = withRequestLog("/api/agent/new", async (req: Request) => {
     allowFileRoot(cwd);
     invalidateSessionListCache();
 
-    const state = await session.send({ type: "get_state" }) as {
+    const state = (await session.send({ type: "get_state" })) as {
       model?: { id: string; provider: string };
       thinkingLevel?: string;
       configuredThinkingLevel?: string;
@@ -90,9 +101,7 @@ export const POST = withRequestLog("/api/agent/new", async (req: Request) => {
         sessionId: session.sessionId,
         runtimeId: session.runtimeId,
         data: null,
-        model: state.model
-          ? { provider: state.model.provider, modelId: state.model.id }
-          : null,
+        model: state.model ? { provider: state.model.provider, modelId: state.model.id } : null,
         thinkingLevel: state.thinkingLevel,
         configuredThinkingLevel: state.configuredThinkingLevel,
       });
@@ -106,18 +115,17 @@ export const POST = withRequestLog("/api/agent/new", async (req: Request) => {
       sessionId: session.sessionId,
       runtimeId: session.runtimeId,
       data: result,
-      model: state.model
-        ? { provider: state.model.provider, modelId: state.model.id }
-        : null,
+      model: state.model ? { provider: state.model.provider, modelId: state.model.id } : null,
       thinkingLevel: state.thinkingLevel,
       configuredThinkingLevel: state.configuredThinkingLevel,
     });
   } catch (error) {
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : String(error),
-      ...(commandType === "prompt" && !promptAccepted
-        ? { code: "prompt_rejected", accepted: false }
-        : {}),
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        ...(commandType === "prompt" && !promptAccepted ? { code: "prompt_rejected", accepted: false } : {}),
+      },
+      { status: 500 },
+    );
   }
 });

@@ -1,10 +1,10 @@
 # Worktrees in ompdesk
 
-ompdesk can show all Git worktrees for one project in the sidebar. Use this when you want to keep separate checkouts for different branches, while keeping the project's sessions grouped together.
+ompdesk can show all Git worktrees for one project in the right panel's Git tab. Use this when you want to keep separate checkouts for different branches, while keeping the project's sessions grouped together.
 
 ## When the Worktree Control Appears
 
-The worktree switcher appears below the project picker when the selected directory is a Git repository root.
+The branch switcher sits at the top of the right panel's Git tab when the selected directory is a Git repository root.
 
 It is hidden when:
 
@@ -37,7 +37,7 @@ Existing sessions stay grouped under the same project. Opening an existing sessi
 
 ## Creating a Worktree
 
-Choose `New worktree...` from the worktree menu and enter a branch name.
+Choose `New worktree...` from the branch menu and enter a branch name.
 
 ompdesk creates the checkout at:
 
@@ -85,8 +85,8 @@ Each session still remembers the working directory it was created with. That mea
 
 ## Troubleshooting
 
-**I do not see the worktree switcher.**
-Select a Git repository root. Non-Git directories and repo subdirectories show a small hint instead of the switcher.
+**I do not see the branch switcher.**
+Open the right panel and select the Git tab, then select a Git repository root. The switcher is hidden for non-Git directories and repo subdirectories.
 
 **A branch cannot be added as a worktree.**
 Git allows a branch to be checked out in only one worktree at a time. Switch to the existing worktree for that branch, or remove it first.

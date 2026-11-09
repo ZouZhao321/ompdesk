@@ -1,7 +1,7 @@
 # ompdesk serves its API on Bun, not Node: the omp SDK (`@oh-my-pi/pi-*`) is
 # published as TypeScript sources that import `bun:` builtins, so both stages
 # start from the Bun release that package.json's `engines.bun` floor requires.
-ARG BUN_VERSION=1.3.14
+ARG BUN_VERSION=1.4.2
 
 # ---------------------------------------------------------------------------
 # Build: install dependencies and produce the Next.js production build.
@@ -34,12 +34,18 @@ RUN apt-get update \
 # usual first human account on Linux; override for anything else:
 #   docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) .
 # Docker Desktop on macOS and Windows remaps ownership itself and needs neither.
+# The Bun base image already uses GID 1000, so both the group and the user are
+# created only when the requested ids are still free; the final `USER` is
+# numeric so it works either way.
 ARG UID=1000
 ARG GID=1000
-RUN groupadd --gid "${GID}" omp \
- && useradd --uid "${UID}" --gid "${GID}" --create-home --home-dir /home/omp omp \
- && mkdir -p /home/omp/.omp/agent /workspace \
- && chown -R omp:omp /home/omp /workspace
+RUN set -eux; \
+    if ! getent group "${GID}" > /dev/null; then groupadd --gid "${GID}" omp; fi; \
+    if ! getent passwd "${UID}" > /dev/null; then \
+      useradd --uid "${UID}" --gid "${GID}" --create-home --home-dir /home/omp omp; \
+    fi; \
+    mkdir -p /home/omp/.omp/agent /workspace; \
+    chown -R "${UID}:${GID}" /home/omp /workspace
 
 WORKDIR /app
 
@@ -70,7 +76,7 @@ ENV HOME=/home/omp \
 VOLUME ["/home/omp/.omp"]
 EXPOSE 30141
 
-USER omp
+USER ${UID}:${GID}
 # Not /app: the launcher records its own cwd as OMPDESK_LAUNCH_CWD so relative
 # project paths in the browser resolve against it.
 WORKDIR /workspace
@@ -79,5 +85,14 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD bun --eval 'const r = await fetch(`http://127.0.0.1:${process.env.PORT ?? 30141}/`); process.exit(r.status < 500 ? 0 : 1)'
 
 # The published CLI, so the container honours the same flags and environment
-# variables as a local `ompdesk` — including `--authenticated`.
-ENTRYPOINT ["bun", "/app/bin/ompdesk.js"]
+# variables as a local `ompdesk` — including `--authenticated`. `foreground`
+# keeps the server in the entrypoint process instead of detaching: a container
+# whose PID 1 exits would be torn down with it.
+#
+# It stays in ENTRYPOINT rather than CMD: any argument after the image name
+# replaces CMD wholesale, so `docker run <image> --port 8080` would lose
+# `foreground` and detach a server whose parent exits immediately. Options still
+# reach the launcher — `docker run <image> --port 8080` becomes
+# `foreground --port 8080` — but a subcommand does not, which is why the image
+# is documented as running the server and nothing else.
+ENTRYPOINT ["bun", "/app/bin/ompdesk.js", "foreground"]

@@ -42,19 +42,21 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
   }, [translations]);
 
   const candidates = useMemo<PreviewCandidate[]>(
-    () => entries.map((entry) => ({
-      id: `${entry.filePath}:${entry.startLine}`,
-      entry,
-      key: entry.language === targetLanguage ? null : commentTranslationKey(entry),
-    })),
+    () =>
+      entries.map((entry) => ({
+        id: `${entry.filePath}:${entry.startLine}`,
+        entry,
+        key: entry.language === targetLanguage ? null : commentTranslationKey(entry),
+      })),
     [entries, targetLanguage],
   );
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = candidates.find((candidate) => candidate.id === selectedId)
-    ?? candidates.find((candidate) => candidate.key !== null && translations[candidate.key])
-    ?? candidates[0]
-    ?? null;
+  const selected =
+    candidates.find((candidate) => candidate.id === selectedId) ??
+    candidates.find((candidate) => candidate.key !== null && translations[candidate.key]) ??
+    candidates[0] ??
+    null;
 
   const [source, setSource] = useState<{ path: string; content: string } | null>(null);
   const [sourceFailed, setSourceFailed] = useState(false);
@@ -177,13 +179,9 @@ export function CommentTranslationPreview({ cwd, entries, translations }: Props)
       </div>
 
       {!viewerEnabled ? (
-        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>
-          {t("comments.previewHidden")}
-        </div>
+        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>{t("comments.previewHidden")}</div>
       ) : !record ? (
-        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>
-          {t("comments.previewEmpty")}
-        </div>
+        <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-dim)" }}>{t("comments.previewEmpty")}</div>
       ) : null}
     </div>
   );

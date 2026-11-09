@@ -29,11 +29,7 @@ test("clears before the same-session no-op so re-opening a row still counts as r
 
 test("keeps the marker when the workspace only auto-restores a session", () => {
   // 选中会话内只有一处清除，且被 !isRestore 挡住；恢复路径因此保留标记。
-  assert.equal(
-    [...selectSessionSource.matchAll(/clearUnreadSessionIds\(/g)].length,
-    1,
-    "选中会话内不应出现第二处清除",
-  );
+  assert.equal([...selectSessionSource.matchAll(/clearUnreadSessionIds\(/g)].length, 1, "选中会话内不应出现第二处清除");
   assert.match(selectSessionSource, /if \(!isRestore\) clearUnreadSessionIds\(\[session\.id\]\);/);
   assert.match(sidebar, /onSelectSession\(target, true\)/);
 });

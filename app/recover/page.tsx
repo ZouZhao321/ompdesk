@@ -32,7 +32,7 @@ export default function RecoverPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await response.json() as { ok?: boolean; expiresAt?: number; error?: string };
+    const data = (await response.json()) as { ok?: boolean; expiresAt?: number; error?: string };
     if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
     return data;
   }, []);
@@ -71,10 +71,8 @@ export default function RecoverPage() {
     }
   }, [code, confirmation, password, post]);
 
-  const canSubmit = !busy
-    && code.trim().length > 0
-    && password.length >= MIN_PASSWORD_LENGTH
-    && password === confirmation;
+  const canSubmit =
+    !busy && code.trim().length > 0 && password.length >= MIN_PASSWORD_LENGTH && password === confirmation;
 
   return (
     <main className={styles.page}>
@@ -85,24 +83,30 @@ export default function RecoverPage() {
         {stage === "done" ? (
           <>
             <p className={styles.lead}>
-              The password was changed and password access is on. Open ompdesk and sign in with the
-              username <code>omp</code> and your new password.
+              The password was changed and password access is on. Open ompdesk and sign in with the username{" "}
+              <code>omp</code> and your new password.
             </p>
-            <Link className={styles.primary} href="/">Back to ompdesk</Link>
+            <Link className={styles.primary} href="/">
+              Back to ompdesk
+            </Link>
           </>
         ) : (
           <>
             <p className={styles.lead}>
               ompdesk stores your password as a hash and cannot read it back. To set a new one, it prints a one-time
-              recovery code <strong>on its own console</strong> — the terminal running ompdesk. Read the code there
-              and enter it below.
+              recovery code <strong>on its own console</strong> — the terminal running ompdesk. Read the code there and
+              enter it below.
             </p>
             <p className={styles.aside}>
               No terminal at hand? Run <code>ompdesk --reset-password</code> on that machine instead.
             </p>
 
             <button type="button" className={styles.secondary} disabled={busy} onClick={() => void requestCode()}>
-              {busy && stage === "idle" ? "Requesting…" : stage === "code-sent" ? "Send another code" : "Print a recovery code"}
+              {busy && stage === "idle"
+                ? "Requesting…"
+                : stage === "code-sent"
+                  ? "Send another code"
+                  : "Print a recovery code"}
             </button>
 
             {stage === "code-sent" && (
@@ -144,13 +148,20 @@ export default function RecoverPage() {
                 value={confirmation}
                 disabled={busy}
                 onChange={(event) => setConfirmation(event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter" && canSubmit) void completeRecovery(); }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && canSubmit) void completeRecovery();
+                }}
               />
             </label>
 
             {error && <p className={styles.error}>{error}</p>}
 
-            <button type="button" className={styles.primary} disabled={!canSubmit} onClick={() => void completeRecovery()}>
+            <button
+              type="button"
+              className={styles.primary}
+              disabled={!canSubmit}
+              onClick={() => void completeRecovery()}
+            >
               {busy && stage === "code-sent" ? "Setting…" : "Set new password"}
             </button>
           </>
