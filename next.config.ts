@@ -7,7 +7,9 @@ let ompVersion = "unknown";
 try {
   const ompPkgPath = join(__dirname, "node_modules/@oh-my-pi/pi-coding-agent/package.json");
   ompVersion = (JSON.parse(readFileSync(ompPkgPath, "utf8")) as { version: string }).version;
-} catch { /* package not found, use default */ }
+} catch {
+  /* package not found, use default */
+}
 
 /**
  * The omp SDK is published as TypeScript sources and imports `bun:` builtins,
@@ -76,9 +78,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/",
-        headers: [
-          { key: "Cache-Control", value: "private, no-cache, max-age=0, must-revalidate" },
-        ],
+        headers: [{ key: "Cache-Control", value: "private, no-cache, max-age=0, must-revalidate" }],
       },
       {
         source: "/sw.js",
@@ -89,9 +89,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/manifest.webmanifest",
-        headers: [
-          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
-        ],
+        headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
       },
     ];
   },

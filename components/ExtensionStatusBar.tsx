@@ -51,7 +51,9 @@ export function ExtensionStatusBar({ statuses }: { statuses: ExtensionStatusItem
         }}
       >
         {parseAnsiLine(statusLine).map((segment, index) => (
-          <span key={index} style={segment.style}>{segment.text}</span>
+          <span key={index} style={segment.style}>
+            {segment.text}
+          </span>
         ))}
       </span>
     </div>

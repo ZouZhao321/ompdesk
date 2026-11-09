@@ -95,16 +95,14 @@ export function findFirstUserMessage(messages: readonly AgentMessage[]): string 
 export function findFirstTitleSource(messages: readonly AgentMessage[]): string | undefined {
   const userText = findFirstUserMessage(messages);
   if (userText) return userText;
-  const summary = (messages as ReadonlyArray<{ role?: string; summary?: unknown }>)
-    .find((m) => m.role === "compactionSummary" && typeof m.summary === "string")
-    ?.summary as string | undefined;
+  const summary = (messages as ReadonlyArray<{ role?: string; summary?: unknown }>).find(
+    (m) => m.role === "compactionSummary" && typeof m.summary === "string",
+  )?.summary as string | undefined;
   return summary?.trim() ? summary : undefined;
 }
 
 export function truncateTitle(value: string): string {
   const trimmed = value.replace(/\s+/g, " ").trim();
   const characters = Array.from(trimmed);
-  return characters.length > MAX_TITLE_LENGTH
-    ? characters.slice(0, MAX_TITLE_LENGTH).join("").trim()
-    : trimmed;
+  return characters.length > MAX_TITLE_LENGTH ? characters.slice(0, MAX_TITLE_LENGTH).join("").trim() : trimmed;
 }

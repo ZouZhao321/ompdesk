@@ -6,7 +6,10 @@ export interface DisplayOptions {
   hideThinking?: boolean;
 }
 
-export function isEmptyThinkingBlock(block: AssistantContentBlock, options: DisplayOptions = {}): block is ThinkingContent {
+export function isEmptyThinkingBlock(
+  block: AssistantContentBlock,
+  options: DisplayOptions = {},
+): block is ThinkingContent {
   return block.type === "thinking" && !block.deferred && !options.isStreaming && block.thinking.trim() === "";
 }
 
@@ -23,10 +26,7 @@ export function getDisplayableAssistantBlocks(
   return (message.content ?? []).filter((block) => !isHiddenAssistantBlock(block, options));
 }
 
-export function getAssistantErrorMessage(
-  message: AssistantMessage,
-  options: DisplayOptions = {},
-): string | null {
+export function getAssistantErrorMessage(message: AssistantMessage, options: DisplayOptions = {}): string | null {
   if (options.isStreaming || message.stopReason !== "error") return null;
   return message.errorMessage?.trim() || "Unknown provider error";
 }

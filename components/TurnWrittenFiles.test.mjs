@@ -12,9 +12,7 @@ const { TurnWrittenFiles } = await jiti.import("./TurnWrittenFiles.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 function render(props) {
-  return renderToStaticMarkup(
-    React.createElement(I18nProvider, null, React.createElement(TurnWrittenFiles, props)),
-  );
+  return renderToStaticMarkup(React.createElement(I18nProvider, null, React.createElement(TurnWrittenFiles, props)));
 }
 
 test("renders a button per file showing the basename and full path", () => {
@@ -42,10 +40,7 @@ test("long names truncate inside the chip instead of widening it", () => {
   assert.match(html, /white-space:nowrap/);
   assert.match(html, /overflow:hidden/);
   assert.ok(html.includes(`title="/abs/out/${longName}"`), "full path must stay in title");
-  assert.ok(
-    html.includes(`aria-label="Open ${longName}"`),
-    "assistive tech must get the full file name",
-  );
+  assert.ok(html.includes(`aria-label="Open ${longName}"`), "assistive tech must get the full file name");
 });
 
 test("same-named files render distinct visible text and distinct labels", () => {

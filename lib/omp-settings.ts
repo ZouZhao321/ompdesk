@@ -98,7 +98,9 @@ export function getSettingForWeb<T = unknown>(settings: Settings, path: SettingP
 
 /** Paths shown on `tab`, in omp's settings-panel order. */
 export function getPathsForTab(tab: SettingTab): SettingPath[] {
-  return orderedSettings().filter((setting) => setting.ui?.tab === tab).map((setting) => setting.id);
+  return orderedSettings()
+    .filter((setting) => setting.ui?.tab === tab)
+    .map((setting) => setting.id);
 }
 
 /**

@@ -7,10 +7,7 @@ import { shouldCollapseCompactedHistory } from "@/lib/transcript-collapse";
 
 export const GET = withRequestLog("/api/sessions/[id]/context", getRouteHandler);
 
-async function getRouteHandler(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function getRouteHandler(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const url = new URL(req.url);
   const leafId = url.searchParams.get("leafId") ?? undefined;
@@ -27,7 +24,7 @@ async function getRouteHandler(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const sm = liveRpc?.inner.sessionManager ?? await SessionManager.open(filePath!);
+    const sm = liveRpc?.inner.sessionManager ?? (await SessionManager.open(filePath!));
     const entries = sm.getEntries() as never;
     const context = buildSessionContext(entries, leafId, {
       deferThinking,

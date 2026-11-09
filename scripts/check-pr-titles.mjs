@@ -18,9 +18,7 @@ import { createGitEnv } from "../lib/git-env.ts";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WORK = join(ROOT, ".tmp", "pr-titles");
 const CHECKER = join(ROOT, "scripts", "check-commit-msg.py");
-const PYTHON =
-  process.env.PYTHON?.trim() ||
-  (process.platform === "win32" ? "python" : "python3");
+const PYTHON = process.env.PYTHON?.trim() || (process.platform === "win32" ? "python" : "python3");
 
 const base = process.env.PR_BASE_SHA?.trim();
 if (!base) {
@@ -70,9 +68,7 @@ for (const commit of commits) {
     process.exit(2);
   }
   if (result.status !== 0) {
-    failures.push(
-      `${commit.sha.slice(0, 7)} ${commit.subject}\n${result.stderr.trim()}`,
-    );
+    failures.push(`${commit.sha.slice(0, 7)} ${commit.subject}\n${result.stderr.trim()}`);
   }
 }
 

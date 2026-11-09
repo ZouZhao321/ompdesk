@@ -12,7 +12,13 @@ import {
 const DROPDOWN_ANIMATION_MS = 140;
 
 /** 弹层容器的进场/退场动画：关闭后保留挂载直到动画结束，避免布局跳动。 */
-export function AnimatedDropdown({ open, children, style, role, onKeyDown }: {
+export function AnimatedDropdown({
+  open,
+  children,
+  style,
+  role,
+  onKeyDown,
+}: {
   open: boolean;
   children: ReactNode;
   style: CSSProperties;

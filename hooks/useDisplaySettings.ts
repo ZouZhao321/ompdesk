@@ -38,7 +38,7 @@ export async function refreshDisplaySettings(cwd?: string | null): Promise<void>
   const query = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
   const response = await fetch(`/api/display-settings${query}`, { cache: "no-store" });
   if (!response.ok) throw new Error(`Display settings request failed (${response.status})`);
-  const next = await response.json() as DisplaySettings;
+  const next = (await response.json()) as DisplaySettings;
   // A slower earlier request must not overwrite a newer answer.
   if (id !== requestId) return;
   if (next.hideThinkingBlock === state.hideThinkingBlock) return;

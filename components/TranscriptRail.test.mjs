@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { readSourceFile } from "../test-support/source-text.ts";
 
-const source = await readFile(new URL("./TranscriptRail.tsx", import.meta.url), "utf8");
+const source = await readSourceFile(new URL("./TranscriptRail.tsx", import.meta.url));
 const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-const chatWindow = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
+const chatWindow = await readSourceFile(new URL("./ChatWindow.tsx", import.meta.url));
 
 /** 取一条 CSS 规则的声明块；规则不存在时返回 null。 */
 function declarations(selector) {
@@ -129,14 +130,11 @@ test("derives the rail geometry from the region constants", async () => {
     /--transcript-rail-min-region: calc\(\s*2 \* \(var\(--transcript-rail-inset\) \+ var\(--transcript-rail-lane\) \+ var\(--transcript-rail-margin\)\)\s*\);/,
   );
   // 阈值把内边距与缝隙一起算进去：版心一半 + 内边距 + 缝隙 = 432，最小宽度 944。
-  const inset = RAIL_COLUMN_WIDTH_PX / 2
-    + RAIL_COLUMN_PADDING_PX
-    + customPixel(region, "transcript-rail-gap");
+  const inset = RAIL_COLUMN_WIDTH_PX / 2 + RAIL_COLUMN_PADDING_PX + customPixel(region, "transcript-rail-gap");
   assert.equal(inset, insetPx);
   assert.equal(inset, 432);
-  const minRegion = 2 * (
-    inset + customPixel(region, "transcript-rail-lane") + customPixel(region, "transcript-rail-margin")
-  );
+  const minRegion =
+    2 * (inset + customPixel(region, "transcript-rail-lane") + customPixel(region, "transcript-rail-margin"));
   assert.equal(minRegion, minRegionPx);
   assert.equal(minRegion, 944);
   // 车道容器铺满转写区，只承载隐藏判定；容器查询写不了 calc，阈值照最小宽度减一。
@@ -213,14 +211,14 @@ test("keeps the rail out of the tab order while it is hidden", async () => {
   const { RAIL_COLUMN_PADDING_PX, RAIL_COLUMN_WIDTH_PX } = await import("../lib/transcript-rail.ts");
   const region = declarations(".chat-transcript-region");
   assert.ok(region, "missing .chat-transcript-region");
-  const inset = RAIL_COLUMN_WIDTH_PX / 2
-    + RAIL_COLUMN_PADDING_PX
-    + GAP_PX;
+  const inset = RAIL_COLUMN_WIDTH_PX / 2 + RAIL_COLUMN_PADDING_PX + GAP_PX;
   const laneQueryMaxPx = 2 * (inset + LANE_PX + MARGIN_PX) - 1;
   // 放不下整条车道就是放不下：整条 display: none 收起，隐藏时元素不可聚焦。
   assert.match(
     styles,
-    new RegExp(`@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`),
+    new RegExp(
+      `@container transcript-rail-lane \\(max-width: ${laneQueryMaxPx}px\\) \\{\\s*\\.transcript-rail \\{\\s*display: none;`,
+    ),
   );
   // 不支持内联尺寸容器查询的浏览器读不到那条规则：回退按同一选择器收起，跳转条不会
   // 一直显示、在 769–943px 的转写区压住正文右缘。
@@ -272,7 +270,10 @@ test("compresses the dot column instead of scrolling it", () => {
   // 车道连按钮块都放不下时整条收起，不把圆点压到按钮与正文上。
   assert.match(source, /if \(laneHeight <= block\) \{\s*setDotPitch\(null\);\s*return;\s*\}/);
   assert.match(source, /const next = railDotPitch\(laneHeight - block, dots\.length\);/);
-  assert.match(source, /style=\{\{\s*height: pitch \* dots\.length,\s*"--rail-dot-mark": `\$\{dotMarkPx\}px`,\s*\} as CSSProperties\}/);
+  assert.match(
+    source,
+    /style=\{\s*\{ height: pitch \* dots\.length, "--rail-dot-mark": `\$\{dotMarkPx\}px` \} as CSSProperties\s*\}/,
+  );
   // 节距低于可用下限时整条收起；车道仍在布局里，窗口缩放后能重新判断。
   assert.match(source, /style=\{\{ gap: RAIL_ROW_GAP_PX, display: railHidden \? "none" : undefined \}\}/);
   // 按钮块高度由常量给出，跳转条收起时不需要依赖上一次的测量。

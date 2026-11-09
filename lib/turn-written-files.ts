@@ -86,8 +86,5 @@ export function writtenFileLabels(filePaths: string[]): string[] {
 function splitPathSegments(filePath: string): string[] {
   // 与文件图标和 getFileName 用同一套归一化：只有 Windows 风格路径才转换反斜杠，
   // 避免同一张卡片里出现两套名字。
-  return normalizeFilePathSlashes(filePath)
-    .replace(/\/+$/, "")
-    .split("/")
-    .filter(Boolean);
+  return normalizeFilePathSlashes(filePath).replace(/\/+$/, "").split("/").filter(Boolean);
 }

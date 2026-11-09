@@ -26,7 +26,7 @@ export const POST = withRequestLog("/api/skills/install", async (req: Request) =
   let scope: unknown;
   let cwd = "";
   try {
-    const body = await req.json() as { package?: unknown; scope?: unknown; cwd?: unknown };
+    const body = (await req.json()) as { package?: unknown; scope?: unknown; cwd?: unknown };
     pkg = typeof body.package === "string" ? body.package.trim() : "";
     scope = body.scope;
     cwd = typeof body.cwd === "string" ? body.cwd.trim() : "";
@@ -72,7 +72,9 @@ export const POST = withRequestLog("/api/skills/install", async (req: Request) =
       env: getSafeNpxEnv({ FORCE_COLOR: "0" }),
     });
 
-    const output = redactNpxOutput(stdout + stderr).replace(ANSI_RE, "").slice(-4000);
+    const output = redactNpxOutput(stdout + stderr)
+      .replace(ANSI_RE, "")
+      .slice(-4000);
     const success = /Installation complete|Installed \d+ skill/.test(output);
     if (!success) {
       auditFailure("skill.install", pkg, { status: 500, scope, cwd: cwd || undefined, reason: "install-failed" });
@@ -82,7 +84,9 @@ export const POST = withRequestLog("/api/skills/install", async (req: Request) =
     return NextResponse.json({ success: true, output });
   } catch (e: unknown) {
     const err = e as { stdout?: string; stderr?: string; message?: string };
-    const output = redactNpxOutput((err.stdout ?? "") + (err.stderr ?? "")).replace(ANSI_RE, "").slice(-4000);
+    const output = redactNpxOutput((err.stdout ?? "") + (err.stderr ?? ""))
+      .replace(ANSI_RE, "")
+      .slice(-4000);
     auditFailure("skill.install", pkg || undefined, {
       status: 500,
       scope,

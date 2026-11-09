@@ -11,7 +11,10 @@ import { getFileIcon } from "./FileIcons";
  * in the preview pane. Entries come from the turn's successful `write`/`edit`
  * tool calls — the reply text is never scanned for paths.
  */
-export function TurnWrittenFiles({ files, onOpenFile }: {
+export function TurnWrittenFiles({
+  files,
+  onOpenFile,
+}: {
   files: WrittenFile[];
   onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
 }) {
@@ -21,7 +24,10 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
   const labels = writtenFileLabels(files.map((file) => file.filePath));
 
   return (
-    <div aria-label={t("chat.filesWritten")} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6 }}>
+    <div
+      aria-label={t("chat.filesWritten")}
+      style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6 }}
+    >
       {files.map(({ filePath }, index) => {
         const name = getFileName(filePath);
         const label = labels[index] ?? name;
@@ -51,7 +57,9 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
             }}
           >
             {getFileIcon(name, 12)}
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{label}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              {label}
+            </span>
           </button>
         );
       })}

@@ -72,10 +72,7 @@ export type OpenFileRequest = {
   filePath: string;
   label: string;
   sourceSessionId?: string | null;
-} & (
-  | { modeHint?: undefined; openSeq?: undefined }
-  | { modeHint: "diff"; openSeq: number }
-);
+} & ({ modeHint?: undefined; openSeq?: undefined } | { modeHint: "diff"; openSeq: number });
 
 /**
  * 把一次打开请求并入标签列表。
@@ -88,15 +85,18 @@ export function mergeOpenFileTab(tabs: Tab[], request: OpenFileRequest): Tab[] {
   const tabId = `file:${request.filePath}`;
   const existing = tabs.find((tab) => tab.id === tabId);
   if (!existing) {
-    return [...tabs, {
-      id: tabId,
-      kind: "file",
-      label: request.label,
-      filePath: request.filePath,
-      sourceSessionId: request.sourceSessionId,
-      initialDisplayMode: request.modeHint,
-      openSeq: request.openSeq,
-    } satisfies FileTab];
+    return [
+      ...tabs,
+      {
+        id: tabId,
+        kind: "file",
+        label: request.label,
+        filePath: request.filePath,
+        sourceSessionId: request.sourceSessionId,
+        initialDisplayMode: request.modeHint,
+        openSeq: request.openSeq,
+      } satisfies FileTab,
+    ];
   }
   if (existing.kind !== "file") return tabs;
   // undefined 表示调用方没有意见；null 是显式清空（当前没有选中会话），
@@ -106,19 +106,21 @@ export function mergeOpenFileTab(tabs: Tab[], request: OpenFileRequest): Tab[] {
   if (!request.modeHint) {
     // 无提示的打开沿用标签现状：只有来源会话变了才改写，其余一律不动列表。
     if (sourceUnchanged) return tabs;
-    return tabs.map((tab) => tab.id === tabId && tab.kind === "file"
-      ? { ...tab, sourceSessionId: request.sourceSessionId }
-      : tab);
+    return tabs.map((tab) =>
+      tab.id === tabId && tab.kind === "file" ? { ...tab, sourceSessionId: request.sourceSessionId } : tab,
+    );
   }
   const modeUnchanged = existing.initialDisplayMode === request.modeHint;
   // 走到这里 request 已收窄为带 modeHint 的一支，openSeq 必为数字。
   if (sourceUnchanged && modeUnchanged && request.openSeq === existing.openSeq) return tabs;
-  return tabs.map((tab) => tab.id === tabId && tab.kind === "file"
-    ? {
-      ...tab,
-      ...(sourceUnchanged ? {} : { sourceSessionId: request.sourceSessionId }),
-      initialDisplayMode: request.modeHint,
-      openSeq: request.openSeq,
-    }
-    : tab);
+  return tabs.map((tab) =>
+    tab.id === tabId && tab.kind === "file"
+      ? {
+          ...tab,
+          ...(sourceUnchanged ? {} : { sourceSessionId: request.sourceSessionId }),
+          initialDisplayMode: request.modeHint,
+          openSeq: request.openSeq,
+        }
+      : tab,
+  );
 }

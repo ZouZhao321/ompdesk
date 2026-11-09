@@ -48,9 +48,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # 流水线只在 package.json 的 `ci` 脚本里定义一次（typecheck → test → build →
-      # smoke:dev）；本地 `bun run verify` 与推送前钩子用的是同一份定义，改流程只改
-      # 那一处，CI 与本地不会再分叉。
+      # 流水线只在 package.json 的 `ci` 脚本里定义一次（format → typecheck → test →
+      # build → smoke:dev）；本地 `bun run verify` 与推送前钩子用的是同一份定义，改流程
+      # 只改那一处，CI 与本地不会再分叉。
+      #
+      # 第一步排版是写入模式：只改写不判定，排版差异不会让 CI 失败。需要单独的判定用
+      # `bun run format:check`。
       #
       # 最后一步会真实启动 dev server 请求首页与一个 API 路由：`bun run build` 只编译
       # 生产图谱，开发图谱里把 node: 内置模块带进 edge 或浏览器产物的错误能绕开它，

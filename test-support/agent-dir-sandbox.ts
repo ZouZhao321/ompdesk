@@ -158,9 +158,7 @@ function warnCleanupFailure(action: string, error: unknown): void {
  * 抛普通错误——包成 `SandboxDirectoryCreateError` 会被当成环境限制而静默跳过用例。
  */
 function assertSandboxDirectoryFragment(dir: string): void {
-  const outsideSandbox = dir.length === 0
-    || isAbsolute(dir)
-    || dir.split(/[\\/]/).includes("..");
+  const outsideSandbox = dir.length === 0 || isAbsolute(dir) || dir.split(/[\\/]/).includes("..");
   if (outsideSandbox) {
     throw new Error(`沙箱子目录必须是沙箱内的相对路径：${JSON.stringify(dir)}`);
   }

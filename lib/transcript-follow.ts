@@ -25,17 +25,17 @@ export type FollowEvent =
   | { type: "pause" }
   /** 列表报告了一次滚动位置。 */
   | {
-    type: "scroll";
-    /** 这次滚动是不是用户自己驱动的（滚轮/触摸/指针/方向键）。 */
-    userDriven: boolean;
-    /** 距列表底部的像素。 */
-    distanceFromBottom: number;
-    /**
-     * scrollTop 是否朝末尾方向增大。内容增高或布局夹取（滚动位置被向下夹）都会
-     * 改变距底部的距离，但只有朝末尾移动才可能是「用户回到末尾」。
-     */
-    movedTowardEnd: boolean;
-  };
+      type: "scroll";
+      /** 这次滚动是不是用户自己驱动的（滚轮/触摸/指针/方向键）。 */
+      userDriven: boolean;
+      /** 距列表底部的像素。 */
+      distanceFromBottom: number;
+      /**
+       * scrollTop 是否朝末尾方向增大。内容增高或布局夹取（滚动位置被向下夹）都会
+       * 改变距底部的距离，但只有朝末尾移动才可能是「用户回到末尾」。
+       */
+      movedTowardEnd: boolean;
+    };
 
 /** 一次事件的结论：写回的跟随状态，以及要执行的滚动。 */
 export interface FollowOutcome {
