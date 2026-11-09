@@ -1,16 +1,9 @@
 "use client";
 
-import {
-  useEffect,
-  useLayoutEffect,
-  useState,
-  useCallback,
-  useMemo,
-  useRef,
-  useSyncExternalStore,
-  type CSSProperties,
-} from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import type { SessionInfo, SessionActivitySnapshot } from "@/lib/types";
+import type { WorktreeEntry } from "@/lib/worktree-types";
+import { subscribeWorktreeSwitch } from "@/lib/worktree-switch";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { restoreSessionContinuation } from "@/lib/workspace-memory";
 import { summarizeWorkspaceActivity, workspaceKeyOf } from "@/lib/workspace-activity";
@@ -68,30 +61,11 @@ interface Props {
   onBackgroundTaskDone?: () => void;
 }
 
-interface WorktreeEntry {
-  path: string;
-  branch: string | null;
-  isMain: boolean;
-}
-
-interface BranchEntry {
-  name: string;
-  /** Path of the checkout holding this branch, null when none does */
-  worktreePath: string | null;
-  current: boolean;
-}
-
 interface WorktreeState {
   /** The cwd this data was fetched for — guards against stale responses */
   forCwd: string;
   projectRoot: string;
-  isGit: boolean;
-  /** False when forCwd is a repo subdirectory — the switcher is hidden there
-   *  because subdir sessions keep their own project identity */
-  isTopLevel: boolean;
   worktrees: WorktreeEntry[];
-  /** null when enumeration failed; an empty array means the repo has no branches */
-  branches: BranchEntry[] | null;
 }
 
 /** 会话活动快照的客户端形态；字段可选是因为首次渲染时还没有拿到任何数据。 */
@@ -256,33 +230,6 @@ function getRecentProjects(sessions: SessionInfo[]): string[] {
     }
   }
   return [...latestByRoot.entries()].sort((a, b) => b[1].localeCompare(a[1])).map(([root]) => root);
-}
-
-/**
- * Path label that ellipsizes on the LEFT, keeping the (most relevant) trailing
- * segments visible: "…orkspace/ompdesk". Shows as much of the path as fits
- * instead of a fixed number of segments. The rtl container moves the ellipsis
- * to the left edge; the inner plaintext bidi isolation keeps the path itself
- * rendered strictly left-to-right (no punctuation reordering).
- */
-function PathLabel({ text, style }: { text: string; style?: CSSProperties }) {
-  return (
-    <span
-      style={{
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-        display: "block",
-        minWidth: 0,
-        lineHeight: 1.35,
-        direction: "rtl",
-        textAlign: "left",
-        ...style,
-      }}
-    >
-      <span style={{ unicodeBidi: "plaintext" }}>{text}</span>
-    </span>
-  );
 }
 
 interface SessionTreeNode {
@@ -473,20 +420,12 @@ export function SessionSidebar({
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ project: string; count: number } | null>(null);
   const [removedProjects, setRemovedProjects] = useState<Set<string>>(() => new Set());
-  const [wtFilter, setWtFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathError, setCustomPathError] = useState<string | null>(null);
   const [customPathValidating, setCustomPathValidating] = useState(false);
-  // Worktree switcher state
   const [worktreeState, setWorktreeState] = useState<WorktreeState | null>(null);
-  const [wtDropdownOpen, setWtDropdownOpen] = useState(false);
-  const [wtNewOpen, setWtNewOpen] = useState(false);
-  const [wtNewBranch, setWtNewBranch] = useState("");
-  const [wtError, setWtError] = useState<string | null>(null);
-  const [wtBusy, setWtBusy] = useState(false);
-  const [wtConfirmRemove, setWtConfirmRemove] = useState<string | null>(null);
-  const wtDropdownRef = useRef<HTMLDivElement>(null);
-  const wtNewInputRef = useRef<HTMLInputElement>(null);
+
+  const projectMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   // 绿色完成提示点亮后自灭；计时器归 effect 管，卸载时清掉。
@@ -788,7 +727,6 @@ export function SessionSidebar({
   }, [selectedCwdProp]);
 
   // Load worktrees for the current effective cwd
-  const [wtRefreshKey, setWtRefreshKey] = useState(0);
   useLayoutEffect(() => {
     if (!selectedCwd) {
       setWorktreeState(null);
@@ -797,30 +735,18 @@ export function SessionSidebar({
     let cancelled = false;
     fetch(`/api/worktrees?cwd=${encodeURIComponent(selectedCwd)}`)
       .then((r) => r.json())
-      .then(
-        (d: {
-          projectRoot?: string;
-          isGit?: boolean;
-          isTopLevel?: boolean;
-          worktrees?: WorktreeEntry[];
-          branches?: BranchEntry[] | null;
-          error?: string;
-        }) => {
-          if (cancelled) return;
-          if (d.error || !d.projectRoot) {
-            setWorktreeState(null);
-            return;
-          }
-          setWorktreeState({
-            forCwd: selectedCwd,
-            projectRoot: d.projectRoot,
-            isGit: d.isGit ?? false,
-            isTopLevel: d.isTopLevel ?? false,
-            worktrees: d.worktrees ?? [],
-            branches: d.branches ?? null,
-          });
-        },
-      )
+      .then((d: { projectRoot?: string; worktrees?: WorktreeEntry[]; error?: string }) => {
+        if (cancelled) return;
+        if (d.error || !d.projectRoot) {
+          setWorktreeState(null);
+          return;
+        }
+        setWorktreeState({
+          forCwd: selectedCwd,
+          projectRoot: d.projectRoot,
+          worktrees: d.worktrees ?? [],
+        });
+      })
       .catch(() => {
         if (!cancelled) {
           setWorktreeState(null);
@@ -829,7 +755,7 @@ export function SessionSidebar({
     return () => {
       cancelled = true;
     };
-  }, [selectedCwd, wtRefreshKey, refreshKey]);
+  }, [selectedCwd, refreshKey]);
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
@@ -935,143 +861,32 @@ export function SessionSidebar({
   // Optimistically register the checkout so projectRootFor() resolves it to
   // the main repo before the refetch lands (keeps AppShell from treating the
   // new cwd as a different project), then switch to it.
-  const applyCheckout = useCallback((branchName: string, path: string) => {
+  const applyCheckout = useCallback((branchName: string | null, path: string, projectRoot: string) => {
     setWorktreeState((prev) => {
-      if (!prev) return prev;
-      const worktrees = prev.worktrees.some((wt) => wt.path === path)
-        ? prev.worktrees
-        : [...prev.worktrees, { path, branch: branchName, isMain: false }];
-      // The branch list is unknown after a failed enumeration; the refetch below
-      // fills it in, so only the checkout side is updated here.
-      if (!prev.branches) return { ...prev, forCwd: path, worktrees };
-      const known = prev.branches.some((branch) => branch.name === branchName);
-      const updated = prev.branches.map((branch) => ({
-        ...branch,
-        worktreePath: branch.name === branchName ? path : branch.worktreePath,
-        current: branch.name === branchName,
-      }));
-      const branches = known ? updated : [...updated, { name: branchName, worktreePath: path, current: true }];
-      return { ...prev, forCwd: path, worktrees, branches };
+      const base = prev ?? { forCwd: path, projectRoot, worktrees: [] };
+      const worktrees = base.worktrees.some((wt) => wt.path === path)
+        ? base.worktrees
+        : [...base.worktrees, { path, branch: branchName, isMain: false }];
+      return { ...base, projectRoot, forCwd: path, worktrees };
     });
     setSelectedCwd(path);
-    setWtRefreshKey((k) => k + 1);
   }, []);
 
-  // One teardown for every successful switch or create: a leftover filter or a
-  // pending force-remove prompt must not outlive the panel.
-  const closeWtPanel = useCallback(() => {
-    setWtDropdownOpen(false);
-    setWtNewOpen(false);
-    setWtNewBranch("");
-    setWtError(null);
-    setWtFilter("");
-    setWtConfirmRemove(null);
-  }, []);
-
-  const handleCreateWorktree = useCallback(async () => {
-    const branch = wtNewBranch.trim();
-    if (!branch || wtBusy || !worktreeState) return;
-    setWtBusy(true);
-    setWtError(null);
-    try {
-      const res = await fetch("/api/worktrees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: worktreeState.projectRoot, branch, create: true }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
-      if (!res.ok || data.error || !data.path) {
-        setWtError(data.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      closeWtPanel();
-      applyCheckout(branch, data.path);
-    } catch (e) {
-      setWtError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setWtBusy(false);
-    }
-  }, [wtNewBranch, wtBusy, worktreeState, applyCheckout, closeWtPanel]);
-
-  // Selecting a branch: reuse its checkout when one exists, otherwise create
-  // one through the same endpoint and switch to the result.
-  const handleSwitchBranch = useCallback(
-    async (branch: BranchEntry) => {
-      if (!worktreeState || wtBusy) return;
-      if (branch.worktreePath) {
-        setSelectedCwd(branch.worktreePath);
-        closeWtPanel();
-        return;
-      }
-      setWtBusy(true);
-      setWtError(null);
-      try {
-        const res = await fetch("/api/worktrees", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cwd: worktreeState.projectRoot, branch: branch.name }),
-        });
-        const data = (await res.json().catch(() => ({}))) as { path?: string; reused?: boolean; error?: string };
-        if (!res.ok || data.error || !data.path) {
-          setWtError(data.error ?? `HTTP ${res.status}`);
-          return;
-        }
-        const path = data.path;
-        applyCheckout(branch.name, path);
-        closeWtPanel();
-      } catch (e) {
-        setWtError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setWtBusy(false);
-      }
-    },
-    [worktreeState, wtBusy, applyCheckout, closeWtPanel],
+  // 右侧 Git 面板切换分支 checkout：交给同一套目录解析，项目归属与已打开会话不变。
+  useEffect(
+    () => subscribeWorktreeSwitch(({ branch, path, projectRoot }) => applyCheckout(branch, path, projectRoot)),
+    [applyCheckout],
   );
-
-  const handleRemoveWorktree = useCallback(
-    async (path: string, force: boolean) => {
-      if (!worktreeState || wtBusy) return;
-      setWtBusy(true);
-      setWtError(null);
-      try {
-        const res = await fetch("/api/worktrees", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cwd: worktreeState.projectRoot, path, force }),
-        });
-        const data = (await res.json().catch(() => ({}))) as { error?: string; dirty?: boolean };
-        if (!res.ok) {
-          if (data.dirty && !force) {
-            // Dirty worktree — ask the user to confirm a force removal
-            setWtConfirmRemove(path);
-            return;
-          }
-          setWtError(data.error ?? `HTTP ${res.status}`);
-          return;
-        }
-        setWtConfirmRemove(null);
-        if (selectedCwd === path) setSelectedCwd(worktreeState.projectRoot);
-        setWtRefreshKey((k) => k + 1);
-      } catch (e) {
-        setWtError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setWtBusy(false);
-      }
-    },
-    [worktreeState, wtBusy, selectedCwd],
-  );
-
-  // 收起项目菜单及其派生的确认条 / 工作树弹层状态；hover 高亮由调用方决定。
+  // 收起项目菜单及其确认条；hover 高亮由调用方决定。
   const dismissProjectMenu = useCallback(() => {
     setProjectMenuOpen(null);
     setRemoveProjectConfirm(null);
-    closeWtPanel();
-  }, [closeWtPanel]);
+  }, []);
 
   // Close the project actions menu on outside click.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (wtDropdownRef.current && !wtDropdownRef.current.contains(e.target as Node)) {
+      if (projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
         dismissProjectMenu();
         setHoveredProject(null);
       }
@@ -1242,201 +1057,9 @@ export function SessionSidebar({
     return [{ project, name, sessions: projectMatches ? sessions : matchingSessions }];
   });
 
-  const showWorktreeSwitcher = Boolean(
-    worktreeState?.isGit && worktreeState.isTopLevel && selectedCwd && selectedProject === worktreeState.projectRoot,
-  );
   const currentWt =
     worktreeState?.worktrees.find((worktree) => worktree.path === selectedCwd) ??
     worktreeState?.worktrees.find((worktree) => worktree.isMain);
-  const branchesUnavailable = worktreeState !== null && worktreeState.branches === null;
-  const branches = worktreeState?.branches ?? [];
-  // Checkouts no branch points at (detached HEAD, deleted branch) still need a
-  // row: the editor can open them and they can only be removed from here.
-  const checkouts = worktreeState?.worktrees ?? [];
-  const orphanCheckouts = branchesUnavailable
-    ? []
-    : checkouts.filter((wt) => !branches.some((branch) => branch.worktreePath === wt.path));
-  // Enumeration failed: fall back to the plain checkout list instead of calling
-  // every checkout detached.
-  const fallbackCheckouts = branchesUnavailable ? checkouts : [];
-  const showWtFilter = branches.length + orphanCheckouts.length + fallbackCheckouts.length >= 8;
-  // Without the input there is no way to clear a leftover query, so ignore it.
-  const filterText = showWtFilter ? wtFilter.trim().toLowerCase() : "";
-  const matchesFilter = (value: string) => !filterText || value.toLowerCase().includes(filterText);
-  const visibleBranches = branches.filter(
-    (branch) => matchesFilter(branch.name) || (branch.worktreePath !== null && matchesFilter(branch.worktreePath)),
-  );
-  const visibleOrphans = orphanCheckouts.filter((wt) => matchesFilter(wt.path));
-  const visibleFallback = fallbackCheckouts.filter((wt) => matchesFilter(wt.branch ?? wt.path));
-  const noMatches = visibleBranches.length + visibleOrphans.length + visibleFallback.length === 0;
-  const removeConfirmBar = (path: string) => (
-    <div
-      key={path}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "7px 10px",
-        borderBottom: "1px solid var(--border)",
-        background: "rgba(239,68,68,0.06)",
-      }}
-    >
-      <span
-        style={{
-          flex: 1,
-          fontSize: 11,
-          color: "var(--text)",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {t("sidebar.forceRemoveCheckout")}
-      </span>
-      <button
-        onClick={() => void handleRemoveWorktree(path, true)}
-        disabled={wtBusy}
-        style={{
-          padding: "3px 9px",
-          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-          background: "#ef4444",
-          border: "none",
-          borderRadius: 5,
-          color: "#fff",
-          fontSize: 11,
-          fontWeight: 600,
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
-      >
-        {t("sidebar.force")}
-      </button>
-      <button
-        onClick={() => setWtConfirmRemove(null)}
-        style={{
-          padding: "3px 9px",
-          minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-          background: "var(--bg-hover)",
-          border: "1px solid var(--border)",
-          borderRadius: 5,
-          color: "var(--text-muted)",
-          fontSize: 11,
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
-      >
-        {t("sidebar.cancel")}
-      </button>
-    </div>
-  );
-  const removeCheckoutButton = (path: string) => (
-    <button
-      onClick={() => void handleRemoveWorktree(path, false)}
-      disabled={wtBusy}
-      title={t("sidebar.removeWorktreeTitle", { path })}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: isMobile ? MOBILE_HIT_TARGET_PX : 34,
-        height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
-        padding: 0,
-        marginRight: 4,
-        background: "none",
-        border: "none",
-        color: "var(--text-dim)",
-        cursor: "pointer",
-        borderRadius: 5,
-        flexShrink: 0,
-        transition: "color 0.12s, background 0.12s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.color = "#ef4444";
-        e.currentTarget.style.background = "rgba(239,68,68,0.08)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.color = "var(--text-dim)";
-        e.currentTarget.style.background = "none";
-      }}
-    >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-        <path d="M10 11v6M14 11v6" />
-        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-      </svg>
-    </button>
-  );
-
-  const renderCheckoutRow = (row: {
-    key: string;
-    /** Checkout path; null for a branch that has none yet */
-    path: string | null;
-    title: string;
-    checked: boolean;
-    label: string;
-    tag?: string;
-    removable: boolean;
-    confirming: boolean;
-    onSelect: () => void;
-  }) => {
-    if (row.confirming && row.path) return removeConfirmBar(row.path);
-    return (
-      <div
-        key={row.key}
-        className="wt-row"
-        style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
-      >
-        <button
-          onClick={row.onSelect}
-          disabled={wtBusy}
-          title={row.title}
-          style={{
-            ...projectMenuRowStyle(isMobile),
-            flex: 1,
-            minWidth: 0,
-            gap: 7,
-            background: "var(--bg)",
-            border: "none",
-            color: row.checked ? "var(--text)" : "var(--text-muted)",
-            cursor: "pointer",
-            textAlign: "left",
-            fontFamily: "var(--font-mono)",
-          }}
-        >
-          {row.checked ? (
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ flexShrink: 0 }}
-            >
-              <polyline points="1.5 5 4 7.5 8.5 2.5" />
-            </svg>
-          ) : (
-            <span style={{ width: 10, flexShrink: 0 }} />
-          )}
-          <PathLabel text={row.label} style={{ flex: 1 }} />
-          {row.tag && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{row.tag}</span>}
-        </button>
-        {row.removable && row.path && removeCheckoutButton(row.path)}
-      </div>
-    );
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -1689,7 +1312,7 @@ export function SessionSidebar({
                   activity={projectActivity.get(project)}
                   hovered={hoveredProject === project}
                   menuOpen={projectMenuOpen === project}
-                  menuRef={projectMenuOpen === project ? wtDropdownRef : undefined}
+                  menuRef={projectMenuOpen === project ? projectMenuRef : undefined}
                   highlightActions={Boolean(isSelectedProject && currentWt && !currentWt.isMain)}
                   onToggleCollapse={() => toggleProjectCollapsed(project)}
                   onSelect={() => setSelectedCwd(project)}
@@ -1722,290 +1345,6 @@ export function SessionSidebar({
                       overflow: "hidden",
                     }}
                   >
-                    {showWorktreeSwitcher && worktreeState && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (wtDropdownOpen) closeWtPanel();
-                            else setWtDropdownOpen(true);
-                          }}
-                          title={t("sidebar.switchBranch")}
-                          aria-label={t("sidebar.switchBranch")}
-                          aria-expanded={wtDropdownOpen}
-                          style={{
-                            ...projectMenuRowStyle(isMobile),
-                            border: "none",
-                            borderBottom: wtDropdownOpen ? "1px solid var(--border)" : "none",
-                            background: wtDropdownOpen ? "var(--bg-selected)" : "transparent",
-                            color: "var(--text-muted)",
-                            cursor: "pointer",
-                            textAlign: "left",
-                          }}
-                        >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <line x1="6" y1="3" x2="6" y2="15" />
-                            <circle cx="18" cy="6" r="3" />
-                            <circle cx="6" cy="18" r="3" />
-                            <path d="M18 9a9 9 0 0 1-9 9" />
-                          </svg>
-                          <span style={{ flex: 1 }}>{t("sidebar.worktrees")}</span>
-                          <svg
-                            width="11"
-                            height="11"
-                            viewBox="0 0 12 12"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <polyline points="4 2.5 8 6 4 9.5" />
-                          </svg>
-                        </button>
-                        <AnimatedDropdown
-                          open={wtDropdownOpen}
-                          style={{
-                            position: "static",
-                            width: "auto",
-                            zIndex: 100,
-                            background: "var(--bg)",
-                            border: "none",
-                            borderTop: "1px solid var(--border)",
-                            borderRadius: 0,
-                            boxShadow: "none",
-                            boxSizing: "border-box",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {showWtFilter && (
-                            <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
-                              <input
-                                value={wtFilter}
-                                onChange={(e) => setWtFilter(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Escape") {
-                                    setWtFilter("");
-                                    setWtDropdownOpen(false);
-                                  }
-                                }}
-                                placeholder={t("sidebar.filterWorktrees")}
-                                autoFocus
-                                style={{
-                                  width: "100%",
-                                  minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                                  fontSize: 11,
-                                  fontFamily: "var(--font-mono)",
-                                  padding: "5px 8px",
-                                  border: "1px solid var(--border)",
-                                  borderRadius: 5,
-                                  outline: "none",
-                                  background: "var(--bg)",
-                                  color: "var(--text)",
-                                  boxSizing: "border-box",
-                                }}
-                              />
-                            </div>
-                          )}
-                          <div style={{ maxHeight: "min(40vh, 300px)", overflowY: "auto" }}>
-                            {visibleBranches.map((branch) => {
-                              const holderPath = branch.worktreePath;
-                              const holder = holderPath ? checkouts.find((wt) => wt.path === holderPath) : null;
-                              const isMain = holder?.isMain === true;
-                              let stateLabel = t("sidebar.branchNoCheckout");
-                              if (holderPath) {
-                                stateLabel = isMain ? t("sidebar.mainCheckout") : t("sidebar.hasCheckout");
-                              }
-                              return renderCheckoutRow({
-                                key: branch.name,
-                                path: holderPath,
-                                title: holderPath ?? t("sidebar.branchNoCheckoutTitle", { branch: branch.name }),
-                                checked: branch.current,
-                                label: branch.name,
-                                tag: stateLabel,
-                                removable: Boolean(holderPath) && !isMain,
-                                confirming: Boolean(holderPath) && wtConfirmRemove === holderPath,
-                                onSelect: () => void handleSwitchBranch(branch),
-                              });
-                            })}
-                            {visibleOrphans.map((wt) =>
-                              renderCheckoutRow({
-                                key: wt.path,
-                                path: wt.path,
-                                title: wt.path,
-                                checked: wt.path === selectedCwd,
-                                label: wt.path,
-                                tag: t("sidebar.detachedCheckout"),
-                                removable: !wt.isMain,
-                                confirming: wtConfirmRemove === wt.path,
-                                onSelect: () => {
-                                  setSelectedCwd(wt.path);
-                                  closeWtPanel();
-                                },
-                              }),
-                            )}
-                            {visibleFallback.map((wt) =>
-                              renderCheckoutRow({
-                                key: wt.path,
-                                path: wt.path,
-                                title: wt.path,
-                                checked: wt.path === selectedCwd,
-                                label: wt.branch ?? wt.path,
-                                removable: !wt.isMain,
-                                confirming: wtConfirmRemove === wt.path,
-                                onSelect: () => {
-                                  setSelectedCwd(wt.path);
-                                  closeWtPanel();
-                                },
-                              }),
-                            )}
-                            {showWtFilter && noMatches && filterText.length > 0 && (
-                              <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>
-                                {t("sidebar.noMatchingWorktrees")}
-                              </div>
-                            )}
-                          </div>
-
-                          {!wtNewOpen ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setWtNewOpen(true);
-                                setWtError(null);
-                                setTimeout(() => wtNewInputRef.current?.focus(), 0);
-                              }}
-                              title={t("sidebar.createWorktreeTitle")}
-                              style={{
-                                ...projectMenuRowStyle(isMobile),
-                                gap: 7,
-                                padding: "8px 10px",
-                                background: "none",
-                                border: "none",
-                                color: "var(--text-muted)",
-                                cursor: "pointer",
-                                textAlign: "left",
-                              }}
-                            >
-                              <svg
-                                width="10"
-                                height="10"
-                                viewBox="0 0 10 10"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.1"
-                                strokeLinecap="round"
-                                style={{ flexShrink: 0 }}
-                              >
-                                <line x1="5" y1="1" x2="5" y2="9" />
-                                <line x1="1" y1="5" x2="9" y2="5" />
-                              </svg>
-                              <span>{t("sidebar.newWorktree")}</span>
-                            </button>
-                          ) : (
-                            <div style={{ padding: "6px 8px" }}>
-                              <input
-                                ref={wtNewInputRef}
-                                value={wtNewBranch}
-                                onChange={(e) => {
-                                  setWtNewBranch(e.target.value);
-                                  setWtError(null);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    void handleCreateWorktree();
-                                  }
-                                  if (e.key === "Escape") {
-                                    setWtNewOpen(false);
-                                    setWtNewBranch("");
-                                    setWtError(null);
-                                  }
-                                }}
-                                placeholder={t("sidebar.branchName")}
-                                style={{
-                                  width: "100%",
-                                  minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                                  fontSize: 11,
-                                  fontFamily: "var(--font-mono)",
-                                  padding: "5px 8px",
-                                  border: "1px solid var(--accent)",
-                                  borderRadius: 5,
-                                  outline: "none",
-                                  background: "var(--bg)",
-                                  color: "var(--text)",
-                                  boxSizing: "border-box",
-                                }}
-                              />
-                              <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
-                                <button
-                                  onClick={() => void handleCreateWorktree()}
-                                  disabled={wtBusy || !wtNewBranch.trim()}
-                                  style={{
-                                    flex: 1,
-                                    padding: "4px 0",
-                                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                                    background: "var(--accent)",
-                                    border: "none",
-                                    borderRadius: 5,
-                                    color: "#fff",
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    cursor: wtBusy || !wtNewBranch.trim() ? "not-allowed" : "pointer",
-                                    opacity: wtBusy || !wtNewBranch.trim() ? 0.65 : 1,
-                                  }}
-                                >
-                                  {wtBusy ? t("sidebar.creating") : t("sidebar.create")}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setWtNewOpen(false);
-                                    setWtNewBranch("");
-                                    setWtError(null);
-                                  }}
-                                  style={{
-                                    flex: 1,
-                                    padding: "4px 0",
-                                    minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                                    background: "var(--bg-hover)",
-                                    border: "1px solid var(--border)",
-                                    borderRadius: 5,
-                                    color: "var(--text-muted)",
-                                    fontSize: 11,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {t("sidebar.cancel")}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          {wtError && (
-                            <div
-                              style={{
-                                padding: "5px 10px 8px",
-                                color: "#dc2626",
-                                fontSize: 11,
-                                lineHeight: 1.35,
-                                overflowWrap: "anywhere",
-                              }}
-                            >
-                              {wtError}
-                            </div>
-                          )}
-                        </AnimatedDropdown>
-                      </>
-                    )}
                     <ProjectPinMenuItem
                       isPinned={pinnedProjectKeys.has(normalizeProjectKey(project))}
                       onToggle={() => handleTogglePinnedProject(project)}
