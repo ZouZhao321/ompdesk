@@ -7,10 +7,7 @@ export function commentTranslationTarget(locale: Locale): CommentLanguage {
 }
 
 /** 查看器要查询的译文键，按词条顺序去重。 */
-export function commentTranslationKeys(
-  entries: readonly CommentEntry[],
-  targetLanguage: CommentLanguage,
-): string[] {
+export function commentTranslationKeys(entries: readonly CommentEntry[], targetLanguage: CommentLanguage): string[] {
   const keys: string[] = [];
   const seen = new Set<string>();
   for (const entry of entries) {

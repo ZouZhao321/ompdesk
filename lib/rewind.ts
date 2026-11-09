@@ -8,9 +8,7 @@ export interface RewindEntry {
   images: ChatDraftImage[];
 }
 
-export type RewindPlan =
-  | { handled: true; error: string }
-  | { handled: true; action: "openRewind" };
+export type RewindPlan = { handled: true; error: string } | { handled: true; action: "openRewind" };
 
 /**
  * 根据会话忙碌状态决定 /rewind 与 /branch 的处理结果。

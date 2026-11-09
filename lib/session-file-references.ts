@@ -17,7 +17,10 @@ export async function isFilePathReferencedBySession(filePath: string, sessionId:
   }
 }
 
-export async function isBashOutputPathReferencedBySession(filePath: string, sessionId: string | null): Promise<boolean> {
+export async function isBashOutputPathReferencedBySession(
+  filePath: string,
+  sessionId: string | null,
+): Promise<boolean> {
   if (!isValidSessionId(sessionId)) return false;
   try {
     const sessionPath = await resolveSessionPath(sessionId);

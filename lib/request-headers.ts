@@ -37,10 +37,7 @@ export function trustsForwardedAddress(env: NodeJS.ProcessEnv = process.env): bo
  * each proxy appends to, so the last entry is the one closest to this server;
  * the first entry is whatever the client chose to send.
  */
-export function resolveForwardedAddress(
-  headers: Headers,
-  env: NodeJS.ProcessEnv = process.env,
-): string {
+export function resolveForwardedAddress(headers: Headers, env: NodeJS.ProcessEnv = process.env): string {
   if (!trustsForwardedAddress(env)) return "local";
   const forwarded = headers.get("x-forwarded-for")?.split(",");
   const last = forwarded?.[forwarded.length - 1]?.trim();

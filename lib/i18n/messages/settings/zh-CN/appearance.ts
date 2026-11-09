@@ -26,11 +26,9 @@ export const appearance: Record<string, string> = {
   "settings.field.statusLine.separator.label": "状态行分隔符",
   "settings.field.statusLine.separator.description": "各片段之间分隔符的样式",
   "settings.field.statusLine.contextLine.label": "上下文响应线",
-  "settings.field.statusLine.contextLine.description":
-    "左右片段之间的线段如何反映上下文用量（仅盒式输入框）",
+  "settings.field.statusLine.contextLine.description": "左右片段之间的线段如何反映上下文用量（仅盒式输入框）",
   "settings.field.statusLine.sessionAccent.label": "会话强调色",
-  "settings.field.statusLine.sessionAccent.description":
-    "编辑器边框与状态行间隙使用会话名称的颜色",
+  "settings.field.statusLine.sessionAccent.description": "编辑器边框与状态行间隙使用会话名称的颜色",
   "settings.field.statusLine.transparent.label": "透明状态行",
   "settings.field.statusLine.transparent.description":
     "状态行使用终端默认背景，不再使用主题的 `statusLineBg`。Powerline 端帽会被去掉，因为它们需要对比填充才能与周围终端衔接。",
@@ -48,8 +46,7 @@ export const appearance: Record<string, string> = {
   "settings.field.images.blockImages.description": "禁止把图片发送给 LLM Provider",
 
   "settings.field.tui.resizeScrollback.label": "调整回滚缓冲",
-  "settings.field.tui.resizeScrollback.description":
-    "终端尺寸稳定后，如何刷新保留在终端回滚缓冲中的记录行",
+  "settings.field.tui.resizeScrollback.description": "终端尺寸稳定后，如何刷新保留在终端回滚缓冲中的记录行",
   "settings.field.terminal.showProgress.label": "原生终端进度",
   "settings.field.terminal.showProgress.description":
     "Agent 或上下文维护运行时，通过 OSC 9;4 发出不确定进度（Tern 中始终开启）",
@@ -62,14 +59,12 @@ export const appearance: Record<string, string> = {
   "settings.field.tui.renderMermaid.label": "渲染 Mermaid 图",
   "settings.field.tui.renderMermaid.description": "把 Mermaid 围栏代码块渲染为字符画",
   "settings.field.tui.renderSvg.label": "渲染 SVG 图形",
-  "settings.field.tui.renderSvg.description":
-    "邀请 Agent 用 SVG 绘制图表，在支持图形的终端中内联显示为图片",
+  "settings.field.tui.renderSvg.description": "邀请 Agent 用 SVG 绘制图表，在支持图形的终端中内联显示为图片",
   "settings.field.tui.autoGraph.label": "表格自动绘图",
   "settings.field.tui.autoGraph.description":
     "在 Agent 回答里的数值表格下方绘制图表，使用主题配色；仅在支持图形的终端生效",
   "settings.field.tui.reactions.label": "Agent 表情回应",
-  "settings.field.tui.reactions.description":
-    "允许 Agent 用表情徽标回应你的消息，徽标显示在其气泡上",
+  "settings.field.tui.reactions.description": "允许 Agent 用表情徽标回应你的消息，徽标显示在其气泡上",
   "settings.field.tui.codexResetFireworks.label": "Codex 重置烟花",
   "settings.field.tui.codexResetFireworks.description":
     "Codex 每周用量意外重置或新存入重置次数时，在画面上三分之一处播放烟花，直到按 Esc 才消失",
@@ -93,33 +88,26 @@ export const appearance: Record<string, string> = {
   "settings.field.display.pinnedAgents.description":
     "编辑框上方的实时 Agent 跳转列表（off 隐藏；collapsed 只显示几行并带展开器；full 显示全部）",
   "settings.field.display.subagentLivePreview.label": "子 Agent 实时预览",
-  "settings.field.display.subagentLivePreview.description":
-    "在每个置顶子 Agent 的行下方显示当前或最近一次工具调用",
+  "settings.field.display.subagentLivePreview.description": "在每个置顶子 Agent 的行下方显示当前或最近一次工具调用",
   "settings.field.display.smoothStreaming.label": "平滑流式输出",
-  "settings.field.display.smoothStreaming.description":
-    "内容分块到达时平滑显示助手文本与流式工具输入",
+  "settings.field.display.smoothStreaming.description": "内容分块到达时平滑显示助手文本与流式工具输入",
   "settings.field.display.hideToolActivity.label": "隐藏工具活动",
   "settings.field.display.hideToolActivity.description": "在记录中隐藏模型发起的工具调用与结果",
   "settings.field.display.showTokenUsage.label": "显示 Token 用量",
   "settings.field.display.showTokenUsage.description": "在助手消息上显示每轮 Token 用量",
   "settings.field.display.showTurnTime.label": "显示轮次耗时",
-  "settings.field.display.showTurnTime.description":
-    "在助手消息的用量行显示从提示到让出的总耗时（含工具调用）",
+  "settings.field.display.showTurnTime.description": "在助手消息的用量行显示从提示到让出的总耗时（含工具调用）",
   "settings.field.display.cacheMissMarker.label": "缓存未命中标记",
-  "settings.field.display.cacheMissMarker.description":
-    "助手轮次的请求未命中提示缓存时，在该轮之后显示分隔线",
+  "settings.field.display.cacheMissMarker.description": "助手轮次的请求未命中提示缓存时，在该轮之后显示分隔线",
   "settings.field.display.collapseCompacted.label": "折叠已压缩历史",
   "settings.field.display.collapseCompacted.description":
     "在实时记录中把压缩前的历史折叠到摘要分隔线之后；关闭后完整记录内联显示，每个压缩点保留分隔线",
   "settings.field.showHardwareCursor.label": "显示硬件光标",
   "settings.field.showHardwareCursor.description": "显示终端光标以支持输入法",
   "settings.field.tui.imeSafeCursor.label": "输入法安全布局",
-  "settings.field.tui.imeSafeCursor.description":
-    "把提示框下边框移到单独一行，避免 macOS 输入法预编辑内容顶开边框",
+  "settings.field.tui.imeSafeCursor.description": "把提示框下边框移到单独一行，避免 macOS 输入法预编辑内容顶开边框",
   "settings.field.task.showResolvedModelBadge.label": "显示实际模型徽标",
-  "settings.field.task.showResolvedModelBadge.description":
-    "在任务组件状态行显示每个子 Agent 实际使用的模型 ID",
+  "settings.field.task.showResolvedModelBadge.description": "在任务组件状态行显示每个子 Agent 实际使用的模型 ID",
   "settings.field.title.icons.label": "标题图标",
-  "settings.field.title.icons.description":
-    "新增的生成标题或 /rename 标题前使用的图标与短代码",
+  "settings.field.title.icons.description": "新增的生成标题或 /rename 标题前使用的图标与短代码",
 };

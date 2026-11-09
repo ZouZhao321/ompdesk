@@ -229,13 +229,27 @@ function buildChildren(sessions: SessionInfo[]): Map<string, SessionInfo[]> {
   return children;
 }
 
-/** Target session plus every fork descendant, parent first. Subagent sessions are excluded. */
-async function collectChain(target: SessionInfo): Promise<{ sessions: SessionInfo[]; truncated: boolean }> {
+/**
+ * The whole fork family: walk up to the root session, then include every fork
+ * descendant parent-first. A map opened from any branch therefore shows its
+ * siblings too. Subagent sessions are excluded.
+ */
+async function collectTree(target: SessionInfo): Promise<{ sessions: SessionInfo[]; truncated: boolean }> {
   const all = await listAllSessions();
   const children = buildChildren(all);
+  const byId = new Map(all.map((session) => [session.id, session]));
+  const ancestors = new Set<string>([target.id]);
+  let root = target;
+  while (root.parentSessionId && !ancestors.has(root.parentSessionId)) {
+    const parent = byId.get(root.parentSessionId);
+    if (!parent) break;
+    ancestors.add(parent.id);
+    root = parent;
+  }
+
   const chain: SessionInfo[] = [];
-  const seen = new Set<string>([sessionPathKey(target.path)]);
-  const queue: SessionInfo[] = [target];
+  const seen = new Set<string>([sessionPathKey(root.path)]);
+  const queue: SessionInfo[] = [root];
   let truncated = false;
 
   while (queue.length > 0) {
@@ -296,7 +310,7 @@ export async function buildSessionMap(sessionId: string): Promise<SessionMapPayl
   const target = await resolveTarget(sessionId);
   if (!target) return null;
 
-  const chain = await collectChain(target.info);
+  const chain = await collectTree(target.info);
   const loaded = await parseChain(chain.sessions);
   const byTurn = new Map<string, MapTurnNode>();
   const nodes: MapTurnNode[] = [];
@@ -333,7 +347,7 @@ export async function buildSessionMap(sessionId: string): Promise<SessionMapPayl
 export async function readMapTurn(sessionId: string, turnId: string): Promise<MapTurnDetail | null> {
   const target = await resolveTarget(sessionId);
   if (!target) return null;
-  const chain = await collectChain(target.info);
+  const chain = await collectTree(target.info);
   const loaded = await parseChain(chain.sessions);
   for (const { parsed } of loaded) {
     const turn = parsed.turns.find((candidate) => candidate.id === turnId);

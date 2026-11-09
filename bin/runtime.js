@@ -7,7 +7,7 @@ const { delimiter, join } = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { homedir } = require("os");
 
-const MIN_BUN_VERSION = "1.3.14";
+const MIN_BUN_VERSION = "1.4.2";
 
 function parseVersion(version) {
   const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(version ?? ""));
@@ -104,7 +104,10 @@ function withLoopbackNoProxy(env) {
   if (!proxied) return env;
   const current = env.NO_PROXY ?? env.no_proxy ?? "";
   if (current.trim() === "*") return env;
-  const entries = current.split(",").map((entry) => entry.trim()).filter(Boolean);
+  const entries = current
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
   const missing = LOOPBACK_HOSTS.filter((host) => !entries.includes(host));
   if (missing.length === 0) return env;
   const value = [...entries, ...missing].join(",");

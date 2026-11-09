@@ -84,10 +84,7 @@ export declare function consumeRecoveryCode(
   password: unknown,
   options?: WebAuthStoreOptions,
 ): RecoveryConsumeResult;
-export declare function createDigest(
-  secret: string,
-  params?: WebAuthStoreOptions["params"],
-): WebAuthDigest;
+export declare function createDigest(secret: string, params?: WebAuthStoreOptions["params"]): WebAuthDigest;
 export declare function getWebAuthStatus(options?: WebAuthStoreOptions): WebAuthStatus;
 export declare function issueRecoveryCode(options?: WebAuthStoreOptions): RecoveryIssueResult;
 export declare function normalizeRecoveryCode(code: unknown): string;

@@ -18,7 +18,17 @@
 bunx ompdesk@latest        # 或 bun add -g ompdesk 后运行 ompdesk
 ```
 
-浏览器打开 `http://127.0.0.1:30141`。换端口用 `ompdesk --port 8080` 或 `PORT=8080 ompdesk`。桌面版与 `bun run dev`、`bun run start` 固定使用 30141。
+浏览器打开 `http://127.0.0.1:30141`。换端口用 `ompdesk --port 8080` 或 `PORT=8080 ompdesk`。`bun run dev`、`bun run start` 固定使用 30141。
+
+启动在后台完成，命令返回后终端可以继续使用；关掉终端不影响服务，也不打断正在运行的任务。查看状态与关闭：
+
+```bash
+ompdesk status
+ompdesk stop            # 有任务在运行会拒绝
+ompdesk stop --force    # 确认要中断时
+```
+
+实例记录写在 agent 目录（默认 `~/.omp/agent`）里，所以 `status` 与 `stop` 覆盖该目录下的全部实例，加 `--port` 只处理一个。需要服务跟随终端前台运行（容器、服务管理器）时用 `ompdesk foreground`。
 
 ## Docker
 

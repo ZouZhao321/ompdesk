@@ -26,14 +26,16 @@ export function getWindowsDriveCandidates(): BrowsableDirectory[] {
 }
 
 export async function listWindowsDrives(): Promise<BrowsableDirectory[]> {
-  const candidates = await Promise.all(getWindowsDriveCandidates().map(async (drive) => {
-    try {
-      const driveStat = await stat(drive.path);
-      return driveStat.isDirectory() ? drive : null;
-    } catch {
-      return null;
-    }
-  }));
+  const candidates = await Promise.all(
+    getWindowsDriveCandidates().map(async (drive) => {
+      try {
+        const driveStat = await stat(drive.path);
+        return driveStat.isDirectory() ? drive : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
 
   return candidates.filter((drive): drive is BrowsableDirectory => drive !== null);
 }
@@ -59,10 +61,7 @@ export async function listWindowsDrives(): Promise<BrowsableDirectory[]> {
  * 其余输入两侧一致：`C:\x`、`C:/x` 与 `\\server\share` 都判 true，`/x` 与普通相对名字
  * 都判 false。
  */
-export function isWindowsPathInput(
-  directory: string,
-  platform: NodeJS.Platform = process.platform,
-): boolean {
+export function isWindowsPathInput(directory: string, platform: NodeJS.Platform = process.platform): boolean {
   if (/^[a-zA-Z]:/.test(directory)) return true;
   if (directory.startsWith("\\\\")) return true;
   return platform === "win32" && (directory.startsWith("\\") || directory.startsWith("//"));
@@ -114,9 +113,7 @@ export function getParentDirectory(directory: string): string | null {
   // 与 `normalizeDirectory` 同一套选择规则：Windows 形态自带分隔符语义，用 win32；
   // POSIX 绝对输入用 posix；相对输入的上级由宿主状态决定，必须用宿主 `path`——交给
   // posix 会把 Windows 宿主上的 `Users\alex` 当成一个名字，上级判成 `.`。
-  const pathApi = isWindowsPathInput(directory)
-    ? path.win32
-    : (path.posix.isAbsolute(directory) ? path.posix : path);
+  const pathApi = isWindowsPathInput(directory) ? path.win32 : path.posix.isAbsolute(directory) ? path.posix : path;
   const normalized = pathApi.normalize(directory);
   const parent = pathApi.dirname(normalized);
   return parent === normalized ? null : parent;
@@ -129,22 +126,24 @@ export async function resolveDirectory(directory: string): Promise<string> {
 export async function listDirectories(directory: string): Promise<BrowsableDirectory[]> {
   const entries = await readdir(directory, { withFileTypes: true });
   // 忽略损坏、不可访问或不指向目录的符号链接。
-  const candidates = await Promise.all(entries.map(async (entry) => {
-    if (entry.isDirectory()) {
-      return { name: entry.name, path: path.join(directory, entry.name) };
-    }
-    if (!entry.isSymbolicLink()) return null;
+  const candidates = await Promise.all(
+    entries.map(async (entry) => {
+      if (entry.isDirectory()) {
+        return { name: entry.name, path: path.join(directory, entry.name) };
+      }
+      if (!entry.isSymbolicLink()) return null;
 
-    try {
-      const entryPath = path.join(directory, entry.name);
-      const realEntryPath = await realpath(entryPath);
-      const entryStat = await stat(realEntryPath);
-      if (!entryStat.isDirectory()) return null;
-      return { name: entry.name, path: entryPath };
-    } catch {
-      return null;
-    }
-  }));
+      try {
+        const entryPath = path.join(directory, entry.name);
+        const realEntryPath = await realpath(entryPath);
+        const entryStat = await stat(realEntryPath);
+        if (!entryStat.isDirectory()) return null;
+        return { name: entry.name, path: entryPath };
+      } catch {
+        return null;
+      }
+    }),
+  );
 
   return candidates
     .filter((entry): entry is BrowsableDirectory => entry !== null)

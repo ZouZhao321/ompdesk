@@ -67,10 +67,7 @@ function formatHost(host: string): string {
 }
 
 /** The address the panel should show, derived from the same flags the server was started with. */
-export function resolveListenAddress(
-  env: NodeJS.ProcessEnv = process.env,
-  argv: string[] = process.argv,
-): string {
+export function resolveListenAddress(env: NodeJS.ProcessEnv = process.env, argv: string[] = process.argv): string {
   // An empty environment variable means "not set", not a host or port of "";
   // `??` would build `http://:30141` and record it as the listen address.
   const host = env.OMPDESK_HOSTNAME?.trim() || readArg(argv, "--hostname", "-H") || "127.0.0.1";
@@ -137,12 +134,17 @@ export async function startLogging(options: StartLoggingOptions = {}): Promise<v
     env: options.env,
   });
   try {
-    const authEnabled = options.authEnabled ?? await detectAuthEnabled();
-    logEvent("info", "process", "process.start", buildProcessStartFields({
-      ...options.fields,
-      env: options.env ?? options.fields?.env,
-      authEnabled,
-    }));
+    const authEnabled = options.authEnabled ?? (await detectAuthEnabled());
+    logEvent(
+      "info",
+      "process",
+      "process.start",
+      buildProcessStartFields({
+        ...options.fields,
+        env: options.env ?? options.fields?.env,
+        authEnabled,
+      }),
+    );
   } catch {
     // Startup must proceed even when logging is unavailable.
   }

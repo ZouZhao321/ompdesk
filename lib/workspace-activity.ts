@@ -5,10 +5,7 @@ import type { SessionInfo } from "./types";
  *
  * 不做路径归一化或大小写折叠；工作区记忆与侧边栏项目分组共用这一规则。
  */
-export function workspaceKeyOf(session: {
-  cwd: string;
-  projectRoot?: string | null;
-}): string {
+export function workspaceKeyOf(session: { cwd: string; projectRoot?: string | null }): string {
   return session.projectRoot ?? session.cwd;
 }
 

@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { readSourceFile } from "../test-support/source-text.ts";
 
-const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
-const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
-const appShellSource = await readFile(new URL("../components/AppShell.tsx", import.meta.url), "utf8");
+const source = await readSourceFile(new URL("./useAgentSession.ts", import.meta.url));
+const chatWindowSource = await readSourceFile(new URL("../components/ChatWindow.tsx", import.meta.url));
+const appShellSource = await readSourceFile(new URL("../components/AppShell.tsx", import.meta.url));
 
 test("keeps the session event stream open through the idle grace window", () => {
   const finishSource = source.slice(
@@ -16,25 +15,12 @@ test("keeps the session event stream open through the idle grace window", () => 
     source.indexOf("const scheduleEventStreamClose"),
     source.indexOf("const finishPromptWithoutStream"),
   );
-  const agentEndSource = source.slice(
-    source.indexOf('case "agent_end"'),
-    source.indexOf('case "agent_settled"'),
-  );
-  const agentStartSource = source.slice(
-    source.indexOf('case "agent_start"'),
-    source.indexOf('case "agent_end"'),
-  );
-  const agentSettledSource = source.slice(
-    source.indexOf('case "agent_settled"'),
-    source.indexOf('case "prompt_done"'),
-  );
-  const promptDoneSource = source.slice(
-    source.indexOf('case "prompt_done"'),
-    source.indexOf('case "prompt_error"'),
-  );
+  const agentEndSource = source.slice(source.indexOf('case "agent_end"'), source.indexOf('case "goal_status"'));
+  const agentStartSource = source.slice(source.indexOf('case "agent_start"'), source.indexOf('case "agent_end"'));
+  const promptDoneSource = source.slice(source.indexOf('case "prompt_done"'), source.indexOf('case "prompt_error"'));
   const sendSource = source.slice(
-    source.indexOf("  const handleSend = useCallback"),
-    source.indexOf("  const executeBash = useCallback"),
+    source.indexOf("const handleSend = useCallback"),
+    source.indexOf("const executeBash = useCallback"),
   );
 
   assert.match(source, /const EVENT_STREAM_IDLE_GRACE_MS = 30_000/);
@@ -45,13 +31,21 @@ test("keeps the session event stream open through the idle grace window", () => 
   assert.doesNotMatch(finishSource, /closeEvents\(\)/);
   assert.doesNotMatch(agentEndSource, /closeEvents\(\)/);
   assert.match(agentStartSource, /cancelEventStreamGrace\(\)/);
-  assert.match(agentSettledSource, /scheduleEventStreamClose\(sid\)/);
-  assert.match(agentSettledSource, /onAgentEnd\?\.\(sessionIdRef\.current \?\? undefined\)/);
+  // 终态 agent_end 就是运行结束的权威信号；等到 15s 对账才收尾会让输入框停在引导模式。
+  assert.match(agentEndSource, /event\.isTerminal !== false && event\.yielded !== false/);
+  assert.match(agentEndSource, /settleUiStage\(\)/);
+  assert.match(agentEndSource, /notifyPromptStage\(promptRunIdRef\.current\)/);
+  assert.doesNotMatch(agentEndSource, /onAgentEnd\?\./);
+  assert.match(agentEndSource, /scheduleEventStreamClose\(sessionIdRef\.current\)/);
   assert.match(promptDoneSource, /notifyPromptStage\(runId\)/);
   assert.match(promptDoneSource, /scheduleEventStreamClose\(sid\)/);
+  assert.match(promptDoneSource, /waitForPromptSettlement\(sid, runId\)/);
   assert.match(sendSource, /const definitivelyRejected = !promptRequestStarted \|\| isPromptRejectedError\(e\)/);
   assert.match(sendSource, /if \(!definitivelyRejected && sentSessionId\) \{[\s\S]*?waitForPromptSettlement/);
-  assert.match(sendSource, /if \(!definitivelyRejected && sentSessionId\) \{[\s\S]*?return;[\s\S]*?\}[\s\S]*?closeEvents\(\)/);
+  assert.match(
+    sendSource,
+    /if \(!definitivelyRejected && sentSessionId\) \{[\s\S]*?return;[\s\S]*?\}[\s\S]*?closeEvents\(\)/,
+  );
 });
 
 test("reuses an open event stream and hides an empty agent phase", () => {
@@ -72,10 +66,7 @@ test("reuses an open event stream and hides an empty agent phase", () => {
 
 test("plays the enabled sound once for each extension dialog", () => {
   assert.match(chatWindowSource, /soundedExtensionDialogIdRef = useRef<string \| null>\(null\)/);
-  assert.match(
-    chatWindowSource,
-    /soundedExtensionDialogIdRef\.current === extensionDialog\.id/,
-  );
+  assert.match(chatWindowSource, /soundedExtensionDialogIdRef\.current === extensionDialog\.id/);
   assert.match(chatWindowSource, /soundedExtensionDialogIdRef\.current = extensionDialog\.id/);
   assert.match(chatWindowSource, /playDoneSoundRef\.current\(\)/);
 });
@@ -89,16 +80,16 @@ test("keeps completed subagents in the session history", () => {
 
 test("routes blocking extension requests through deduplicated browser attention notifications", () => {
   const completionSource = appShellSource.slice(
-    appShellSource.indexOf("  const handleAgentEnd = useCallback"),
-    appShellSource.indexOf("  const handleAttentionNeeded = useCallback"),
+    appShellSource.indexOf("const handleAgentEnd = useCallback"),
+    appShellSource.indexOf("const handleAttentionNeeded = useCallback"),
   );
   const extensionRequestSource = source.slice(
-    source.indexOf("  const handleExtensionUiRequest = useCallback"),
-    source.indexOf("  const settleUiStage = useCallback"),
+    source.indexOf("const handleExtensionUiRequest = useCallback"),
+    source.indexOf("const settleUiStage = useCallback"),
   );
   const attentionSource = appShellSource.slice(
-    appShellSource.indexOf("  const handleAttentionNeeded = useCallback"),
-    appShellSource.indexOf("  const handleAutoName = useCallback"),
+    appShellSource.indexOf("const handleAttentionNeeded = useCallback"),
+    appShellSource.indexOf("const handleAutoName = useCallback"),
   );
 
   assert.match(
@@ -108,11 +99,13 @@ test("routes blocking extension requests through deduplicated browser attention 
   assert.match(chatWindowSource, /onAttentionNeeded, onSessionCreated/);
   assert.match(completionSource, /if \(!shouldShowBrowserNotification\(\)\) return/);
   assert.match(attentionSource, /shouldShowBrowserNotification\(\)/);
-  assert.match(attentionSource, /claimExtensionAttentionNotification\(request, notifiedAttentionRequestIdsRef\.current\)/);
+  assert.match(
+    attentionSource,
+    /claimExtensionAttentionNotification\(request, notifiedAttentionRequestIdsRef\.current\)/,
+  );
   assert.match(attentionSource, /tag: `pi-extension-ui:\$\{request\.id\}`/);
   assert.match(appShellSource, /onAttentionNeeded=\{handleAttentionNeeded\}/);
 });
-
 
 test("/fork is consumed locally and surfaces server resolution errors", () => {
   const forkCaseSource = source.slice(
@@ -130,7 +123,10 @@ test("/fork is consumed locally and surfaces server resolution errors", () => {
   // and yields to the next explicit case, not the default bridge.
   assert.doesNotMatch(forkCaseSource, /execute_slash_command/);
   assert.doesNotMatch(forkCaseSource, /type: "prompt"/);
-  assert.match(source, /case "fork":[\s\S]*?return complete\(\{ handled: true, message: "Forked a new session" \}\);\s*\}\s*case "goal": \{/);
+  assert.match(
+    source,
+    /case "fork":[\s\S]*?return complete\(\{ handled: true, message: "Forked a new session" \}\);\s*\}\s*case "goal": \{/,
+  );
 });
 
 test("fork navigation selects the new session id from the RPC result", () => {
@@ -139,12 +135,15 @@ test("fork navigation selects the new session id from the RPC result", () => {
     source.indexOf("const handleNavigate = useCallback"),
   );
 
-  assert.match(forkSource, /const handleFork = useCallback\(async \([\s\S]*?entryId\?: string,[\s\S]*?Promise<\{ forked: boolean; error\?: string \}>/);
+  assert.match(
+    forkSource,
+    /const handleFork = useCallback\(async \([\s\S]*?entryId\?: string,?[\s\S]*?Promise<\{ forked: boolean; error\?: string \}>/,
+  );
   assert.match(forkSource, /type: "fork"/);
   assert.match(forkSource, /\.\.\.\(entryId \? \{ entryId \} : \{\}\)/);
   assert.match(forkSource, /const \{ cancelled, newSessionId \} = result \?\? \{\};/);
   assert.match(forkSource, /if \(!cancelled && newSessionId\) \{/);
-  assert.match(forkSource, /onSessionForked\?\.\(newSessionId\);\s*\n\s*return \{ forked: true \};/);
+  assert.match(forkSource, /onSessionForked\?\.\(newSessionId\);\s*return \{ forked: true \};/);
   assert.match(forkSource, /error: e instanceof Error \? e\.message : String\(e\)/);
   assert.match(forkSource, /setForkingEntryId\(null\)/);
 });
@@ -186,10 +185,7 @@ test("/handoff reloads the same session after an in-place compaction", () => {
     source.indexOf("default: {", source.indexOf('case "handoff":')),
   );
 
-  assert.match(
-    handoffCaseSource,
-    /sendAgentCommand<\{ cancelled\?: boolean \}>[\s\S]*?type: "handoff"/,
-  );
+  assert.match(handoffCaseSource, /sendAgentCommand<\{ cancelled\?: boolean \}>[\s\S]*?type: "handoff"/);
   // omp 18 hands off in place: the session id never changes, so success
   // reloads this transcript instead of navigating to a replacement session.
   assert.doesNotMatch(handoffCaseSource, /newSessionId/);
@@ -198,8 +194,14 @@ test("/handoff reloads the same session after an in-place compaction", () => {
   // Every branch returns handled so the command never reaches the SDK
   // fallback — the busy state is torn down in a finally block and the case
   // yields to the default bridge with a return.
-  assert.match(handoffCaseSource, /complete\(\{ handled: true, message: "Context handed off and compacted in place" \}\)/);
-  assert.match(source, /case "handoff":[\s\S]*?return complete\(\{ handled: true, message: "Context handed off and compacted in place" \}\);\s*\}\s*finally \{[\s\S]*?\}\s*\}\s*default: \{/);
+  assert.match(
+    handoffCaseSource,
+    /complete\(\{ handled: true, message: "Context handed off and compacted in place" \}\)/,
+  );
+  assert.match(
+    source,
+    /case "handoff":[\s\S]*?return complete\(\{ handled: true, message: "Context handed off and compacted in place" \}\);\s*\}\s*finally \{[\s\S]*?\}\s*\}\s*default: \{/,
+  );
 });
 
 test("rehydrates handoff as busy without misreporting compaction", () => {
@@ -217,16 +219,22 @@ test("rehydrates handoff as busy without misreporting compaction", () => {
 test("feeds the scroll position into the follow reducer", () => {
   const scrollHandlerSource = source.slice(
     source.indexOf("const handleScrollPositionChange"),
-    source.indexOf("  // Load session on mount"),
+    source.indexOf("// Load session on mount"),
   );
 
   // 「暂停只认用户驱动、恢复按位置」的判定在 lib/transcript-follow.ts，由它的逻辑
   // 测试覆盖；跳转落点的抑制与三条状态序列由 useAgentSession.follow.test.mjs 覆盖。
   // 这里只钉住接线：滚动位置按两个字段交给判定，抑制器合着时整条观测不参与。
-  assert.match(scrollHandlerSource, /if \(followObservationHeldRef\.current && Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/);
+  assert.match(
+    scrollHandlerSource,
+    /if \(followObservationHeldRef\.current && Date\.now\(\) < followObservationHoldUntilRef\.current\) return;/,
+  );
   assert.match(scrollHandlerSource, /type: "scroll"/);
   assert.match(scrollHandlerSource, /userDriven: Date\.now\(\) <= userScrollIntentUntilRef\.current/);
-  assert.match(scrollHandlerSource, /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/);
+  assert.match(
+    scrollHandlerSource,
+    /distanceFromBottom: container\.scrollHeight - container\.scrollTop - container\.clientHeight/,
+  );
   // 按运行状态早退会让空闲期跳转停掉的跟随永远恢复不了。
   assert.doesNotMatch(scrollHandlerSource, /agentRunningRef|bashRunningRef/);
   // 旧的时间窗方案整体删掉，不留一个恒真的断言当挡箭牌。
@@ -237,12 +245,12 @@ test("feeds the scroll position into the follow reducer", () => {
 
 test("restores follow and brings the view to the end when a prompt is submitted", () => {
   const sendSource = source.slice(
-    source.indexOf("  const handleSend = useCallback"),
-    source.indexOf("  const executeBash = useCallback"),
+    source.indexOf("const handleSend = useCallback"),
+    source.indexOf("const executeBash = useCallback"),
   );
   const bashSource = source.slice(
-    source.indexOf("  const executeBash = useCallback"),
-    source.indexOf("  const handleAbort = useCallback"),
+    source.indexOf("const executeBash = useCallback"),
+    source.indexOf("const handleAbort = useCallback"),
   );
 
   // 发送提问与执行 shell 命令都走同一条提交处置，判定在 lib/transcript-follow.ts。
@@ -277,22 +285,34 @@ test("defers the post-load follow until the new transcript commits", () => {
 test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   // 单一写入点：跟随开关只由 setAutoFollow 写，状态不会和判定漂移。
   assert.match(source, /const setAutoFollow = useCallback\(\(following: boolean\) => \{\s*setAutoFollowPaused\(/);
-  assert.match(source, /const resumeAutoFollow = useCallback\(\(\) => \{\s*applyFollow\(\{ type: "resume" \}\);\s*\}, \[applyFollow\]\);/);
+  assert.match(
+    source,
+    /const resumeAutoFollow = useCallback\(\(\) => \{\s*applyFollow\(\{ type: "resume" \}\);\s*\}, \[applyFollow\]\);/,
+  );
   // 意图窗口的清理只在 applyFollow 里做，而且只跟着回底走：跳转的落点由抑制器挡住，
   // 不再借窗口。
   assert.equal(source.match(/userScrollIntentUntilRef\.current = 0/g)?.length, 1);
   assert.match(source, /if \(outcome\.scrollToEnd\) userScrollIntentUntilRef\.current = 0;/);
-  assert.match(source, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/);
+  assert.match(
+    source,
+    /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/,
+  );
   // Scrolling is the list's job: the hook hands the jump to the list handle
   // instead of touching the scroll element itself. 入口是必填的：漏接在 typecheck 暴露，
   // 不会出现状态写着「跟随中」却没有落点。
   assert.match(source, /scrollTranscriptToEnd: \(behavior: ScrollBehavior\) => void;/);
-  assert.match(source, /const scrollToBottom = useCallback\(\(behavior: ScrollBehavior = "smooth"\) => \{\s*scrollTranscriptToEndRef\.current\(behavior\);\s*\}, \[\]\);/);
+  assert.match(
+    source,
+    /const scrollToBottom = useCallback\(\(behavior: ScrollBehavior = "smooth"\) => \{\s*scrollTranscriptToEndRef\.current\(behavior\);\s*\}, \[\]\);/,
+  );
   assert.doesNotMatch(source, /scrollTranscriptToEndRef\.current\?\./);
   assert.doesNotMatch(source, /scrollIntoView/);
   assert.doesNotMatch(source, /container\.scrollTo\(/);
 
-  assert.match(chatWindowSource, /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/);
+  assert.match(
+    chatWindowSource,
+    /autoFollowPaused, resumeAutoFollow, pauseAutoFollow, holdFollowObservation, releaseFollowObservation,/,
+  );
   // 按钮有两个来源：跟随暂停，或停稳帧实测列表不在底部。前者管用户上滚与跳转，后者
   // 让「跟随开着但列表没跟上」时也留一个恢复入口。
   assert.match(chatWindowSource, /\{\(autoFollowPaused \|\| !transcriptAtBottom\) && \(/);
@@ -309,18 +329,24 @@ test("exposes a paused-follow flag and a jump-to-bottom action", () => {
   assert.match(chatWindowSource, /onClick=\{resumeAutoFollow\}/);
 });
 
-test("renders the transcript with omp's hideThinkingBlock setting", () => {
-  const messageViewSource = readFileSync(new URL("../components/MessageView.tsx", import.meta.url), "utf8");
+test("renders the transcript with omp's hideThinkingBlock setting", async () => {
+  const messageViewSource = await readSourceFile(new URL("../components/MessageView.tsx", import.meta.url));
   assert.match(messageViewSource, /const \{ hideThinkingBlock \} = useDisplaySettings\(\)/);
-  assert.match(messageViewSource, /isHiddenAssistantBlock\(block, \{ isStreaming, hideThinking: hideThinkingBlock \}\)/);
+  assert.match(
+    messageViewSource,
+    /isHiddenAssistantBlock\(block, \{ isStreaming, hideThinking: hideThinkingBlock \}\)/,
+  );
 
   assert.match(chatWindowSource, /useSyncedDisplaySettings\(/);
-  assert.match(chatWindowSource, /displayOptions = useMemo<DisplayOptions>\(\(\) => \(\{ hideThinking: hideThinkingBlock \}\)/);
+  assert.match(
+    chatWindowSource,
+    /displayOptions = useMemo<DisplayOptions>\(\(\) => \(\{ hideThinking: hideThinkingBlock \}\)/,
+  );
   // Turn grouping has to agree with what MessageView renders, or a message
   // made only of thinking blocks leaves an empty row behind. The judgment
   // lives in lib/transcript-items.ts; the transcript only consumes its items
   // and hands its own display options to the builder.
-  const transcriptItemsSource = readFileSync(new URL("../lib/transcript-items.ts", import.meta.url), "utf8");
+  const transcriptItemsSource = await readSourceFile(new URL("../lib/transcript-items.ts", import.meta.url));
   assert.match(chatWindowSource, /buildTranscriptItems\(messages, entryIds, \{\s*displayOptions,/);
   assert.match(transcriptItemsSource, /hasDisplayableProcessMessage\(messages\[processIdx\], displayOptions\)/);
   assert.match(transcriptItemsSource, /splitFinalAssistantBlocks\(finalAssistant, displayOptions\)/);
@@ -344,32 +370,22 @@ test("/branch and /rewind reach the rewind plan through a normalized command nam
 
   const normalizeIndex = dispatchSource.search(/normalizeRewindCommand\(/);
   assert.ok(normalizeIndex >= 0, "the dispatch must call normalizeRewindCommand");
-  assert.ok(
-    normalizeIndex < switchMatch.index,
-    "the command name must be normalized before the switch",
-  );
+  assert.ok(normalizeIndex < switchMatch.index, "the command name must be normalized before the switch");
 
-  const assignedName = dispatchSource.match(
-    /const\s+([A-Za-z_$][\w$]*)\s*=\s*normalizeRewindCommand\(commandName\)/,
-  );
+  const assignedName = dispatchSource.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*normalizeRewindCommand\(commandName\)/);
   const routesNormalizedName =
-    /normalizeRewindCommand\(commandName\)/.test(switchSubject)
-    || (assignedName !== null
-      && switchSubject === assignedName[1]
-      && assignedName.index < switchMatch.index);
-  assert.ok(
-    routesNormalizedName,
-    `the switch must dispatch on the normalized name, got: ${switchSubject}`,
-  );
+    /normalizeRewindCommand\(commandName\)/.test(switchSubject) ||
+    (assignedName !== null && switchSubject === assignedName[1] && assignedName.index < switchMatch.index);
+  assert.ok(routesNormalizedName, `the switch must dispatch on the normalized name, got: ${switchSubject}`);
 
   const rewindIndex = dispatchSource.indexOf('case "rewind":');
   assert.ok(rewindIndex >= 0, "/rewind must have a dispatch case");
 
   const nextCase = dispatchSource.indexOf('case "', rewindIndex + 'case "rewind":'.length);
   const defaultCase = dispatchSource.indexOf("default:", rewindIndex);
-  const regionEnd = [nextCase, defaultCase]
-    .filter((index) => index >= 0)
-    .sort((left, right) => left - right)[0] ?? dispatchSource.length;
+  const regionEnd =
+    [nextCase, defaultCase].filter((index) => index >= 0).sort((left, right) => left - right)[0] ??
+    dispatchSource.length;
   const rewindRegion = dispatchSource.slice(rewindIndex, regionEnd);
 
   assert.match(rewindRegion, /planRewindCommand\(\{/);
@@ -383,17 +399,7 @@ test("/branch and /rewind reach the rewind plan through a normalized command nam
 
   // Every other command keeps its own case and is never rewritten by the alias.
   const caseLabels = [...dispatchSource.matchAll(/case "([^"]+)":/g)].map((match) => match[1]);
-  assert.deepEqual(caseLabels, [
-    "compact",
-    "reload",
-    "name",
-    "session",
-    "copy",
-    "fork",
-    "goal",
-    "rewind",
-    "handoff",
-  ]);
+  assert.deepEqual(caseLabels, ["compact", "reload", "name", "session", "copy", "fork", "goal", "rewind", "handoff"]);
   assert.doesNotMatch(dispatchSource, /case "branch":/);
   assert.doesNotMatch(dispatchSource, /Cannot rewind while the session is busy/);
 });
