@@ -37,10 +37,7 @@ function uncoveredFunctionFinding(path: string, metrics: FileCoverage): Finding 
 }
 
 /** 单个改动文件的判定；通过时返回 null。 */
-function evaluateFile(
-  file: ChangedFile,
-  coverage: ReadonlyMap<string, FileCoverage>,
-): Finding | null {
+function evaluateFile(file: ChangedFile, coverage: ReadonlyMap<string, FileCoverage>): Finding | null {
   const metrics = coverage.get(file.path);
   if (!metrics) return unloadedFinding(file);
   if (file.status !== "added") return null;

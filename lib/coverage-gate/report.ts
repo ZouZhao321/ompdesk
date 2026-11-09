@@ -40,9 +40,8 @@ function renderChangedFile(file: ChangedFile, coverage: ReadonlyMap<string, File
     ? `行 ${ratio(metrics.linesHit, metrics.linesFound)} · 函数 ${ratio(metrics.functionsHit, metrics.functionsFound)}`
     : "行 0/0（未加载） · 函数 0/0（未加载）";
   // 纯类型、常量表与样式的新增文件没有函数可调用，规则一不适用，如实标注。
-  const applicability = metrics && file.status === "added" && metrics.functionsFound === 0
-    ? " · 规则一不适用（零函数）"
-    : "";
+  const applicability =
+    metrics && file.status === "added" && metrics.functionsFound === 0 ? " · 规则一不适用（零函数）" : "";
   return `  ${label}  ${path} · ${detail}${applicability}`;
 }
 
@@ -90,9 +89,7 @@ export function renderReport(input: ReportInput): string {
 
   lines.push(
     "",
-    failed
-      ? `本次 ${input.findings.length} 条判定未通过，退出码非零。`
-      : "本步骤只报告，不阻断合并；退出码固定为 0。",
+    failed ? `本次 ${input.findings.length} 条判定未通过，退出码非零。` : "本步骤只报告，不阻断合并；退出码固定为 0。",
   );
   return lines.join("\n");
 }
