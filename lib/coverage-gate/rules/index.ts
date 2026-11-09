@@ -16,6 +16,8 @@ export interface RuleInput {
   managedFiles: readonly string[];
   /** 规则二的基准侧数据：分叉点覆盖率与两版函数结构。未接入时为 undefined。 */
   functionDelta?: FunctionDeltaData;
+  /** 测试文件的导入索引：被导入文件 → 被导入的符号名。未接入时跳过被动覆盖检查。 */
+  testImports?: ReadonlyMap<string, ReadonlySet<string>>;
   /** 规则三的输入：两侧导出对比、生产引用索引与基线条目。 */
   exportUsage: ExportAnalysis;
 }

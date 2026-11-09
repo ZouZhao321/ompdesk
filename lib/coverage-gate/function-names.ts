@@ -100,6 +100,60 @@ export function collectFunctionSurface(sourceText: string, fileName: string): Fu
   return surface;
 }
 
+function hasPlainExportModifier(node: ts.Node): boolean {
+  const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+  if (!modifiers) return false;
+  const kinds = modifiers.map((modifier) => modifier.kind);
+  return kinds.includes(ts.SyntaxKind.ExportKeyword) && !kinds.includes(ts.SyntaxKind.DefaultKeyword);
+}
+
+/**
+ * 本文件对外暴露的函数名：导出名 → 本文件里的函数名。别名导出按导出名记，
+ * `export { foo as bar }` 得到 `bar → foo`。
+ *
+ * 默认导出没有可对照的符号名（`import x from` 不写出符号），不参与被动覆盖检查，
+ * 这里不收录。
+ */
+export function collectNamedFunctionExports(sourceText: string, fileName: string): Record<string, string> {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+    scriptKindOf(fileName),
+  );
+  const defined = collectFunctionSurface(sourceText, fileName).defined;
+  // 导出名来自源码，`constructor`、`__proto__` 这类名字会撞上原型链，用无原型对象。
+  const exported: Record<string, string> = Object.create(null);
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name && hasPlainExportModifier(node)) {
+      exported[node.name.text] = node.name.text;
+    } else if (ts.isVariableStatement(node) && hasPlainExportModifier(node)) {
+      for (const declaration of node.declarationList.declarations) {
+        if (!isFunctionLikeValue(declaration.initializer)) continue;
+        const name = nameText(declaration.name);
+        if (name !== null) exported[name] = name;
+      }
+    } else if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier === undefined &&
+      node.exportClause !== undefined &&
+      ts.isNamedExports(node.exportClause)
+    ) {
+      for (const element of node.exportClause.elements) {
+        const local = (element.propertyName ?? element.name).text;
+        if (defined.has(local)) exported[element.name.text] = local;
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return exported;
+}
+
 /** 名字集合的差集，按名称排序，输出稳定。 */
 export function diffFunctionSurface(base: FunctionSurface, head: FunctionSurface): FunctionSurfaceDiff {
   const added = [...head.defined].filter((name) => !base.defined.has(name)).sort();
