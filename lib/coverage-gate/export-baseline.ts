@@ -58,9 +58,8 @@ export function parseBaseline(text: string): BaselineEntry[] {
 /** 序列化基线：条目按路径、名字、种类排序，同一份输入永远产出同一份文件。 */
 export function baselineJson(entries: readonly BaselineEntry[]): string {
   const symbols = [...entries].sort(
-    (left, right) => left.path.localeCompare(right.path)
-      || left.name.localeCompare(right.name)
-      || left.kind.localeCompare(right.kind),
+    (left, right) =>
+      left.path.localeCompare(right.path) || left.name.localeCompare(right.name) || left.kind.localeCompare(right.kind),
   );
   return `${JSON.stringify({ symbols }, null, 2)}\n`;
 }
@@ -96,9 +95,7 @@ export async function generateBaseline(input: {
       if (text !== null) texts.set(filePath, text);
     }
   };
-  await Promise.all(
-    Array.from({ length: Math.min(READ_CONCURRENCY, targets.length) }, () => read()),
-  );
+  await Promise.all(Array.from({ length: Math.min(READ_CONCURRENCY, targets.length) }, () => read()));
 
   const { references, exportsByFile } = scanSources(texts);
   const entries: BaselineEntry[] = [];
@@ -111,9 +108,8 @@ export async function generateBaseline(input: {
   }
 
   entries.sort(
-    (left, right) => left.path.localeCompare(right.path)
-      || left.name.localeCompare(right.name)
-      || left.kind.localeCompare(right.kind),
+    (left, right) =>
+      left.path.localeCompare(right.path) || left.name.localeCompare(right.name) || left.kind.localeCompare(right.kind),
   );
   return { entries, scannedFiles: texts.size };
 }

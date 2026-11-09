@@ -81,9 +81,7 @@ const EMPTY_SURFACE = { defined: new Set<string>(), reExported: new Set<string>(
  * 样本，不读真实仓库。
  */
 export function buildFunctionDelta(input: FunctionDeltaBuildInput): FunctionDeltaData {
-  const baseCoverage = input.baseCoverage.ok
-    ? input.baseCoverage.coverage
-    : new Map<string, FileCoverage>();
+  const baseCoverage = input.baseCoverage.ok ? input.baseCoverage.coverage : new Map<string, FileCoverage>();
   const managed = new Set(input.managedFiles ?? []);
   const renamedPrevious = new Set(
     input.changedFiles
@@ -104,9 +102,7 @@ export function buildFunctionDelta(input: FunctionDeltaBuildInput): FunctionDelt
   for (const file of input.changedFiles) {
     const pair = input.sources.get(file.path) ?? { base: null, head: null };
     const basePath = file.previousPath ?? file.path;
-    const headSurface = pair.head === null
-      ? EMPTY_SURFACE
-      : collectFunctionSurface(pair.head, file.path);
+    const headSurface = pair.head === null ? EMPTY_SURFACE : collectFunctionSurface(pair.head, file.path);
 
     if (file.status === "renamed" && file.previousPath !== undefined) {
       renames.push({
@@ -122,15 +118,11 @@ export function buildFunctionDelta(input: FunctionDeltaBuildInput): FunctionDelt
       continue;
     }
 
-    const baseSurface = pair.base === null
-      ? EMPTY_SURFACE
-      : collectFunctionSurface(pair.base, basePath);
+    const baseSurface = pair.base === null ? EMPTY_SURFACE : collectFunctionSurface(pair.base, basePath);
     const diff = diffFunctionSurface(baseSurface, headSurface);
     const baseMetrics = baseCoverage.get(basePath);
     const headMetrics = input.coverage.get(file.path);
-    const exportedNames = pair.head === null
-      ? {}
-      : collectNamedFunctionExports(pair.head, file.path);
+    const exportedNames = pair.head === null ? {} : collectNamedFunctionExports(pair.head, file.path);
     const addedExported = Object.keys(exportedNames)
       .filter((exported) => diff.added.includes(exportedNames[exported]))
       .sort();
@@ -160,20 +152,23 @@ export function buildFunctionDelta(input: FunctionDeltaBuildInput): FunctionDelt
     }
   }
 
-  const deleted = input.managedFiles === undefined
-    ? []
-    : [...baseCoverage.keys()]
-      .filter((path) => !managed.has(path) && !renamedPrevious.has(path) && isManagedSourceFile(path))
-      .flatMap((path) => {
-        const text = input.deletedSources?.get(path);
-        if (text === undefined) return [];
-        return [{ path, names: collectFunctionSurface(text, path).defined }];
-      });
+  const deleted =
+    input.managedFiles === undefined
+      ? []
+      : [...baseCoverage.keys()]
+          .filter((path) => !managed.has(path) && !renamedPrevious.has(path) && isManagedSourceFile(path))
+          .flatMap((path) => {
+            const text = input.deletedSources?.get(path);
+            if (text === undefined) return [];
+            return [{ path, names: collectFunctionSurface(text, path).defined }];
+          });
 
+  // 两侧都没有覆盖率记录时「净增量为零」平凡成立，那不是替换失真，而是这个文件从未被加载，
+  // 不能借此豁免本规则，否则未测文件里的替换会静默通过。
   const replacements = rows
-    .filter((row) => row.added.length > 0
-      && row.removed.length > 0
-      && row.headFound - row.baseFound === 0)
+    .filter(
+      (row) => row.added.length > 0 && row.removed.length > 0 && row.baseFound > 0 && row.headFound === row.baseFound,
+    )
     .map((row) => ({ path: row.file, added: row.added, removed: row.removed }));
 
   const distortion = analyzeDistortion({
@@ -204,43 +199,46 @@ function contrast(row: FunctionDeltaRow): string {
 }
 
 /** 新增的对外函数名必须被某个测试文件导入；内部辅助函数不在此列。 */
-function passiveCoverageFindings(
-  row: FunctionDeltaRow,
-  testImports: RuleInput["testImports"],
-): Finding[] {
+function passiveCoverageFindings(row: FunctionDeltaRow, testImports: RuleInput["testImports"]): Finding[] {
   if (row.addedExported.length === 0 || testImports === undefined) return [];
 
   const missing = row.addedExported.filter((name) => !isImportedByTest(testImports, row.file, name));
   if (missing.length === 0) return [];
 
   const imported = row.addedExported.length - missing.length;
-  return [{
-    rule: RULE_ID,
-    file: row.file,
-    numbers: `新增对外函数 ${row.addedExported.length} 个，测试导入 ${imported} 个`,
-    reason: `新增的对外函数名没有出现在任何测试文件的导入语句里：${missing.join("、")}`,
-    fix: "在测试文件里 import 这些符号并调用，或把它们改为模块内部函数",
-  }];
+  return [
+    {
+      rule: RULE_ID,
+      file: row.file,
+      numbers: `新增对外函数 ${row.addedExported.length} 个，测试导入 ${imported} 个`,
+      reason: `新增的对外函数名没有出现在任何测试文件的导入语句里：${missing.join("、")}`,
+      fix: "在测试文件里 import 这些符号并调用，或把它们改为模块内部函数",
+    },
+  ];
 }
 
 function judgeRow(row: FunctionDeltaRow, testImports: RuleInput["testImports"]): Finding[] {
   if (row.headSourceMissing) {
-    return [{
-      rule: RULE_ID,
-      file: row.file,
-      numbers: contrast(row),
-      reason: "本次版本的文件正文读取失败，函数结构无法比对",
-      fix: "确认文件仍在工作区且可读，然后重跑覆盖率门禁",
-    }];
+    return [
+      {
+        rule: RULE_ID,
+        file: row.file,
+        numbers: contrast(row),
+        reason: "本次版本的文件正文读取失败，函数结构无法比对",
+        fix: "确认文件仍在工作区且可读，然后重跑覆盖率门禁",
+      },
+    ];
   }
   if (row.baseSourceMissing) {
-    return [{
-      rule: RULE_ID,
-      file: row.file,
-      numbers: contrast(row),
-      reason: "分叉点版本的文件正文读取失败，基准缺失，属流水线问题",
-      fix: "确认检出包含分叉点提交（fetch-depth: 0），然后重跑覆盖率门禁",
-    }];
+    return [
+      {
+        rule: RULE_ID,
+        file: row.file,
+        numbers: contrast(row),
+        reason: "分叉点版本的文件正文读取失败，基准缺失，属流水线问题",
+        fix: "确认检出包含分叉点提交（fetch-depth: 0），然后重跑覆盖率门禁",
+      },
+    ];
   }
   // 结构改造后这一行的函数增量不代表新增代码是否被测，转由失真处理的说明承担。
   if (row.exemptReason !== undefined) return [];
@@ -254,12 +252,14 @@ function judgeRow(row: FunctionDeltaRow, testImports: RuleInput["testImports"]):
       rule: RULE_ID,
       file: row.file,
       numbers: `${contrast(row)}，函数总数减少 ${-foundDelta}`,
-      reason: row.removed.length > 0
-        ? `函数总数减少，删除的函数与测试不再对应：${row.removed.join("、")}`
-        : "函数总数减少，但两版结构里没有删除的函数名，覆盖率计数与结构不一致",
-      fix: row.removed.length > 0
-        ? "把删除函数的测试一并移除，或在豁免清单登记本次删除"
-        : "确认该文件的加载路径是否变化，计数与结构不一致时按流水线问题排查",
+      reason:
+        row.removed.length > 0
+          ? `函数总数减少，删除的函数与测试不再对应：${row.removed.join("、")}`
+          : "函数总数减少，但两版结构里没有删除的函数名，覆盖率计数与结构不一致",
+      fix:
+        row.removed.length > 0
+          ? "把删除函数的测试一并移除，或在豁免清单登记本次删除"
+          : "确认该文件的加载路径是否变化，计数与结构不一致时按流水线问题排查",
     });
   }
 
@@ -268,12 +268,14 @@ function judgeRow(row: FunctionDeltaRow, testImports: RuleInput["testImports"]):
       rule: RULE_ID,
       file: row.file,
       numbers: `${contrast(row)}，新增 ${row.added.length} 个函数，被调用数增加 ${hitDelta}`,
-      reason: row.added.length > 0
-        ? `新增函数的被调用数没有同步增加，需要至少 ${row.added.length} 个，实际 ${hitDelta} 个：${row.added.join("、")}`
-        : "本次改动没有新增函数，但函数被调用数相对分叉点减少，减少的调用没有被补回",
-      fix: row.added.length > 0
-        ? "为新增函数补测试，或把未被使用的函数移出本次改动"
-        : "确认改动是否让原有函数不再被测试调用，补回相应测试",
+      reason:
+        row.added.length > 0
+          ? `新增函数的被调用数没有同步增加，需要至少 ${row.added.length} 个，实际 ${hitDelta} 个：${row.added.join("、")}`
+          : "本次改动没有新增函数，但函数被调用数相对分叉点减少，减少的调用没有被补回",
+      fix:
+        row.added.length > 0
+          ? "为新增函数补测试，或把未被使用的函数移出本次改动"
+          : "确认改动是否让原有函数不再被测试调用，补回相应测试",
     });
   }
 
@@ -306,22 +308,26 @@ export const functionDeltaRule: CoverageRule = {
     if (!data) {
       // 只有新增文件时函数增量无从比较，规则一已经覆盖它们。
       if (input.changedFiles.every((file) => file.status === "added")) return [];
-      return [{
-        rule: RULE_ID,
-        file: "（基准覆盖率）",
-        numbers: "改动文件未取得基准数据",
-        reason: "规则二没有拿到分叉点的覆盖率与文件正文，无法判定，属流水线问题",
-        fix: "确认覆盖率门禁接入了基准数据获取后再重跑",
-      }];
+      return [
+        {
+          rule: RULE_ID,
+          file: "（基准覆盖率）",
+          numbers: "改动文件未取得基准数据",
+          reason: "规则二没有拿到分叉点的覆盖率与文件正文，无法判定，属流水线问题",
+          fix: "确认覆盖率门禁接入了基准数据获取后再重跑",
+        },
+      ];
     }
     if (!data.baseCoverage.ok) {
-      return [{
-        rule: RULE_ID,
-        file: "（基准覆盖率）",
-        numbers: `分叉点 ${data.mergeBase.slice(0, 7)} 的基准运行未产出覆盖率`,
-        reason: `基准运行失败，属流水线问题：${data.baseCoverage.detail}`,
-        fix: "修复分叉点工作副本或测试命令后重跑；基准缺失不能当作通过",
-      }];
+      return [
+        {
+          rule: RULE_ID,
+          file: "（基准覆盖率）",
+          numbers: `分叉点 ${data.mergeBase.slice(0, 7)} 的基准运行未产出覆盖率`,
+          reason: `基准运行失败，属流水线问题：${data.baseCoverage.detail}`,
+          fix: "修复分叉点工作副本或测试命令后重跑；基准缺失不能当作通过",
+        },
+      ];
     }
 
     const findings: Finding[] = [];

@@ -41,20 +41,14 @@ function nameText(name: ts.PropertyName | ts.BindingName | undefined): string | 
 }
 
 function isFunctionLikeValue(node: ts.Node | undefined): boolean {
-  return (
-    node !== undefined
-    && (ts.isArrowFunction(node) || ts.isFunctionExpression(node))
-  );
+  return node !== undefined && (ts.isArrowFunction(node) || ts.isFunctionExpression(node));
 }
 
 /**
  * 收集文件里的函数名。覆盖函数声明、赋给变量的箭头函数与函数表达式、对象方法与类方法
  * 的简写、访问器、类字段上的箭头函数，以及重导出。
  */
-export function collectFunctionSurface(
-  sourceText: string,
-  fileName: string,
-): FunctionSurface {
+export function collectFunctionSurface(sourceText: string, fileName: string): FunctionSurface {
   const sourceFile = parseSource(fileName, sourceText);
   const surface: FunctionSurface = { defined: new Set(), reExported: new Set() };
 
@@ -62,16 +56,12 @@ export function collectFunctionSurface(
     if (ts.isFunctionDeclaration(node)) {
       // 匿名函数声明只可能是 `export default function () {}`。
       surface.defined.add(nameText(node.name) ?? "default");
-    } else if (
-      ts.isMethodDeclaration(node)
-      || ts.isGetAccessorDeclaration(node)
-      || ts.isSetAccessorDeclaration(node)
-    ) {
+    } else if (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) {
       const name = nameText(node.name);
       if (name !== null) surface.defined.add(name);
     } else if (
-      (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node))
-      && isFunctionLikeValue(node.initializer)
+      (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) &&
+      isFunctionLikeValue(node.initializer)
     ) {
       const name = nameText(node.name);
       if (name !== null) surface.defined.add(name);
@@ -113,10 +103,7 @@ function hasPlainExportModifier(node: ts.Node): boolean {
  * 默认导出没有可对照的符号名（`import x from` 不写出符号），不参与被动覆盖检查，
  * 这里不收录。
  */
-export function collectNamedFunctionExports(
-  sourceText: string,
-  fileName: string,
-): Record<string, string> {
+export function collectNamedFunctionExports(sourceText: string, fileName: string): Record<string, string> {
   const sourceFile = parseSource(fileName, sourceText);
   const defined = collectFunctionSurface(sourceText, fileName).defined;
   // 导出名来自源码，`constructor`、`__proto__` 这类名字会撞上原型链，用无原型对象。
@@ -132,10 +119,10 @@ export function collectNamedFunctionExports(
         if (name !== null) exported[name] = name;
       }
     } else if (
-      ts.isExportDeclaration(node)
-      && node.moduleSpecifier === undefined
-      && node.exportClause !== undefined
-      && ts.isNamedExports(node.exportClause)
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier === undefined &&
+      node.exportClause !== undefined &&
+      ts.isNamedExports(node.exportClause)
     ) {
       for (const element of node.exportClause.elements) {
         const local = (element.propertyName ?? element.name).text;
@@ -151,10 +138,7 @@ export function collectNamedFunctionExports(
 }
 
 /** 名字集合的差集，按名称排序，输出稳定。 */
-export function diffFunctionSurface(
-  base: FunctionSurface,
-  head: FunctionSurface,
-): FunctionSurfaceDiff {
+export function diffFunctionSurface(base: FunctionSurface, head: FunctionSurface): FunctionSurfaceDiff {
   const added = [...head.defined].filter((name) => !base.defined.has(name)).sort();
   const removed = [...base.defined].filter((name) => !head.defined.has(name)).sort();
   const addedReExports = [...head.reExported]

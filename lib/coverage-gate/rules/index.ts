@@ -53,9 +53,6 @@ export const COVERAGE_RULES: readonly CoverageRule[] = [ruleNewFiles, functionDe
 export const EXPORT_RULES: readonly CoverageRule[] = [ruleExports];
 
 /** 依次执行规则并汇总结果。`rules` 可注入，供测试使用固定样本。 */
-export function evaluateRules(
-  input: RuleInput,
-  rules: readonly CoverageRule[] = RULES,
-): Finding[] {
+export function evaluateRules(input: RuleInput, rules: readonly CoverageRule[] = RULES): Finding[] {
   return rules.flatMap((rule) => rule.evaluate(input));
 }

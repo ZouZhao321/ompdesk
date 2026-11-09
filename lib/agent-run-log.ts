@@ -24,14 +24,7 @@ export type AgentRunCommand = "steer" | "follow_up" | "abort" | "fork" | "compac
  * stopReason 来自 SDK 的 assistant message；`fork` 表示运行被会话 fork 打断，
  * `unknown` 表示 SDK 没有给出原因。
  */
-export type AgentRunStopReason =
-  | "stop"
-  | "length"
-  | "toolUse"
-  | "error"
-  | "aborted"
-  | "fork"
-  | "unknown";
+export type AgentRunStopReason = "stop" | "length" | "toolUse" | "error" | "aborted" | "fork" | "unknown";
 
 export const AGENT_RUN_START = "agent.run.start";
 export const AGENT_RUN_END = "agent.run.end";
@@ -275,9 +268,7 @@ function addTokens(target: TokenTotals, usage: TokenTotals): void {
  * 会话当前模型的角色：omp 每次切换模型都会追加一条 `model_change` 记录，
  * 最新一条的 role 就是驱动会话的角色。
  */
-export function resolveSessionModelRole(
-  entries: ReadonlyArray<{ type?: string; role?: string }>,
-): string {
+export function resolveSessionModelRole(entries: ReadonlyArray<{ type?: string; role?: string }>): string {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (entry?.type !== "model_change") continue;
@@ -405,20 +396,22 @@ export class AgentRunTracker {
   /** 记录一次命令结果，不包含命令文本、参数或消息内容。 */
   command(name: AgentRunCommand, result: AgentRunCommandResult): AgentRunRecord[] {
     const sessionId = this.active?.sessionId ?? this.sessionIdOf?.();
-    return [{
-      level: result.ok ? "info" : "warn",
-      message: AGENT_RUN_COMMAND,
-      fields: definedFields({
-        sessionId,
-        runId: this.active?.runId,
-        command: name,
-        ok: result.ok,
-        durationMs: Math.max(0, Math.round(result.durationMs)),
-        cancelled: result.cancelled,
-        newSessionId: result.newSessionId,
-        error: result.error,
-      }),
-    }];
+    return [
+      {
+        level: result.ok ? "info" : "warn",
+        message: AGENT_RUN_COMMAND,
+        fields: definedFields({
+          sessionId,
+          runId: this.active?.runId,
+          command: name,
+          ok: result.ok,
+          durationMs: Math.max(0, Math.round(result.durationMs)),
+          cancelled: result.cancelled,
+          newSessionId: result.newSessionId,
+          error: result.error,
+        }),
+      },
+    ];
   }
 
   private startTool(event: AgentRunEventLike): AgentRunRecord[] {
@@ -440,20 +433,22 @@ export class AgentRunTracker {
 
     const outputBytes = readToolOutputBytes(event.result);
     const isError = event.isError === true;
-    return [{
-      level: isError ? "warn" : "info",
-      message: AGENT_TOOL_END,
-      fields: definedFields({
-        sessionId: started?.sessionId ?? this.active?.sessionId ?? this.sessionIdOf?.(),
-        runId: started?.runId ?? this.active?.runId,
-        toolCallId,
-        toolName: readText(event.toolName) ?? started?.toolName ?? "unknown",
-        durationMs: started ? Math.max(0, Math.round(this.now() - started.startedAt)) : undefined,
-        isError,
-        outputBytes,
-        outputSize: outputBytes === undefined ? undefined : outputSize(outputBytes),
-      }),
-    }];
+    return [
+      {
+        level: isError ? "warn" : "info",
+        message: AGENT_TOOL_END,
+        fields: definedFields({
+          sessionId: started?.sessionId ?? this.active?.sessionId ?? this.sessionIdOf?.(),
+          runId: started?.runId ?? this.active?.runId,
+          toolCallId,
+          toolName: readText(event.toolName) ?? started?.toolName ?? "unknown",
+          durationMs: started ? Math.max(0, Math.round(this.now() - started.startedAt)) : undefined,
+          isError,
+          outputBytes,
+          outputSize: outputBytes === undefined ? undefined : outputSize(outputBytes),
+        }),
+      },
+    ];
   }
 
   private startCompaction(event: AgentRunEventLike): AgentRunRecord[] {
@@ -467,16 +462,18 @@ export class AgentRunTracker {
       reason,
       action,
     };
-    return [{
-      level: "info",
-      message: AGENT_COMPACTION_START,
-      fields: definedFields({
-        sessionId,
-        runId: this.compaction.runId,
-        reason,
-        action,
-      }),
-    }];
+    return [
+      {
+        level: "info",
+        message: AGENT_COMPACTION_START,
+        fields: definedFields({
+          sessionId,
+          runId: this.compaction.runId,
+          reason,
+          action,
+        }),
+      },
+    ];
   }
 
   private endCompaction(event: AgentRunEventLike): AgentRunRecord[] {
@@ -500,23 +497,25 @@ export class AgentRunTracker {
       tokensAfter = this.contextTokensOf?.();
     }
 
-    return [{
-      level: errorMessage !== undefined ? "error" : aborted || skipped ? "warn" : "info",
-      message: AGENT_COMPACTION_END,
-      fields: definedFields({
-        sessionId: started?.sessionId ?? this.active?.sessionId ?? this.sessionIdOf?.(),
-        runId: started?.runId ?? this.active?.runId,
-        reason: readText(event.reason) ?? started?.reason,
-        action: readText(event.action) ?? started?.action,
-        durationMs: started ? Math.max(0, Math.round(this.now() - started.startedAt)) : undefined,
-        tokensBefore,
-        tokensAfter,
-        aborted: event.aborted === undefined ? undefined : aborted,
-        skipped: event.skipped === undefined ? undefined : skipped,
-        willRetry: event.willRetry,
-        errorMessage,
-      }),
-    }];
+    return [
+      {
+        level: errorMessage !== undefined ? "error" : aborted || skipped ? "warn" : "info",
+        message: AGENT_COMPACTION_END,
+        fields: definedFields({
+          sessionId: started?.sessionId ?? this.active?.sessionId ?? this.sessionIdOf?.(),
+          runId: started?.runId ?? this.active?.runId,
+          reason: readText(event.reason) ?? started?.reason,
+          action: readText(event.action) ?? started?.action,
+          durationMs: started ? Math.max(0, Math.round(this.now() - started.startedAt)) : undefined,
+          tokensBefore,
+          tokensAfter,
+          aborted: event.aborted === undefined ? undefined : aborted,
+          skipped: event.skipped === undefined ? undefined : skipped,
+          willRetry: event.willRetry,
+          errorMessage,
+        }),
+      },
+    ];
   }
 
   /** 运行结束时仍没有结束事件的工具：写一条有上限的警告，不伪造成功结果。 */
@@ -525,17 +524,19 @@ export class AgentRunTracker {
     const openTools = [...this.tools.values()];
     this.tools.clear();
     const toolNames = openTools.slice(0, MAX_INCOMPLETE_TOOL_NAMES).map((tool) => tool.toolName);
-    return [{
-      level: "warn",
-      message: AGENT_TOOL_INCOMPLETE,
-      fields: definedFields({
-        sessionId: run.sessionId,
-        runId: run.runId,
-        count: openTools.length,
-        toolNames,
-        omitted: openTools.length - toolNames.length || undefined,
-      }),
-    }];
+    return [
+      {
+        level: "warn",
+        message: AGENT_TOOL_INCOMPLETE,
+        fields: definedFields({
+          sessionId: run.sessionId,
+          runId: run.runId,
+          count: openTools.length,
+          toolNames,
+          omitted: openTools.length - toolNames.length || undefined,
+        }),
+      },
+    ];
   }
 
   private applySummary(run: ActiveRun, summary: TurnSummary, accumulateUsage: boolean): void {
@@ -557,33 +558,33 @@ export class AgentRunTracker {
     const durationMs = Math.max(0, Math.round(this.now() - run.startedAt));
     const tokens = run.tokens;
 
-    const records: AgentRunRecord[] = [{
-      level: endLevel(stopReason),
-      message: AGENT_RUN_END,
-      fields: definedFields({
-        sessionId: run.sessionId,
-        runId: run.runId,
-        provider: run.provider ?? run.start.provider,
-        model: run.model ?? run.start.model,
-        role: run.start.role,
-        thinkingLevel: run.start.thinkingLevel,
-        configuredThinkingLevel: run.start.configuredThinkingLevel,
-        durationMs,
-        stopReason,
-        turns: run.turns,
-        inputTokens: tokens?.input,
-        outputTokens: tokens?.output,
-        cacheReadTokens: tokens?.cacheRead,
-        cacheWriteTokens: tokens?.cacheWrite,
-        totalTokens: tokens
-          ? tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite
-          : undefined,
-        requestId: run.start.requestId,
-        failed: outcome.error === undefined ? undefined : true,
-        error: outcome.error,
-        ...extra,
-      }),
-    }];
+    const records: AgentRunRecord[] = [
+      {
+        level: endLevel(stopReason),
+        message: AGENT_RUN_END,
+        fields: definedFields({
+          sessionId: run.sessionId,
+          runId: run.runId,
+          provider: run.provider ?? run.start.provider,
+          model: run.model ?? run.start.model,
+          role: run.start.role,
+          thinkingLevel: run.start.thinkingLevel,
+          configuredThinkingLevel: run.start.configuredThinkingLevel,
+          durationMs,
+          stopReason,
+          turns: run.turns,
+          inputTokens: tokens?.input,
+          outputTokens: tokens?.output,
+          cacheReadTokens: tokens?.cacheRead,
+          cacheWriteTokens: tokens?.cacheWrite,
+          totalTokens: tokens ? tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite : undefined,
+          requestId: run.start.requestId,
+          failed: outcome.error === undefined ? undefined : true,
+          error: outcome.error,
+          ...extra,
+        }),
+      },
+    ];
     records.push(...this.drainOpenTools(run));
     return records;
   }

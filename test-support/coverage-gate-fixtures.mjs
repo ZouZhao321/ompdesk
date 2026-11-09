@@ -10,15 +10,17 @@ export const SAMPLE_MERGE_BASE = "0123456789abcdef0123456789abcdef01234567";
 /** `[路径, 函数命中, 函数总数, 行命中, 行总数]` 拼成一份 lcov。 */
 export function lcovOf(records) {
   return records
-    .map(([path, functionsHit, functionsFound, linesHit, linesFound]) => [
-      `SF:${path}`,
-      `FNF:${functionsFound}`,
-      `FNH:${functionsHit}`,
-      `DA:1,${linesHit > 0 ? 1 : 0}`,
-      `LF:${linesFound}`,
-      `LH:${linesHit}`,
-      "end_of_record",
-    ].join("\n"))
+    .map(([path, functionsHit, functionsFound, linesHit, linesFound]) =>
+      [
+        `SF:${path}`,
+        `FNF:${functionsFound}`,
+        `FNH:${functionsHit}`,
+        `DA:1,${linesHit > 0 ? 1 : 0}`,
+        `LF:${linesFound}`,
+        `LH:${linesHit}`,
+        "end_of_record",
+      ].join("\n"),
+    )
     .join("\n");
 }
 

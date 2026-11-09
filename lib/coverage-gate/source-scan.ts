@@ -44,13 +44,12 @@ function scriptKindOf(filePath: string): ts.ScriptKind {
   return SCRIPT_KIND_BY_EXTENSION[extension] ?? ts.ScriptKind.TS;
 }
 
-/** 把源码文本解析成语法树。不读磁盘、不做类型检查，只做结构扫描。 */
-export function parseSource(filePath: string, sourceText: string): ts.SourceFile {
-  return ts.createSourceFile(
-    filePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    false,
-    scriptKindOf(filePath),
-  );
+/**
+ * 把源码文本解析成语法树。不读磁盘、不做类型检查，只做结构扫描。
+ *
+ * `setParentNodes` 默认关掉：结构扫描只往下走。需要从节点反查上下文（动态导入要判断
+ * 结果被绑到了哪个变量）时打开，代价是每个节点多一个 `parent` 引用。
+ */
+export function parseSource(filePath: string, sourceText: string, setParentNodes = false): ts.SourceFile {
+  return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, setParentNodes, scriptKindOf(filePath));
 }

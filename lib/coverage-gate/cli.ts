@@ -1,11 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
-import {
-  generateBaseCoverage,
-  readSourcePair,
-  type BaseCoverageLoader,
-  type SourceReader,
-} from "./base-coverage";
+import { generateBaseCoverage, readSourcePair, type BaseCoverageLoader, type SourceReader } from "./base-coverage";
 import {
   applyExceptions,
   EXCEPTIONS_FILE,
@@ -14,7 +9,7 @@ import {
   type ExceptionResolution,
 } from "./exceptions";
 import { BASELINE_FILE } from "./export-baseline";
-import { collectExportUsage, type ExportAnalysis } from "./export-usage";
+import { collectExportUsage, exportUsageFailure, type ExportAnalysis } from "./export-usage";
 import {
   isManagedSourceFile,
   listChangedFiles,
@@ -130,6 +125,11 @@ function unavailable(detail: string): CoverageGateResult {
 /** 默认的读取实现：直接读磁盘，测试注入自己的读取函数。 */
 const readDiskText = (filePath: string): Promise<string> => readFile(filePath, "utf8");
 
+/** 目标文件不存在：可选文件与工作区里已删除的受管文件都会走到这里。 */
+function isMissingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
 /** 读仓库根下的一个可选文件：不存在时返回 null，其余读取错误照常抛出。 */
 async function readOptionalFile(
   root: string,
@@ -139,27 +139,32 @@ async function readOptionalFile(
   try {
     return await read(join(root, fileName));
   } catch (error) {
-    const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-    if (code === "ENOENT") return null;
+    if (isMissingFile(error)) return null;
     throw error;
   }
 }
 
 /**
- * 测试文件的导入索引。git 查询的桩没有 `testFiles` 时返回空索引，被动覆盖检查随之跳过。
+ * 测试文件的导入索引。git 查询的桩没有 `testFiles` 时返回 undefined，被动覆盖检查随之
+ * 跳过：空索引会被当成「没有任何测试导入过这个符号」，与桩缺少这项查询的语义相反。
  */
 async function collectTestImportIndex(
   git: GitQueries,
   root: string,
   readText: (filePath: string) => Promise<string>,
-): Promise<ReadonlyMap<string, ReadonlySet<string>>> {
-  if (!git.testFiles) return new Map();
+): Promise<ReadonlyMap<string, ReadonlySet<string>> | undefined> {
+  if (!git.testFiles) return undefined;
 
   const testFiles = await git.testFiles(root);
   const sources = new Map<string, string>();
   await Promise.all(
     testFiles.map(async (filePath) => {
-      sources.set(filePath, await readText(join(root, filePath)));
+      try {
+        sources.set(filePath, await readText(join(root, filePath)));
+      } catch (error) {
+        // git 索引里仍列着工作区已删除的文件，缺文件不该让整次门禁退化成「未能运行」。
+        if (!isMissingFile(error)) throw new Error(`${filePath}：${errorMessage(error)}`);
+      }
     }),
   );
   return collectTestImports(sources);
@@ -222,8 +227,8 @@ async function loadRepositoryFacts(
   } catch (error) {
     return {
       ok: false,
-      detail: `git 数据读取失败：${errorMessage(error)}。`
-        + "分叉点需要完整检出，actions/checkout 需设 fetch-depth: 0。",
+      detail:
+        `git 数据读取失败：${errorMessage(error)}。` + "分叉点需要完整检出，actions/checkout 需设 fetch-depth: 0。",
     };
   }
 
@@ -287,9 +292,8 @@ export async function runCoverageGate(
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
   const lcovPath = options.lcovPath ?? LCOV_PATH;
   const today = dependencies.today ?? localTodayIso();
-  const readExceptions = dependencies.readExceptions ?? ((root: string) => (
-    readOptionalFile(root, EXCEPTIONS_FILE, readDiskText)
-  ));
+  const readExceptions =
+    dependencies.readExceptions ?? ((root: string) => readOptionalFile(root, EXCEPTIONS_FILE, readDiskText));
 
   // 分析的计时从读产物开始，基准运行的耗时从 `generateBaseCoverage` 的结果里扣出来。
   const analysisStartedAt = Date.now();
@@ -299,8 +303,7 @@ export async function runCoverageGate(
     lcovText = await readText(lcovPath);
   } catch (error) {
     return unavailable(
-      `覆盖率产物缺失：${lcovPath}（${errorMessage(error)}）。`
-        + "先运行 bun run coverage:gate 生成 lcov。",
+      `覆盖率产物缺失：${lcovPath}（${errorMessage(error)}）。` + "先运行 bun run coverage:gate 生成 lcov。",
     );
   }
 
@@ -308,13 +311,13 @@ export async function runCoverageGate(
   const coverage = indexByPath(parsed.files);
   const totals = aggregateCoverage(parsed.files);
 
-  const loaded = await loadRepositoryFacts(git, options, dependencies, baseRef, (root) => (
-    resolveRepositoryExceptions(readExceptions, today, root)
-  ));
+  const loaded = await loadRepositoryFacts(git, options, dependencies, baseRef, (root) =>
+    resolveRepositoryExceptions(readExceptions, today, root),
+  );
   if (!loaded.ok) return unavailable(loaded.detail);
   const { root, mergeBase, changedFiles, managedFiles, deletedFiles, exceptions } = loaded.facts;
 
-  let testImports: ReadonlyMap<string, ReadonlySet<string>>;
+  let testImports: ReadonlyMap<string, ReadonlySet<string>> | undefined;
   try {
     testImports = await collectTestImportIndex(git, root, readText);
   } catch (error) {
@@ -327,39 +330,67 @@ export async function runCoverageGate(
   const hasAdded = changedFiles.some((file) => file.status === "added");
   let functionDelta: FunctionDeltaData | undefined;
   if (hasChanged || (hasAdded && deletedFiles.length > 0)) {
-    const baseCoverage = await (dependencies.baseCoverage ?? generateBaseCoverage)({
-      repositoryRoot: root,
+    // 基准数据获取与正文读取都可能直接抛异常，按阶段兜底，报告照常输出。
+    const pipelineFailure = (detail: string): FunctionDeltaData => ({
       mergeBase,
-      scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
+      baseCoverage: { ok: false, detail, durationMs: 0 },
+      rows: [],
+      notes: [],
+      lineFallbacks: [],
     });
-    const [pairs, deletedSources] = await Promise.all([
+    const [baseOutcome, sourcesOutcome, deletedOutcome] = await Promise.allSettled([
+      (dependencies.baseCoverage ?? generateBaseCoverage)({
+        repositoryRoot: root,
+        mergeBase,
+        scratchRoot: path.join(root, ".tmp", "coverage-gate-base"),
+      }),
       Promise.all(
         changedFiles.map(async (file) => {
-          const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
-          return [file.path, pair] as const;
+          try {
+            const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
+            return [file.path, pair] as const;
+          } catch (error) {
+            // 底层读取错误常常不带路径，这里补上，报告里能直接定位是哪个文件。
+            throw new Error(`${file.path}：${errorMessage(error)}`);
+          }
         }),
       ),
       readDeletedSources(deletedFiles, root, mergeBase, readBaseText),
     ]);
-    functionDelta = buildFunctionDelta({
-      changedFiles,
-      coverage,
-      baseCoverage,
-      mergeBase,
-      sources: new Map(pairs),
-      managedFiles,
-      deletedSources,
-    });
+    if (baseOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`基准覆盖率获取异常：${errorMessage(baseOutcome.reason)}`);
+    } else if (sourcesOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`两版正文读取异常：${errorMessage(sourcesOutcome.reason)}`);
+    } else if (deletedOutcome.status === "rejected") {
+      functionDelta = pipelineFailure(`已删除文件正文读取异常：${errorMessage(deletedOutcome.reason)}`);
+    } else {
+      try {
+        functionDelta = buildFunctionDelta({
+          changedFiles,
+          coverage,
+          baseCoverage: baseOutcome.value,
+          mergeBase,
+          sources: new Map(sourcesOutcome.value),
+          managedFiles,
+          deletedSources: deletedOutcome.value,
+        });
+      } catch (error) {
+        functionDelta = pipelineFailure(`函数结构比对异常：${errorMessage(error)}`);
+      }
+    }
   }
 
-  const findings = evaluateRules({
-    changedFiles,
-    coverage,
-    totals,
-    managedFiles,
-    functionDelta,
-    testImports,
-  }, COVERAGE_RULES);
+  const findings = evaluateRules(
+    {
+      changedFiles,
+      coverage,
+      totals,
+      managedFiles,
+      functionDelta,
+      testImports,
+    },
+    COVERAGE_RULES,
+  );
   // 有效豁免只放行登记的那一条规则与那一个文件；已到期条目不放行任何判定。
   const { blocking, exceptions: applied } = applyExceptions(findings, exceptions);
 
@@ -394,7 +425,8 @@ export async function runCoverageGate(
 /**
  * 静态引用检查：规则三。不需要覆盖率产物，因此排在测试之前；失败时后面的测试不再运行。
  *
- * 源码读不出来或基线文件读失败以外的错误都按「门禁没跑起来」处理，退出码 2。
+ * git 读不到分叉点时按「门禁没跑起来」处理，退出码 2；源码或基线读不出来则交给规则三
+ * 报成流水线问题，退出码 1——那时判定数据不全，需要人工看报告，而不是当成通过。
  */
 export async function runExportGate(
   options: Omit<CoverageGateOptions, "lcovPath" | "testDurationMs" | "testSummary">,
@@ -403,19 +435,17 @@ export async function runExportGate(
   const startedAt = Date.now();
   const readText = dependencies.readText ?? readDiskText;
   const readBaseText = dependencies.readBaseText ?? readFileAtRevision;
-  const readBaseline = dependencies.readBaseline ?? ((root: string) => (
-    readOptionalFile(root, BASELINE_FILE, readDiskText)
-  ));
+  const readBaseline =
+    dependencies.readBaseline ?? ((root: string) => readOptionalFile(root, BASELINE_FILE, readDiskText));
   const git = dependencies.git ?? GIT_QUERIES;
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
   const today = dependencies.today ?? localTodayIso();
-  const readExceptions = dependencies.readExceptions ?? ((root: string) => (
-    readOptionalFile(root, EXCEPTIONS_FILE, readDiskText)
-  ));
+  const readExceptions =
+    dependencies.readExceptions ?? ((root: string) => readOptionalFile(root, EXCEPTIONS_FILE, readDiskText));
 
-  const loaded = await loadRepositoryFacts(git, options, dependencies, baseRef, (root) => (
-    resolveRepositoryExceptions(readExceptions, today, root)
-  ));
+  const loaded = await loadRepositoryFacts(git, options, dependencies, baseRef, (root) =>
+    resolveRepositoryExceptions(readExceptions, today, root),
+  );
   if (!loaded.ok) return unavailable(loaded.detail);
   const { root, mergeBase, changedFiles, managedFiles, exceptions } = loaded.facts;
 
@@ -435,16 +465,20 @@ export async function runExportGate(
       baselineText,
     });
   } catch (error) {
-    return unavailable(`导出引用分析失败：${errorMessage(error)}。`);
+    // 分析整体失败也走规则：规则三把它报成流水线问题，报告里带上原因与定位信息。
+    exportUsage = exportUsageFailure(`导出引用分析失败：${errorMessage(error)}`);
   }
 
-  const findings = evaluateRules({
-    changedFiles,
-    coverage: new Map(),
-    totals: EMPTY_TOTALS,
-    managedFiles: referenceFiles,
-    exportUsage,
-  }, EXPORT_RULES);
+  const findings = evaluateRules(
+    {
+      changedFiles,
+      coverage: new Map(),
+      totals: EMPTY_TOTALS,
+      managedFiles: referenceFiles,
+      exportUsage,
+    },
+    EXPORT_RULES,
+  );
   const { blocking, exceptions: applied } = applyExceptions(findings, exceptions);
 
   const report = renderExportReport({

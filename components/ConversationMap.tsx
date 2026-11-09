@@ -6,6 +6,7 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import { CARD_HEIGHT, CARD_WIDTH, layoutTurnTree } from "@/lib/map-layout";
 import type { MapTurnDetail, MapTurnNode, SessionMapPayload } from "@/lib/map-types";
 import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 interface ConversationMapProps {
   sessionId: string;
@@ -88,6 +89,7 @@ export function ConversationMap({
   onOpenSession,
 }: ConversationMapProps) {
   const { t, locale } = useI18n();
+  const isMobile = useIsMobile();
   const [payload, setPayload] = useState<SessionMapPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +112,7 @@ export function ConversationMap({
   offsetsRef.current = offsets;
   const dragMovedRef = useRef(false);
   const fittedPayloadRef = useRef<SessionMapPayload | null>(null);
+  const cameraTouchedRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -213,12 +216,16 @@ export function ConversationMap({
     const margin = 32;
     const scale = Math.min(
       MAX_SCALE,
-      Math.max(MIN_SCALE, Math.min(
-        (viewport.clientWidth - margin * 2) / Math.max(1, layout.width),
-        (viewport.clientHeight - margin * 2) / Math.max(1, layout.height),
-        1,
-      )),
+      Math.max(
+        MIN_SCALE,
+        Math.min(
+          (viewport.clientWidth - margin * 2) / Math.max(1, layout.width),
+          (viewport.clientHeight - margin * 2) / Math.max(1, layout.height),
+          1,
+        ),
+      ),
     );
+    cameraTouchedRef.current = false;
     setCamera({
       x: (viewport.clientWidth - layout.width * scale) / 2,
       y: margin,
@@ -232,6 +239,18 @@ export function ConversationMap({
     fit();
   }, [payload, fit]);
 
+  // A phone that rotates or a panel that resizes must not leave the map off
+  // screen. Only refit while the user has not moved the camera themselves.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(() => {
+      if (!cameraTouchedRef.current) fit();
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [fit]);
+
   const selectedNode = selectedId ? nodesById.get(selectedId) : undefined;
 
   useEffect(() => {
@@ -244,7 +263,9 @@ export function ConversationMap({
     setDetail(null);
     void (async () => {
       try {
-        const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/map?turn=${encodeURIComponent(selectedId)}`);
+        const response = await fetch(
+          `/api/sessions/${encodeURIComponent(sessionId)}/map?turn=${encodeURIComponent(selectedId)}`,
+        );
         const body = (await response.json().catch(() => ({}))) as MapTurnDetail & { error?: string };
         if (!response.ok || body.error) throw new Error(body.error || `HTTP ${response.status}`);
         if (!cancelled) setDetail(body);
@@ -258,6 +279,22 @@ export function ConversationMap({
       cancelled = true;
     };
   }, [selectedId, sessionId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedId(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selectedId]);
+
+  /** 弹层内的 Esc 只关闭弹层：stopPropagation 挡住 window 上的全局 Esc（中止运行中的回答）。 */
+  const handleDialogKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    setSelectedId(null);
+  }, []);
 
   const onPointerDownBackground = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -276,6 +313,7 @@ export function ConversationMap({
   const onPointerMoveBackground = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const pan = panRef.current;
     if (pan && pan.pointerId === event.pointerId) {
+      cameraTouchedRef.current = true;
       setCamera((current) => ({
         ...current,
         x: pan.originX + (event.clientX - pan.startX),
@@ -287,33 +325,40 @@ export function ConversationMap({
     if (drag && drag.pointerId === event.pointerId) {
       const dx = (event.clientX - drag.startX) / cameraRef.current.scale;
       const dy = (event.clientY - drag.startY) / cameraRef.current.scale;
-      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragMovedRef.current = true;
+      if (!dragMovedRef.current) {
+        if (Math.abs(dx) <= 2 && Math.abs(dy) <= 2) return;
+        dragMovedRef.current = true;
+      }
       const next = { id: drag.id, x: Math.round(drag.originX + dx), y: Math.round(drag.originY + dy) };
       moveRef.current = next;
       setOffsets((current) => ({ ...current, [next.id]: { x: next.x, y: next.y } }));
     }
   }, []);
 
-  const endPointer = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const pan = panRef.current;
-    if (pan && pan.pointerId === event.pointerId) panRef.current = null;
-    const drag = dragRef.current;
-    if (drag && drag.pointerId === event.pointerId) {
-      dragRef.current = null;
-      const moved = moveRef.current;
-      moveRef.current = null;
-      if (moved) {
-        const next = { ...offsetsRef.current, [moved.id]: { x: moved.x, y: moved.y } };
-        setOffsets(next);
-        writeOffsets(sessionId, next);
+  const endPointer = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const pan = panRef.current;
+      if (pan && pan.pointerId === event.pointerId) panRef.current = null;
+      const drag = dragRef.current;
+      if (drag && drag.pointerId === event.pointerId) {
+        dragRef.current = null;
+        const moved = moveRef.current;
+        moveRef.current = null;
+        if (moved) {
+          const next = { ...offsetsRef.current, [moved.id]: { x: moved.x, y: moved.y } };
+          setOffsets(next);
+          writeOffsets(sessionId, next);
+        }
       }
-    }
-  }, [sessionId]);
+    },
+    [sessionId],
+  );
 
   const onWheel = useCallback((event: WheelEvent) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
     event.preventDefault();
+    cameraTouchedRef.current = true;
     const rect = viewport.getBoundingClientRect();
     const px = event.clientX - rect.left;
     const py = event.clientY - rect.top;
@@ -335,75 +380,90 @@ export function ConversationMap({
     return () => viewport.removeEventListener("wheel", onWheel);
   }, [onWheel]);
 
-  const startCardDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>, node: MapTurnNode) => {
-    if (event.button !== 0) return;
-    const position = positions.get(node.id);
-    if (!position) return;
-    event.stopPropagation();
-    dragMovedRef.current = false;
-    const offset = offsetsRef.current[node.id];
-    dragRef.current = {
-      id: node.id,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      // Offsets are relative to the laid-out card, not to the rendered position.
-      originX: offset?.x ?? 0,
-      originY: offset?.y ?? 0,
-    };
-    viewportRef.current?.setPointerCapture(event.pointerId);
-  }, [positions]);
+  const startCardDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>, node: MapTurnNode) => {
+      if (event.button !== 0) return;
+      const position = positions.get(node.id);
+      if (!position) return;
+      event.stopPropagation();
+      dragMovedRef.current = false;
+      const offset = offsetsRef.current[node.id];
+      dragRef.current = {
+        id: node.id,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        // Offsets are relative to the laid-out card, not to the rendered position.
+        originX: offset?.x ?? 0,
+        originY: offset?.y ?? 0,
+      };
+      // Capture on the card, not the viewport: a click only reaches the card when
+      // pointerup is owned by it. Capturing on the viewport would retarget the
+      // click and leave every card unselectable.
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [positions],
+  );
 
-  const handleFork = useCallback(async (node: MapTurnNode) => {
-    setActionError(null);
-    setForking(true);
-    try {
-      const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(node.sessionId, {
-        type: "fork",
-        entryId: node.forkEntryId,
-        includeEntry: true,
-      });
-      if (!result?.newSessionId) throw new Error(t("map.forkCancelled"));
-      onSessionForked(result.newSessionId);
-      onClose();
-    } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setForking(false);
-    }
-  }, [onClose, onSessionForked, t]);
+  const handleFork = useCallback(
+    async (node: MapTurnNode) => {
+      setActionError(null);
+      setForking(true);
+      try {
+        const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(node.sessionId, {
+          type: "fork",
+          entryId: node.forkEntryId,
+          includeEntry: true,
+        });
+        if (!result?.newSessionId) throw new Error(t("map.forkCancelled"));
+        onSessionForked(result.newSessionId);
+        onClose();
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setForking(false);
+      }
+    },
+    [onClose, onSessionForked, t],
+  );
 
-  const handleSwitch = useCallback(async (node: MapTurnNode) => {
-    setActionError(null);
-    const leafId = node.answerEntryId ?? node.id;
-    if (node.sessionId === sessionId) {
-      onSwitchLeaf(leafId);
-      onClose();
-      return;
-    }
-    try {
-      await sendAgentCommand(node.sessionId, { type: "navigate_tree", targetId: leafId });
-      const opened = await onOpenSession(node.sessionId);
-      if (!opened) {
-        setActionError(t("map.openFailed"));
+  const handleSwitch = useCallback(
+    async (node: MapTurnNode) => {
+      setActionError(null);
+      const leafId = node.answerEntryId ?? node.id;
+      if (node.sessionId === sessionId) {
+        onSwitchLeaf(leafId);
+        onClose();
         return;
       }
-      onClose();
-    } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [onClose, onOpenSession, onSwitchLeaf, sessionId, t]);
+      try {
+        await sendAgentCommand(node.sessionId, { type: "navigate_tree", targetId: leafId });
+        const opened = await onOpenSession(node.sessionId);
+        if (!opened) {
+          setActionError(t("map.openFailed"));
+          return;
+        }
+        onClose();
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : String(cause));
+      }
+    },
+    [onClose, onOpenSession, onSwitchLeaf, sessionId, t],
+  );
 
   const selectNode = useCallback((id: string) => {
     setSelectedId(id);
     setActionError(null);
   }, []);
 
-  const onCardKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>, node: MapTurnNode) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    selectNode(node.id);
-  }, [selectNode]);
+  const onCardKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>, node: MapTurnNode) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      selectNode(node.id);
+    },
+    [selectNode],
+  );
 
   const toggleCollapsed = useCallback((id: string) => {
     setCollapsed((current) => {
@@ -414,10 +474,7 @@ export function ConversationMap({
     });
   }, []);
 
-  const sessionCount = useMemo(
-    () => new Set((payload?.nodes ?? []).map((node) => node.sessionId)).size,
-    [payload],
-  );
+  const sessionCount = useMemo(() => new Set((payload?.nodes ?? []).map((node) => node.sessionId)).size, [payload]);
   const sessionColors = useMemo(() => {
     const colors = new Map<string, string>();
     const palette = ["var(--accent)", "#f59e0b", "#10b981", "#8b5cf6", "#ef4444", "#06b6d4"];
@@ -451,17 +508,36 @@ export function ConversationMap({
           background: "var(--bg-panel)",
         }}
       >
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{t("map.title")}</span>
-        {payload && (
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", flexShrink: 0 }}>
+          {t("map.title")}
+        </span>
+        {payload && !isMobile && (
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
             {t("map.stats", { turns: payload.nodes.length, sessions: sessionCount })}
           </span>
         )}
         <div style={{ flex: 1 }} />
-        <button type="button" style={toolbarButtonStyle} onClick={fit} title={t("map.fit")}>{t("map.fit")}</button>
-        <button type="button" style={toolbarButtonStyle} onClick={() => setCamera({ x: 24, y: 24, scale: 1 })}>{t("map.resetZoom")}</button>
-        <button type="button" style={toolbarButtonStyle} onClick={() => void load()}>{t("map.refresh")}</button>
-        <button type="button" style={{ ...toolbarButtonStyle, color: "var(--text)" }} onClick={onClose}>{t("map.close")}</button>
+        <button type="button" style={toolbarButtonStyle} onClick={fit} title={t("map.fit")}>
+          {t("map.fit")}
+        </button>
+        {!isMobile && (
+          <button
+            type="button"
+            style={toolbarButtonStyle}
+            onClick={() => {
+              cameraTouchedRef.current = true;
+              setCamera({ x: 24, y: 24, scale: 1 });
+            }}
+          >
+            {t("map.resetZoom")}
+          </button>
+        )}
+        <button type="button" style={toolbarButtonStyle} onClick={() => void load()}>
+          {t("map.refresh")}
+        </button>
+        <button type="button" style={{ ...toolbarButtonStyle, color: "var(--text)" }} onClick={onClose}>
+          {t("map.close")}
+        </button>
       </div>
 
       <div style={{ position: "relative", flex: 1, minHeight: 0, overflow: "hidden" }}>
@@ -492,7 +568,11 @@ export function ConversationMap({
               transformOrigin: "0 0",
             }}
           >
-            <svg width={layout.width} height={layout.height} style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}>
+            <svg
+              width={layout.width}
+              height={layout.height}
+              style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}
+            >
               {layout.edges.map((edge) => {
                 const from = positions.get(edge.from);
                 const to = positions.get(edge.to);
@@ -558,16 +638,52 @@ export function ConversationMap({
                     userSelect: "none",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: 999, background: sessionColors.get(node.sessionId) ?? "var(--accent)" }} />
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 10,
+                      color: "var(--text-dim)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 999,
+                        background: sessionColors.get(node.sessionId) ?? "var(--accent)",
+                      }}
+                    />
                     <span>#{node.turnIndex + 1}</span>
                     {node.toolCount > 0 && <span>{t("map.tools", { count: node.toolCount })}</span>}
                     <span style={{ marginLeft: "auto" }}>{formatTime(node.timestamp, locale)}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text)",
+                      lineHeight: 1.35,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
                     {node.preview || "—"}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-muted)",
+                      lineHeight: 1.35,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
                     {node.answerPreview || "—"}
                   </div>
                   {childCount > 0 && (childCount > 1 || isCollapsed) && (
@@ -575,8 +691,16 @@ export function ConversationMap({
                       type="button"
                       data-map-toggle
                       aria-expanded={!isCollapsed}
-                      aria-label={isCollapsed ? t("map.expandCount", { count: hiddenCount }) : t("map.collapseCount", { count: Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1) })}
-                      title={isCollapsed ? t("map.expandCount", { count: hiddenCount }) : t("map.collapseCount", { count: Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1) })}
+                      aria-label={
+                        isCollapsed
+                          ? t("map.expandCount", { count: hiddenCount })
+                          : t("map.collapseCount", { count: Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1) })
+                      }
+                      title={
+                        isCollapsed
+                          ? t("map.expandCount", { count: hiddenCount })
+                          : t("map.collapseCount", { count: Math.max(0, (subtreeSizes.get(node.id) ?? 1) - 1) })
+                      }
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -611,89 +735,229 @@ export function ConversationMap({
           )}
 
           {loading && (
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-muted)" }}>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 12,
+                color: "var(--text-muted)",
+              }}
+            >
               {t("map.loading")}
             </div>
           )}
 
           {!loading && error && (
-            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 12, color: "var(--danger)" }}>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                fontSize: 12,
+                color: "var(--danger)",
+              }}
+            >
               <span>{error}</span>
-              <button type="button" style={toolbarButtonStyle} onClick={() => void load()}>{t("map.retry")}</button>
+              <button type="button" style={toolbarButtonStyle} onClick={() => void load()}>
+                {t("map.retry")}
+              </button>
             </div>
           )}
 
           {!loading && !error && payload && payload.nodes.length === 0 && (
-            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 12, color: "var(--text-muted)" }}>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                fontSize: 12,
+                color: "var(--text-muted)",
+              }}
+            >
               <span>{t("map.empty")}</span>
-              <button type="button" style={toolbarButtonStyle} onClick={() => void load()}>{t("map.retry")}</button>
+              <button type="button" style={toolbarButtonStyle} onClick={() => void load()}>
+                {t("map.retry")}
+              </button>
             </div>
           )}
         </div>
 
         {selectedNode && (
           <div
-            data-map-panel
+            data-map-dialog
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) setSelectedId(null);
+            }}
             style={{
               position: "absolute",
-              top: 12,
-              right: 12,
-              bottom: 12,
-              width: "min(380px, calc(100% - 24px))",
+              inset: 0,
+              zIndex: 40,
               display: "flex",
-              flexDirection: "column",
-              border: "1px solid var(--border)",
-              borderRadius: 10,
-              background: "var(--bg-panel)",
-              boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-              overflow: "hidden",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+              background: "rgba(0, 0, 0, 0.38)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--text-dim)" }}>
-              <span>#{selectedNode.turnIndex + 1}</span>
-              {selectedNode.sessionTitle && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedNode.sessionTitle}</span>}
-              <button type="button" aria-label={t("map.close")} title={t("map.close")} style={{ ...toolbarButtonStyle, marginLeft: "auto" }} onClick={() => setSelectedId(null)}>×</button>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-              {detailLoading && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("map.loadingTurn")}</div>}
-              <div>
-                <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>{t("map.you")}</div>
-                <div style={{ fontSize: 12, color: "var(--text)", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.5 }}>
-                  {detail?.userText || selectedNode.preview || "—"}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>{t("map.assistant")}</div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.5 }}>
-                  {detail?.answerText || selectedNode.answerPreview || "—"}
-                </div>
-              </div>
-              {detail?.truncated && (
-                <div style={{ fontSize: 10, color: "var(--warning)" }}>{t("map.truncatedDetail")}</div>
-              )}
-              {detail && detail.tools.length > 0 && (
-                <div style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-                  {t("map.toolsUsed")}: {detail.tools.join(", ")}
-                </div>
-              )}
-            </div>
-            {actionError && (
-              <div style={{ padding: "6px 10px", fontSize: 11, color: "var(--danger)", borderTop: "1px solid var(--border)" }}>
-                {actionError}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid var(--border)" }}>
-              <button
-                type="button"
-                disabled={forking}
-                onClick={() => void handleFork(selectedNode)}
-                style={{ ...actionButtonStyle, background: "var(--accent)", borderColor: "var(--accent)", color: "#fff", opacity: forking ? 0.6 : 1 }}
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="map-turn-dialog-title"
+              onKeyDown={handleDialogKeyDown}
+              onPointerDown={(event) => event.stopPropagation()}
+              style={{
+                width: "min(720px, 100%)",
+                maxHeight: "100%",
+                display: "flex",
+                flexDirection: "column",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                background: "var(--bg-panel)",
+                boxShadow: "0 18px 60px rgba(0, 0, 0, 0.35)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 14px",
+                  borderBottom: "1px solid var(--border)",
+                }}
               >
-                {forking ? t("map.forking") : t("map.forkHere")}
-              </button>
-              <button type="button" style={actionButtonStyle} onClick={() => void handleSwitch(selectedNode)}>
-                {t("map.switchHere")}
-              </button>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: sessionColors.get(selectedNode.sessionId) ?? "var(--accent)",
+                    flexShrink: 0,
+                  }}
+                />
+                <span id="map-turn-dialog-title" style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
+                  {t("map.turnTitle", { index: selectedNode.turnIndex + 1 })}
+                </span>
+                {selectedNode.sessionTitle && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-dim)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {selectedNode.sessionTitle}
+                  </span>
+                )}
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>
+                  {formatTime(selectedNode.timestamp, locale)}
+                </span>
+                <button
+                  type="button"
+                  autoFocus
+                  aria-label={t("map.close")}
+                  title={t("map.close")}
+                  style={{ ...toolbarButtonStyle, marginLeft: 4 }}
+                  onClick={() => setSelectedId(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  padding: 14,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                }}
+              >
+                {detailLoading && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("map.loadingTurn")}</div>
+                )}
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>{t("map.you")}</div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "var(--text)",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {detail?.userText || selectedNode.preview || "—"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>{t("map.assistant")}</div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "var(--text-muted)",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {detail?.answerText || selectedNode.answerPreview || "—"}
+                  </div>
+                </div>
+                {detail?.truncated && (
+                  <div style={{ fontSize: 10, color: "var(--warning)" }}>{t("map.truncatedDetail")}</div>
+                )}
+                {detail && detail.tools.length > 0 && (
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                    {t("map.toolsUsed")}: {detail.tools.join(", ")}
+                  </div>
+                )}
+              </div>
+              {actionError && (
+                <div
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: 11,
+                    color: "var(--danger)",
+                    borderTop: "1px solid var(--border)",
+                  }}
+                >
+                  {actionError}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--border)" }}>
+                <button
+                  type="button"
+                  disabled={forking}
+                  onClick={() => void handleFork(selectedNode)}
+                  style={{
+                    ...actionButtonStyle,
+                    background: "var(--accent)",
+                    borderColor: "var(--accent)",
+                    color: "#fff",
+                    opacity: forking ? 0.6 : 1,
+                  }}
+                >
+                  {forking ? t("map.forking") : t("map.forkHere")}
+                </button>
+                <button type="button" style={actionButtonStyle} onClick={() => void handleSwitch(selectedNode)}>
+                  {t("map.switchHere")}
+                </button>
+              </div>
             </div>
           </div>
         )}

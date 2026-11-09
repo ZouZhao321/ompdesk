@@ -8,8 +8,5 @@ export const dynamic = "force-dynamic";
 export const GET = withRequestLog("/api/agent/running", getRouteHandler);
 
 async function getRouteHandler() {
-  return NextResponse.json(
-    getRpcSessionActivitySnapshot(),
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  return NextResponse.json(getRpcSessionActivitySnapshot(), { headers: { "Cache-Control": "no-store" } });
 }

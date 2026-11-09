@@ -67,9 +67,8 @@ function renderChangedFile(file: ChangedFile, coverage: ReadonlyMap<string, File
     ? `行 ${ratio(metrics.linesHit, metrics.linesFound)} · 函数 ${ratio(metrics.functionsHit, metrics.functionsFound)}`
     : "行 0/0（未加载） · 函数 0/0（未加载）";
   // 纯类型、常量表与样式的新增文件没有函数可调用，规则一不适用，如实标注。
-  const applicability = metrics && file.status === "added" && metrics.functionsFound === 0
-    ? " · 规则一不适用（零函数）"
-    : "";
+  const applicability =
+    metrics && file.status === "added" && metrics.functionsFound === 0 ? " · 规则一不适用（零函数）" : "";
   return `  ${label}  ${path} · ${detail}${applicability}`;
 }
 
@@ -83,9 +82,7 @@ function renderFunctionDeltaRow(row: FunctionDeltaRow): string {
     `被调用数 ${hitDelta >= 0 ? "+" : ""}${hitDelta}`,
   ];
   if (row.addedReExports.length > 0 || row.removedReExports.length > 0) {
-    parts.push(
-      `重导出 +${row.addedReExports.length}/-${row.removedReExports.length}`,
-    );
+    parts.push(`重导出 +${row.addedReExports.length}/-${row.removedReExports.length}`);
   }
   if (row.baseSourceMissing) parts.push("分叉点版本读不到");
   if (row.exemptReason !== undefined) parts.push(`规则二豁免：${row.exemptReason}`);
@@ -97,18 +94,10 @@ function renderFunctionDelta(data: FunctionDeltaData): string[] {
   if (!data.baseCoverage.ok) {
     // 基准缺失时两侧数字不可比，只说明原因，不打印半边为 0 的对照。
     lines.push(`  基准覆盖率不可用（流水线问题）：${data.baseCoverage.detail}`);
-    if (data.baseCoverage.cleanupProblem) {
-      lines.push(`  工作副本清理失败：${data.baseCoverage.cleanupProblem}`);
-    }
     return lines;
   }
 
-  lines.push(
-    `  基准覆盖率现场生成，耗时 ${(data.baseCoverage.durationMs / 1000).toFixed(1)} 秒`,
-  );
-  if (data.baseCoverage.cleanupProblem) {
-    lines.push(`  工作副本清理失败（不影响判定结果）：${data.baseCoverage.cleanupProblem}`);
-  }
+  lines.push(`  基准覆盖率现场生成，耗时 ${(data.baseCoverage.durationMs / 1000).toFixed(1)} 秒`);
   for (const row of data.rows) lines.push(renderFunctionDeltaRow(row));
   if (data.rows.length === 0) lines.push("  没有需要比对的改动文件");
 
@@ -142,17 +131,8 @@ function renderExceptionEntry(entry: ExceptionEntry, suffix = ""): string[] {
 
 function renderExceptions(resolution: ExceptionResolution): string[] {
   const lines = [`豁免清单（${EXCEPTIONS_FILE}，复核日期 ${resolution.today}）`];
-  if (!resolution.present) {
-    lines.push("  清单文件不存在，按没有登记处理。");
-    return lines;
-  }
-
-  if (
-    resolution.active.length === 0
-    && resolution.expired.length === 0
-    && resolution.problems.length === 0
-  ) {
-    lines.push("  没有登记豁免。");
+  if (resolution.active.length === 0 && resolution.expired.length === 0 && resolution.problems.length === 0) {
+    lines.push(resolution.present ? "  没有登记豁免。" : "  清单文件不存在，按没有登记处理。");
     return lines;
   }
 
@@ -199,9 +179,7 @@ function renderTimings(timings: ReportTimings): string[] {
     timings.testMs === undefined
       ? "  本次测试运行 —（报告不是由命令行入口产生）"
       : `  本次测试运行 ${seconds(timings.testMs)}`,
-    timings.baseSkipped
-      ? "  基准运行 —（本次没有需要比对的改动文件，跳过）"
-      : `  基准运行 ${seconds(timings.baseMs)}`,
+    timings.baseSkipped ? "  基准运行 —（本次没有需要比对的改动文件，跳过）" : `  基准运行 ${seconds(timings.baseMs)}`,
     `  分析 ${seconds(timings.analysisMs)}（不含基准运行）`,
     `  门禁合计 ${seconds(total)}，预算 ${seconds(GATE_BUDGET_MS)}`,
   ];
@@ -254,8 +232,8 @@ export function renderReport(input: ReportInput): string {
     "",
     "测试运行",
     input.testSummary
-      ? `  ${input.testSummary.passed} 个用例通过，${input.testSummary.skipped} 个跳过，`
-        + `${input.testSummary.failed} 个失败`
+      ? `  ${input.testSummary.passed} 个用例通过，${input.testSummary.skipped} 个跳过，` +
+          `${input.testSummary.failed} 个失败`
       : "  用例统计未取得（报告不是由命令行入口产生，或测试输出格式已变）",
     "  跳过的用例不计入覆盖率的分子与分母",
   );

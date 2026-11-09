@@ -56,10 +56,7 @@ function isTestFileSource(filePath: string): boolean {
  * 解析 `git diff --name-status -z -M` 的输出，并并入未跟踪文件。
  * `-z` 下记录形如 `M\0path\0` 或 `R100\0old\0new\0`；删除的记录跳过。
  */
-function parseChangedFiles(
-  diffOutput: string,
-  untrackedOutput = "",
-): ChangedFile[] {
+function parseChangedFiles(diffOutput: string, untrackedOutput = ""): ChangedFile[] {
   const changes = new Map<string, ChangedFile>();
   const tokens = diffOutput.split("\0");
 
@@ -72,12 +69,7 @@ function parseChangedFiles(
       const previousPath = tokens[index++];
       const path = tokens[index++];
       if (!path) continue;
-      changes.set(
-        path,
-        code === "R"
-          ? { path, status: "renamed", previousPath }
-          : { path, status: "added" },
-      );
+      changes.set(path, code === "R" ? { path, status: "renamed", previousPath } : { path, status: "added" });
       continue;
     }
 
@@ -129,10 +121,7 @@ export async function resolveMergeBase(cwd: string, baseRef: string): Promise<st
  * 改动清单：分叉点到工作区的差异，含新增、修改与改名后的路径；未跟踪文件按新增
  * 计入，本地未提交时报告不会漏掉新文件。清空的工作区里这一项为空。
  */
-export async function listChangedFiles(
-  cwd: string,
-  mergeBase: string,
-): Promise<ChangedFile[]> {
+export async function listChangedFiles(cwd: string, mergeBase: string): Promise<ChangedFile[]> {
   const [diffOutput, untrackedOutput] = await Promise.all([
     git(cwd, ["diff", "--name-status", "-z", "-M", mergeBase, "--"]),
     git(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]),
@@ -161,7 +150,10 @@ export async function listReferenceSourceFiles(cwd: string): Promise<string[]> {
 /** 某个提交里的全部文件，按路径排序。生成基线时按分叉点的文件清单扫描。 */
 export async function listFilesAtRevision(cwd: string, revision: string): Promise<string[]> {
   const output = await git(cwd, ["ls-tree", "-r", "--name-only", "-z", revision]);
-  return output.split("\0").filter((filePath) => filePath.length > 0).sort();
+  return output
+    .split("\0")
+    .filter((filePath) => filePath.length > 0)
+    .sort();
 }
 
 /**
@@ -170,15 +162,14 @@ export async function listFilesAtRevision(cwd: string, revision: string): Promis
  */
 export async function listDeletedFiles(cwd: string, mergeBase: string): Promise<string[]> {
   const output = await git(cwd, ["diff", "--name-only", "--diff-filter=D", "-z", mergeBase]);
-  return output.split("\0").filter((path) => path.length > 0 && isManagedSourceFile(path)).sort();
+  return output
+    .split("\0")
+    .filter((path) => path.length > 0 && isManagedSourceFile(path))
+    .sort();
 }
 
 /** 读取某个版本里的文件内容；文件在该版本不存在时返回 null（新增与删除的常规情形）。 */
-export async function readFileAtRevision(
-  cwd: string,
-  revision: string,
-  filePath: string,
-): Promise<string | null> {
+export async function readFileAtRevision(cwd: string, revision: string, filePath: string): Promise<string | null> {
   try {
     return await git(cwd, ["show", `${revision}:${filePath}`]);
   } catch {

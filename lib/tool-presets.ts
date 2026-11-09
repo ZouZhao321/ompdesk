@@ -10,9 +10,7 @@ export const PRESET_NONE: string[] = [];
 export const PRESET_DEFAULT: string[] = ["read", "bash", "edit", "write"];
 export const PRESET_FULL: string[] = ["read", "bash", "edit", "write", "grep", "glob"];
 
-const BUILTIN_TOOL_NAMES: Record<string, true> = Object.fromEntries(
-  PRESET_FULL.map((name) => [name, true]),
-);
+const BUILTIN_TOOL_NAMES: Record<string, true> = Object.fromEntries(PRESET_FULL.map((name) => [name, true]));
 
 export function getPresetFromTools(tools: ToolEntry[]): ToolPreset {
   const activeTools = tools.filter((t) => t.active);

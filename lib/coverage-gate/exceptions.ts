@@ -118,11 +118,7 @@ function dayNumber(value: string): number | null {
   const day = Number(match[3]);
   const utc = Date.UTC(year, month - 1, day);
   const date = new Date(utc);
-  if (
-    date.getUTCFullYear() !== year
-    || date.getUTCMonth() !== month - 1
-    || date.getUTCDate() !== day
-  ) {
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
     return null;
   }
   return utc / MS_PER_DAY;
@@ -193,10 +189,7 @@ function readEntry(
  * 每条登记要么进入 `active`（到期日当天及以后仍有效）要么进入 `expired`（次日起失效），
  * 要么记一条 `problems`。同文件同规则重复登记：第一条按日期归类，后续条目记问题。
  */
-export function resolveExceptions(
-  text: string | null,
-  today: string = localTodayIso(),
-): ExceptionResolution {
+export function resolveExceptions(text: string | null, today: string = localTodayIso()): ExceptionResolution {
   const resolution: ExceptionResolution = {
     present: text !== null,
     today,
@@ -247,8 +240,7 @@ export function resolveExceptions(
     if (!ruleIds.has(entry.rule)) {
       resolution.problems.push({
         index,
-        message: `第 ${index} 条的 rule（规则编号）${entry.rule} 不存在，`
-          + `可用：${[...ruleIds].join("、")}`,
+        message: `第 ${index} 条的 rule（规则编号）${entry.rule} 不存在，` + `可用：${[...ruleIds].join("、")}`,
       });
       return;
     }
@@ -257,8 +249,7 @@ export function resolveExceptions(
     if (expiryDay === null) {
       resolution.problems.push({
         index,
-        message: `第 ${index} 条的 expires（到期日）${entry.expires} 不合法，`
-          + "需为 YYYY-MM-DD 且是真实日期",
+        message: `第 ${index} 条的 expires（到期日）${entry.expires} 不合法，` + "需为 YYYY-MM-DD 且是真实日期",
       });
       return;
     }
@@ -288,13 +279,8 @@ export function resolveExceptions(
  * 把有效豁免套到判定上。只有文件与规则都相同的判定被放行，其余原样保留；
  * 已到期的条目不放行任何判定。
  */
-export function applyExceptions(
-  findings: readonly Finding[],
-  resolution: ExceptionResolution,
-): AppliedExceptions {
-  const activeByKey = new Map(
-    resolution.active.map((entry) => [exceptionKey(entry.path, entry.rule), entry] as const),
-  );
+export function applyExceptions(findings: readonly Finding[], resolution: ExceptionResolution): AppliedExceptions {
+  const activeByKey = new Map(resolution.active.map((entry) => [exceptionKey(entry.path, entry.rule), entry] as const));
   const suppressed = new Map<string, Finding[]>();
   const blocking: Finding[] = [];
 

@@ -4,7 +4,7 @@ ompdesk 会把同一个 Git 项目的 main checkout 和 linked worktree 放在�
 
 ## 什么时候会看到 Worktree 控件
 
-当左上角选择的是 Git 仓库根目录时，项目选择器下面会出现 worktree 切换控件。
+当左上角选择的是 Git 仓库根目录时，右侧面板的 Git 标签页顶部会出现分支切换控件。
 
 以下情况不会显示：
 
@@ -16,7 +16,7 @@ ompdesk 会把同一个 Git 项目的 main checkout 和 linked worktree 放在�
 
 ## 切换分支会影响什么
 
-worktree 切换器列出的是仓库的本地分支，不是 checkout 目录。每一行标出这条分支是否已有副本：
+分支下拉列出的是仓库的本地分支，不是 checkout 目录。每一行标出这条分支是否已有副本：
 
 - 已有副本：选中后直接切到那个 checkout，不新建目录。
 - 没有副本：选中后先在 `<repo>-worktrees/<branch>` 建一份，再切过去。
@@ -37,7 +37,7 @@ worktree 切换器列出的是仓库的本地分支，不是 checkout 目录。�
 
 ## 新建 Worktree
 
-在 worktree 菜单里选择 `New worktree...`，输入 branch name。
+在分支下拉里选择 `New worktree...`，输入 branch name。
 
 ompdesk 会把 checkout 放在：
 
@@ -85,8 +85,8 @@ ompdesk 按 project root 分组会话，所以 main checkout 和 linked worktree
 
 ## 常见问题
 
-**为什么我看不到 worktree 切换器？**
-请确认当前选择的是 Git 仓库根目录。非 Git 目录和仓库子目录会显示一行轻提示，而不是切换器。
+**为什么我看不到分支切换器？**
+请打开右侧面板的 Git 标签页，并确认当前选择的是 Git 仓库根目录。非 Git 目录和仓库子目录不会显示切换器。
 
 **为什么某个 branch 不能创建 worktree？**
 Git 不允许同一个 branch 同时被多个 worktree checkout。你可以切到已有的 worktree，或者先删除那个 checkout。

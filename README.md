@@ -31,7 +31,7 @@ Because a browser tab can drive a high-privilege agent, ompdesk binds to the loo
 
 ## Quick Start
 
-ompdesk serves its API on **Bun**: the omp SDK is published as TypeScript sources and imports `bun:` builtins, so Node cannot load it. Install Bun 1.3.14 or newer:
+ompdesk serves its API on **Bun**: the omp SDK is published as TypeScript sources and imports `bun:` builtins, so Node cannot load it. Install Bun 1.4.2 or newer:
 
 ```bash
 curl -fsSL https://bun.sh/install | bash        # macOS / Linux
@@ -46,6 +46,16 @@ bunx ompdesk@latest
 
 Open [http://127.0.0.1:30141](http://127.0.0.1:30141). The launcher opens the browser for you once the server is ready.
 
+`ompdesk` starts in the background and returns to the prompt, so closing the terminal does not stop the server or the agent turns it is running. Ask it for its state and stop it with the same command:
+
+```bash
+ompdesk status    # running or not, the address, and what each project is doing
+ompdesk stop      # refuses while a task is running
+ompdesk stop --force
+```
+
+`status` and `stop` cover every instance recorded for the current agent directory; `--port <port>` narrows them to one. Each instance records itself and its run log in that directory, so a second `ompdesk` on the same port reports the address of the running one instead of failing on the port. `ompdesk foreground` runs the server attached to the terminal instead — that is the form a container or a service manager wants.
+
 Install it globally instead:
 
 ```bash
@@ -55,12 +65,22 @@ ompdesk
 
 The `ompdesk` entrypoint runs under Node or Bun, locates a Bun runtime, and re-executes the server there. Pin a specific Bun build with `OMPDESK_BUN=/path/to/bun`.
 
+### Commands
+
+| Command | Effect |
+| --- | --- |
+| `ompdesk` / `ompdesk start` | Start in the background and return to the prompt. |
+| `ompdesk status` | Report each recorded instance: running or not, address, pid, and per-project session counts. |
+| `ompdesk stop` | Stop the recorded instances. Refuses while a session is mid-turn; `--force` interrupts it. |
+| `ompdesk foreground` | Run the server attached to this terminal, for containers and service managers. |
+
 ### Options
 
 | Option | Effect |
 | --- | --- |
-| `-p, --port <port>` | Listen port. Defaults to `30141`; `PORT` also works. |
+| `-p, --port <port>` | Listen port. Defaults to `30141`; `PORT` also works. Also selects one instance for `status` and `stop`. |
 | `-H, --hostname <host>` | Listen address. Non-loopback values are refused unless `OMPDESK_ALLOW_NON_LOOPBACK` is set for a container. |
+| `-f, --force` | With `stop`: interrupt running tasks instead of refusing. |
 | `--no-open` | Do not open the browser automatically. |
 | `--authenticated` | Turn the password lock on for this run and later ones. Asks for a password when none exists and the terminal is interactive. |
 | `--reset-password` | Replace the stored password without knowing the old one. Requires a shell on the server. |
@@ -79,6 +99,8 @@ The `ompdesk` entrypoint runs under Node or Bun, locates a Bun runtime, and re-e
 | `OMPDESK_TRUST_PROXY=1` | Trust the last `x-forwarded-for` hop for rate-limit bucketing. Only set it behind a proxy you control. |
 | `OMPDESK_ALLOW_NON_LOOPBACK=1` | Skip the loopback-only check. The Docker image sets it; do not use it on a host. |
 | `OMPDESK_BUN` | Bun executable used by the launcher. |
+| `OMPDESK_STARTUP_TIMEOUT_MS` | How long `start` waits for the port to answer before giving up. Defaults to 120000. |
+| `OMPDESK_DIST_DIR` | Serve a build directory other than `.next`. `next.config.ts` reads the same variable. |
 | `PI_CODING_AGENT_DIR` | Use another omp agent directory instead of `~/.omp/agent`. |
 | `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | Proxy for server-side model and provider requests. Bun reads them once at startup. |
 
@@ -126,7 +148,7 @@ On the phone open `http://<tailnet IPv4>:30141` (read the address with `tailscal
 - Read session state at a glance: running, waiting for an answer, unread, completed, interrupted, cancelled, or failed. Browser notifications cover runs that finish while the tab is in the background.
 - Rename, archive, restore, and delete sessions; archived sessions stay on disk.
 - Follow forks as a tree and switch between branches without leaving the sidebar.
-- Start a session in the selected project or a custom working directory, and switch Git worktrees from the same place.
+- Start a session in the selected project or a custom working directory, and switch Git worktrees from the Git tab in the right panel.
 - Install the interface as a progressive web app (PWA) on a phone; the layout and hit targets adapt to small screens.
 
 ### Chat and agent runs
@@ -223,7 +245,7 @@ File browsing is not a general filesystem browser. `/api/files` allows the sessi
 - **Proxy**: ompdesk passes the standard proxy variables through to Bun. The launcher adds loopback hosts to `NO_PROXY` so a local provider (Ollama, LM Studio, llama.cpp) keeps working; Bun reads the variables once at startup.
 - **Runtime logs**: every request, agent run, tool call, security decision, and audit action is written as structured JSON and can be read, searched, and downloaded from **Settings → Logs**. Record shape, levels, and `OMP_LOG_LEVEL` / `OMPDESK_LOG_STDOUT`: [docs/logging.md](./docs/logging.md).
 - **Telemetry**: set `OTEL_EXPORTER_OTLP_ENDPOINT` to export traces, logs, and metrics over OTLP `http/protobuf`. With no endpoint, no exporter loads. Prompt and reply text stay out unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=full` is set. Supported variables and per-signal switches: [docs/telemetry.md](./docs/telemetry.md) (Chinese).
-- **Worktrees**: the switcher appears for Git repository roots and covers new sessions, the Explorer, and file mentions. Creation and removal rules: [docs/worktrees.md](./docs/worktrees.md).
+- **Worktrees**: the branch switcher sits at the top of the Git tab for Git repository roots and covers new sessions, the Explorer, and file mentions. Creation and removal rules: [docs/worktrees.md](./docs/worktrees.md).
 - **Forks**: **Fork** creates a new `.jsonl` file. **Edit from here** creates another branch inside the same session file.
 - **Skills**: the installer runs `npx skills add ... --agent claude-code`, which writes the `.claude/skills` layout omp discovers by default.
 - **Interface language**: English and Simplified Chinese ship today; the initial locale follows the browser, and the top bar switch persists the choice in `localStorage`. Adding a language: [docs/i18n.md](./docs/i18n.md).

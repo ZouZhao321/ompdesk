@@ -26,6 +26,7 @@ agent/[id]/events/route.ts      GET SSE 流
 agent/[id]/bash-output/route.ts GET 命令输出
 agent/running/route.ts          GET 运行中与等待输入的会话 id
 agent/running/events/route.ts   GET 同一份活动快照的 SSE 流
+control/activity/route.ts       GET 后台实例的活动视图，供 ompdesk status 与 stop 读取；只认启动时下发的控制令牌
 auth/all-providers/route.ts     GET API-key 提供方列表
 auth/api-key/[provider]/route.ts GET/POST/DELETE 提供方 API key 状态与存储
 auth/login/[provider]/route.ts  GET OAuth 登录 SSE | POST 手动 code
@@ -85,6 +86,8 @@ comment-translation-generation.ts 勾选条目的批量译文生成：字典命�
 comment-translation-validation.ts 译文逐字片段校验：路径、标识符、数字与括号片段
 comment-translation-route.ts 生成接口的请求校验与处理器
 comment-translation-model.ts 生成接口的模型接线：可见模型选择与 completeSimple 调用
+control-activity.ts 按工作区汇总会话数、运行中与等待输入，供 /api/control/activity 使用；工作区键与侧边栏同一规则
+control-token.ts     后台实例的控制令牌：请求头名、路径前缀与常量时间比较
 git-env.ts           createGitEnv()：git 子进程环境，剥离钩子注入的仓库定位变量
 git-ignore.ts        checkIgnoredEntries：git check-ignore 批量判定目录项是否被忽略，不可判定返回 null
 git-listing.ts       listGitFiles：git ls-files 列举跟踪与未忽略的文件，非仓库返回 null
@@ -135,6 +138,8 @@ tool-presets.ts      PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
 types.ts             共享 TypeScript 类型
 normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的字段名差异
 worktree.ts          项目解析、本地分支清单、按分支确保工作副本与增删
+worktree-types.ts    /api/worktrees 的 checkout 与本地分支类型，侧栏与 Git 面板共用
+worktree-switch.ts   分支切换请求的发布与订阅：Git 面板发起，侧栏执行目录解析
 coverage-gate/       覆盖率门禁，见下方
 ```
 
@@ -173,8 +178,7 @@ SessionSidebar.tsx  会话树
 ChatWindow.tsx      聊天组合
 ChatInput.tsx       输入栏 + 模型/角色/思考/tools/compact 控件
 MessageView.tsx     渲染单条消息（user/assistant/toolCall/toolResult）
-BranchNavigator.tsx 会话内分支切换器
-ConversationMap.tsx 会话地图：卡片、连线、缩放、分叉与切换
+ConversationMap.tsx 分支地图：卡片、连线、缩放、弹窗详情、分叉与切换
 SubagentPanel.tsx   子代理标签页：运行与历史列表、执行详情
 CommentTranslationPanel.tsx 注释互译标签页：中英两栏词条、勾选生成、分批请求与字典管理
 CommentTranslationPreview.tsx 面板底部预览：用查看器同一份源码视图渲染选中词条
@@ -194,6 +198,8 @@ SkillsConfig.tsx    设置面板内的 skills 列表与安装
 FileExplorer.tsx    文件树
 FileExplorerPanel.tsx 右侧标签页中的文件树视图（上传、刷新、变更文件）
 GitChangesPanel.tsx 右侧标签页中的 Git 变更列表（状态、汇总、刷新与轮询）
+WorktreeSwitcher.tsx Git 标签页顶部的分支下拉：当前分支、切换 checkout 与新建 worktree
+PathLabel.tsx       路径标签：左端省略并保留结尾路径段，Git 面板的 checkout 行使用
 GitStatusBadge.tsx  变更文件的状态字母徽标与状态配色
 PanelIconButton.tsx 右侧面板工具栏图标按钮
 FileIcons.tsx       文件图标辅助
@@ -227,11 +233,11 @@ useTheme.ts         主题状态
 不在上述四组里、但改代码时会碰到的入口与配置。
 
 ```
-proxy.ts            访问控制：密码校验、主机与跨站检查
+proxy.ts            访问控制：密码校验、主机与跨站检查；控制令牌通道在这里放行
 instrumentation.ts  启动时接线（代理、日志）
 next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
-bin/                启动器、密码存储、Bun 定位
-scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息、coverage-gate 覆盖率门禁入口）
+bin/                启动器（start/status/stop/foreground）、实例记录、密码存储、Bun 定位
+scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息、pr-queue 列开放 PR 的阻塞项、coverage-gate 覆盖率门禁入口）
 test-support/       测试样本：会话夹具经 SessionManager 生成，测试与手工验证共用同一入口
 coverage-exceptions.json    覆盖率门禁的豁免清单（path、rule、reason、alternativeVerification、expires）
 coverage-export-baseline.json 分叉点之前就存在的无引用导出，规则三据此不重复拦存量

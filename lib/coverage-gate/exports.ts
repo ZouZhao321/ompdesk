@@ -136,9 +136,10 @@ function collectExports(source: ts.SourceFile, localKinds: ReadonlyMap<string, E
 
   for (const statement of source.statements) {
     if (ts.isExportDeclaration(statement)) {
-      const specifier = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
-        ? statement.moduleSpecifier.text
-        : null;
+      const specifier =
+        statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+          ? statement.moduleSpecifier.text
+          : null;
       const clause = statement.exportClause;
       // `export * from` 的导出名无法静态得知，引用索引按「引用全部」处理。
       if (!clause) continue;
@@ -147,15 +148,10 @@ function collectExports(source: ts.SourceFile, localKinds: ReadonlyMap<string, E
         continue;
       }
       for (const element of clause.elements) {
-        const localName = element.propertyName && ts.isIdentifier(element.propertyName)
-          ? element.propertyName.text
-          : element.name.text;
+        const localName =
+          element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName.text : element.name.text;
         const typeOnly = statement.isTypeOnly || element.isTypeOnly;
-        const kind: ExportKind = typeOnly
-          ? "type"
-          : specifier
-            ? "runtime"
-            : localKinds.get(localName) ?? "runtime";
+        const kind: ExportKind = typeOnly ? "type" : specifier ? "runtime" : (localKinds.get(localName) ?? "runtime");
         push(element.name.text, kind, specifier ? "re-export" : "alias");
       }
       continue;
@@ -224,9 +220,11 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
       if (bindings && ts.isNamespaceImport(bindings)) namespaceRef = true;
       if (bindings && ts.isNamedImports(bindings)) {
         for (const element of bindings.elements) {
-          named.push(element.propertyName && ts.isIdentifier(element.propertyName)
-            ? element.propertyName.text
-            : element.name.text);
+          named.push(
+            element.propertyName && ts.isIdentifier(element.propertyName)
+              ? element.propertyName.text
+              : element.name.text,
+          );
         }
       }
       imports.push({ specifier, named, defaultRef: clause.name !== undefined, namespaceRef });
@@ -248,16 +246,42 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
     }
     const named: string[] = [];
     for (const element of clause.elements) {
-      const name = element.propertyName && ts.isIdentifier(element.propertyName)
-        ? element.propertyName.text
-        : element.name.text;
+      const name =
+        element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName.text : element.name.text;
       named.push(name);
       reExports.push({ specifier, name });
     }
     imports.push({ specifier, named, defaultRef: false, namespaceRef: false });
   }
 
+  collectLazyImports(source, imports);
+
   return { imports, reExports, stars };
+}
+
+/** 动态导入或 `require` 调用里的模块说明符；取不到字符串字面量时返回 null。 */
+function lazySpecifier(call: ts.CallExpression): string | null {
+  const isDynamicImport = call.expression.kind === ts.SyntaxKind.ImportKeyword;
+  const isRequire = ts.isIdentifier(call.expression) && call.expression.text === "require";
+  if (!isDynamicImport && !isRequire) return null;
+  const [argument] = call.arguments;
+  // 无插值模板字面量与普通字符串等价，模块解析结果相同。
+  return argument !== undefined && ts.isStringLiteralLike(argument) ? argument.text : null;
+}
+
+/**
+ * 惰性加载同样是对模块导出的引用。取到的名字不固定，按「引用了该模块全部导出」记，
+ * 只求不漏报：宁可少拦一条，也不把只在动态加载里用到的导出判成 0 引用。
+ */
+function collectLazyImports(source: ts.SourceFile, imports: ModuleImport[]): void {
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const specifier = lazySpecifier(node);
+      if (specifier !== null) imports.push({ specifier, named: [], defaultRef: false, namespaceRef: true });
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(source, visit);
 }
 
 /** 扫描一个文件：导出、对外引用、转出口。 */

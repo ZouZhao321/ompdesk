@@ -7,10 +7,7 @@
 export const MAX_COMMENT_TRANSLATION_ENTRIES = 1_000;
 
 /** 界面提示键；文案在 lib/i18n/messages 里。 */
-export type CommentTranslationErrorKey =
-  | "comments.noModel"
-  | "comments.invalidEntries"
-  | "comments.generateFailed";
+export type CommentTranslationErrorKey = "comments.noModel" | "comments.invalidEntries" | "comments.generateFailed";
 
 /** 服务端的 code 映射成具体提示；未知失败统一走生成失败。 */
 export function commentTranslationErrorKey(code: unknown): CommentTranslationErrorKey {

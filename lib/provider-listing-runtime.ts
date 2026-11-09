@@ -34,11 +34,7 @@ export async function collectProviderListingInputs(): Promise<ProviderListingInp
   }
 
   const descriptorsById = new Map(PROVIDER_DESCRIPTORS.map((descriptor) => [descriptor.providerId, descriptor]));
-  const ids = new Set<string>([
-    ...modelCounts.keys(),
-    ...oauthByProvider.keys(),
-    ...descriptorsById.keys(),
-  ]);
+  const ids = new Set<string>([...modelCounts.keys(), ...oauthByProvider.keys(), ...descriptorsById.keys()]);
 
   const credentialTypes = new Map<string, ProviderCredentialType>();
   for (const id of ids) {

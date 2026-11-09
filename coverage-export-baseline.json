@@ -606,6 +606,61 @@
       "kind": "type"
     },
     {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "CoverageGateDependencies",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "CoverageGateOptions",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "CoverageGateResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "DEFAULT_BASE_REF",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "GitQueries",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/cli.ts",
+      "name": "runCoverageGate",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/coverage-gate/git.ts",
+      "name": "parseChangedFiles",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/coverage-gate/lcov.ts",
+      "name": "LcovParseResult",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/report.ts",
+      "name": "ReportInput",
+      "kind": "type"
+    },
+    {
+      "path": "lib/coverage-gate/rules/index.ts",
+      "name": "RULES",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/coverage-gate/rules/rule-new-files.ts",
+      "name": "RULE_NEW_FILES",
+      "kind": "runtime"
+    },
+    {
       "path": "lib/custom-ui-terminal.ts",
       "name": "DEFAULT_CUSTOM_UI_ROWS",
       "kind": "runtime"
