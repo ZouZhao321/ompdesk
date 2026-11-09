@@ -96,7 +96,7 @@ async function collectTestImportIndex(
         sources.set(filePath, await readText(join(root, filePath)));
       } catch (error) {
         // git 索引里仍列着工作区已删除的文件，缺文件不该让整次门禁退化成「未能运行」。
-        if (!isMissingFile(error)) throw error;
+        if (!isMissingFile(error)) throw new Error(`${filePath}：${errorMessage(error)}`);
       }
     }),
   );

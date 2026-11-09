@@ -78,7 +78,11 @@ function importedNames(declaration: ts.ImportDeclaration): string[] {
 function dynamicImportSpecifier(node: ts.CallExpression): string | null {
   const callee = node.expression;
   const isImportKeyword = callee.kind === ts.SyntaxKind.ImportKeyword;
-  const isImportMethod = ts.isPropertyAccessExpression(callee) && callee.name.text === "import";
+  // `createJiti(...).import("…")` 与 `jiti.import("…")`；任意对象上的同名方法不算。
+  const isImportMethod =
+    ts.isPropertyAccessExpression(callee) &&
+    callee.name.text === "import" &&
+    (ts.isIdentifier(callee.expression) || ts.isCallExpression(callee.expression));
   if (!isImportKeyword && !isImportMethod) return null;
 
   const [argument] = node.arguments;
@@ -87,15 +91,30 @@ function dynamicImportSpecifier(node: ts.CallExpression): string | null {
   return null;
 }
 
+/** 跳过 `await` 与括号，拿到动态导入表达式所处的位置。 */
+function enclosingExpression(node: ts.Node): ts.Node {
+  let current = node;
+  while (
+    current.parent !== undefined &&
+    (ts.isAwaitExpression(current.parent) || ts.isParenthesizedExpression(current.parent))
+  ) {
+    current = current.parent;
+  }
+  return current;
+}
+
 /**
  * 动态导入贡献的名字。`const { f } = await import("…")` 取解构出的名字；
- * `const mod = await import("…")` 拿到命名空间对象，记成通配标记；
- * 只做副作用加载时不贡献名字。
+ * `const mod = await import("…")` 或从辅助函数返回模块对象时拿到命名空间对象，
+ * 记成通配标记；只做副作用加载时不贡献名字。
  */
 function dynamicImportNames(node: ts.CallExpression): string[] {
-  const awaited = node.parent !== undefined && ts.isAwaitExpression(node.parent) ? node.parent : node;
-  const parent = awaited.parent;
-  if (parent === undefined || !ts.isVariableDeclaration(parent)) return [];
+  const parent = enclosingExpression(node).parent;
+  if (parent === undefined) return [];
+
+  // 返回模块对象的辅助函数：调用方拿到的是命名空间对象，可用任意导出。
+  if (ts.isReturnStatement(parent) || ts.isArrowFunction(parent)) return [ANY_IMPORTED_NAME];
+  if (!ts.isVariableDeclaration(parent)) return [];
 
   // `const mod = await import("…")` 拿到命名空间对象，测试可用任意导出。
   if (ts.isIdentifier(parent.name)) return [ANY_IMPORTED_NAME];
