@@ -104,16 +104,16 @@ export async function generateBaseCoverage(request: BaseCoverageRequest): Promis
   }
 
   try {
-    await git(request.repositoryRoot, ["worktree", "add", "--detach", worktreePath, request.mergeBase]);
-  } catch (error) {
-    return {
-      ok: false,
-      detail: `无法为分叉点 ${baseLabel} 创建工作副本：${errorMessage(error)}`,
-      durationMs: elapsed(),
-    };
-  }
+    try {
+      await git(request.repositoryRoot, ["worktree", "add", "--detach", worktreePath, request.mergeBase]);
+    } catch (error) {
+      return {
+        ok: false,
+        detail: `无法为分叉点 ${baseLabel} 创建工作副本：${errorMessage(error)}`,
+        durationMs: elapsed(),
+      };
+    }
 
-  try {
     try {
       await execFileAsync(
         // 门禁本身在 bun 下运行，基准运行直接复用当前进程的可执行文件。
@@ -177,7 +177,14 @@ async function discardWorktree(repositoryRoot: string, worktreePath: string): Pr
 }
 
 /** 这些读取失败说明该版本的正文本身缺席或不可读，交给规则二判定；其余错误照常抛出。 */
-const UNREADABLE_CODES: Record<string, true> = { ENOENT: true, EISDIR: true, ENOTDIR: true, EACCES: true };
+const UNREADABLE_CODES: Record<string, true> = {
+  ENOENT: true,
+  EISDIR: true,
+  ENOTDIR: true,
+  EACCES: true,
+  EPERM: true,
+  ELOOP: true,
+};
 
 async function readWorkingTreeFile(absolutePath: string): Promise<string | null> {
   try {

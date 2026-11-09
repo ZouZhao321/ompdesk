@@ -131,8 +131,13 @@ export async function runCoverageGate(
       }),
       Promise.all(
         deltaFiles.map(async (file) => {
-          const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
-          return [file.path, pair] as const;
+          try {
+            const pair = await (dependencies.sources ?? readSourcePair)(root, mergeBase, file);
+            return [file.path, pair] as const;
+          } catch (error) {
+            // 底层读取错误常常不带路径，这里补上，报告里能直接定位是哪个文件。
+            throw new Error(`${file.path}：${errorMessage(error)}`);
+          }
         }),
       ),
     ]);
