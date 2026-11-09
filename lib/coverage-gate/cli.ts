@@ -40,7 +40,7 @@ export interface CoverageGateDependencies {
 }
 
 export interface CoverageGateResult {
-  /** 本票据只报告，任何结论都是 0；规则阻断在后续票据接入。 */
+  /** 有判定结果时非零，用来让合并检查变红；产物或 git 数据不可用时保持 0。 */
   exitCode: number;
   report: string;
 }
@@ -58,8 +58,8 @@ function renderUnavailable(detail: string): string {
 /**
  * 编排一次门禁运行：读 lcov、取分叉点与改动清单、聚合、渲染报告。
  *
- * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出：本票据的步骤不改变合并
- * 结论，日志里要留下可定位的说明。规则判定结果同样只进报告。
+ * 产物缺失或 git 读不到分叉点时把原因写进报告而不是抛出，退出码保持 0：门禁本身
+ * 没跑起来不等于代码没被测试。规则有判定结果时退出码为 1，检查随之变红。
  */
 export async function runCoverageGate(
   options: CoverageGateOptions,
@@ -102,6 +102,12 @@ export async function runCoverageGate(
   }
 
   const relevantChanges = changedFiles.filter((file) => isManagedSourceFile(file.path));
+  const findings = evaluateRules({
+    changedFiles: relevantChanges,
+    coverage,
+    totals,
+    managedFiles,
+  });
   const report = renderReport({
     baseRef,
     mergeBase,
@@ -112,13 +118,8 @@ export async function runCoverageGate(
     duplicateRecords: parsed.duplicates,
     managedFileCount: managedFiles.length,
     missingManagedFiles: managedFiles.filter((file) => !coverage.has(file)),
-    findings: evaluateRules({
-      changedFiles: relevantChanges,
-      coverage,
-      totals,
-      managedFiles,
-    }),
+    findings,
   });
 
-  return { exitCode: 0, report };
+  return { exitCode: findings.length > 0 ? 1 : 0, report };
 }
