@@ -30,17 +30,27 @@ const LEGACY_TRUST_FILE = "omp-web-trusted-projects.json";
  * the system prompt, not modules the loader imports.
  */
 const CODE_BEARING_PROJECT_DIRS = [
-  ".omp/extensions", ".omp/hooks", ".omp/tools",
-  ".pi/extensions", ".pi/hooks", ".pi/tools",
-  ".claude/extensions", ".claude/hooks", ".claude/tools",
-  ".agents/extensions", ".agents/hooks", ".agents/tools",
+  ".omp/extensions",
+  ".omp/hooks",
+  ".omp/tools",
+  ".pi/extensions",
+  ".pi/hooks",
+  ".pi/tools",
+  ".claude/extensions",
+  ".claude/hooks",
+  ".claude/tools",
+  ".agents/extensions",
+  ".agents/hooks",
+  ".agents/tools",
 ] as const;
 
 /** Project-relative files that declare MCP servers, i.e. processes omp spawns. */
 const MCP_MANIFEST_FILES = [
   ".mcp.json",
-  ".omp/.mcp.json", ".omp/mcp.json",
-  ".claude/.mcp.json", ".claude/mcp.json",
+  ".omp/.mcp.json",
+  ".omp/mcp.json",
+  ".claude/.mcp.json",
+  ".claude/mcp.json",
   ".cursor/mcp.json",
 ] as const;
 
@@ -64,8 +74,9 @@ function readTrustedProjects(agentDir: string): Record<string, boolean> {
       const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
       return Object.fromEntries(
-        Object.entries(parsed as Record<string, unknown>)
-          .filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+        Object.entries(parsed as Record<string, unknown>).filter(
+          (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+        ),
       );
     } catch {
       return {};

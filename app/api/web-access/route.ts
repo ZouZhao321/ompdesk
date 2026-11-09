@@ -52,7 +52,7 @@ export const PUT = withRequestLog("/api/web-access", async (req: Request) => {
 
   let body: { action?: unknown; password?: unknown };
   try {
-    body = await req.json() as { action?: unknown; password?: unknown };
+    body = (await req.json()) as { action?: unknown; password?: unknown };
   } catch {
     return NextResponse.json({ error: "Expected a JSON body" }, { status: 400 });
   }
@@ -68,7 +68,10 @@ export const PUT = withRequestLog("/api/web-access", async (req: Request) => {
   if (getWebAuthStatus().managedByEnvironment) {
     auditFailure(auditAction, "password", { status: 409, reason: "managed-by-environment" });
     return NextResponse.json(
-      { error: "Password access is managed by the OMPDESK_PASSWORD environment variable. Unset it to manage the password here." },
+      {
+        error:
+          "Password access is managed by the OMPDESK_PASSWORD environment variable. Unset it to manage the password here.",
+      },
       { status: 409 },
     );
   }
@@ -105,9 +108,6 @@ export const PUT = withRequestLog("/api/web-access", async (req: Request) => {
     }
   } catch (error) {
     auditFailure(auditAction, "password", { status: 400, error });
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
 });

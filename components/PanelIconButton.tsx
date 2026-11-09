@@ -41,8 +41,12 @@ export function PanelIconButton({
       aria-pressed={ariaPressed}
       style={{
         position: "relative",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 26, height: 26, padding: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 26,
+        height: 26,
+        padding: 0,
         background,
         border: "none",
         color,

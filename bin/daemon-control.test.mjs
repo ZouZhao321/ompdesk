@@ -50,7 +50,10 @@ test("实例记录按端口分开存放，读取时可还原", async () => {
     writeRecord(recordFile(dir, 30141), record());
     writeRecord(recordFile(dir, 30142), record({ port: 30142, url: "http://127.0.0.1:30142" }));
 
-    assert.deepEqual(listRecords(dir).map((entry) => entry.port), [30141, 30142]);
+    assert.deepEqual(
+      listRecords(dir).map((entry) => entry.port),
+      [30141, 30142],
+    );
     assert.equal(readRecord(recordFile(dir, 30141)).url, "http://127.0.0.1:30141");
   });
 });
@@ -149,10 +152,7 @@ test("状态输出包含地址、进程与按项目的活动", () => {
   assert.equal(lines[0], "ompdesk is running at http://127.0.0.1:30141");
   assert.match(lines[1], /^pid \d+, started /);
   assert.match(lines[2], /^log /);
-  assert.deepEqual(lines.slice(3), [
-    "ompdesk: 3 sessions, 1 running",
-    "quiet: 1 session",
-  ]);
+  assert.deepEqual(lines.slice(3), ["ompdesk: 3 sessions, 1 running", "quiet: 1 session"]);
 });
 
 test("状态输出在端点不响应时说明无法确认", () => {
@@ -168,10 +168,7 @@ test("运行总数与项目行不一致时单独说明，不停留在无法定�
     waiting: 0,
     projects: [{ path: "/work/a", sessions: 1, running: 1, waiting: 0 }],
   });
-  assert.deepEqual(lines, [
-    "a: 1 session, 1 running",
-    "Not listed under a project yet: 1 running session.",
-  ]);
+  assert.deepEqual(lines, ["a: 1 session, 1 running", "Not listed under a project yet: 1 running session."]);
 });
 
 test("没有可归位会话时不打印自相矛盾的空行", () => {

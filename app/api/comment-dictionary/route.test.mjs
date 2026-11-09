@@ -49,10 +49,11 @@ async function createFixture(t) {
 
 async function listEntries(project) {
   const { NextRequest } = await import("next/server");
-  const response = await getCommentEntries(new NextRequest(
-    `http://localhost:30141/api/comment-entries?cwd=${encodeURIComponent(project)}`,
-    { headers: { host: "localhost:30141" } },
-  ));
+  const response = await getCommentEntries(
+    new NextRequest(`http://localhost:30141/api/comment-entries?cwd=${encodeURIComponent(project)}`, {
+      headers: { host: "localhost:30141" },
+    }),
+  );
   assert.equal(response.status, 200);
   return response.json();
 }
@@ -60,12 +61,14 @@ async function listEntries(project) {
 test("saving a manual translation makes it readable with the project entries", async (t) => {
   const { project } = await createFixture(t);
 
-  const saved = await PUT(request("PUT", {
-    original: "中文说明",
-    originalLanguage: "zh",
-    targetLanguage: "en",
-    translation: "Chinese note",
-  }));
+  const saved = await PUT(
+    request("PUT", {
+      original: "中文说明",
+      originalLanguage: "zh",
+      targetLanguage: "en",
+      translation: "Chinese note",
+    }),
+  );
   assert.equal(saved.status, 200);
   const record = await saved.json();
   assert.equal(record.origin, "manual");
@@ -78,12 +81,14 @@ test("saving a manual translation makes it readable with the project entries", a
 
 test("deleting the dictionary removes translations from later reads", async (t) => {
   const { project } = await createFixture(t);
-  await PUT(request("PUT", {
-    original: "中文说明",
-    originalLanguage: "zh",
-    targetLanguage: "en",
-    translation: "Chinese note",
-  }));
+  await PUT(
+    request("PUT", {
+      original: "中文说明",
+      originalLanguage: "zh",
+      targetLanguage: "en",
+      translation: "Chinese note",
+    }),
+  );
 
   const deleted = await DELETE(request("DELETE"));
   assert.equal(deleted.status, 200);
@@ -99,20 +104,24 @@ test("deleting the dictionary removes translations from later reads", async (t) 
 test("invalid translations are rejected without writing the dictionary", async (t) => {
   const { project } = await createFixture(t);
 
-  const empty = await PUT(request("PUT", {
-    original: "中文说明",
-    originalLanguage: "zh",
-    targetLanguage: "en",
-    translation: "   ",
-  }));
+  const empty = await PUT(
+    request("PUT", {
+      original: "中文说明",
+      originalLanguage: "zh",
+      targetLanguage: "en",
+      translation: "   ",
+    }),
+  );
   assert.equal(empty.status, 400);
 
-  const sameLanguage = await PUT(request("PUT", {
-    original: "中文说明",
-    originalLanguage: "zh",
-    targetLanguage: "zh",
-    translation: "中文说明",
-  }));
+  const sameLanguage = await PUT(
+    request("PUT", {
+      original: "中文说明",
+      originalLanguage: "zh",
+      targetLanguage: "zh",
+      translation: "中文说明",
+    }),
+  );
   assert.equal(sameLanguage.status, 400);
 
   const payload = await listEntries(project);

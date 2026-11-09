@@ -32,26 +32,20 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.debug.enabled.label": "调试",
   "settings.field.debug.enabled.description": "启用 debug 工具，基于 DAP 进行调试",
   "settings.field.launch.enabled.label": "服务",
-  "settings.field.launch.enabled.description":
-    "启用具名 bash 服务与 proc:// 托管，用于共享的长期运行项目进程",
+  "settings.field.launch.enabled.description": "启用具名 bash 服务与 proc:// 托管，用于共享的长期运行项目进程",
   "settings.field.speechgen.enabled.label": "语音生成",
-  "settings.field.speechgen.enabled.description":
-    "启用 tts 工具，进行设备端（Kokoro）或 xAI Grok Voice 语音文件合成",
+  "settings.field.speechgen.enabled.description": "启用 tts 工具，进行设备端（Kokoro）或 xAI Grok Voice 语音文件合成",
   "settings.field.generate_image.enabled.label": "生成图片",
   "settings.field.generate_image.enabled.description":
     "启用 generate_image 工具（文生图与图片编辑）。打开 tools.xdev 后以 xd:// 设备形式提供。",
   "settings.field.computer.enabled.label": "计算机",
-  "settings.field.computer.enabled.description":
-    "启用可脚本化的宿主桌面 eval 前奏（截图、输入、无障碍）",
+  "settings.field.computer.enabled.description": "启用可脚本化的宿主桌面 eval 前奏（截图、输入、无障碍）",
   "settings.field.ratchet.enabled.label": "Ratchet",
-  "settings.field.ratchet.enabled.description":
-    "启用 ratchet eval/hillclimb 前奏；/ratchet 会为当前会话开启",
+  "settings.field.ratchet.enabled.description": "启用 ratchet eval/hillclimb 前奏；/ratchet 会为当前会话开启",
   "settings.field.archive.enabled.label": "归档",
-  "settings.field.archive.enabled.description":
-    "启用只读 archive eval 前奏：提示历史、最近项目、过往会话与摘要",
+  "settings.field.archive.enabled.description": "启用只读 archive eval 前奏：提示历史、最近项目、过往会话与摘要",
   "settings.field.checkpoint.enabled.label": "检查点/回退",
-  "settings.field.checkpoint.enabled.description":
-    "启用 checkpoint 与 rewind 工具，用于上下文检查点",
+  "settings.field.checkpoint.enabled.description": "启用 checkpoint 与 rewind 工具，用于上下文检查点",
   "settings.field.fetch.enabled.label": "读取 URL",
   "settings.field.fetch.enabled.description": "允许 read 工具抓取并处理 URL",
   "settings.field.vault.enabled.label": "Obsidian Vault",
@@ -68,8 +62,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.ask.enabled.label": "询问",
   "settings.field.ask.enabled.description": "启用 ask 工具，向用户发起交互式提问",
   "settings.field.browser.enabled.label": "浏览器",
-  "settings.field.browser.enabled.description":
-    "启用 browser eval 前奏，进行脚本化 Chromium 自动化（Puppeteer）",
+  "settings.field.browser.enabled.description": "启用 browser eval 前奏，进行脚本化 Chromium 自动化（Puppeteer）",
   "settings.field.ida.enabled.label": "IDA Pro",
   "settings.field.ida.enabled.description":
     "把通过 `read` 打开的可执行文件在 IDA Pro（idalib）中打开，并启用 `ida` 工具；未找到 IDA 安装时不生效",
@@ -79,11 +72,9 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.todo.remindersMax.label": "待办提醒上限",
   "settings.field.todo.remindersMax.description": "放弃前最多发出的待办提醒次数",
   "settings.field.todo.eager.label": "自动创建待办",
-  "settings.field.todo.eager.description":
-    "首条消息之后推动自动创建待办列表的强度",
+  "settings.field.todo.eager.description": "首条消息之后推动自动创建待办列表的强度",
   "settings.field.tasks.todoClearDelay.label": "待办自动清除延迟",
-  "settings.field.tasks.todoClearDelay.description":
-    "已完成或已放弃的待办从待办组件中移除前的延迟",
+  "settings.field.tasks.todoClearDelay.description": "已完成或已放弃的待办从待办组件中移除前的延迟",
 
   "settings.field.grep.contextBefore.label": "Grep 前文行数",
   "settings.field.grep.contextBefore.description": "每个 grep 匹配项之前的上下文行数",
@@ -96,11 +87,9 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.browser.relay.description":
     "通过 omp 浏览器中继驱动你自己的 Chrome 标签页。先安装一次扩展（`omp browser-relay install`）；browser 前奏需要时中继服务会自动启动。优先于浏览器 CDP URL；可设置 PI_BROWSER_RELAY=0 或 PI_BROWSER_RELAY=1 覆盖。",
   "settings.field.browser.relayUrl.label": "浏览器中继 URL",
-  "settings.field.browser.relayUrl.description":
-    "omp 浏览器中继端点（默认 http://127.0.0.1:9224）。",
+  "settings.field.browser.relayUrl.description": "omp 浏览器中继端点（默认 http://127.0.0.1:9224）。",
   "settings.field.browser.headless.label": "无头浏览器",
-  "settings.field.browser.headless.description":
-    "以无头模式启动浏览器（禁用则显示浏览器界面）",
+  "settings.field.browser.headless.description": "以无头模式启动浏览器（禁用则显示浏览器界面）",
   "settings.field.browser.cmux.label": "cmux 浏览器",
   "settings.field.browser.cmux.description":
     "cmux socket 可用时，使用 cmux WKWebView 界面进行浏览器自动化。可设置 PI_BROWSER_CMUX=0 或 PI_BROWSER_CMUX=1 覆盖。",
@@ -118,12 +107,10 @@ export const toolsFiles: Record<string, string> = {
     "保存截图的目录。未设置时截图写入临时文件。支持 ~。示例：~/Downloads、~/Desktop、/sdcard/Download（Android）",
 
   "settings.field.computer.display.label": "计算机显示器",
-  "settings.field.computer.display.description":
-    "活动窗口所在的显示器（active）、所有显示器（all），或原生显示器 id",
+  "settings.field.computer.display.description": "活动窗口所在的显示器（active）、所有显示器（all），或原生显示器 id",
 
   "settings.field.ida.python.label": "IDA Python",
-  "settings.field.ida.python.description":
-    "可导入 ida_domain 与 idapro 的 Python 解释器；留空则自动检测",
+  "settings.field.ida.python.description": "可导入 ida_domain 与 idapro 的 Python 解释器；留空则自动检测",
   "settings.field.ida.installDir.label": "IDA 安装目录",
   "settings.field.ida.installDir.description":
     "包含 libidalib 的目录，导出为 IDADIR；留空则自动检测（$IDADIR、ida-config.json、标准安装路径）",
@@ -139,11 +126,9 @@ export const toolsFiles: Record<string, string> = {
     "把渲染后的 issue/PR 视图输出缓存在 ~/.omp/cache/github-cache.db，使重复读取无需额外开销",
 
   "settings.field.tools.artifactSpillThreshold.label": "产物溢出阈值（KB）",
-  "settings.field.tools.artifactSpillThreshold.description":
-    "工具输出超过此大小时保存为产物文件；尾部内容仍内联保留",
+  "settings.field.tools.artifactSpillThreshold.description": "工具输出超过此大小时保存为产物文件；尾部内容仍内联保留",
   "settings.field.tools.artifactTailBytes.label": "产物尾部大小（KB）",
-  "settings.field.tools.artifactTailBytes.description":
-    "输出溢出到产物文件时，内联保留的尾部内容大小",
+  "settings.field.tools.artifactTailBytes.description": "输出溢出到产物文件时，内联保留的尾部内容大小",
   "settings.field.tools.artifactHeadBytes.label": "产物头部大小（KB）",
   "settings.field.tools.artifactHeadBytes.description":
     "输出溢出到产物文件时，与尾部一同内联保留的头部内容大小（中间省略）。设为 0 即禁用，只保留尾部。",
@@ -151,8 +136,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.tools.outputMaxColumns.description":
     "流式工具输出（bash、python、js eval）与 `read` 的单行字节上限。超过该宽度的行以省略号截断，到下一个换行符之前的剩余字节会被丢弃。0 表示禁用。",
   "settings.field.tools.artifactTailLines.label": "产物尾部行数",
-  "settings.field.tools.artifactTailLines.description":
-    "输出溢出到产物文件时，内联保留的尾部内容最大行数",
+  "settings.field.tools.artifactTailLines.description": "输出溢出到产物文件时，内联保留的尾部内容最大行数",
   "settings.field.tools.artifactMaxBytes.label": "产物文件上限（MB）",
   "settings.field.tools.artifactMaxBytes.description":
     "流式工具输出（bash、python、js eval）所保存产物文件的大小上限。更大的输出保留开头部分（最多 3 MB）与最近的剩余部分，两者之间带有截断提示。0 表示不限制。",
@@ -161,8 +145,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.images.questionTimeoutMs.description":
     "read 的 ?q= 图片问答背后视觉模型调用的单次请求超时，单位为毫秒。Provider 卡住时会以超时错误快速失败，而不是阻塞到手动中止。设为 0 可禁用超时。",
   "settings.field.tools.intentTracing.label": "意图追踪",
-  "settings.field.tools.intentTracing.description":
-    "要求 Agent 在执行每个工具调用前说明其意图",
+  "settings.field.tools.intentTracing.description": "要求 Agent 在执行每个工具调用前说明其意图",
   "settings.field.tools.abortOnFabricatedResult.label": "中止伪造的工具结果",
   "settings.field.tools.abortOnFabricatedResult.description":
     "对于带内工具调用，当模型在回合中途开始臆造工具结果时立即停止。禁用后改为让模型生成完毕，再丢弃伪造的后续内容。",
@@ -173,8 +156,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.tools.speculativeExecution.maxInFlight.description":
     "正常调度前允许并行运行的、经过校验的本地读取数量上限。",
   "settings.field.tools.maxTimeout.label": "工具最大超时",
-  "settings.field.tools.maxTimeout.description":
-    "Agent 可为任意工具设置的最大超时秒数（0 表示不限制）",
+  "settings.field.tools.maxTimeout.description": "Agent 可为任意工具设置的最大超时秒数（0 表示不限制）",
   "settings.field.async.enabled.label": "异步执行",
   "settings.field.async.enabled.description": "启用异步 bash 命令与后台任务执行",
 
@@ -187,8 +169,7 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.mcp.enableProjectConfig.label": "MCP 项目配置",
   "settings.field.mcp.enableProjectConfig.description": "从项目根目录加载 .mcp.json/mcp.json",
   "settings.field.mcp.renderMarkdownResults.label": "MCP Markdown 结果",
-  "settings.field.mcp.renderMarkdownResults.description":
-    "在记录中将非 JSON 的 MCP 文本结果渲染为 Markdown",
+  "settings.field.mcp.renderMarkdownResults.description": "在记录中将非 JSON 的 MCP 文本结果渲染为 Markdown",
   "settings.field.mcp.notifications.label": "MCP 更新注入",
   "settings.field.mcp.notifications.description": "把 MCP 资源更新注入 Agent 对话",
 
@@ -200,29 +181,21 @@ export const toolsFiles: Record<string, string> = {
     "接收 Auto QA JSON 报告的完整 URL（默认 https://qa.omp.sh/v1/grievances）",
 
   "settings.field.edit.mode.label": "编辑模式",
-  "settings.field.edit.mode.description":
-    "选择 edit 工具的变体（replace、patch、hashline 或 apply_patch）",
+  "settings.field.edit.mode.description": "选择 edit 工具的变体（replace、patch、hashline 或 apply_patch）",
   "settings.field.edit.fuzzyMatch.label": "模糊匹配",
-  "settings.field.edit.fuzzyMatch.description":
-    "接受针对空白 Diff 的高置信度模糊匹配",
+  "settings.field.edit.fuzzyMatch.description": "接受针对空白 Diff 的高置信度模糊匹配",
   "settings.field.edit.fuzzyThreshold.label": "模糊匹配阈值",
-  "settings.field.edit.fuzzyThreshold.description":
-    "接受模糊匹配的相似度阈值（0-1）",
+  "settings.field.edit.fuzzyThreshold.description": "接受模糊匹配的相似度阈值（0-1）",
   "settings.field.edit.streamingAbort.label": "预览失败时中止",
-  "settings.field.edit.streamingAbort.description":
-    "补丁预览失败时中止流式 edit 工具调用",
+  "settings.field.edit.streamingAbort.description": "补丁预览失败时中止流式 edit 工具调用",
   "settings.field.edit.recoverInlineEdits.label": "恢复内联编辑内容",
-  "settings.field.edit.recoverInlineEdits.description":
-    "把模型以纯文本形式输出的编辑内容转换为 edit 工具调用并执行",
+  "settings.field.edit.recoverInlineEdits.description": "把模型以纯文本形式输出的编辑内容转换为 edit 工具调用并执行",
   "settings.field.edit.blockAutoGenerated.label": "阻止自动生成的文件",
-  "settings.field.edit.blockAutoGenerated.description":
-    "禁止编辑看起来是自动生成的文件（protoc、sqlc、swagger 等）",
+  "settings.field.edit.blockAutoGenerated.description": "禁止编辑看起来是自动生成的文件（protoc、sqlc、swagger 等）",
   "settings.field.edit.enforceSeenLines.label": "强制已见行校验",
-  "settings.field.edit.enforceSeenLines.description":
-    "拒绝锚定在此前 read/search 从未完整显示过的行上的编辑",
+  "settings.field.edit.enforceSeenLines.description": "拒绝锚定在此前 read/search 从未完整显示过的行上的编辑",
   "settings.field.edit.blackbox.enabled.label": "记录解析回归",
-  "settings.field.edit.blackbox.enabled.description":
-    "当编辑导致 AST 解析失败时，追加完整的修改前后源码",
+  "settings.field.edit.blackbox.enabled.description": "当编辑导致 AST 解析失败时，追加完整的修改前后源码",
   "settings.field.edit.autoRepair.enabled.label": "自动修复解析回归",
   "settings.field.edit.autoRepair.enabled.description":
     "当编辑破坏文件的 AST 解析时，请求 smol 模型修复损坏区域（通过重新解析校验；失败则回退为警告）",
@@ -230,25 +203,19 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.readLineNumbers.label": "行号",
   "settings.field.readLineNumbers.description": "默认在 read 工具输出前添加行号",
   "settings.field.read.defaultLimit.label": "默认读取行数",
-  "settings.field.read.defaultLimit.description":
-    "Agent 调用 read 未指定 limit 时默认返回的行数",
+  "settings.field.read.defaultLimit.description": "Agent 调用 read 未指定 limit 时默认返回的行数",
   "settings.field.read.renderMarkdown.label": "Markdown 预览",
-  "settings.field.read.renderMarkdown.description":
-    "把 Markdown 的 read 结果渲染为终端 Markdown 预览，而不是原始源码",
+  "settings.field.read.renderMarkdown.description": "把 Markdown 的 read 结果渲染为终端 Markdown 预览，而不是原始源码",
   "settings.field.read.toolResultPreview.label": "内联读取预览",
-  "settings.field.read.toolResultPreview.description":
-    "在记录中内联渲染 read 工具结果，而不是摘要行",
+  "settings.field.read.toolResultPreview.description": "在记录中内联渲染 read 工具结果，而不是摘要行",
 
   "settings.field.read.summarize.enabled.label": "读取摘要",
-  "settings.field.read.summarize.enabled.description":
-    "未指定显式选择器调用 read 时返回结构化代码摘要",
+  "settings.field.read.summarize.enabled.description": "未指定显式选择器调用 read 时返回结构化代码摘要",
   "settings.field.read.summarize.prose.label": "文本摘要",
-  "settings.field.read.summarize.prose.description":
-    "对 Markdown 与纯文本的读取返回结构化摘要",
+  "settings.field.read.summarize.prose.description": "对 Markdown 与纯文本的读取返回结构化摘要",
 
   "settings.field.lsp.enabled.label": "LSP",
-  "settings.field.lsp.enabled.description":
-    "启用 lsp 工具以提供代码智能（定义、引用、诊断、重命名）",
+  "settings.field.lsp.enabled.description": "启用 lsp 工具以提供代码智能（定义、引用、诊断、重命名）",
   "settings.field.lsp.lazy.label": "LSP 延迟启动",
   "settings.field.lsp.lazy.description":
     "在首次使用时（调用 lsp 工具或编辑匹配的文件类型）启动语言服务器，而不是在会话启动时",
@@ -256,14 +223,11 @@ export const toolsFiles: Record<string, string> = {
   "settings.field.lsp.shared.description":
     "通过守护进程代理，在多个 omp 实例之间为每个项目共享一个语言服务器（不可用时回退为私有服务器）",
   "settings.field.lsp.formatOnWrite.label": "写入时格式化",
-  "settings.field.lsp.formatOnWrite.description":
-    "写入后使用 LSP 自动格式化代码文件",
+  "settings.field.lsp.formatOnWrite.description": "写入后使用 LSP 自动格式化代码文件",
   "settings.field.lsp.diagnosticsOnWrite.label": "写入时诊断",
-  "settings.field.lsp.diagnosticsOnWrite.description":
-    "写入代码文件后返回 LSP 诊断",
+  "settings.field.lsp.diagnosticsOnWrite.description": "写入代码文件后返回 LSP 诊断",
   "settings.field.lsp.diagnosticsOnEdit.label": "编辑时诊断",
-  "settings.field.lsp.diagnosticsOnEdit.description":
-    "编辑代码文件后返回 LSP 诊断",
+  "settings.field.lsp.diagnosticsOnEdit.description": "编辑代码文件后返回 LSP 诊断",
   "settings.field.lsp.diagnosticsDeduplicate.label": "诊断去重",
   "settings.field.lsp.diagnosticsDeduplicate.description":
     "抑制已为该文件显示过的编辑后 LSP 诊断，只呈现新增或变化的诊断",

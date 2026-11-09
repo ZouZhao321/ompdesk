@@ -53,8 +53,12 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
   // 请求返回时可能已经换了目录：用 ref 读取最新值，避免旧闭包把用户拉回旧 checkout。
   const cwdRef = useRef(cwd);
   const stateRef = useRef<SwitcherState | null>(null);
-  useEffect(() => { cwdRef.current = cwd; }, [cwd]);
-  useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => {
+    cwdRef.current = cwd;
+  }, [cwd]);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const closePanel = useCallback(() => {
     setOpen(false);
@@ -74,32 +78,36 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
     let cancelled = false;
     fetch(`/api/worktrees?cwd=${encodeURIComponent(cwd)}`)
       .then((response) => response.json())
-      .then((data: {
-        projectRoot?: string;
-        isGit?: boolean;
-        isTopLevel?: boolean;
-        worktrees?: WorktreeEntry[];
-        branches?: BranchEntry[] | null;
-        error?: string;
-      }) => {
-        if (cancelled) return;
-        if (data.error || !data.projectRoot) {
-          setState(null);
-          return;
-        }
-        setState({
-          forCwd: cwd,
-          projectRoot: data.projectRoot,
-          isGit: data.isGit ?? false,
-          isTopLevel: data.isTopLevel ?? false,
-          worktrees: data.worktrees ?? [],
-          branches: data.branches ?? null,
-        });
-      })
+      .then(
+        (data: {
+          projectRoot?: string;
+          isGit?: boolean;
+          isTopLevel?: boolean;
+          worktrees?: WorktreeEntry[];
+          branches?: BranchEntry[] | null;
+          error?: string;
+        }) => {
+          if (cancelled) return;
+          if (data.error || !data.projectRoot) {
+            setState(null);
+            return;
+          }
+          setState({
+            forCwd: cwd,
+            projectRoot: data.projectRoot,
+            isGit: data.isGit ?? false,
+            isTopLevel: data.isTopLevel ?? false,
+            worktrees: data.worktrees ?? [],
+            branches: data.branches ?? null,
+          });
+        },
+      )
       .catch(() => {
         if (!cancelled) setState(null);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [cwd, refreshKey, reloadKey, active]);
 
   // 目录变了就清空并收起：上一个目录的分支列表既不能显示，也不能被点选。
@@ -135,7 +143,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cwd: state.projectRoot, branch: branchName, create }),
       });
-      const data = await response.json().catch(() => ({})) as { path?: string; error?: string };
+      const data = (await response.json().catch(() => ({}))) as { path?: string; error?: string };
       if (!response.ok || data.error || !data.path) {
         setError(data.error ?? `HTTP ${response.status}`);
         return;
@@ -175,7 +183,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cwd: state.projectRoot, path, force }),
       });
-      const data = await response.json().catch(() => ({})) as { error?: string; dirty?: boolean };
+      const data = (await response.json().catch(() => ({}))) as { error?: string; dirty?: boolean };
       if (!response.ok) {
         if (data.dirty && !force) {
           setConfirmRemove(path);
@@ -217,9 +225,10 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
   const visibleOrphans = orphanCheckouts.filter((worktree) => matchesFilter(worktree.path));
   const visibleFallback = fallbackCheckouts.filter((worktree) => matchesFilter(worktree.branch ?? worktree.path));
   const noMatches = visibleBranches.length + visibleOrphans.length + visibleFallback.length === 0;
-  const currentBranch = branches.find((branch) => branch.current)?.name
-    ?? checkouts.find((worktree) => worktree.path === cwd)?.branch
-    ?? null;
+  const currentBranch =
+    branches.find((branch) => branch.current)?.name ??
+    checkouts.find((worktree) => worktree.path === cwd)?.branch ??
+    null;
   const label = currentBranch ?? t("git.detachedHead");
 
   const removeButton = (path: string) => (
@@ -229,19 +238,40 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
       disabled={busy}
       title={t("git.removeCheckoutTitle", { path })}
       style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         width: isMobile ? MOBILE_HIT_TARGET_PX : 34,
         height: isMobile ? MOBILE_HIT_TARGET_PX : 28,
-        padding: 0, marginRight: 4,
-        background: "none", border: "none",
-        color: "var(--text-dim)", cursor: "pointer",
-        borderRadius: 5, flexShrink: 0,
+        padding: 0,
+        marginRight: 4,
+        background: "none",
+        border: "none",
+        color: "var(--text-dim)",
+        cursor: "pointer",
+        borderRadius: 5,
+        flexShrink: 0,
         transition: "color 0.12s, background 0.12s",
       }}
-      onMouseEnter={(event) => { event.currentTarget.style.color = "#ef4444"; event.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
-      onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-dim)"; event.currentTarget.style.background = "none"; }}
+      onMouseEnter={(event) => {
+        event.currentTarget.style.color = "#ef4444";
+        event.currentTarget.style.background = "rgba(239,68,68,0.08)";
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.color = "var(--text-dim)";
+        event.currentTarget.style.background = "none";
+      }}
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <polyline points="3 6 5 6 21 6" />
         <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
         <path d="M10 11v6M14 11v6" />
@@ -266,23 +296,60 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
       return (
         <div
           key={row.key}
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "rgba(239,68,68,0.06)" }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "7px 10px",
+            borderBottom: "1px solid var(--border)",
+            background: "rgba(239,68,68,0.06)",
+          }}
         >
-          <span style={{ flex: 1, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span
+            style={{
+              flex: 1,
+              fontSize: 11,
+              color: "var(--text)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {t("git.forceRemoveCheckout")}
           </span>
           <button
             type="button"
             onClick={() => void handleRemoveWorktree(row.path as string, true)}
             disabled={busy}
-            style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+            style={{
+              padding: "3px 9px",
+              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+              background: "#ef4444",
+              border: "none",
+              borderRadius: 5,
+              color: "#fff",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
           >
             {t("git.force")}
           </button>
           <button
             type="button"
             onClick={() => setConfirmRemove(null)}
-            style={{ padding: "3px 9px", minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined, background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
+            style={{
+              padding: "3px 9px",
+              minHeight: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+              background: "var(--bg-hover)",
+              border: "1px solid var(--border)",
+              borderRadius: 5,
+              color: "var(--text-muted)",
+              fontSize: 11,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
           >
             {t("sidebar.cancel")}
           </button>
@@ -290,10 +357,7 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
       );
     }
     return (
-      <div
-        key={row.key}
-        style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}
-      >
+      <div key={row.key} style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)" }}>
         <button
           type="button"
           onClick={row.onSelect}
@@ -313,16 +377,24 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
           }}
         >
           {row.checked ? (
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ flexShrink: 0 }}
+            >
               <polyline points="1.5 5 4 7.5 8.5 2.5" />
             </svg>
           ) : (
             <span style={{ width: 10, flexShrink: 0 }} />
           )}
           <PathLabel text={row.label} style={{ flex: 1 }} />
-          {row.tag && (
-            <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{row.tag}</span>
-          )}
+          {row.tag && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{row.tag}</span>}
         </button>
         {row.removable && row.path && removeButton(row.path)}
       </div>
@@ -352,14 +424,37 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
           fontFamily: "var(--font-mono)",
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <line x1="6" y1="3" x2="6" y2="15" />
           <circle cx="18" cy="6" r="3" />
           <circle cx="6" cy="18" r="3" />
           <path d="M18 9a9 9 0 0 1-9 9" />
         </svg>
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {label}
+        </span>
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}
+        >
           <polyline points="4 2.5 8 6 4 9.5" />
         </svg>
       </button>
@@ -419,7 +514,9 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
             const holder = holderPath ? checkouts.find((worktree) => worktree.path === holderPath) : null;
             const isMain = holder?.isMain === true;
             const stateLabel = holderPath
-              ? (isMain ? t("git.mainCheckout") : t("git.checkout"))
+              ? isMain
+                ? t("git.mainCheckout")
+                : t("git.checkout")
               : t("git.branchNoCheckout");
             return checkoutRow({
               key: branch.name,
@@ -433,29 +530,35 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
               onSelect: () => handleSwitchBranch(branch),
             });
           })}
-          {visibleOrphans.map((worktree) => checkoutRow({
-            key: worktree.path,
-            path: worktree.path,
-            title: worktree.path,
-            checked: worktree.path === cwd,
-            label: worktree.path,
-            tag: t("git.detached"),
-            removable: !worktree.isMain,
-            confirming: confirmRemove === worktree.path,
-            onSelect: () => switchTo(worktree.branch, worktree.path),
-          }))}
-          {visibleFallback.map((worktree) => checkoutRow({
-            key: worktree.path,
-            path: worktree.path,
-            title: worktree.path,
-            checked: worktree.path === cwd,
-            label: worktree.branch ?? worktree.path,
-            removable: !worktree.isMain,
-            confirming: confirmRemove === worktree.path,
-            onSelect: () => switchTo(worktree.branch, worktree.path),
-          }))}
+          {visibleOrphans.map((worktree) =>
+            checkoutRow({
+              key: worktree.path,
+              path: worktree.path,
+              title: worktree.path,
+              checked: worktree.path === cwd,
+              label: worktree.path,
+              tag: t("git.detached"),
+              removable: !worktree.isMain,
+              confirming: confirmRemove === worktree.path,
+              onSelect: () => switchTo(worktree.branch, worktree.path),
+            }),
+          )}
+          {visibleFallback.map((worktree) =>
+            checkoutRow({
+              key: worktree.path,
+              path: worktree.path,
+              title: worktree.path,
+              checked: worktree.path === cwd,
+              label: worktree.branch ?? worktree.path,
+              removable: !worktree.isMain,
+              confirming: confirmRemove === worktree.path,
+              onSelect: () => switchTo(worktree.branch, worktree.path),
+            }),
+          )}
           {showFilter && noMatches && filterText.length > 0 && (
-            <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("git.noMatchingBranches")}</div>
+            <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>
+              {t("git.noMatchingBranches")}
+            </div>
           )}
         </div>
 
@@ -478,7 +581,16 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
               textAlign: "left",
             }}
           >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.1"
+              strokeLinecap="round"
+              style={{ flexShrink: 0 }}
+            >
               <line x1="5" y1="1" x2="5" y2="9" />
               <line x1="1" y1="5" x2="9" y2="5" />
             </svg>
@@ -542,7 +654,11 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
               </button>
               <button
                 type="button"
-                onClick={() => { setNewOpen(false); setNewBranch(""); setError(null); }}
+                onClick={() => {
+                  setNewOpen(false);
+                  setNewBranch("");
+                  setError(null);
+                }}
                 style={{
                   flex: 1,
                   padding: "4px 0",
@@ -561,7 +677,15 @@ export function WorktreeSwitcher({ cwd, refreshKey = 0, active = true }: Props) 
           </div>
         )}
         {error && (
-          <div style={{ padding: "5px 10px 8px", color: "#dc2626", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>
+          <div
+            style={{
+              padding: "5px 10px 8px",
+              color: "#dc2626",
+              fontSize: 11,
+              lineHeight: 1.35,
+              overflowWrap: "anywhere",
+            }}
+          >
             {error}
           </div>
         )}

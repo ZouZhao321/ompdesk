@@ -6,7 +6,7 @@ const source = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8"
 
 function callbackBody(name, nextName) {
   const start = source.indexOf(`const ${name} = useCallback`);
-  const end = source.indexOf(`\n  const ${nextName}`, start);
+  const end = source.indexOf(`const ${nextName} = useCallback`, start);
   assert.notEqual(start, -1, `${name} callback not found`);
   assert.notEqual(end, -1, `${nextName} callback not found after ${name}`);
   return source.slice(start, end);

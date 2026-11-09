@@ -143,10 +143,7 @@ export const RAIL_ROW_GAP_PX = 4;
  * 已渲染条目，不按平均高度估算。可见顶边落在第一条之上（页首插槽可见）时返回
  * 第一条；列表还没渲染任何条目时返回 null。
  */
-export function railTopVisibleItemIndex(
-  items: readonly RailRenderedItem[],
-  visibleTop: number,
-): number | null {
+export function railTopVisibleItemIndex(items: readonly RailRenderedItem[], visibleTop: number): number | null {
   if (items.length === 0) return null;
   let top = items[0].index;
   for (const item of items) {

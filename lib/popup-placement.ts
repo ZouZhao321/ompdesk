@@ -49,7 +49,7 @@ export function computePopupPlacement(
   // Stay on the preferred side unless it cannot fit the popup and the other
   // side has more room; flipping for a marginal gain only makes it jumpy.
   const keepPreferred = preferredSpace >= preferredMaxHeight || preferredSpace >= otherSpace;
-  const side: PopupSide = keepPreferred ? prefer : (prefer === "above" ? "below" : "above");
+  const side: PopupSide = keepPreferred ? prefer : prefer === "above" ? "below" : "above";
   const space = keepPreferred ? preferredSpace : otherSpace;
 
   return { side, maxHeight: Math.max(floor, Math.min(preferredMaxHeight, space)) };

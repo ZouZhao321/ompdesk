@@ -64,4 +64,3 @@ export const POST = withRequestLog("/api/updates", async (req: Request) => {
     );
   }
 });
-

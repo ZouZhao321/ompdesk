@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createJiti } from "jiti";
+import { readSourceFile } from "../test-support/source-text.ts";
 
 const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
@@ -43,11 +43,7 @@ function props(overrides = {}) {
 
 function render(overrides, initialLocale = "en") {
   return renderToStaticMarkup(
-    React.createElement(
-      I18nProvider,
-      { initialLocale },
-      React.createElement(LogsPanelView, props(overrides)),
-    ),
+    React.createElement(I18nProvider, { initialLocale }, React.createElement(LogsPanelView, props(overrides))),
   );
 }
 
@@ -81,13 +77,23 @@ test("distinguishes an empty file list from a load failure and a loading state",
 });
 
 test("shows no-matches separately from a genuinely empty file", () => {
-  const file = { name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true };
+  const file = {
+    name: "omp.2026-10-24.4242.log",
+    size: 10,
+    modifiedAt: "2026-10-24T15:00:00.000Z",
+    current: true,
+  };
   assert.match(render({ files: [file], file, level: "warn" }), /No matching entries/);
   assert.match(render({ files: [file], file }), /This log file is empty/);
 });
 
 test("does not claim no matches while a truncated page is still catching up", () => {
-  const file = { name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true };
+  const file = {
+    name: "omp.2026-10-24.4242.log",
+    size: 10,
+    modifiedAt: "2026-10-24T15:00:00.000Z",
+    current: true,
+  };
   const html = render({ files: [file], file, level: "warn", catchingUp: true });
 
   assert.match(html, /Catching up/);
@@ -96,7 +102,12 @@ test("does not claim no matches while a truncated page is still catching up", ()
 });
 
 test("renders level badges, messages, and file metadata", () => {
-  const file = { name: "omp.2026-10-24.4242.log", size: 1_536, modifiedAt: "2026-10-24T15:00:00.000Z", current: true };
+  const file = {
+    name: "omp.2026-10-24.4242.log",
+    size: 1_536,
+    modifiedAt: "2026-10-24T15:00:00.000Z",
+    current: true,
+  };
   const html = render({
     files: [file],
     file,
@@ -114,8 +125,20 @@ test("renders level badges, messages, and file metadata", () => {
 
 test("expands one entry into its full field JSON", () => {
   const html = render({
-    files: [{ name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true }],
-    file: { name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true },
+    files: [
+      {
+        name: "omp.2026-10-24.4242.log",
+        size: 10,
+        modifiedAt: "2026-10-24T15:00:00.000Z",
+        current: true,
+      },
+    ],
+    file: {
+      name: "omp.2026-10-24.4242.log",
+      size: 10,
+      modifiedAt: "2026-10-24T15:00:00.000Z",
+      current: true,
+    },
     entries: [entry(0, "http.request", { requestId: "req-1", durationMs: 42 })],
     expandedOffset: 0,
   });
@@ -126,7 +149,12 @@ test("expands one entry into its full field JSON", () => {
 });
 
 test("preserves unparseable lines with their parse error", () => {
-  const file = { name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true };
+  const file = {
+    name: "omp.2026-10-24.4242.log",
+    size: 10,
+    modifiedAt: "2026-10-24T15:00:00.000Z",
+    current: true,
+  };
   const raw = {
     offset: 0,
     length: 8,
@@ -187,7 +215,12 @@ test("localizes empty states and keeps server errors verbatim", () => {
   assert.match(failed, /无法加载日志/);
   assert.match(failed, /connect ECONNREFUSED/);
 
-  const file = { name: "omp.2026-10-24.4242.log", size: 10, modifiedAt: "2026-10-24T15:00:00.000Z", current: true };
+  const file = {
+    name: "omp.2026-10-24.4242.log",
+    size: 10,
+    modifiedAt: "2026-10-24T15:00:00.000Z",
+    current: true,
+  };
   const noMatches = render({ files: [file], file, level: "warn" }, "zh-CN");
   assert.match(noMatches, /没有匹配的条目/);
   assert.match(noMatches, /只读取该文件的最新部分/);
@@ -200,10 +233,13 @@ test("localizes empty states and keeps server errors verbatim", () => {
   assert.match(paused, /最后写入 /);
 });
 
-test("keeps the narrow-screen layout rules", () => {
-  const css = readFileSync(new URL("./LogsPanel.module.css", import.meta.url), "utf8");
+test("keeps the narrow-screen layout rules", async () => {
+  const css = await readSourceFile(new URL("./LogsPanel.module.css", import.meta.url));
   assert.match(css, /@media \(max-width: 760px\)/);
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.entrySummary \{[\s\S]*?grid-template-columns: auto minmax\(0, 1fr\)/);
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)[\s\S]*?\.entrySummary \{[\s\S]*?grid-template-columns: auto minmax\(0, 1fr\)/,
+  );
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.field, \.searchField, \.fileField \{ flex: 1 1 100%/);
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.actions \{ display: grid/);
 });
