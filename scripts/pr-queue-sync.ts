@@ -74,7 +74,12 @@ const skipped: string[] = [];
 for (const pr of listed) {
   if (only.length > 0 && !only.includes(pr.number)) continue;
   const branch = pr.headRefName;
-  const behind = Number(git(["rev-list", "--count", `origin/${branch}..origin/main`]).trim());
+  const behindResult = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`]);
+  if (!behindResult.ok) {
+    skipped.push(`#${pr.number} ${branch}：读不到 origin/${branch}，无法判断是否落后`);
+    continue;
+  }
+  const behind = Number(behindResult.stdout.trim());
   if (behind === 0) {
     skipped.push(`#${pr.number} ${branch}：已是最新`);
     continue;

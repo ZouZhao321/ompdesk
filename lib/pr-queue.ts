@@ -23,8 +23,8 @@ export interface PullRequestState {
   checks: CheckState[];
   /** 与这个 PR 试合并会冲突的其他分支。 */
   conflictsWith: string[];
-  /** 分支比 main 少多少个提交。 */
-  behindCommits: number;
+  /** 分支比 main 少多少个提交；读不到 `origin/<branch>` 时为 null。 */
+  behindCommits: number | null;
   unresolvedThreads: number;
   changedFiles: number;
   /** 这个 PR 的全部提交都包含在哪个开放 PR 的历史里。 */
@@ -72,7 +72,13 @@ export function classifyPullRequest(pr: PullRequestState, required: string[]): V
     });
   }
 
-  if (pr.behindCommits > 0) {
+  if (pr.behindCommits === null) {
+    blockers.push({
+      kind: "behind",
+      detail: `读不到 origin/${pr.branch}：远端没有这个分支，无法判断是否落后`,
+      needsDecision: true,
+    });
+  } else if (pr.behindCommits > 0) {
     blockers.push({
       kind: "behind",
       detail: `比 main 少 ${pr.behindCommits} 个提交：合并目标要求分支最新，每次别人合并它都要重新同步`,

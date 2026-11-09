@@ -109,6 +109,12 @@ const response = JSON.parse(
 ) as GraphqlResponse;
 const nodes = response.data.repository.pullRequests.nodes;
 
+/** 读远端分支与 main 的提交差；远端没有这个分支时 rev-list 失败，返回 null。 */
+function behindCommits(branch: string): number | null {
+  const result = runGit(["rev-list", "--count", `origin/${branch}..origin/main`]);
+  return result.status === 0 ? Number(result.stdout.trim()) : null;
+}
+
 const prs: PullRequestState[] = nodes.map((node) => ({
   number: node.number,
   branch: node.headRefName,
@@ -124,7 +130,7 @@ const prs: PullRequestState[] = nodes.map((node) => ({
       }),
     ),
   conflictsWith: [],
-  behindCommits: Number(runGit(["rev-list", "--count", `origin/${node.headRefName}..origin/main`]).stdout.trim()),
+  behindCommits: behindCommits(node.headRefName),
   unresolvedThreads: node.reviewThreads.nodes.filter((thread) => !thread.isResolved).length,
   changedFiles: node.changedFiles,
   containedIn: null,
