@@ -121,16 +121,11 @@ function unionNames(entries: readonly NamedSet[]): Set<string> {
   return names;
 }
 
-
-
 /**
  * 用函数名集合把两侧文件分组。两侧名字重叠达到阈值的文件连成一组；只有同时含基准侧与
  * 本次侧的分量才成组，输出按基准路径排序，供报告稳定复现。
  */
-function groupByFunctionNames(
-  base: readonly NamedSet[],
-  head: readonly NamedSet[],
-): NameSetGroup[] {
+function groupByFunctionNames(base: readonly NamedSet[], head: readonly NamedSet[]): NameSetGroup[] {
   const parent = Array.from({ length: base.length + head.length }, (_, index) => index);
   const find = (index: number): number => {
     let current = index;
@@ -188,29 +183,31 @@ function groupByFunctionNames(
 }
 
 function renameNotes(facts: DistortionFacts): DistortionNote[] {
-  return facts.renames.map((rename): DistortionNote => ({
-    label: "改名",
-    file: `${rename.path} ← ${rename.previousPath}`,
-    numbers: rename.baseCovered
-      ? "基准取改名前的路径"
-      : "基准路径未出现在分叉点覆盖率里",
-    reason: rename.baseCovered
-      ? "git 识别为改名，旧路径的基准映射到新路径，不按新增文件处理"
-      : "git 识别为改名，但旧路径在分叉点没有覆盖率记录，基准侧按 0 计",
-    fix: rename.baseCovered
-      ? "无需处理；两侧数字来自同一条基准记录"
-      : "确认改名前该文件是否被测试加载，必要时为它补一个会加载的测试",
-  }));
+  return facts.renames.map(
+    (rename): DistortionNote => ({
+      label: "改名",
+      file: `${rename.path} ← ${rename.previousPath}`,
+      numbers: rename.baseCovered ? "基准取改名前的路径" : "基准路径未出现在分叉点覆盖率里",
+      reason: rename.baseCovered
+        ? "git 识别为改名，旧路径的基准映射到新路径，不按新增文件处理"
+        : "git 识别为改名，但旧路径在分叉点没有覆盖率记录，基准侧按 0 计",
+      fix: rename.baseCovered
+        ? "无需处理；两侧数字来自同一条基准记录"
+        : "确认改名前该文件是否被测试加载，必要时为它补一个会加载的测试",
+    }),
+  );
 }
 
 function replacementNotes(facts: DistortionFacts): DistortionNote[] {
-  return facts.replacements.map((replacement): DistortionNote => ({
-    label: "疑似替换",
-    file: replacement.path,
-    numbers: `删除 ${replacement.removed.length} 个函数，新增 ${replacement.added.length} 个，净增量 0`,
-    reason: `删除旧函数后新增同类函数：删 ${replacement.removed.join("、")}，加 ${replacement.added.join("、")}，函数总数没有变化，函数增量判定不可靠`,
-    fix: "转人工豁免：在评审里写明替换原因与替代验证方式",
-  }));
+  return facts.replacements.map(
+    (replacement): DistortionNote => ({
+      label: "疑似替换",
+      file: replacement.path,
+      numbers: `删除 ${replacement.removed.length} 个函数，新增 ${replacement.added.length} 个，净增量 0`,
+      reason: `删除旧函数后新增同类函数：删 ${replacement.removed.join("、")}，加 ${replacement.added.join("、")}，函数总数没有变化，函数增量判定不可靠`,
+      fix: "转人工豁免：在评审里写明替换原因与替代验证方式",
+    }),
+  );
 }
 
 function sumLines(

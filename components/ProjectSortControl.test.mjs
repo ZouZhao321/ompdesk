@@ -40,9 +40,7 @@ function menuItemSnippets(html) {
 }
 
 function menuItemFor(html, label) {
-  const snippet = menuItemSnippets(html).find(
-    (item) => item.includes(label) || item.includes(`aria-label="${label}"`),
-  );
+  const snippet = menuItemSnippets(html).find((item) => item.includes(label) || item.includes(`aria-label="${label}"`));
   assert.ok(snippet, `expected a menuitemradio labelled "${label}"`);
   return snippet;
 }

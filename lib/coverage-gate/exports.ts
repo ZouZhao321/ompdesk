@@ -76,6 +76,10 @@ export interface ExportAnalysis {
   scannedFiles: number;
   /** 基线文件存在但无法解析时的说明；有值时规则把它报成失败。 */
   baselineError?: string;
+  /** 整次分析失败的原因；有值时规则按流水线问题报一条，不再逐符号判定。 */
+  analysisError?: string;
+  /** 单个文件读取失败的文件与原因；有值时判定数据不全，规则把它报成失败。 */
+  readFailures: readonly string[];
 }
 
 /** 基线条目的值。 */
@@ -171,9 +175,10 @@ function collectExports(source: ts.SourceFile, localKinds: ReadonlyMap<string, E
 
   for (const statement of source.statements) {
     if (ts.isExportDeclaration(statement)) {
-      const specifier = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
-        ? statement.moduleSpecifier.text
-        : null;
+      const specifier =
+        statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+          ? statement.moduleSpecifier.text
+          : null;
       const clause = statement.exportClause;
       // `export * from` 的导出名无法静态得知，引用索引按「引用全部」处理。
       if (!clause) continue;
@@ -182,15 +187,10 @@ function collectExports(source: ts.SourceFile, localKinds: ReadonlyMap<string, E
         continue;
       }
       for (const element of clause.elements) {
-        const localName = element.propertyName && ts.isIdentifier(element.propertyName)
-          ? element.propertyName.text
-          : element.name.text;
+        const localName =
+          element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName.text : element.name.text;
         const typeOnly = statement.isTypeOnly || element.isTypeOnly;
-        const kind: ExportKind = typeOnly
-          ? "type"
-          : specifier
-            ? "runtime"
-            : localKinds.get(localName) ?? "runtime";
+        const kind: ExportKind = typeOnly ? "type" : specifier ? "runtime" : (localKinds.get(localName) ?? "runtime");
         push(element.name.text, kind, specifier ? "re-export" : "alias");
       }
       continue;
@@ -259,9 +259,11 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
       if (bindings && ts.isNamespaceImport(bindings)) namespaceRef = true;
       if (bindings && ts.isNamedImports(bindings)) {
         for (const element of bindings.elements) {
-          named.push(element.propertyName && ts.isIdentifier(element.propertyName)
-            ? element.propertyName.text
-            : element.name.text);
+          named.push(
+            element.propertyName && ts.isIdentifier(element.propertyName)
+              ? element.propertyName.text
+              : element.name.text,
+          );
         }
       }
       imports.push({ specifier, named, defaultRef: clause.name !== undefined, namespaceRef });
@@ -283,34 +285,54 @@ function collectImports(source: ts.SourceFile): { imports: ModuleImport[]; reExp
     }
     const named: string[] = [];
     for (const element of clause.elements) {
-      const name = element.propertyName && ts.isIdentifier(element.propertyName)
-        ? element.propertyName.text
-        : element.name.text;
+      const name =
+        element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName.text : element.name.text;
       named.push(name);
       reExports.push({ specifier, name });
     }
     imports.push({ specifier, named, defaultRef: false, namespaceRef: false });
   }
 
+  collectLazyImports(source, imports);
+
   return { imports, reExports, stars };
+}
+
+/** 动态导入或 `require` 调用里的模块说明符；取不到字符串字面量时返回 null。 */
+function lazySpecifier(call: ts.CallExpression): string | null {
+  const isDynamicImport = call.expression.kind === ts.SyntaxKind.ImportKeyword;
+  const isRequire = ts.isIdentifier(call.expression) && call.expression.text === "require";
+  if (!isDynamicImport && !isRequire) return null;
+  const [argument] = call.arguments;
+  // 无插值模板字面量与普通字符串等价，模块解析结果相同。
+  return argument !== undefined && ts.isStringLiteralLike(argument) ? argument.text : null;
+}
+
+/**
+ * 惰性加载同样是对模块导出的引用。取到的名字不固定，按「引用了该模块全部导出」记，
+ * 只求不漏报：宁可少拦一条，也不把只在动态加载里用到的导出判成 0 引用。
+ */
+function collectLazyImports(source: ts.SourceFile, imports: ModuleImport[]): void {
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const specifier = lazySpecifier(node);
+      if (specifier !== null) imports.push({ specifier, named: [], defaultRef: false, namespaceRef: true });
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(source, visit);
 }
 
 /** 扫描一个文件：导出、对外引用、转出口。 */
 function scanModule(filePath: string, sourceText: string): ModuleScan {
-  const source = ts.createSourceFile(
-    filePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    false,
-    scriptKindOf(filePath),
-  );
+  const source = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, false, scriptKindOf(filePath));
   const localKinds = collectLocalKinds(source);
   const { imports, reExports, stars } = collectImports(source);
   return { exports: collectExports(source, localKinds), imports, reExports, stars };
 }
 
 /** 只取导出符号。 */
-export function extractExports(filePath: string, sourceText: string): ExportedSymbol[] {
+function extractExports(filePath: string, sourceText: string): ExportedSymbol[] {
   return scanModule(filePath, sourceText).exports;
 }
 
@@ -453,13 +475,6 @@ function buildReferenceIndex(scans: ReadonlyMap<string, ModuleScan>): ReferenceI
   return index;
 }
 
-/** 从源码文本建引用索引。 */
-export function indexReferences(sources: ReadonlyMap<string, string>): ReferenceIndex {
-  const scans = new Map<string, ModuleScan>();
-  for (const [filePath, sourceText] of sources) scans.set(filePath, scanModule(filePath, sourceText));
-  return buildReferenceIndex(scans);
-}
-
 /** 某个导出在受管源码里的引用方文件，去重后按路径排序。 */
 export function referencesFor(index: ReferenceIndex, file: string, name: string): readonly string[] {
   const byName = index.get(file);
@@ -515,22 +530,50 @@ interface CollectExportUsageOptions {
   baselineText: string | null;
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** 目标文件不存在：工作区里已删除的受管文件会走到这里，不算读取失败。 */
+function isMissingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
 /**
  * 采集一次判定所需的全部数据：工作区源码的引用索引、改动文件两侧的导出对比、
  * 基线里的存量条目。
+ *
+ * 单个文件读不出来不放弃整次分析：工作区里已删除的受管文件按不存在处理，其余读取
+ * 失败记进 `readFailures`，由规则报成流水线问题，别的规则照常判定。
  */
 export async function collectExportUsage(options: CollectExportUsageOptions): Promise<ExportAnalysis> {
   // 改动清单里的未跟踪新文件不在 `git ls-files` 里，但要一并扫描：本地运行时规则
   // 与检查里看到同一批文件。
   const paths = new Set(options.managedFiles);
-  for (const change of options.changedFiles) paths.add(change.path);
+  const changedPaths = new Set<string>();
+  for (const change of options.changedFiles) {
+    paths.add(change.path);
+    changedPaths.add(change.path);
+  }
 
   const scans = new Map<string, ModuleScan>();
-  const texts = await Promise.all([...paths].sort().map(async (filePath) => {
-    const text = await options.readers.readWorkspace(filePath);
-    return [filePath, text] as const;
-  }));
-  for (const [filePath, text] of texts) scans.set(filePath, scanModule(filePath, text));
+  const readFailures: string[] = [];
+  await Promise.all(
+    [...paths].sort().map(async (filePath) => {
+      let text: string;
+      try {
+        text = await options.readers.readWorkspace(filePath);
+      } catch (error) {
+        // 工作区里删掉的文件按不存在处理；改动清单里的文件本该在，读不到就是数据不全，
+        // 不能静默跳过，否则它的新增导出会从判定里消失。
+        if (!isMissingFile(error) || changedPaths.has(filePath)) {
+          readFailures.push(`${filePath}：${errorMessage(error)}`);
+        }
+        return;
+      }
+      scans.set(filePath, scanModule(filePath, text));
+    }),
+  );
 
   const baseline = new Set<string>();
   let baselineError: string | undefined;
@@ -550,20 +593,47 @@ export async function collectExportUsage(options: CollectExportUsageOptions): Pr
     if (headExports.length === 0) continue;
 
     const basePath = change.previousPath ?? change.path;
-    const baseText = change.status === "added" ? null : await options.readers.readAtMergeBase(basePath);
-    const baseKeys = new Set((baseText === null ? [] : extractExports(basePath, baseText)).map(
-      (symbol) => `${symbol.name}\u0000${symbol.kind}`,
-    ));
+    let baseText: string | null;
+    try {
+      baseText = change.status === "added" ? null : await options.readers.readAtMergeBase(basePath);
+    } catch (error) {
+      readFailures.push(`分叉点 ${basePath}：${errorMessage(error)}`);
+      continue;
+    }
+    const baseKeys = new Set(
+      (baseText === null ? [] : extractExports(basePath, baseText)).map(
+        (symbol) => `${symbol.name}\u0000${symbol.kind}`,
+      ),
+    );
     for (const symbol of headExports) {
-      if (!baseKeys.has(`${symbol.name}\u0000${symbol.kind}`)) added.push({ file: change.path, symbol });
+      if (baseKeys.has(`${symbol.name}\u0000${symbol.kind}`)) continue;
+      added.push({ file: change.path, symbol });
+      // 基线只豁免分叉点之前就存在的符号。本次新增的导出即使出现在基线里也不放行，
+      // 否则改一次基线就能让规则三自我豁免。
+      baseline.delete(baselineKey(change.path, symbol.name, symbol.kind));
     }
   }
+
+  readFailures.sort();
 
   return {
     added,
     references: buildReferenceIndex(scans),
     baseline,
     scannedFiles: scans.size,
+    readFailures,
     ...(baselineError === undefined ? {} : { baselineError }),
+  };
+}
+
+/** 导出分析整体没跑起来时的空结果：规则据 `analysisError` 报成流水线问题。 */
+export function exportUsageFailure(detail: string): ExportAnalysis {
+  return {
+    added: [],
+    references: new Map(),
+    baseline: new Set(),
+    scannedFiles: 0,
+    readFailures: [],
+    analysisError: detail,
   };
 }

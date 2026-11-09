@@ -1,7 +1,12 @@
 import fs from "fs";
 import { withRequestLog } from "@/lib/api-request-log";
 import { NextRequest, NextResponse } from "next/server";
-import { getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed, isWindowsAbsolutePath } from "@/lib/file-access";
+import {
+  getAllowedFileRoots,
+  isExistingFilePathAllowed,
+  isFilePathAllowed,
+  isWindowsAbsolutePath,
+} from "@/lib/file-access";
 import { getGitStatus } from "@/lib/git-changes";
 
 export const GET = withRequestLog("/api/git/status", getRouteHandler);

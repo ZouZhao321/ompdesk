@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createJiti } from "jiti";
+import { extractBlock, readSourceFile } from "../test-support/source-text.ts";
 
 const jiti = createJiti(import.meta.url);
 const { MOBILE_HIT_TARGET_PX, MOBILE_LAYOUT_QUERY } = await jiti.import("../lib/mobile-layout.ts");
@@ -9,13 +9,13 @@ const { MOBILE_HIT_TARGET_PX, MOBILE_LAYOUT_QUERY } = await jiti.import("../lib/
 /** 移动档媒体查询串：CSS 必须与 lib/mobile-layout 的导出常量逐字一致。 */
 const mobileMediaQuery = MOBILE_LAYOUT_QUERY;
 
-const layoutSource = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
-const cssSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-const appShellSource = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8");
-const chatWindowSource = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
-const chatInputSource = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
-const tabBarSource = await readFile(new URL("./TabBar.tsx", import.meta.url), "utf8");
-const viewportHookSource = await readFile(new URL("../hooks/useViewportHeight.ts", import.meta.url), "utf8");
+const layoutSource = await readSourceFile(new URL("../app/layout.tsx", import.meta.url));
+const cssSource = await readSourceFile(new URL("../app/globals.css", import.meta.url));
+const appShellSource = await readSourceFile(new URL("./AppShell.tsx", import.meta.url));
+const chatWindowSource = await readSourceFile(new URL("./ChatWindow.tsx", import.meta.url));
+const chatInputSource = await readSourceFile(new URL("./ChatInput.tsx", import.meta.url));
+const tabBarSource = await readSourceFile(new URL("./TabBar.tsx", import.meta.url));
+const viewportHookSource = await readSourceFile(new URL("../hooks/useViewportHeight.ts", import.meta.url));
 
 test("configures iOS standalone mode to use the full screen", () => {
   assert.match(layoutSource, /statusBarStyle: "default"/);
@@ -51,12 +51,7 @@ test("contains chat content and inputs within the mobile viewport", () => {
 });
 
 test("prevents iOS focus zoom from widening the layout", () => {
-  const marker = `@media ${mobileMediaQuery} {`;
-  const start = cssSource.lastIndexOf(marker);
-  assert.ok(start >= 0, "globals.css must keep the mobile media query");
-  const end = cssSource.indexOf("\n}", start);
-  assert.ok(end > start, "the last mobile media query block must be closed");
-  const mobileBlock = cssSource.slice(start, end);
+  const mobileBlock = extractBlock(cssSource, `@media ${mobileMediaQuery}`);
   assert.match(
     mobileBlock,
     /textarea,\s*input,\s*select \{\s*font-size: 16px !important;/,
@@ -65,12 +60,7 @@ test("prevents iOS focus zoom from widening the layout", () => {
 });
 
 test("手机档把文件面板页签栏与顶栏抬到同一命中区高度", () => {
-  const marker = `@media ${mobileMediaQuery} {`;
-  const start = cssSource.lastIndexOf(marker);
-  assert.ok(start >= 0, "globals.css must keep the mobile media query");
-  const end = cssSource.indexOf("\n}", start);
-  assert.ok(end > start, "the last mobile media query block must be closed");
-  const mobileBlock = cssSource.slice(start, end);
+  const mobileBlock = extractBlock(cssSource, `@media ${mobileMediaQuery}`);
   // 右侧内边距留给悬浮的面板开关，最后一个页签的关闭按钮不会被盖住。
   assert.match(
     mobileBlock,

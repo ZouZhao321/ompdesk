@@ -70,10 +70,7 @@ function bracketFragments(text: string): string[] {
  */
 function isCodeIdentifier(value: string): boolean {
   if (value.length < 2 || !PLAIN_IDENTIFIER_RE.test(value)) return false;
-  return /[A-Z]/.test(value.slice(1))
-    || value.includes("_")
-    || /\d/.test(value)
-    || value.startsWith("$");
+  return /[A-Z]/.test(value.slice(1)) || value.includes("_") || /\d/.test(value) || value.startsWith("$");
 }
 
 /** 原文中必须逐字保留的片段，按出现顺序去重。 */

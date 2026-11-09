@@ -38,18 +38,18 @@ export async function persistExplicitStartupPreferences(
   let modelDefaultChanged = false;
 
   if (
-    explicit.model
-    && effective.model
-    && explicit.model.provider === effective.model.provider
-    && explicit.model.modelId === effective.model.modelId
+    explicit.model &&
+    effective.model &&
+    explicit.model.provider === effective.model.provider &&
+    explicit.model.modelId === effective.model.modelId
   ) {
     settings.setModelRole("default", formatRoleSelector(effective.model));
     modelDefaultChanged = true;
   }
 
   if (
-    explicit.thinkingLevel
-    && (explicit.thinkingLevel === "auto" || effective.supportsThinking || effective.thinkingLevel !== "off")
+    explicit.thinkingLevel &&
+    (explicit.thinkingLevel === "auto" || effective.supportsThinking || effective.thinkingLevel !== "off")
   ) {
     setSetting(settings, "defaultThinkingLevel", explicit.thinkingLevel === "auto" ? "auto" : effective.thinkingLevel);
   }

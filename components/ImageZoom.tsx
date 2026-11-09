@@ -107,9 +107,12 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     setCamera(cameraRef.current);
   }, []);
 
-  useEffect(() => () => {
-    if (frameRef.current) cancelAnimationFrame(frameRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    },
+    [],
+  );
 
   const onNaturalSizeRef = useRef(onNaturalSize);
   useEffect(() => {
@@ -117,36 +120,34 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
   }, [onNaturalSize]);
 
   // 缓存命中的图片可能在 onLoad 挂上之前就完成加载，挂载后必须主动核对一次尺寸。
-  const syncNaturalSize = useCallback((image: HTMLImageElement) => {
-    // 只有 viewBox 的 SVG 在部分引擎里 naturalWidth 为 0，退回元素尺寸与替换元素默认尺寸。
-    const hasIntrinsicSize = image.naturalWidth > 0 && image.naturalHeight > 0;
-    const size = hasIntrinsicSize
-      ? { w: image.naturalWidth, h: image.naturalHeight }
-      : { w: image.clientWidth || DEFAULT_IMAGE_SIZE.w, h: image.clientHeight || DEFAULT_IMAGE_SIZE.h };
-    const current = naturalSizeRef.current;
-    setLoaded(true);
-    if (current.w === size.w && current.h === size.h) return;
-    naturalSizeRef.current = size;
-    setNatural(size);
-    if (hasIntrinsicSize) onNaturalSizeRef.current?.(size);
-    // 尺寸相近的刷新保留当前比例；换成悬殊的另一张图时重新适配，否则会缩成看不见的大小。
-    const previous = previousNaturalRef.current;
-    if (previous && previous.w > 0 && previous.h > 0) {
-      const ratio = Math.max(
-        size.w / previous.w,
-        previous.w / size.w,
-        size.h / previous.h,
-        previous.h / size.h,
-      );
-      if (ratio > 2) adjustedRef.current = false;
-    }
-    previousNaturalRef.current = size;
-    // 尺寸与相机同一次更新里就位，避免首帧以 100% 贴在左上角再跳。
-    const viewport = viewportSizeRef.current;
-    if (!adjustedRef.current && viewport.w > 0 && viewport.h > 0) {
-      applyCamera(centerCamera(size, viewport, fitZoom(size, viewport)));
-    }
-  }, [applyCamera]);
+  const syncNaturalSize = useCallback(
+    (image: HTMLImageElement) => {
+      // 只有 viewBox 的 SVG 在部分引擎里 naturalWidth 为 0，退回元素尺寸与替换元素默认尺寸。
+      const hasIntrinsicSize = image.naturalWidth > 0 && image.naturalHeight > 0;
+      const size = hasIntrinsicSize
+        ? { w: image.naturalWidth, h: image.naturalHeight }
+        : { w: image.clientWidth || DEFAULT_IMAGE_SIZE.w, h: image.clientHeight || DEFAULT_IMAGE_SIZE.h };
+      const current = naturalSizeRef.current;
+      setLoaded(true);
+      if (current.w === size.w && current.h === size.h) return;
+      naturalSizeRef.current = size;
+      setNatural(size);
+      if (hasIntrinsicSize) onNaturalSizeRef.current?.(size);
+      // 尺寸相近的刷新保留当前比例；换成悬殊的另一张图时重新适配，否则会缩成看不见的大小。
+      const previous = previousNaturalRef.current;
+      if (previous && previous.w > 0 && previous.h > 0) {
+        const ratio = Math.max(size.w / previous.w, previous.w / size.w, size.h / previous.h, previous.h / size.h);
+        if (ratio > 2) adjustedRef.current = false;
+      }
+      previousNaturalRef.current = size;
+      // 尺寸与相机同一次更新里就位，避免首帧以 100% 贴在左上角再跳。
+      const viewport = viewportSizeRef.current;
+      if (!adjustedRef.current && viewport.w > 0 && viewport.h > 0) {
+        applyCamera(centerCamera(size, viewport, fitZoom(size, viewport)));
+      }
+    },
+    [applyCamera],
+  );
 
   useEffect(() => {
     // 换源（live 刷新或换文件）后先回到加载占位，避免新图按旧尺寸拉伸，也避免失败时留下旧画面。
@@ -200,18 +201,21 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
     );
   }, [natural.w, natural.h, viewport.w, viewport.h, applyCamera]);
 
-  const zoomTo = useCallback((scale: number, anchor?: { x: number; y: number }) => {
-    const size = viewportSizeRef.current;
-    const next = zoomCameraAt(
-      cameraRef.current,
-      anchor ?? { x: size.w / 2, y: size.h / 2 },
-      scale,
-      naturalSizeRef.current,
-      size,
-    );
-    if (naturalSizeRef.current.w > 0 && next.scale !== cameraRef.current.scale) adjustedRef.current = true;
-    scheduleCamera(next);
-  }, [scheduleCamera]);
+  const zoomTo = useCallback(
+    (scale: number, anchor?: { x: number; y: number }) => {
+      const size = viewportSizeRef.current;
+      const next = zoomCameraAt(
+        cameraRef.current,
+        anchor ?? { x: size.w / 2, y: size.h / 2 },
+        scale,
+        naturalSizeRef.current,
+        size,
+      );
+      if (naturalSizeRef.current.w > 0 && next.scale !== cameraRef.current.scale) adjustedRef.current = true;
+      scheduleCamera(next);
+    },
+    [scheduleCamera],
+  );
 
   const fitToWindow = useCallback(() => {
     adjustedRef.current = false;
@@ -414,7 +418,16 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
           title={t("i18n.zoomOut")}
           aria-label={t("i18n.zoomOut")}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
             <path d="M5 12h14" />
           </svg>
         </button>
@@ -427,7 +440,16 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
           title={t("i18n.zoomIn")}
           aria-label={t("i18n.zoomIn")}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
             <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
@@ -438,7 +460,17 @@ export function ImageZoomSurface({ src, alt, className, onNaturalSize }: ImageZo
           title={t("i18n.fitToWindow")}
           aria-label={t("i18n.fitToWindow")}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" />
           </svg>
         </button>
@@ -496,7 +528,16 @@ export function ImagePreviewDialog({ request, onClose }: { request: ImagePreview
           title={t("i18n.close")}
           aria-label={t("i18n.close")}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
             <path d="M6 6l12 12M18 6 6 18" />
           </svg>
         </button>
@@ -516,13 +557,7 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   return (
     <ImagePreviewContext.Provider value={open}>
       {children}
-      {request && (
-        <ImagePreviewDialog
-          key={request.src}
-          request={request}
-          onClose={() => setRequest(null)}
-        />
-      )}
+      {request && <ImagePreviewDialog key={request.src} request={request} onClose={() => setRequest(null)} />}
     </ImagePreviewContext.Provider>
   );
 }
@@ -601,10 +636,14 @@ export function ZoomableImage({ src, alt, className, imgStyle, thumbnail = false
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? label : undefined}
       onClick={open}
-      onKeyDown={interactive ? (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        open(event);
-      } : undefined}
+      onKeyDown={
+        interactive
+          ? (event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              open(event);
+            }
+          : undefined
+      }
     />
   );
 }

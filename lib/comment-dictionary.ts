@@ -79,12 +79,7 @@ export function readCommentDictionary(agentDir: string): CommentDictionary {
   if (!existsSync(file)) return { version: 1, translations: {} };
 
   const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
-  if (
-    typeof parsed !== "object"
-    || parsed === null
-    || Array.isArray(parsed)
-    || !("translations" in parsed)
-  ) {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed) || !("translations" in parsed)) {
     throw new Error(`Invalid comment dictionary: ${file}`);
   }
   const stored = parsed.translations;

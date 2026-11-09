@@ -25,8 +25,18 @@ interface EntryViewState {
 export interface TranscriptViewStore {
   subscribe(listener: () => void): () => void;
   /** 读出展开状态；没有用户操作记录时返回 `fallback`。 */
-  isExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): boolean;
-  toggleExpanded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, fallback: boolean): void;
+  isExpanded(
+    sessionId: string | undefined,
+    anchorEntryId: string | undefined,
+    part: string,
+    fallback: boolean,
+  ): boolean;
+  toggleExpanded(
+    sessionId: string | undefined,
+    anchorEntryId: string | undefined,
+    part: string,
+    fallback: boolean,
+  ): void;
   /** 记下取回的延迟内容；正文本身就是「已加载」的标记，写入通常不通知订阅方。 */
   markLoaded(sessionId: string | undefined, anchorEntryId: string | undefined, part: string, content: string): void;
   /** 已取回的延迟内容；还没取回时为 null。 */

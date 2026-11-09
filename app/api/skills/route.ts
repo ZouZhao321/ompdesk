@@ -51,7 +51,7 @@ export const PATCH = withRequestLog("/api/skills", async (req: Request) => {
   let disableModelInvocation: unknown;
   let resolvedFilePath: string | undefined;
   try {
-    const body = await req.json() as { filePath?: unknown; disableModelInvocation?: unknown };
+    const body = (await req.json()) as { filePath?: unknown; disableModelInvocation?: unknown };
     filePath = typeof body.filePath === "string" ? body.filePath.trim() : "";
     disableModelInvocation = body.disableModelInvocation;
     if (!filePath) {

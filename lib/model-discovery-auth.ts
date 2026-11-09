@@ -24,7 +24,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringRecord(value: unknown): Record<string, string> {
   if (!isRecord(value)) return {};
-  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
 }
 
 export async function resolveModelDiscoveryAuth(
@@ -41,15 +43,23 @@ export async function resolveModelDiscoveryAuth(
     // `auth: "none"`. Header-only providers (a gateway authenticated through an
     // `$ENV_VAR` header) are exactly that case, so say so explicitly.
     const needsKeylessAuth = provider.apiKey === undefined && provider.auth === undefined;
-    writeFileSync(modelsPath, JSON.stringify({
-      providers: {
-        [providerName]: {
-          ...provider,
-          ...(needsKeylessAuth ? { auth: "none" } : {}),
-          models: [{ id: discoveryModelId }],
+    writeFileSync(
+      modelsPath,
+      JSON.stringify(
+        {
+          providers: {
+            [providerName]: {
+              ...provider,
+              ...(needsKeylessAuth ? { auth: "none" } : {}),
+              models: [{ id: discoveryModelId }],
+            },
+          },
         },
-      },
-    }, null, 2), "utf8");
+        null,
+        2,
+      ),
+      "utf8",
+    );
 
     // A throwaway registry over the submitted provider config, sharing the real
     // AuthStorage so an already-saved key for this provider still resolves.

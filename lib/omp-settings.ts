@@ -71,9 +71,36 @@ export function isCredential(path: SettingPath): boolean {
   return lookup(path)?.isCredential ?? false;
 }
 
+/**
+ * 网页端与终端取值不同的设置项。
+ *
+ * `display.collapseCompacted` 在 omp 里默认折叠，终端只渲染最近一次压缩留下的
+ * 保留段。网页端按会话真实记录呈现每一轮：被折叠的轮次不进 DOM，提问跳转条的
+ * 圆点与会话地图的落点就没有目标。因此未显式配置时取 `false`；用户写过这一项
+ * 就按用户的值。
+ */
+const WEB_SETTING_DEFAULTS: Record<string, boolean> = {
+  "display.collapseCompacted": false,
+};
+
+/** 网页端该项的默认值；没有网页端专有默认时返回 omp 的默认值。 */
+export function getDefaultForWeb(path: SettingPath): unknown {
+  return Object.hasOwn(WEB_SETTING_DEFAULTS, path) ? WEB_SETTING_DEFAULTS[path] : getDefault(path);
+}
+
+/** 读网页端生效值：用户显式配置过就用用户的值，否则用网页端默认。 */
+export function getSettingForWeb<T = unknown>(settings: Settings, path: SettingPath): T | undefined {
+  if (Object.hasOwn(WEB_SETTING_DEFAULTS, path) && !isSettingConfigured(settings, path)) {
+    return WEB_SETTING_DEFAULTS[path] as T;
+  }
+  return getSetting<T>(settings, path);
+}
+
 /** Paths shown on `tab`, in omp's settings-panel order. */
 export function getPathsForTab(tab: SettingTab): SettingPath[] {
-  return orderedSettings().filter((setting) => setting.ui?.tab === tab).map((setting) => setting.id);
+  return orderedSettings()
+    .filter((setting) => setting.ui?.tab === tab)
+    .map((setting) => setting.id);
 }
 
 /**

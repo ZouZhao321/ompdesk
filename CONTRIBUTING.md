@@ -20,16 +20,26 @@ Pull requests are welcome for focused changes. Before opening one:
 bun install
 bun test
 bun run typecheck
-bunx eslint <changed files and directories>
+bun run lint:changed
 ```
 
-`bun run lint` still reports pre-existing errors in `components/` and `hooks/` (React compiler
-memoization checks), so it is not part of `bun run ci` or the CI job — reproduce with
-`bun run lint`, and judge the eslint result of the files you touched.
+`bun run lint:changed` only checks the files this branch touched, and only fails on errors
+that this branch actually introduced. The whole-repository `bun run lint` still reports 8
+pre-existing errors (`components/ChatInput.tsx` and `hooks/useAgentSession.ts`, React compiler
+memoization checks). Filtering by line alone is not enough: a whole-file reformat puts
+untouched code into the diff, so those lines would be counted as changed and the pre-existing
+errors would come back. The script therefore compares candidate errors against the base
+version of the same file, by rule and message text, and subtracts the ones that were already
+there. CI runs the same script against the pull request's merge base.
 
-Match the surrounding code, keep one logical change per commit, and write commit titles as
-`type(scope): 中文描述` with `type` from `feat`, `fix`, `refactor`, `test`, `docs`, `chore`,
-`perf`.
+Queue health is one command: `bun run queue` lists open pull requests with what blocks each
+one, and splits them into work a script can do (merge `origin/main` into the branch) and work
+that needs a decision. `bun run queue:sync` performs the first kind; it runs the merge inside
+each branch's own worktree so the pre-push verification checks the code it is about to push.
+
+Commit titles are checked in CI: `type(scope): 中文描述` with `type` from `feat`, `fix`,
+`refactor`, `test`, `docs`, `chore`, `perf`. `Merge `, `Revert `, `fixup! `, `squash! ` and
+`amend! ` prefixes are skipped.
 
 ## Security
 

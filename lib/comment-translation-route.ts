@@ -84,10 +84,13 @@ export function createCommentTranslationHandler(deps: CommentTranslationHandlerD
     try {
       model = await deps.resolveModel();
     } catch (error) {
-      return NextResponse.json({
-        code: "model_unavailable",
-        error: error instanceof Error ? error.message : String(error),
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          code: "model_unavailable",
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      );
     }
     if (!model) {
       return NextResponse.json(
@@ -104,10 +107,13 @@ export function createCommentTranslationHandler(deps: CommentTranslationHandlerD
       });
       return NextResponse.json({ model: model.id, ...generation });
     } catch (error) {
-      return NextResponse.json({
-        code: "model_failed",
-        error: error instanceof Error ? error.message : String(error),
-      }, { status: 502 });
+      return NextResponse.json(
+        {
+          code: "model_failed",
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { status: 502 },
+      );
     }
   };
 }

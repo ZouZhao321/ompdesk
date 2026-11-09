@@ -43,8 +43,7 @@ export const appearance: Record<string, string> = {
   "settings.field.terminal.showImages.label": "Show Inline Images",
   "settings.field.terminal.showImages.description": "Render images inline in the terminal",
   "settings.field.images.autoResize.label": "Auto-Resize Images",
-  "settings.field.images.autoResize.description":
-    "Resize large images to 2000x2000 max for better model compatibility",
+  "settings.field.images.autoResize.description": "Resize large images to 2000x2000 max for better model compatibility",
   "settings.field.images.blockImages.label": "Block Images",
   "settings.field.images.blockImages.description": "Prevent images from being sent to LLM providers",
 
@@ -123,6 +122,5 @@ export const appearance: Record<string, string> = {
   "settings.field.task.showResolvedModelBadge.description":
     "Display the actual model ID used by each subagent in the task widget status line",
   "settings.field.title.icons.label": "Title Icons",
-  "settings.field.title.icons.description":
-    "Icon and short code that head new generated or /rename session titles",
+  "settings.field.title.icons.description": "Icon and short code that head new generated or /rename session titles",
 };
