@@ -49,8 +49,5 @@ export function withTranscriptLiveTail(
   streamingMessage: Partial<AgentMessage> | null,
 ): readonly TranscriptListItem[] {
   if (!hasTranscriptLiveTail(streamingMessage)) return items;
-  return [
-    ...items,
-    { kind: "live-tail", key: TRANSCRIPT_LIVE_TAIL_KEY, message: streamingMessage },
-  ];
+  return [...items, { kind: "live-tail", key: TRANSCRIPT_LIVE_TAIL_KEY, message: streamingMessage }];
 }

@@ -38,14 +38,16 @@ type McpDocument = {
 };
 
 function redactNestedStrings(value: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
-    key,
-    typeof item === "string"
-      ? REDACTED_VALUE
-      : item && typeof item === "object" && !Array.isArray(item)
-        ? redactNestedStrings(item as Record<string, unknown>)
-        : item,
-  ]));
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      typeof item === "string"
+        ? REDACTED_VALUE
+        : item && typeof item === "object" && !Array.isArray(item)
+          ? redactNestedStrings(item as Record<string, unknown>)
+          : item,
+    ]),
+  );
 }
 
 function redactConfig(config: McpServerConfig): McpServerConfig {
@@ -55,10 +57,9 @@ function redactConfig(config: McpServerConfig): McpServerConfig {
       headers: Object.fromEntries(Object.keys(config.headers).map((key) => [key, REDACTED_VALUE])),
     }),
     ...(config.env && {
-      env: Object.fromEntries(Object.entries(config.env).map(([key, value]) => [
-        key,
-        SECRET_ENV_KEY.test(key) ? REDACTED_VALUE : value,
-      ])),
+      env: Object.fromEntries(
+        Object.entries(config.env).map(([key, value]) => [key, SECRET_ENV_KEY.test(key) ? REDACTED_VALUE : value]),
+      ),
     }),
     ...(config.auth && { auth: redactNestedStrings(config.auth) }),
     ...(config.oauth && { oauth: redactNestedStrings(config.oauth) }),
@@ -75,13 +76,14 @@ function restoreRedactedValues(submitted: unknown, existing: unknown, path: stri
     return submitted.map((item, index) => restoreRedactedValues(item, previous[index], `${path}[${index}]`));
   }
   if (submitted && typeof submitted === "object") {
-    const previous = existing && typeof existing === "object" && !Array.isArray(existing)
-      ? existing as Record<string, unknown>
-      : {};
-    return Object.fromEntries(Object.entries(submitted).map(([key, value]) => [
-      key,
-      restoreRedactedValues(value, previous[key], `${path}.${key}`),
-    ]));
+    const previous =
+      existing && typeof existing === "object" && !Array.isArray(existing) ? (existing as Record<string, unknown>) : {};
+    return Object.fromEntries(
+      Object.entries(submitted).map(([key, value]) => [
+        key,
+        restoreRedactedValues(value, previous[key], `${path}.${key}`),
+      ]),
+    );
   }
   return submitted;
 }
@@ -95,15 +97,16 @@ function readScope(scope: "user" | "project", cwd?: string): McpScopeConfig {
   if (!existsSync(path)) return { scope, path, servers: [] };
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as McpDocument;
-    const servers = parsed.mcpServers && typeof parsed.mcpServers === "object"
-      ? Object.entries(parsed.mcpServers).map(([name, config]) => ({
-          name,
-          config: redactConfig(config),
-          enabled: config.enabled !== false,
-          editable: true,
-          source: { path, provider: "OMP", level: scope },
-        }))
-      : [];
+    const servers =
+      parsed.mcpServers && typeof parsed.mcpServers === "object"
+        ? Object.entries(parsed.mcpServers).map(([name, config]) => ({
+            name,
+            config: redactConfig(config),
+            enabled: config.enabled !== false,
+            editable: true,
+            source: { path, provider: "OMP", level: scope },
+          }))
+        : [];
     return { scope, path, servers };
   } catch (error) {
     return { scope, path, servers: [], error: error instanceof Error ? error.message : String(error) };
@@ -135,11 +138,8 @@ async function addDiscoveredServers(response: McpConfigResponse, cwd?: string): 
     includeInvalid: true,
   });
   for (const server of discovered.items) {
-    const target = server._source.level === "project"
-      ? response.project
-      : server._source.level === "user"
-        ? response.user
-        : null;
+    const target =
+      server._source.level === "project" ? response.project : server._source.level === "user" ? response.user : null;
     if (!target || target.servers.some((entry) => entry.name === server.name)) continue;
     target.servers.push({
       name: server.name,
@@ -184,19 +184,28 @@ function validateServer(entry: McpServerEntry): McpServerEntry {
   const name = entry.name.trim();
   if (!SERVER_NAME.test(name)) throw new Error(`Invalid MCP server name: ${name || "(empty)"}`);
   const config = entry.config;
-  if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error(`${name}: config must be an object`);
+  if (!config || typeof config !== "object" || Array.isArray(config))
+    throw new Error(`${name}: config must be an object`);
   const unknown = Object.keys(config).find((key) => !SERVER_KEYS[key]);
   if (unknown) throw new Error(`${name}: unknown property ${unknown}`);
-  if (config.enabled !== undefined && typeof config.enabled !== "boolean") throw new Error(`${name}: enabled must be boolean`);
-  if (config.timeout !== undefined && (typeof config.timeout !== "number" || !Number.isFinite(config.timeout) || config.timeout < 0)) {
+  if (config.enabled !== undefined && typeof config.enabled !== "boolean")
+    throw new Error(`${name}: enabled must be boolean`);
+  if (
+    config.timeout !== undefined &&
+    (typeof config.timeout !== "number" || !Number.isFinite(config.timeout) || config.timeout < 0)
+  ) {
     throw new Error(`${name}: timeout must be a non-negative number`);
   }
   if (config.command && config.url) throw new Error(`${name}: choose command or URL, not both`);
   if (!config.command && !config.url) throw new Error(`${name}: command or URL is required`);
   if (config.command) {
     if (typeof config.command !== "string" || !config.command.trim()) throw new Error(`${name}: command is required`);
-    if (config.type !== undefined && config.type !== "stdio") throw new Error(`${name}: command transport must be stdio`);
-    if (config.args !== undefined && (!Array.isArray(config.args) || config.args.some((arg) => typeof arg !== "string"))) {
+    if (config.type !== undefined && config.type !== "stdio")
+      throw new Error(`${name}: command transport must be stdio`);
+    if (
+      config.args !== undefined &&
+      (!Array.isArray(config.args) || config.args.some((arg) => typeof arg !== "string"))
+    ) {
       throw new Error(`${name}: args must be a string array`);
     }
     if (config.cwd !== undefined && typeof config.cwd !== "string") throw new Error(`${name}: cwd must be text`);
@@ -209,7 +218,10 @@ function validateServer(entry: McpServerEntry): McpServerEntry {
   if (config.auth !== undefined && (!config.auth || typeof config.auth !== "object" || Array.isArray(config.auth))) {
     throw new Error(`${name}: auth must be an object`);
   }
-  if (config.oauth !== undefined && (!config.oauth || typeof config.oauth !== "object" || Array.isArray(config.oauth))) {
+  if (
+    config.oauth !== undefined &&
+    (!config.oauth || typeof config.oauth !== "object" || Array.isArray(config.oauth))
+  ) {
     throw new Error(`${name}: oauth must be an object`);
   }
   return { name, config, enabled: config.enabled !== false };
@@ -246,7 +258,7 @@ export const PATCH = withRequestLog("/api/mcp", async (req: Request) => {
   let enabled: boolean | undefined;
   try {
     const cwd = await validatedCwd(req);
-    const body = await req.json() as {
+    const body = (await req.json()) as {
       scope?: "user" | "project";
       name?: string;
       enabled?: boolean;
@@ -289,7 +301,7 @@ export const PUT = withRequestLog("/api/mcp", async (req: Request) => {
   let mcpScope: "user" | "project" | undefined;
   try {
     const cwd = await validatedCwd(req);
-    const body = await req.json() as { scope?: "user" | "project"; servers?: McpServerEntry[] };
+    const body = (await req.json()) as { scope?: "user" | "project"; servers?: McpServerEntry[] };
     if (body.scope === "user" || body.scope === "project") {
       mcpScope = body.scope;
       target = body.scope === "project" && !cwd ? undefined : configPath(body.scope, cwd);
@@ -298,7 +310,8 @@ export const PUT = withRequestLog("/api/mcp", async (req: Request) => {
     if (body.scope === "project" && !cwd) throw new Error("cwd required for project MCP settings");
     if (!Array.isArray(body.servers)) throw new Error("servers must be an array");
     const servers = body.servers.map(validateServer);
-    if (new Set(servers.map(({ name }) => name)).size !== servers.length) throw new Error("MCP server names must be unique");
+    if (new Set(servers.map(({ name }) => name)).size !== servers.length)
+      throw new Error("MCP server names must be unique");
 
     const path = configPath(body.scope, cwd);
     let existing: McpDocument = {};
@@ -315,7 +328,9 @@ export const PUT = withRequestLog("/api/mcp", async (req: Request) => {
     }));
     const document: McpDocument = {
       ...existing,
-      $schema: existing.$schema ?? "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json",
+      $schema:
+        existing.$schema ??
+        "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json",
       mcpServers: Object.fromEntries(restoredServers.map(({ name, config }) => [name, config])),
     };
     mkdirSync(dirname(path), { recursive: true });

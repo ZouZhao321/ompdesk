@@ -10,9 +10,13 @@ const source = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8
 const ast = ts.createSourceFile("ChatInput.tsx", source, ts.ScriptTarget.Latest, true);
 const callbacks = new Map();
 function collect(node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
-    && node.initializer && ts.isCallExpression(node.initializer)
-    && node.initializer.expression.getText(ast) === "useCallback") {
+  if (
+    ts.isVariableDeclaration(node) &&
+    ts.isIdentifier(node.name) &&
+    node.initializer &&
+    ts.isCallExpression(node.initializer) &&
+    node.initializer.expression.getText(ast) === "useCallback"
+  ) {
     callbacks.set(node.name.text, node.initializer.arguments[0].getText(ast));
   }
   ts.forEachChild(node, collect);
@@ -24,21 +28,26 @@ for (const name of callbackNames) assert.ok(callbacks.has(name), `Missing callba
 
 // `isRewindInput` is injected from lib/rewind.ts so the whole-input predicate
 // stays the real production implementation.
-const { outputText } = ts.transpileModule([
-  "function buildCallbacks(env) {",
-  "  const { value, attachedImages, isStreaming, onBuiltinCommand, onSend, onAudioUnlock, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, isRewindInput } = env;",
-  `  const sendQueued = ${callbacks.get("sendQueued")};`,
-  `  const handleSend = ${callbacks.get("handleSend")};`,
-  "  return { sendQueued, handleSend };",
-  "}",
-].join("\n"), { compilerOptions: { target: ts.ScriptTarget.ES2022 } });
+const { outputText } = ts.transpileModule(
+  [
+    "function buildCallbacks(env) {",
+    "  const { value, attachedImages, isStreaming, onBuiltinCommand, onSend, onAudioUnlock, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, isRewindInput } = env;",
+    `  const sendQueued = ${callbacks.get("sendQueued")};`,
+    `  const handleSend = ${callbacks.get("handleSend")};`,
+    "  return { sendQueued, handleSend };",
+    "}",
+  ].join("\n"),
+  { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+);
 
 const createChatInputCallbacks = new Function(`${outputText}\nreturn buildCallbacks;`)();
 
 function harness({ value = "", attachedImages = [], isStreaming = false, builtinResult = { handled: true } } = {}) {
   const input = { value, cleared: false };
   const calls = [];
-  const record = (name, ...args) => { calls.push([name, ...args]); };
+  const record = (name, ...args) => {
+    calls.push([name, ...args]);
+  };
   const clearInput = () => {
     record("clearInput");
     input.cleared = true;
@@ -63,13 +72,19 @@ function harness({ value = "", attachedImages = [], isStreaming = false, builtin
   return { sendQueued, handleSend, input, calls, names: () => calls.map(([name]) => name) };
 }
 
-for (const [label, message] of [["/rewind", "/rewind"], ["/branch", "/branch"]]) {
+for (const [label, message] of [
+  ["/rewind", "/rewind"],
+  ["/branch", "/branch"],
+]) {
   test(`sendQueued steers ${label} to the builtin dispatcher instead of the model`, () => {
     const h = harness({ value: message, isStreaming: true });
 
     h.sendQueued("steer");
 
-    assert.deepEqual(h.calls.filter(([name]) => name === "onBuiltinCommand"), [["onBuiltinCommand", message]]);
+    assert.deepEqual(
+      h.calls.filter(([name]) => name === "onBuiltinCommand"),
+      [["onBuiltinCommand", message]],
+    );
     assert.equal(h.names().includes("onPromptWithStreamingBehavior"), false, "must not queue as a streaming prompt");
     assert.equal(h.names().includes("onSteer"), false, "must not steer the running agent");
     assert.equal(h.names().includes("onFollowUp"), false);
@@ -99,7 +114,10 @@ test("handleSend on a busy bash-only session dispatches /rewind to the builtin h
 
   await h.handleSend();
 
-  assert.deepEqual(h.calls.filter(([name]) => name === "onBuiltinCommand"), [["onBuiltinCommand", "/rewind"]]);
+  assert.deepEqual(
+    h.calls.filter(([name]) => name === "onBuiltinCommand"),
+    [["onBuiltinCommand", "/rewind"]],
+  );
   assert.equal(h.names().includes("onSend"), false, "busy session must not send a prompt");
   assert.equal(h.names().filter((name) => name === "clearInput").length, 1);
   assert.equal(h.input.cleared, true);
@@ -121,7 +139,40 @@ test("handleSend dispatches /rewind to the builtin handler when the session is i
 
   await h.handleSend();
 
-  assert.deepEqual(h.calls.filter(([name]) => name === "onBuiltinCommand"), [["onBuiltinCommand", "/rewind"]]);
+  assert.deepEqual(
+    h.calls.filter(([name]) => name === "onBuiltinCommand"),
+    [["onBuiltinCommand", "/rewind"]],
+  );
   assert.equal(h.names().includes("onSend"), false, "handled dispatch must not fall through to onSend");
   assert.equal(h.names().filter((name) => name === "clearInput").length, 1);
+});
+
+test("sendQueued queues image attachments for steer and follow-up", () => {
+  const image = { data: "AQID", mimeType: "image/png", previewUrl: "data:image/png;base64,AQID" };
+  const steer = harness({ value: "", attachedImages: [image], isStreaming: true });
+  steer.sendQueued("steer");
+  assert.deepEqual(
+    steer.calls.filter(([name]) => name === "onSteer"),
+    [["onSteer", "", [image]]],
+  );
+  assert.equal(steer.input.cleared, true);
+
+  const follow = harness({ value: "", attachedImages: [image], isStreaming: true });
+  follow.sendQueued("followup");
+  assert.deepEqual(
+    follow.calls.filter(([name]) => name === "onFollowUp"),
+    [["onFollowUp", "", [image]]],
+  );
+  assert.equal(follow.input.cleared, true);
+});
+
+test("sendQueued keeps image attachments when a busy /rewind is rejected", () => {
+  const image = { data: "AQID", mimeType: "image/png", previewUrl: "data:image/png;base64,AQID" };
+  const h = harness({ value: "/rewind", attachedImages: [image], isStreaming: true });
+  h.sendQueued("steer");
+  assert.deepEqual(
+    h.calls.filter(([name]) => name === "onBuiltinCommand"),
+    [["onBuiltinCommand", "/rewind"]],
+  );
+  assert.equal(h.names().includes("clearInput"), false);
 });

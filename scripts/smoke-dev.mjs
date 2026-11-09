@@ -78,19 +78,15 @@ let childExit = null;
 let childClosed = false;
 let childError = null;
 
-const child = spawn(
-  process.execPath,
-  ["--bun", "next", "dev", "--webpack", "-H", HOST, "-p", String(PORT)],
-  {
-    // 工程根固定在仓库根，调用者从哪个目录执行都不影响 next 找 app/ 与产物目录。
-    cwd: ROOT,
-    // 父进程若带着 NODE_ENV=production，next dev 会跳过开发产物管线，冒烟失去意义。
-    env: { ...process.env, NODE_ENV: "development", OMPDESK_DIST_DIR: DIST_DIR },
-    stdio: ["ignore", "pipe", "pipe"],
-    // POSIX 下建独立进程组，收尾时按组结束，避免 next 派生的子进程占着端口。
-    detached: process.platform !== "win32",
-  },
-);
+const child = spawn(process.execPath, ["--bun", "next", "dev", "--webpack", "-H", HOST, "-p", String(PORT)], {
+  // 工程根固定在仓库根，调用者从哪个目录执行都不影响 next 找 app/ 与产物目录。
+  cwd: ROOT,
+  // 父进程若带着 NODE_ENV=production，next dev 会跳过开发产物管线，冒烟失去意义。
+  env: { ...process.env, NODE_ENV: "development", OMPDESK_DIST_DIR: DIST_DIR },
+  stdio: ["ignore", "pipe", "pipe"],
+  // POSIX 下建独立进程组，收尾时按组结束，避免 next 派生的子进程占着端口。
+  detached: process.platform !== "win32",
+});
 
 function record(chunk) {
   const text = chunk.toString();

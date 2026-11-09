@@ -1,10 +1,6 @@
 import fs from "fs";
 import path from "path";
-import {
-  isCommentSourceFile,
-  isSkippedCommentSourceDir,
-  type CommentSourceFile,
-} from "./comment-entries";
+import { isCommentSourceFile, isSkippedCommentSourceDir, type CommentSourceFile } from "./comment-entries";
 import { listGitFiles } from "./git-listing";
 
 /**

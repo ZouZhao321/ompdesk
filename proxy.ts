@@ -1,8 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import {
-  isApiRequestAllowed,
-  isApiRequestHostAllowed,
-} from "@/lib/request-security";
+import { isApiRequestAllowed, isApiRequestHostAllowed } from "@/lib/request-security";
 import { logEvent } from "@/lib/logging";
 import {
   ACTOR_HEADER,
@@ -11,6 +8,7 @@ import {
   resolveForwardedAddress,
   type RequestActor,
 } from "@/lib/request-headers";
+import { CONTROL_ROUTES, CONTROL_TOKEN_ENV, CONTROL_TOKEN_HEADER, controlTokensMatch } from "@/lib/control-token";
 import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 
 /**
@@ -21,7 +19,8 @@ import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 const RECOVERY_PAGE = "/recover";
 const RECOVERY_API = "/api/web-access/recovery";
 
-const SECURITY_HEADERS = {
+/** Headers every refusal carries: the route-level guard reuses this exact set. */
+export const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
@@ -68,11 +67,7 @@ function unauthorizedPage(): string {
  * Forward the correlation headers to the route handler. The client's own values
  * are replaced, so a caller cannot choose the id their request is logged under.
  */
-function continueWithRequestHeaders(
-  request: NextRequest,
-  requestId: string,
-  actor: RequestActor,
-): NextResponse {
+function continueWithRequestHeaders(request: NextRequest, requestId: string, actor: RequestActor): NextResponse {
   const headers = new Headers(request.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
   headers.set(ACTOR_HEADER, actor);
@@ -93,27 +88,45 @@ export function proxy(request: NextRequest) {
     method: request.method,
   };
   const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
-  const isTrustedRequest = isApiRequest
-    ? isApiRequestAllowed(request)
-    : isApiRequestHostAllowed(request);
+  const isTrustedRequest = isApiRequest ? isApiRequestAllowed(request) : isApiRequestHostAllowed(request);
 
   if (!isTrustedRequest) {
     // The combined check already rejected the request; asking about the host
     // again only narrows the reason, it never lets a rejected request through.
     const hostDenied = !isApiRequestHostAllowed(request);
-    logEvent(
-      "warn",
-      "security",
-      hostDenied ? "security.host.denied" : "security.origin.denied",
-      {
-        ...securityFields,
-        reason: hostDenied ? "untrusted-host" : "cross-site-request",
-      },
-    );
+    logEvent("warn", "security", hostDenied ? "security.host.denied" : "security.origin.denied", {
+      ...securityFields,
+      reason: hostDenied ? "untrusted-host" : "cross-site-request",
+    });
     if (!isApiRequest) {
       return new NextResponse("Untrusted request", { status: 403, headers: SECURITY_HEADERS });
     }
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403, headers: SECURITY_HEADERS });
+  }
+
+  // The launcher's control channel answers without the web password, because
+  // the CLI only ever holds a one-way digest of it. A per-start token, stored
+  // owner-only next to the instance record, takes its place; anything without
+  // it gets a 404 so the route does not advertise itself.
+  if (CONTROL_ROUTES.has(pathname)) {
+    if (!controlTokensMatch(request.headers.get(CONTROL_TOKEN_HEADER), process.env[CONTROL_TOKEN_ENV])) {
+      // Recorded like every other denial: a silent 404 would make a repeated CLI
+      // failure impossible to tell apart from a matcher change that never reaches
+      // this branch. The token itself is never written.
+      logEvent("warn", "security", "security.control.denied", {
+        ...securityFields,
+        reason: request.headers.get(CONTROL_TOKEN_HEADER) ? "invalid-token" : "missing-token",
+      });
+      return NextResponse.json(
+        { error: "Not found" },
+        { status: 404, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } },
+      );
+    }
+    logEvent("info", "security", "security.control.access", {
+      ...securityFields,
+      reason: "control-token",
+    });
+    return continueWithRequestHeaders(request, requestId, "local");
   }
 
   // Recovery stays reachable while locked out — that is the whole point of it —
@@ -126,19 +139,21 @@ export function proxy(request: NextRequest) {
     return continueWithRequestHeaders(request, requestId, "recovery");
   }
 
-  const authorization = authorizeWebRequestWithActor(
-    request.headers.get("authorization"),
-  );
+  const authorization = authorizeWebRequestWithActor(request.headers.get("authorization"));
 
   if (authorization.decision === "unavailable") {
     logEvent("warn", "security", "security.auth.unavailable", {
       ...securityFields,
       reason: "credential-file-unreadable",
     });
-    const message = "Password access is enabled but the ompdesk credential file could not be read."
-      + " Run `ompdesk --reset-password` on the server to set a new password.";
+    const message =
+      "Password access is enabled but the ompdesk credential file could not be read." +
+      " Run `ompdesk --reset-password` on the server to set a new password.";
     return isApiRequest
-      ? NextResponse.json({ error: message }, { status: 503, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } })
+      ? NextResponse.json(
+          { error: message },
+          { status: 503, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } },
+        )
       : new NextResponse(message, { status: 503, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } });
   }
 
@@ -149,13 +164,13 @@ export function proxy(request: NextRequest) {
     });
     return isApiRequest
       ? NextResponse.json(
-        { error: "Authentication required", recoveryPath: RECOVERY_PAGE },
-        { status: 401, headers: AUTHENTICATE_HEADERS },
-      )
+          { error: "Authentication required", recoveryPath: RECOVERY_PAGE },
+          { status: 401, headers: AUTHENTICATE_HEADERS },
+        )
       : new NextResponse(unauthorizedPage(), {
-        status: 401,
-        headers: { ...AUTHENTICATE_HEADERS, "Content-Type": "text/html; charset=utf-8" },
-      });
+          status: 401,
+          headers: { ...AUTHENTICATE_HEADERS, "Content-Type": "text/html; charset=utf-8" },
+        });
   }
 
   return continueWithRequestHeaders(request, requestId, authorization.actor);

@@ -159,7 +159,18 @@ export function ProjectRow({
           fontWeight: isSelected ? 600 : 500,
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, color: isSelected ? "var(--accent)" : "var(--text-dim)" }}>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ flexShrink: 0, color: isSelected ? "var(--accent)" : "var(--text-dim)" }}
+        >
           <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
         </svg>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
@@ -170,7 +181,17 @@ export function ProjectRow({
             title={t("sidebar.pinnedProject")}
             style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, color: "var(--text-dim)" }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M12 17v5" />
               <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
             </svg>
@@ -211,7 +232,16 @@ export function ProjectRow({
           event.currentTarget.style.color = "var(--text-dim)";
         }}
       >
-        <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
           <line x1="6" y1="1.5" x2="6" y2="10.5" />
           <line x1="1.5" y1="6" x2="10.5" y2="6" />
         </svg>
@@ -264,9 +294,10 @@ function showProjectActivity(
   t: (key: string, params?: TranslationParams) => string,
 ): ReactNode {
   if (!activity) return null;
-  const unreadBadges = STATIC_MARKER_STATUSES
-    .map((status) => ({ status, count: activity.unread?.[status] ?? 0 }))
-    .filter(({ count }) => count > 0);
+  const unreadBadges = STATIC_MARKER_STATUSES.map((status) => ({
+    status,
+    count: activity.unread?.[status] ?? 0,
+  })).filter(({ count }) => count > 0);
   if (activity.running === 0 && activity.waiting === 0 && unreadBadges.length === 0) {
     return null;
   }
@@ -277,12 +308,26 @@ function showProjectActivity(
           title={t("sidebar.agentRunning")}
           aria-label={t("sidebar.agentRunningWithCount", { count: activity.running })}
           role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            color: "var(--accent)",
+            fontSize: 10,
+            fontFamily: "var(--font-mono)",
+          }}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
             <g>
               <path d="M21 12a9 9 0 1 1-3.8-7.4" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
-              <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite" />
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                from="0 12 12"
+                to="360 12 12"
+                dur="0.9s"
+                repeatCount="indefinite"
+              />
             </g>
           </svg>
           {activity.running}
@@ -293,7 +338,14 @@ function showProjectActivity(
           title={t("sidebar.agentWaitingForInput")}
           aria-label={t("sidebar.agentWaitingForInputWithCount", { count: activity.waiting })}
           role="img"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--warning)", fontSize: 10, fontFamily: "var(--font-mono)" }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            color: "var(--warning)",
+            fontSize: 10,
+            fontFamily: "var(--font-mono)",
+          }}
         >
           <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
             <circle cx="7" cy="7" r="4" fill="currentColor" />
@@ -309,9 +361,18 @@ function showProjectActivity(
             title={t(labelKey)}
             aria-label={t(countLabelKey, { count })}
             role="img"
-            style={{ display: "inline-flex", alignItems: "center", gap: 3, color, fontSize: 10, fontFamily: "var(--font-mono)" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              color,
+              fontSize: 10,
+              fontFamily: "var(--font-mono)",
+            }}
           >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
+            <span
+              style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }}
+            />
             {count}
           </span>
         );

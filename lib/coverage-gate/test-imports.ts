@@ -74,9 +74,7 @@ function importedNames(declaration: ts.ImportDeclaration): string[] {
  * 从测试文件源码建导入索引：被导入文件的路径 → 被导入的符号名集合。
  * 没有导入的文件不出现在结果里。
  */
-export function collectTestImports(
-  sources: ReadonlyMap<string, string>,
-): Map<string, Set<string>> {
+export function collectTestImports(sources: ReadonlyMap<string, string>): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
 
   for (const [filePath, sourceText] of sources) {
@@ -108,11 +106,7 @@ export function collectTestImports(
 }
 
 /** 某个文件是否被测试文件导入了指定符号（命名空间导入视为全部导入）。 */
-export function isImportedByTest(
-  index: ReadonlyMap<string, ReadonlySet<string>>,
-  file: string,
-  name: string,
-): boolean {
+export function isImportedByTest(index: ReadonlyMap<string, ReadonlySet<string>>, file: string, name: string): boolean {
   const imported = index.get(file);
   if (!imported) return false;
   return imported.has(name) || imported.has(ANY_IMPORTED_NAME);

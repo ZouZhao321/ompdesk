@@ -20,11 +20,13 @@ const modelNameCollator = new Intl.Collator(undefined, { numeric: true, sensitiv
 
 function compareModelEntries(
   a: { id: string; name: string; provider: string },
-  b: { id: string; name: string; provider: string }
+  b: { id: string; name: string; provider: string },
 ): number {
-  return modelNameCollator.compare(a.name || a.id, b.name || b.id)
-    || modelNameCollator.compare(a.provider, b.provider)
-    || modelNameCollator.compare(a.id, b.id);
+  return (
+    modelNameCollator.compare(a.name || a.id, b.name || b.id) ||
+    modelNameCollator.compare(a.provider, b.provider) ||
+    modelNameCollator.compare(a.id, b.id)
+  );
 }
 
 async function loadModels(cwd: string): Promise<ModelsData> {
@@ -39,11 +41,13 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   // way the CLI does instead of comparing pattern strings literally.
   const scope = await resolveVisibleModels(modelRegistry, getSetting<string[]>(settings, "enabledModels"), settings);
   const { visible, thinkingLevelPins, warnings } = scope;
-  const modelList = visible.map((m) => ({
-    id: m.id,
-    name: m.name,
-    provider: m.provider,
-  })).sort(compareModelEntries);
+  const modelList = visible
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      provider: m.provider,
+    }))
+    .sort(compareModelEntries);
   for (const m of visible) {
     const key = `${m.provider}:${m.id}`;
     nameMap.set(key, m.name);

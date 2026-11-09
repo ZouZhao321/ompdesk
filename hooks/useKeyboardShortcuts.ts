@@ -39,15 +39,15 @@ interface UseGlobalKeyboardShortcutsOptions {
  * the agent when no menu is open) because it needs intimate knowledge of menu
  * state that is local to that component.
  */
-export function useGlobalKeyboardShortcuts(
-  options: UseGlobalKeyboardShortcutsOptions,
-): void {
+export function useGlobalKeyboardShortcuts(options: UseGlobalKeyboardShortcutsOptions): void {
   const { onNewSession, activeCwd } = options;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       // ---- Esc: stop agent ----
       if (e.key === "Escape") {
+        // A modal owns Esc: closing it must not also abort the running answer.
+        if (document.querySelector('[aria-modal="true"]')) return;
         if (!globalAbortHandler) return;
 
         const tag = (e.target as HTMLElement)?.tagName;

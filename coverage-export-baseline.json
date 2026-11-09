@@ -636,16 +636,6 @@
       "kind": "runtime"
     },
     {
-      "path": "lib/coverage-gate/exports.ts",
-      "name": "extractExports",
-      "kind": "runtime"
-    },
-    {
-      "path": "lib/coverage-gate/exports.ts",
-      "name": "indexReferences",
-      "kind": "runtime"
-    },
-    {
       "path": "lib/coverage-gate/git.ts",
       "name": "parseChangedFiles",
       "kind": "runtime"
@@ -663,16 +653,6 @@
     {
       "path": "lib/coverage-gate/rules/index.ts",
       "name": "RULES",
-      "kind": "runtime"
-    },
-    {
-      "path": "lib/coverage-gate/rules/rule-exports.ts",
-      "name": "isFrameworkExport",
-      "kind": "runtime"
-    },
-    {
-      "path": "lib/coverage-gate/rules/rule-exports.ts",
-      "name": "RULE_EXPORTS",
       "kind": "runtime"
     },
     {

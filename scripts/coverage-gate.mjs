@@ -23,11 +23,7 @@ function readOption(args, flag, fallback) {
 
 const args = process.argv.slice(2);
 const lcovPath = readOption(args, "--lcov", DEFAULT_LCOV_PATH);
-const baseRef = readOption(
-  args,
-  "--base",
-  process.env.COVERAGE_GATE_BASE ?? DEFAULT_BASE_REF,
-);
+const baseRef = readOption(args, "--base", process.env.COVERAGE_GATE_BASE ?? DEFAULT_BASE_REF);
 
 const result = await runCoverageGate({ cwd: process.cwd(), lcovPath, baseRef });
 process.stdout.write(`${result.report}\n`);

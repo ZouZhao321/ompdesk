@@ -9,8 +9,17 @@ const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
-const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, canRestoreUserMessage, filterModelOptions, getUserMessageText, getUserMessageDraftImages } = await jiti.import("./ChatInput.tsx");
-const { clearDraft, getDraft, mergeRestoredSubmissionDraft, mergeRestoredSubmissionText, rekeyDraft, setDraft } = await jiti.import("../lib/draft-store.ts");
+const {
+  ChatInput,
+  ModelErrorBanner,
+  ModelScopeWarningBanner,
+  canRestoreUserMessage,
+  filterModelOptions,
+  getUserMessageText,
+  getUserMessageDraftImages,
+} = await jiti.import("./ChatInput.tsx");
+const { clearDraft, getDraft, mergeRestoredSubmissionDraft, mergeRestoredSubmissionText, rekeyDraft, setDraft } =
+  await jiti.import("../lib/draft-store.ts");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 test("renders the upstream model error", () => {
@@ -111,22 +120,16 @@ test("restores text and base64 images when editing a user message", () => {
   };
 
   assert.equal(getUserMessageText(message), "Review this image @src/example.ts ");
-  assert.deepEqual(getUserMessageDraftImages(message), [
-    { data: "AQID", mimeType: "image/png" },
-  ]);
+  assert.deepEqual(getUserMessageDraftImages(message), [{ data: "AQID", mimeType: "image/png" }]);
 });
 
 test("restores legacy flat image entries when editing a user message", () => {
   const message = {
     role: "user",
-    content: [
-      { type: "image", data: "AQID", mimeType: "image/jpeg" },
-    ],
+    content: [{ type: "image", data: "AQID", mimeType: "image/jpeg" }],
   };
 
-  assert.deepEqual(getUserMessageDraftImages(message), [
-    { data: "AQID", mimeType: "image/jpeg" },
-  ]);
+  assert.deepEqual(getUserMessageDraftImages(message), [{ data: "AQID", mimeType: "image/jpeg" }]);
 });
 
 test("does not restore a historical message over a pending image attachment", () => {
@@ -138,18 +141,12 @@ test("does not restore a historical message over a pending image attachment", ()
 
 test("restores a cleared submission using the queued React state", () => {
   let value = "failed submission";
-  const updates = [
-    () => "",
-    (current) => mergeRestoredSubmissionText("failed submission", current),
-  ];
+  const updates = [() => "", (current) => mergeRestoredSubmissionText("failed submission", current)];
 
   for (const update of updates) value = update(value);
 
   assert.equal(value, "failed submission");
-  assert.equal(
-    mergeRestoredSubmissionText("failed submission", "new draft"),
-    "failed submission\n\nnew draft",
-  );
+  assert.equal(mergeRestoredSubmissionText("failed submission", "new draft"), "failed submission\n\nnew draft");
   assert.equal(
     mergeRestoredSubmissionText("failed submission", "failed submission"),
     "failed submission\n\nfailed submission",
@@ -158,24 +155,16 @@ test("restores a cleared submission using the queued React state", () => {
 
 test("keeps a failed first submission recoverable across a composer remount", () => {
   const image = { data: "AQID", mimeType: "image/png" };
-  const restored = mergeRestoredSubmissionDraft(
-    "failed submission",
-    [image],
-    "",
-    [],
-  );
+  const restored = mergeRestoredSubmissionDraft("failed submission", [image], "", []);
 
   assert.deepEqual(restored, {
     value: "failed submission",
     images: [image],
   });
-  assert.deepEqual(
-    mergeRestoredSubmissionDraft("failed submission", [image], "new draft", []),
-    {
-      value: "failed submission\n\nnew draft",
-      images: [image],
-    },
-  );
+  assert.deepEqual(mergeRestoredSubmissionDraft("failed submission", [image], "new draft", []), {
+    value: "failed submission\n\nnew draft",
+    images: [image],
+  });
 });
 
 test("preserves duplicate image attachments when restoring a submission", () => {
@@ -212,10 +201,10 @@ test("rekey keeps a synchronously restored draft when React state is still empty
   clearDraft(sessionKey);
   setDraft(provisionalKey, { value: "restored before state flush", images: [] });
 
-  assert.deepEqual(
-    rekeyDraft(provisionalKey, sessionKey, { value: "", images: [] }),
-    { value: "restored before state flush", images: [] },
-  );
+  assert.deepEqual(rekeyDraft(provisionalKey, sessionKey, { value: "", images: [] }), {
+    value: "restored before state flush",
+    images: [],
+  });
   assert.equal(getDraft(provisionalKey), null);
   assert.deepEqual(getDraft(sessionKey), {
     value: "restored before state flush",
@@ -293,4 +282,51 @@ test("draws the input column from the shared transcript geometry", async () => {
   assert.match(source, /maxWidth: RAIL_COLUMN_WIDTH_PX, margin: "0 auto"/);
   assert.doesNotMatch(source, /maxWidth: 820\b/);
   assert.doesNotMatch(source, /padding: "0 16px 8px"/);
+});
+
+test("queues image attachments while the agent is running", () => {
+  const draftKey = "streaming-image-queue";
+  setDraft(draftKey, { value: "", images: [{ data: "AQID", mimeType: "image/png" }] });
+
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(ChatInput, {
+        onSend() {},
+        onAbort() {},
+        onSteer() {},
+        onFollowUp() {},
+        isStreaming: true,
+        draftKey,
+      }),
+    ),
+  );
+  clearDraft(draftKey);
+
+  const buttonTag = (title) => {
+    const titleIndex = html.indexOf(title);
+    assert.ok(titleIndex > 0, `missing ${title}`);
+    return html.slice(html.lastIndexOf("<button", titleIndex), html.indexOf(">", titleIndex) + 1);
+  };
+
+  assert.doesNotMatch(buttonTag('title="Interrupt the current run and inject this message now"'), /disabled=""/);
+  assert.doesNotMatch(buttonTag('title="Queue this message after the agent finishes"'), /disabled=""/);
+});
+
+test("labels an image-only queued message", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(
+      I18nProvider,
+      null,
+      React.createElement(ChatInput, {
+        onSend() {},
+        onAbort() {},
+        isStreaming: false,
+        queuedMessages: { steering: ["[Image]"], followUp: [] },
+      }),
+    ),
+  );
+
+  assert.match(html, /Image attachment/);
 });

@@ -60,8 +60,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.spelling.autocorrect.label": "自动纠错（macOS）",
   "settings.field.spelling.autocorrect.description": "单词输入完成后应用 macOS 有把握的拼写纠正",
   "settings.field.emojiAutocomplete.label": "Emoji 自动补全",
-  "settings.field.emojiAutocomplete.description":
-    "根据 `:name:` 短代码提示 emoji，并展开 `:D`、`:-)` 之类的文字表情",
+  "settings.field.emojiAutocomplete.description": "根据 `:name:` 短代码提示 emoji，并展开 `:D`、`:-)` 之类的文字表情",
   "settings.field.paste.largeMenuThreshold.label": "大段粘贴菜单",
   "settings.field.paste.largeMenuThreshold.description":
     "粘贴内容达到这么多行时，提供菜单将其包成代码块、包进 XML 标签，或保存到文件。0 关闭该菜单（大段粘贴仍会折叠为 [Paste] 标记）。",
@@ -109,8 +108,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.share.store.label": "分享存储",
   "settings.field.share.store.description": "/share 上传加密会话 blob 的目标位置",
   "settings.field.share.redactSecrets.label": "分享密钥脱敏",
-  "settings.field.share.redactSecrets.description":
-    "上传前对 /share 快照执行密钥混淆处理（使用 secrets.* 配置）",
+  "settings.field.share.redactSecrets.description": "上传前对 /share 快照执行密钥混淆处理（使用 secrets.* 配置）",
 
   "settings.field.stream.serverUrl.label": "直播服务器",
   "settings.field.stream.serverUrl.description":
@@ -123,14 +121,11 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.magicKeywords.ultrathink.description":
     "允许单独出现的 ultrathink 请求最高自动思考等级，并附加其隐藏提示",
   "settings.field.magicKeywords.orchestrate.label": "Orchestrate 关键词",
-  "settings.field.magicKeywords.orchestrate.description":
-    "允许单独出现的 orchestrate 附加其隐藏的多 Agent 编排提示",
+  "settings.field.magicKeywords.orchestrate.description": "允许单独出现的 orchestrate 附加其隐藏的多 Agent 编排提示",
   "settings.field.magicKeywords.workflow.label": "Workflow 关键词",
-  "settings.field.magicKeywords.workflow.description":
-    "允许单独出现的 workflowz 附加其隐藏的 eval 工作流提示",
+  "settings.field.magicKeywords.workflow.description": "允许单独出现的 workflowz 附加其隐藏的 eval 工作流提示",
   "settings.field.magicKeywords.jevify.label": "Jevify 关键词",
-  "settings.field.magicKeywords.jevify.description":
-    "允许单独出现的 jevify 附加其隐藏的批量评判分类提示",
+  "settings.field.magicKeywords.jevify.description": "允许单独出现的 jevify 附加其隐藏的批量评判分类提示",
 
   "settings.field.autoResume.label": "自动恢复",
   "settings.field.autoResume.description": "自动恢复当前目录下最近的会话",
@@ -148,8 +143,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.marketplace.autoUpdate.label": "市场自动更新",
   "settings.field.marketplace.autoUpdate.description": "启动时检查插件更新",
   "settings.field.startup.changelogMode.label": "启动更新日志",
-  "settings.field.startup.changelogMode.description":
-    "选择更新说明以摘要、完整内容显示，或保持隐藏",
+  "settings.field.startup.changelogMode.description": "选择更新说明以摘要、完整内容显示，或保持隐藏",
 
   "settings.field.power.sleepPrevention.label": "阻止休眠",
   "settings.field.power.sleepPrevention.description":
@@ -160,16 +154,14 @@ export const interactionTasks: Record<string, string> = {
     "助手没有可见消息就停止时自动恢复。Smart 还会用小模型对纯文本停止进行分类。",
 
   "settings.field.git.enabled.label": "启用 Git 集成",
-  "settings.field.git.enabled.description":
-    "在 TUI 中显示 git 分支、状态与 PR 信息，并监听仓库元数据。",
+  "settings.field.git.enabled.description": "在 TUI 中显示 git 分支、状态与 PR 信息，并监听仓库元数据。",
 
   "settings.field.skills.registryUrl.label": "技能注册中心",
   "settings.field.skills.registryUrl.description":
     "`omp skill` 用于安装、搜索与发布技能的 Skillshare 注册中心（https://host[:port]）",
 
   "settings.field.task.isolation.enabled.label": "隔离子 Agent",
-  "settings.field.task.isolation.enabled.description":
-    "在检出的隔离副本中运行子 Agent，之后再整合它们的改动",
+  "settings.field.task.isolation.enabled.description": "在检出的隔离副本中运行子 Agent，之后再整合它们的改动",
   "settings.field.isolation.backend.label": "隔离后端",
   "settings.field.isolation.backend.description": "用于子 Agent 隔离与 worktree 克隆的后端",
   "settings.field.worktree.clone.label": "将检出克隆到 worktree",
@@ -184,14 +176,11 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.worktree.onExit.description":
     "退出时如何处理自 omp 启动以来创建的 worktree（启动时创建或用 `/wt` 创建）",
   "settings.field.task.isolation.apply.label": "应用隔离改动",
-  "settings.field.task.isolation.apply.description":
-    "自动把成功的隔离任务改动应用到父检出；关闭则保留补丁或分支产物",
+  "settings.field.task.isolation.apply.description": "自动把成功的隔离任务改动应用到父检出；关闭则保留补丁或分支产物",
   "settings.field.task.isolation.merge.label": "隔离合并策略",
-  "settings.field.task.isolation.merge.description":
-    "隔离任务的改动如何整合（应用补丁或合并分支）",
+  "settings.field.task.isolation.merge.description": "隔离任务的改动如何整合（应用补丁或合并分支）",
   "settings.field.task.isolation.commits.label": "隔离提交风格",
-  "settings.field.task.isolation.commits.description":
-    "嵌套仓库改动的提交信息风格（通用或 AI 生成）",
+  "settings.field.task.isolation.commits.description": "嵌套仓库改动的提交信息风格（通用或 AI 生成）",
   "settings.field.worktree.base.label": "Worktree 基础目录",
   "settings.field.worktree.base.description":
     "Agent 管理的 worktree 的基础目录——任务隔离副本、`github` PR 检出与 `omp worktree` 清理都放在这里。未设置时使用 ~/.omp/wt。必须是绝对路径或 ~ 相对路径；相对路径会被忽略。环境变量 OMP_WORKTREE_DIR 会覆盖此设置。",
@@ -252,8 +241,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.title.generator.label": "标题生成器",
   "settings.field.title.generator.description": "根据用户消息为未命名会话生成名称的方式",
   "settings.field.title.refreshOnReplan.label": "重新规划时刷新标题",
-  "settings.field.title.refreshOnReplan.description":
-    "todo 初始化重新规划后刷新生成的会话标题，用户手动设置的标题除外",
+  "settings.field.title.refreshOnReplan.description": "todo 初始化重新规划后刷新生成的会话标题，用户手动设置的标题除外",
 
   "settings.field.skills.enableSkillCommands.label": "技能命令",
   "settings.field.skills.enableSkillCommands.description": "把技能注册为 /skill:name 命令",
@@ -262,8 +250,7 @@ export const interactionTasks: Record<string, string> = {
   "settings.field.commands.enableClaudeProject.label": "Claude 项目命令",
   "settings.field.commands.enableClaudeProject.description": "从 .claude/commands/ 加载命令",
   "settings.field.commands.enableOpencodeUser.label": "OpenCode 用户命令",
-  "settings.field.commands.enableOpencodeUser.description":
-    "从 ~/.config/opencode/commands/ 加载命令",
+  "settings.field.commands.enableOpencodeUser.description": "从 ~/.config/opencode/commands/ 加载命令",
   "settings.field.commands.enableOpencodeProject.label": "OpenCode 项目命令",
   "settings.field.commands.enableOpencodeProject.description": "从 .opencode/commands/ 加载命令",
 };

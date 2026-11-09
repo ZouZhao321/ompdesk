@@ -29,8 +29,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.eval.py.label": "Python Eval Backend",
   "settings.field.eval.py.description": "Allow the eval tool to dispatch Python cells to the IPython kernel",
   "settings.field.eval.js.label": "JavaScript Eval Backend",
-  "settings.field.eval.js.description":
-    "Allow the eval tool to dispatch JavaScript cells to the in-process runtime",
+  "settings.field.eval.js.description": "Allow the eval tool to dispatch JavaScript cells to the in-process runtime",
   "settings.field.eval.autoProvision.label": "Eval Environment Provisioning",
   "settings.field.eval.autoProvision.description":
     "Automatically create the managed JavaScript eval package environment on first install",
@@ -62,10 +61,8 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.extendedContext.description":
     "Use larger context windows where supported; may incur premium pricing. Off keeps default or standard-pricing windows",
   "settings.field.compaction.enabled.label": "Auto-Compact",
-  "settings.field.compaction.enabled.description":
-    "Automatically compact context when it gets too large",
-  "settings.field.compaction.experimentalContextManagement.label":
-    "Notes-backed context windows (experimental)",
+  "settings.field.compaction.enabled.description": "Automatically compact context when it gets too large",
+  "settings.field.compaction.experimentalContextManagement.label": "Notes-backed context windows (experimental)",
   "settings.field.compaction.experimentalContextManagement.description":
     "Keep persistent notes and searchable raw history across context windows.",
   "settings.field.compaction.midTurnEnabled.label": "Mid-Turn Compaction",
@@ -90,14 +87,11 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.compaction.asyncEnabled.description":
     "Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed",
   "settings.field.compaction.idleEnabled.label": "Idle Compaction",
-  "settings.field.compaction.idleEnabled.description":
-    "Compact context while idle when token count exceeds threshold",
+  "settings.field.compaction.idleEnabled.description": "Compact context while idle when token count exceeds threshold",
   "settings.field.compaction.idleThresholdTokens.label": "Idle Compaction Threshold",
-  "settings.field.compaction.idleThresholdTokens.description":
-    "Token count above which idle compaction triggers",
+  "settings.field.compaction.idleThresholdTokens.description": "Token count above which idle compaction triggers",
   "settings.field.compaction.idleTimeoutSeconds.label": "Idle Compaction Delay",
-  "settings.field.compaction.idleTimeoutSeconds.description":
-    "Seconds to wait while idle before compacting",
+  "settings.field.compaction.idleTimeoutSeconds.description": "Seconds to wait while idle before compacting",
   "settings.field.compaction.supersedeReads.label": "Supersede Stale Reads",
   "settings.field.compaction.supersedeReads.description":
     "Prune older read results when the same file is read again (cache-aware, runs every turn)",
@@ -127,11 +121,9 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.ttsr.contextMode.label": "TTSR Context Mode",
   "settings.field.ttsr.contextMode.description": "What to do with partial output when TTSR triggers",
   "settings.field.ttsr.interruptMode.label": "TTSR Interrupt Mode",
-  "settings.field.ttsr.interruptMode.description":
-    "When to interrupt mid-stream vs inject warning after completion",
+  "settings.field.ttsr.interruptMode.description": "When to interrupt mid-stream vs inject warning after completion",
   "settings.field.ttsr.repeatMode.label": "TTSR Repeat Mode",
-  "settings.field.ttsr.repeatMode.description":
-    "How rules can repeat: once per session or after a message gap",
+  "settings.field.ttsr.repeatMode.description": "How rules can repeat: once per session or after a message gap",
   "settings.field.ttsr.repeatGap.label": "TTSR Repeat Gap",
   "settings.field.ttsr.repeatGap.description": "Messages before a rule can trigger again",
   "settings.field.ttsr.builtinRules.label": "Built-in Rules",
@@ -148,8 +140,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.memory.backend.description":
     "Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
   "settings.field.sharpshooter.model.label": "Sharpshooter Model",
-  "settings.field.sharpshooter.model.description":
-    "Model selector for extraction/consolidation, empty = smol role",
+  "settings.field.sharpshooter.model.description": "Model selector for extraction/consolidation, empty = smol role",
   "settings.field.autolearn.enabled.label": "Auto-Learn (experimental)",
   "settings.field.autolearn.enabled.description":
     "After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills",
@@ -157,8 +148,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.autolearn.autoContinue.description":
     "When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.",
   "settings.field.mnemopi.dbPath.label": "Mnemopi DB Path",
-  "settings.field.mnemopi.dbPath.description":
-    "Optional SQLite DB path. Defaults to the agent memories directory.",
+  "settings.field.mnemopi.dbPath.description": "Optional SQLite DB path. Defaults to the agent memories directory.",
   "settings.field.mnemopi.bank.label": "Mnemopi Bank",
   "settings.field.mnemopi.bank.description":
     "Optional shared bank base name. Per-project modes derive project-local banks from it.",
@@ -169,11 +159,9 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.mnemopi.embeddingVariant.description":
     "Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.",
   "settings.field.mnemopi.autoRecall.label": "Mnemopi Auto Recall",
-  "settings.field.mnemopi.autoRecall.description":
-    "Recall local memories into the first turn of each session",
+  "settings.field.mnemopi.autoRecall.description": "Recall local memories into the first turn of each session",
   "settings.field.mnemopi.autoRetain.label": "Mnemopi Auto Retain",
-  "settings.field.mnemopi.autoRetain.description":
-    "Retain completed conversation turns into local Mnemopi memory",
+  "settings.field.mnemopi.autoRetain.description": "Retain completed conversation turns into local Mnemopi memory",
   "settings.field.mnemopi.polyphonicRecall.label": "Mnemopi Polyphonic Recall",
   "settings.field.mnemopi.polyphonicRecall.description":
     "Fuse recall with graph, fact, vector and temporal voices so linked memories surface without a keyword match",
@@ -184,8 +172,7 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.mnemopi.proactiveLinking.description":
     "Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories",
   "settings.field.mnemopi.noEmbeddings.label": "Mnemopi Disable Embeddings",
-  "settings.field.mnemopi.noEmbeddings.description":
-    "Force deterministic FTS-only recall instead of vector embeddings",
+  "settings.field.mnemopi.noEmbeddings.description": "Force deterministic FTS-only recall instead of vector embeddings",
   "settings.field.mnemopi.embeddingModel.label": "Mnemopi Embedding Model",
   "settings.field.mnemopi.embeddingModel.description":
     "Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.",
@@ -193,36 +180,29 @@ export const contextMemoryShell: Record<string, string> = {
   "settings.field.mnemopi.embeddingApiUrl.description":
     "Optional OpenAI-compatible embedding endpoint passed to Mnemopi",
   "settings.field.mnemopi.embeddingApiKey.label": "Mnemopi Embedding API Key",
-  "settings.field.mnemopi.embeddingApiKey.description":
-    "Optional embedding API key passed to Mnemopi",
+  "settings.field.mnemopi.embeddingApiKey.description": "Optional embedding API key passed to Mnemopi",
   "settings.field.mnemopi.llmMode.label": "Mnemopi LLM Mode",
   "settings.field.mnemopi.llmMode.description":
     "Use no LLM, the online tiny model (the TINY role from /models, else @smol), or a remote OpenAI-compatible endpoint",
   "settings.field.mnemopi.llmBaseUrl.label": "Mnemopi LLM Base URL",
-  "settings.field.mnemopi.llmBaseUrl.description":
-    "Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
+  "settings.field.mnemopi.llmBaseUrl.description": "Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
   "settings.field.mnemopi.llmApiKey.label": "Mnemopi LLM API Key",
-  "settings.field.mnemopi.llmApiKey.description":
-    "Optional LLM API key for Mnemopi remote mode",
+  "settings.field.mnemopi.llmApiKey.description": "Optional LLM API key for Mnemopi remote mode",
   "settings.field.mnemopi.llmModel.label": "Mnemopi LLM Model",
-  "settings.field.mnemopi.llmModel.description":
-    "Optional LLM model name for Mnemopi remote mode",
+  "settings.field.mnemopi.llmModel.description": "Optional LLM model name for Mnemopi remote mode",
   "settings.field.hindsight.apiUrl.label": "Hindsight API URL",
   "settings.field.hindsight.apiUrl.description": "Hindsight server URL (Cloud or self-hosted)",
   "settings.field.hindsight.apiToken.label": "Hindsight API Token",
-  "settings.field.hindsight.apiToken.description":
-    "Bearer token for authenticated Hindsight servers",
+  "settings.field.hindsight.apiToken.description": "Bearer token for authenticated Hindsight servers",
   "settings.field.hindsight.bankId.label": "Hindsight Bank ID",
   "settings.field.hindsight.bankId.description": "Memory bank identifier (default: project name)",
   "settings.field.hindsight.scoping.label": "Hindsight Scoping",
   "settings.field.hindsight.scoping.description":
     "global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall",
   "settings.field.hindsight.autoRecall.label": "Hindsight Auto Recall",
-  "settings.field.hindsight.autoRecall.description":
-    "Recall memories on the first turn of each session",
+  "settings.field.hindsight.autoRecall.description": "Recall memories on the first turn of each session",
   "settings.field.hindsight.autoRetain.label": "Hindsight Auto Retain",
-  "settings.field.hindsight.autoRetain.description":
-    "Retain transcript every N turns and at session boundaries",
+  "settings.field.hindsight.autoRetain.description": "Retain transcript every N turns and at session boundaries",
   "settings.field.hindsight.retainMode.label": "Hindsight Retain Mode",
   "settings.field.hindsight.retainMode.description":
     "full-session = upsert one document per session, last-turn = chunked",

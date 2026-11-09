@@ -54,37 +54,40 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pendingRole, setPendingRole] = useState<string | null>(null);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    if (!cwd) {
-      setRoles([]);
-      setModels([]);
-      setThinkingLevels({});
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const query = `?cwd=${encodeURIComponent(cwd)}`;
-      const [rolesRes, modelsRes] = await Promise.all([
-        fetch(`/api/model-roles${query}`, signal ? { signal } : undefined),
-        fetch(`/api/models${query}`, signal ? { signal } : undefined),
-      ]);
-      if (!rolesRes.ok) throw new Error(`HTTP ${rolesRes.status}`);
-      const rolesData = await rolesRes.json() as { roles?: ModelRoleAssignment[]; error?: string };
-      if (rolesData.error) throw new Error(rolesData.error);
-      if (!modelsRes.ok) throw new Error(`HTTP ${modelsRes.status}`);
-      const modelsData = await modelsRes.json() as ModelsResponse;
-      setRoles(rolesData.roles ?? []);
-      setModels(modelsData.modelList ?? []);
-      setThinkingLevels(modelsData.thinkingLevels ?? {});
-    } catch (e) {
-      if ((e as Error).name === "AbortError") return;
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [cwd]);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!cwd) {
+        setRoles([]);
+        setModels([]);
+        setThinkingLevels({});
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const query = `?cwd=${encodeURIComponent(cwd)}`;
+        const [rolesRes, modelsRes] = await Promise.all([
+          fetch(`/api/model-roles${query}`, signal ? { signal } : undefined),
+          fetch(`/api/models${query}`, signal ? { signal } : undefined),
+        ]);
+        if (!rolesRes.ok) throw new Error(`HTTP ${rolesRes.status}`);
+        const rolesData = (await rolesRes.json()) as { roles?: ModelRoleAssignment[]; error?: string };
+        if (rolesData.error) throw new Error(rolesData.error);
+        if (!modelsRes.ok) throw new Error(`HTTP ${modelsRes.status}`);
+        const modelsData = (await modelsRes.json()) as ModelsResponse;
+        setRoles(rolesData.roles ?? []);
+        setModels(modelsData.modelList ?? []);
+        setThinkingLevels(modelsData.thinkingLevels ?? {});
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [cwd],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -92,26 +95,29 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
     return () => controller.abort();
   }, [load]);
 
-  const assign = useCallback(async (role: string, selector: string | null) => {
-    if (!cwd) return;
-    setPendingRole(role);
-    setError(null);
-    try {
-      const res = await fetch("/api/model-roles", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd, role, selector, scope }),
-      });
-      const data = await res.json() as { roles?: ModelRoleAssignment[]; error?: string };
-      if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setRoles(data.roles ?? []);
-      onRolesChanged?.();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setPendingRole(null);
-    }
-  }, [cwd, scope, onRolesChanged]);
+  const assign = useCallback(
+    async (role: string, selector: string | null) => {
+      if (!cwd) return;
+      setPendingRole(role);
+      setError(null);
+      try {
+        const res = await fetch("/api/model-roles", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cwd, role, selector, scope }),
+        });
+        const data = (await res.json()) as { roles?: ModelRoleAssignment[]; error?: string };
+        if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
+        setRoles(data.roles ?? []);
+        onRolesChanged?.();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setPendingRole(null);
+      }
+    },
+    [cwd, scope, onRolesChanged],
+  );
 
   const visibleRoles = useMemo(() => roles.filter((role) => !role.hidden), [roles]);
 
@@ -122,12 +128,8 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
-          {t("roles.title")}
-        </div>
-        <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-          {t("roles.description")}
-        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{t("roles.title")}</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{t("roles.description")}</div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -156,9 +158,7 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
         </span>
       </div>
 
-      {error && (
-        <div style={{ fontSize: 12, color: "var(--danger, #ff4757)" }}>{error}</div>
-      )}
+      {error && <div style={{ fontSize: 12, color: "var(--danger, #ff4757)" }}>{error}</div>}
 
       {loading ? (
         <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("i18n.loading")}</div>
@@ -183,28 +183,28 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{
-                    flexShrink: 0,
-                    minWidth: 62,
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                    border: "1px solid var(--border)",
-                    background: "var(--bg-subtle)",
-                    color: "var(--accent)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 9.5,
-                    fontWeight: 700,
-                    letterSpacing: "0.06em",
-                    textAlign: "center",
-                  }}>
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      minWidth: 62,
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      border: "1px solid var(--border)",
+                      background: "var(--bg-subtle)",
+                      color: "var(--accent)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textAlign: "center",
+                    }}
+                  >
                     {role.tag ?? role.role.toUpperCase()}
                   </span>
 
                   <div style={{ minWidth: 0, flex: "0 0 auto", width: 128 }}>
                     <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>{role.name}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
-                      {t(`roles.source.${role.source}`)}
-                    </div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{t(`roles.source.${role.source}`)}</div>
                   </div>
 
                   <SearchableSelect
@@ -234,14 +234,16 @@ export function ModelRolesPanel({ cwd, onRolesChanged }: Props) {
                         label: `${model.name} — ${model.provider}`,
                         searchText: selectorFor(model),
                       })),
-                      ...current && !models.some((model) => selectorFor(model) === current)
+                      ...(current && !models.some((model) => selectorFor(model) === current)
                         ? [{ value: current, label: current }]
-                        : [],
+                        : []),
                     ]}
                   />
 
                   {role.warning && (
-                    <span title={role.warning} style={{ color: "var(--warning, #ffb347)", fontSize: 12 }}>!</span>
+                    <span title={role.warning} style={{ color: "var(--warning, #ffb347)", fontSize: 12 }}>
+                      !
+                    </span>
                   )}
                 </div>
 
