@@ -76,7 +76,6 @@ try {
   }
 }
 
-
 const options = parseLaunchOptions();
 const { force, port, hostname, openBrowser, authenticated, resetPassword, help } = options;
 const command = options.command;
@@ -127,10 +126,12 @@ function requireServerPrerequisites() {
 /** Refuse to hang on a password prompt nobody is there to answer. */
 function requireTerminal(flag) {
   if (isInteractive()) return;
-  throw new Error([
-    `${flag} has to ask for a password, but ompdesk is not attached to a terminal.`,
-    "Run ompdesk once interactively to set the password, or pass OMPDESK_PASSWORD in the environment.",
-  ].join("\n"));
+  throw new Error(
+    [
+      `${flag} has to ask for a password, but ompdesk is not attached to a terminal.`,
+      "Run ompdesk once interactively to set the password, or pass OMPDESK_PASSWORD in the environment.",
+    ].join("\n"),
+  );
 }
 
 async function setPasswordInteractively(intro) {
@@ -251,7 +252,10 @@ async function runAttached() {
   warnAboutExposure();
 
   const child = spawnServer({ stdio: ["inherit", "inherit", "inherit"], detached: false });
-  for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]]) {
+  for (const [signal, code] of [
+    ["SIGINT", 130],
+    ["SIGTERM", 143],
+  ]) {
     process.on(signal, () => {
       try {
         child.kill(signal);
@@ -285,7 +289,7 @@ async function startDaemon() {
   warnAboutExposure();
 
   const existing = readRecord(instanceFile);
-  if (existing && isProcessAlive(existing.pid) && await probePort(existing.host, existing.port)) {
+  if (existing && isProcessAlive(existing.pid) && (await probePort(existing.host, existing.port))) {
     console.error(`ompdesk is already running at ${existing.url}`);
     process.exit(1);
   }
@@ -313,8 +317,12 @@ async function startDaemon() {
   }
 
   let exited = null;
-  child.on("exit", (code, signal) => { exited = { code, signal }; });
-  child.on("error", (error) => { exited = { error }; });
+  child.on("exit", (code, signal) => {
+    exited = { code, signal };
+  });
+  child.on("error", (error) => {
+    exited = { error };
+  });
   child.unref();
 
   const started = await waitForPort(serverHost, portNumber, startupTimeoutMs(), true);
@@ -354,7 +362,7 @@ function selectInstances() {
 
 /** A record only counts while its process answers; anything else is a leftover to drop. */
 async function liveRecord(record) {
-  if (isProcessAlive(record.pid) && await probePort(record.host, record.port)) return true;
+  if (isProcessAlive(record.pid) && (await probePort(record.host, record.port))) return true;
   removeRecord(recordFile(stateDirPath, record.port));
   return false;
 }
@@ -367,7 +375,7 @@ async function runStatus() {
   }
 
   for (const record of records) {
-    if (!await liveRecord(record)) {
+    if (!(await liveRecord(record))) {
       console.log(`ompdesk on port ${record.port} is not running (removed a stale record).`);
       continue;
     }
@@ -407,7 +415,7 @@ async function runStop() {
 
   let status = 0;
   for (const record of records) {
-    if (!await liveRecord(record)) {
+    if (!(await liveRecord(record))) {
       console.log(`ompdesk on port ${record.port} is not running (removed a stale record).`);
       continue;
     }
@@ -422,7 +430,9 @@ async function runStop() {
     if (await stopInstance(record, { force })) {
       console.log(`ompdesk on port ${record.port} stopped.`);
     } else {
-      console.error(`ompdesk on port ${record.port} is still listening. Stop it from the process list, or retry with --force.`);
+      console.error(
+        `ompdesk on port ${record.port} is still listening. Stop it from the process list, or retry with --force.`,
+      );
       status = 1;
     }
   }

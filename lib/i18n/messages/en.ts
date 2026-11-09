@@ -110,7 +110,8 @@ export const enLocale: LocalePlugin = {
     "subagents.transcriptUnavailable": "Live transcript is not available yet. Retrying while the subagent runs.",
     "comments.title": "Comments",
     "comments.summary": "{files} TS files · {total} entries · {excluded} excluded",
-    "comments.scope": "Reads // line comments and /* */ block comments in .ts and .tsx files; symbol banners and single-word headings are left out",
+    "comments.scope":
+      "Reads // line comments and /* */ block comments in .ts and .tsx files; symbol banners and single-word headings are left out",
     "comments.loading": "Scanning comments…",
     "comments.empty": "No comments found",
     "comments.error": "Failed to load comments",
@@ -126,7 +127,8 @@ export const enLocale: LocalePlugin = {
     "comments.saveFailed": "Failed to save the translation",
     "comments.emptyTranslation": "Translation cannot be empty",
     "comments.deleteDictionary": "Delete dictionary",
-    "comments.deleteDictionaryConfirm": "Delete the entire comment dictionary? Every saved translation will be lost and cannot be recovered.",
+    "comments.deleteDictionaryConfirm":
+      "Delete the entire comment dictionary? Every saved translation will be lost and cannot be recovered.",
     "comments.deleteFailed": "Failed to delete the dictionary",
     "comments.translationPrefix": "Translation: ",
     "comments.previewTitle": "Preview in file",
@@ -155,7 +157,8 @@ export const enLocale: LocalePlugin = {
     "sidebar.pinnedProject": "Pinned project",
     "sidebar.removeProject": "Remove from sidebar",
     "sidebar.removeProjectTitle": "Remove this project from the sidebar",
-    "sidebar.removeProjectBusy": "This workspace has {count} sessions running or waiting for an answer. They keep running after removal.",
+    "sidebar.removeProjectBusy":
+      "This workspace has {count} sessions running or waiting for an answer. They keep running after removal.",
     "sidebar.removeProjectAnyway": "Remove anyway",
     "sidebar.expandProject": "Expand project",
     "sidebar.collapseProject": "Collapse project",
@@ -342,7 +345,8 @@ export const enLocale: LocalePlugin = {
     "chat.modelRoles": "Roles",
     "chat.allModels": "All models",
     "roles.title": "Model roles",
-    "roles.description": "omp routes work by role, not by one current model. Assign a model to each role and both ompdesk and the omp CLI use it.",
+    "roles.description":
+      "omp routes work by role, not by one current model. Assign a model to each role and both ompdesk and the omp CLI use it.",
     "roles.scope": "Save to",
     "roles.scopeGlobal": "Global",
     "roles.scopeProject": "This project",
@@ -395,7 +399,8 @@ export const enLocale: LocalePlugin = {
     "chat.commandCopy": "Copy the last assistant message",
     "chat.commandRewind": "Undo the last user turn on this branch",
     "chat.rewindTitle": "Undo last turn",
-    "chat.rewindHint": "Only the last user turn can be undone. Its text and images return to the composer; earlier turns stay untouched.",
+    "chat.rewindHint":
+      "Only the last user turn can be undone. Its text and images return to the composer; earlier turns stay untouched.",
     "chat.rewindEmpty": "This branch has no user message to undo",
     "chat.rewindImages": "{count} images",
     "chat.goalLabel": "Goal",
@@ -590,7 +595,8 @@ export const enLocale: LocalePlugin = {
     "i18n.packageEnabled": "Package enabled.",
     "i18n.sessionReloaded": "Session reloaded.",
     "i18n.thinking": "Thinking",
-    "i18n.largeMessageReveal": "Message content is very large ({size}). Click to view as plain text — markdown rendering is disabled to keep the page responsive.",
+    "i18n.largeMessageReveal":
+      "Message content is very large ({size}). Click to view as plain text — markdown rendering is disabled to keep the page responsive.",
     "i18n.loadingThinking": "Loading thinking...",
     "i18n.copyMessage": "Copy message",
     "i18n.editFromHere": "Edit from here",
@@ -601,7 +607,8 @@ export const enLocale: LocalePlugin = {
     "i18n.noOutput": "(no output)",
     "i18n.noSummary": "(no summary)",
     "i18n.conversationCompacted": "Conversation compacted",
-    "i18n.compactionDescription": "The conversation history before this point was compacted into the following summary:",
+    "i18n.compactionDescription":
+      "The conversation history before this point was compacted into the following summary:",
     "i18n.fileContext": "File context: {details}",
     "i18n.readFiles": "Read files",
     "i18n.modifiedFiles": "Modified files",

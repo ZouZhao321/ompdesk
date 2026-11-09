@@ -26,7 +26,15 @@ import { useAudio } from "@/hooks/useAudio";
 import { canApplySessionIdentity, type SessionIdentity } from "@/lib/agent-client";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
-import { PANEL_VIEW_KINDS, PANEL_VIEW_LABEL_KEYS, panelViewTab, type FileTab, type PanelViewKind, type Tab } from "@/lib/panel-tabs";
+import {
+  mergeOpenFileTab,
+  PANEL_VIEW_KINDS,
+  PANEL_VIEW_LABEL_KEYS,
+  panelViewTab,
+  type OpenFileOptions,
+  type PanelViewKind,
+  type Tab,
+} from "@/lib/panel-tabs";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -36,7 +44,15 @@ import {
 import { getInitialNavigation } from "@/lib/initial-navigation";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { clearUnreadSessionIds } from "@/lib/session-unread";
-import { clearLastOpen, getLastOpenSession, setLastOpenSession, getSessionContinuation, clearSessionContinuation, rememberSessionContinuation, restoreSessionContinuation } from "@/lib/workspace-memory";
+import {
+  clearLastOpen,
+  getLastOpenSession,
+  setLastOpenSession,
+  getSessionContinuation,
+  clearSessionContinuation,
+  rememberSessionContinuation,
+  restoreSessionContinuation,
+} from "@/lib/workspace-memory";
 import { transcriptViewState } from "@/lib/transcript-view-state";
 import {
   getDefaultRightPanelWidth,
@@ -63,11 +79,7 @@ const MemoGitChangesPanel = memo(GitChangesPanel);
 const MemoSubagentPanel = memo(SubagentPanel);
 
 type SessionCopyField = "file" | "id";
-type AutoNameStatus =
-  | { kind: "idle" }
-  | { kind: "naming" }
-  | { kind: "success" }
-  | { kind: "error"; message: string };
+type AutoNameStatus = { kind: "idle" } | { kind: "naming" } | { kind: "success" } | { kind: "error"; message: string };
 
 /** 顶栏尺寸：手机档把高度与按钮命中区放大到 44px，桌面档保持原样。 */
 const TOP_BAR_METRICS = {
@@ -151,26 +163,34 @@ function AutoNameAction({
         disabled={ui.disabled}
         title={ui.title}
         aria-label={ui.label}
-        style={topBar
-          ? {
-            display: "flex", alignItems: "center", gap: 6,
-            height: "100%", padding: "0 12px",
-            background: "none", border: "none",
-            borderTop: "2px solid transparent",
-            borderRight: "1px solid var(--border)",
-            color,
-            cursor: ui.disabled ? "not-allowed" : "pointer",
-            opacity: ui.disabled && status.kind !== "naming" ? 0.45 : 1,
-            flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-            transition: "color 0.1s, background 0.1s, opacity 0.1s",
-          }
-          : {
-            ...MOBILE_SESSION_ACTION_STYLE,
-            gap: 6,
-            color,
-            cursor: ui.disabled ? "not-allowed" : "pointer",
-            opacity: ui.disabled && status.kind !== "naming" ? 0.45 : 1,
-          }}
+        style={
+          topBar
+            ? {
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                height: "100%",
+                padding: "0 12px",
+                background: "none",
+                border: "none",
+                borderTop: "2px solid transparent",
+                borderRight: "1px solid var(--border)",
+                color,
+                cursor: ui.disabled ? "not-allowed" : "pointer",
+                opacity: ui.disabled && status.kind !== "naming" ? 0.45 : 1,
+                flexShrink: 0,
+                fontSize: 11,
+                whiteSpace: "nowrap",
+                transition: "color 0.1s, background 0.1s, opacity 0.1s",
+              }
+            : {
+                ...MOBILE_SESSION_ACTION_STYLE,
+                gap: 6,
+                color,
+                cursor: ui.disabled ? "not-allowed" : "pointer",
+                opacity: ui.disabled && status.kind !== "naming" ? 0.45 : 1,
+              }
+        }
         onMouseEnter={(e) => {
           if (ui.disabled) return;
           e.currentTarget.style.color = ui.isError ? AUTO_NAME_ERROR_COLOR : "var(--text)";
@@ -187,11 +207,31 @@ function AutoNameAction({
             <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         ) : ui.isSuccess ? (
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <polyline points="20 6 9 17 4 12" />
           </svg>
         ) : (
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <path d="m15 4 5 5L7 22l-5-5Z" />
             <path d="m14 5 5 5" />
             <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
@@ -284,8 +324,7 @@ export function AppShell() {
   const searchParams = useSearchParams();
   const [initialNavigation] = useState(() => getInitialNavigation(searchParams));
   const { preference, toggleTheme } = useTheme();
-  const themeLabelKey =
-    preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
+  const themeLabelKey = preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
   const isMobile = useIsMobile();
   const topBar = isMobile ? TOP_BAR_METRICS.mobile : TOP_BAR_METRICS.desktop;
@@ -301,8 +340,8 @@ export function AppShell() {
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   // When user clicks +, we only store the cwd — no fake session id
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
-  const [initialCwdStatus, setInitialCwdStatus] = useState<"idle" | "validating" | "ready" | "error">(
-    () => initialNavigation.requestedCwd ? "validating" : "idle",
+  const [initialCwdStatus, setInitialCwdStatus] = useState<"idle" | "validating" | "ready" | "error">(() =>
+    initialNavigation.requestedCwd ? "validating" : "idle",
   );
   const [initialCwdError, setInitialCwdError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -320,29 +359,29 @@ export function AppShell() {
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
   const getResponsiveRightPanelWidth = useCallback(
-    () => typeof window === "undefined"
-      ? RIGHT_PANEL_FALLBACK_WIDTH
-      : getDefaultRightPanelWidth(window.innerWidth),
+    () => (typeof window === "undefined" ? RIGHT_PANEL_FALLBACK_WIDTH : getDefaultRightPanelWidth(window.innerWidth)),
     [],
   );
   const getResponsiveSidebarMaxWidth = useCallback(
-    () => typeof window === "undefined"
-      ? SIDEBAR_MAX_WIDTH
-      : getSidebarMaxWidth({
-        viewportWidth: window.innerWidth,
-        rightPanelOpen,
-        rightPanelWidth: rightPanelWidthRef.current,
-      }),
+    () =>
+      typeof window === "undefined"
+        ? SIDEBAR_MAX_WIDTH
+        : getSidebarMaxWidth({
+            viewportWidth: window.innerWidth,
+            rightPanelOpen,
+            rightPanelWidth: rightPanelWidthRef.current,
+          }),
     [rightPanelOpen],
   );
   const getResponsiveRightPanelMaxWidth = useCallback(
-    () => typeof window === "undefined"
-      ? RIGHT_PANEL_MAX_WIDTH
-      : getRightPanelMaxWidth({
-        viewportWidth: window.innerWidth,
-        sidebarOpen,
-        sidebarWidth: sidebarWidthRef.current,
-      }),
+    () =>
+      typeof window === "undefined"
+        ? RIGHT_PANEL_MAX_WIDTH
+        : getRightPanelMaxWidth({
+            viewportWidth: window.innerWidth,
+            sidebarOpen,
+            sidebarWidth: sidebarWidthRef.current,
+          }),
     [sidebarOpen],
   );
   const sidebarResizer = useResizablePanel({
@@ -386,6 +425,8 @@ export function AppShell() {
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
   const languageBtnRef = useRef<HTMLButtonElement>(null);
+  // 文件标签的打开序号：让「同一个文件再次以差异模式打开」成为一次新请求。
+  const fileOpenSeqRef = useRef(0);
 
   // Branch state — the map is the branch navigator; ChatWindow pushes the
   // active leaf and the switch callback.
@@ -396,10 +437,13 @@ export function AppShell() {
     setMapOpen(false);
   }, [selectedSession?.id]);
 
-  const handleBranchDataChange = useCallback((activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
-    setBranchActiveLeafId(activeLeafId);
-    branchLeafChangeFnRef.current = onLeafChange;
-  }, []);
+  const handleBranchDataChange = useCallback(
+    (activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => {
+      setBranchActiveLeafId(activeLeafId);
+      branchLeafChangeFnRef.current = onLeafChange;
+    },
+    [],
+  );
 
   const handleBranchLeafChange = useCallback((leafId: string | null) => {
     branchLeafChangeFnRef.current?.(leafId);
@@ -435,19 +479,29 @@ export function AppShell() {
   }, []);
 
   // Context usage — populated by ChatWindow, displayed in top bar
-  const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
-  const handleContextUsageChange = useCallback((usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
-    setContextUsage(usage);
-  }, []);
+  const [contextUsage, setContextUsage] = useState<{
+    percent: number | null;
+    contextWindow: number;
+    tokens: number | null;
+  } | null>(null);
+  const handleContextUsageChange = useCallback(
+    (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => {
+      setContextUsage(usage);
+    },
+    [],
+  );
 
   // Single active panel — only one dropdown open at a time
   const [activeTopPanel, setActiveTopPanel] = useState<"session" | "language" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  const toggleTopPanel = useCallback((panel: "session" | "language") => {
-    if (isMobile) setSidebarOpen(false);
-    setActiveTopPanel((cur) => cur === panel ? null : panel);
-  }, [isMobile]);
+  const toggleTopPanel = useCallback(
+    (panel: "session" | "language") => {
+      if (isMobile) setSidebarOpen(false);
+      setActiveTopPanel((cur) => (cur === panel ? null : panel));
+    },
+    [isMobile],
+  );
 
   const openSessionStatsPanel = useCallback(() => {
     if (isMobile) setSidebarOpen(false);
@@ -466,10 +520,7 @@ export function AppShell() {
       if (activeTopPanel === "language" && !isMobile && languageBtnRef.current) {
         const buttonRect = languageBtnRef.current.getBoundingClientRect();
         const width = Math.min(LANGUAGE_MENU_WIDTH, topBarRect.width);
-        const left = Math.min(
-          buttonRect.left - 1,
-          Math.max(topBarRect.left, topBarRect.right - width),
-        );
+        const left = Math.min(buttonRect.left - 1, Math.max(topBarRect.left, topBarRect.right - width));
         setTopPanelPos({ top: topBarRect.bottom, left, width });
         return;
       }
@@ -488,21 +539,39 @@ export function AppShell() {
 
   // Same @mention format as the chat input's @ autocomplete, so the agent's
   // read tool resolves it the same way (it strips the @ prefix).
-  const handleAtMention = useCallback((relativePath: string, isDir: boolean) => {
-    chatInputRef.current?.insertText(buildAtMentionText(relativePath, isDir));
-    if (isMobile) { setRightPanelOpen(false); setSidebarOpen(false); }
-  }, [isMobile]);
+  const handleAtMention = useCallback(
+    (relativePath: string, isDir: boolean) => {
+      chatInputRef.current?.insertText(buildAtMentionText(relativePath, isDir));
+      if (isMobile) {
+        setRightPanelOpen(false);
+        setSidebarOpen(false);
+      }
+    },
+    [isMobile],
+  );
 
-  const handleAtMentions = useCallback((relativePaths: string[]) => {
-    const mentions = buildFileAtMentionsText(relativePaths);
-    if (mentions) chatInputRef.current?.insertText(mentions);
-    if (isMobile) { setRightPanelOpen(false); setSidebarOpen(false); }
-  }, [isMobile]);
+  const handleAtMentions = useCallback(
+    (relativePaths: string[]) => {
+      const mentions = buildFileAtMentionsText(relativePaths);
+      if (mentions) chatInputRef.current?.insertText(mentions);
+      if (isMobile) {
+        setRightPanelOpen(false);
+        setSidebarOpen(false);
+      }
+    },
+    [isMobile],
+  );
 
-  const handleFileLineMention = useCallback((relativePath: string, startLine: number, endLine: number) => {
-    chatInputRef.current?.insertText(buildFileLineMentionText(relativePath, startLine, endLine));
-    if (isMobile) { setRightPanelOpen(false); setSidebarOpen(false); }
-  }, [isMobile]);
+  const handleFileLineMention = useCallback(
+    (relativePath: string, startLine: number, endLine: number) => {
+      chatInputRef.current?.insertText(buildFileLineMentionText(relativePath, startLine, endLine));
+      if (isMobile) {
+        setRightPanelOpen(false);
+        setSidebarOpen(false);
+      }
+    },
+    [isMobile],
+  );
 
   const initialSessionId = initialNavigation.sessionId;
   const [activeCwd, setActiveCwd] = useState<string | null>(null);
@@ -528,9 +597,7 @@ export function AppShell() {
   // carry projectRoot, so use the active project identity until hydration.
   useEffect(() => {
     if (!selectedSession) return;
-    const projectKey = selectedSession.projectRoot
-      ?? activeProjectRootRef.current
-      ?? selectedSession.cwd;
+    const projectKey = selectedSession.projectRoot ?? activeProjectRootRef.current ?? selectedSession.cwd;
     setLastOpenSession(projectKey, selectedSession.id);
   }, [selectedSession]);
 
@@ -549,7 +616,7 @@ export function AppShell() {
       signal: controller.signal,
     })
       .then(async (response) => {
-        const data = await response.json().catch(() => ({})) as { cwd?: string; error?: string };
+        const data = (await response.json().catch(() => ({}))) as { cwd?: string; error?: string };
         if (!response.ok || !data.cwd) {
           throw new Error(data.error ?? `HTTP ${response.status}`);
         }
@@ -573,137 +640,155 @@ export function AppShell() {
   // from handleCwdChange once the outgoing context has been reset. The session
   // is looked up against the live list so a deleted or drifted session falls
   // back to the default welcome page instead of erroring.
-  const restoreWorkspaceContext = useCallback((projectKey: string) => {
-    const token = ++workspaceRestoreTokenRef.current;
-    const lastOpenSessionId = getLastOpenSession(projectKey);
-    if (!lastOpenSessionId) return;
-    void fetch("/api/sessions")
-      .then((r) => (r.ok ? (r.json() as Promise<{ sessions: SessionInfo[]; sessionIdsByRuntimeId?: Record<string, string> }>) : null))
-      .then((d) => {
-        if (token !== workspaceRestoreTokenRef.current) return; // stale switch
-        const s = d ? restoreSessionContinuation(lastOpenSessionId, d.sessions, d.sessionIdsByRuntimeId) : undefined;
-        if (!s) {
-          // The list loaded but the remembered session is gone — forget it.
-          // When the list itself failed (d === null) keep the memory so a
-          // later switch retries the restore.
-          if (d) clearLastOpen(projectKey);
-          return;
-        }
-        if ((s.projectRoot ?? s.cwd) !== projectKey) {
-          // Defensive: the remembered session drifted out of this workspace.
-          clearLastOpen(projectKey);
-          return;
-        }
-        // Selecting the session must remount the chat with the session
-        // present: useAgentSession loads content in a mount-only effect, so
-        // the null-session welcome mount from the switch would never load
-        // the restored session's messages.
-        setSelectedSession(s);
-        setSessionKey((k) => k + 1);
-        if (new URLSearchParams(window.location.search).get("session") !== s.id) {
-          router.replace(`?session=${encodeURIComponent(s.id)}`, { scroll: false });
-        }
-      })
-      .catch(() => {
-        // Network hiccup: keep the remembered session for a later retry.
-      });
-  }, [router]);
+  const restoreWorkspaceContext = useCallback(
+    (projectKey: string) => {
+      const token = ++workspaceRestoreTokenRef.current;
+      const lastOpenSessionId = getLastOpenSession(projectKey);
+      if (!lastOpenSessionId) return;
+      void fetch("/api/sessions")
+        .then((r) =>
+          r.ok
+            ? (r.json() as Promise<{ sessions: SessionInfo[]; sessionIdsByRuntimeId?: Record<string, string> }>)
+            : null,
+        )
+        .then((d) => {
+          if (token !== workspaceRestoreTokenRef.current) return; // stale switch
+          const s = d ? restoreSessionContinuation(lastOpenSessionId, d.sessions, d.sessionIdsByRuntimeId) : undefined;
+          if (!s) {
+            // The list loaded but the remembered session is gone — forget it.
+            // When the list itself failed (d === null) keep the memory so a
+            // later switch retries the restore.
+            if (d) clearLastOpen(projectKey);
+            return;
+          }
+          if ((s.projectRoot ?? s.cwd) !== projectKey) {
+            // Defensive: the remembered session drifted out of this workspace.
+            clearLastOpen(projectKey);
+            return;
+          }
+          // Selecting the session must remount the chat with the session
+          // present: useAgentSession loads content in a mount-only effect, so
+          // the null-session welcome mount from the switch would never load
+          // the restored session's messages.
+          setSelectedSession(s);
+          setSessionKey((k) => k + 1);
+          if (new URLSearchParams(window.location.search).get("session") !== s.id) {
+            router.replace(`?session=${encodeURIComponent(s.id)}`, { scroll: false });
+          }
+        })
+        .catch(() => {
+          // Network hiccup: keep the remembered session for a later retry.
+        });
+    },
+    [router],
+  );
 
-  const handleCwdChange = useCallback((cwd: string | null, projectRoot?: string | null) => {
-    invalidateWorkspaceRestore();
-    setActiveCwd(cwd);
-    // Skip if cwd is null (initial mount).
-    if (!cwd) return;
-    const newProject = projectRoot ?? cwd;
-    const currentProject = activeProjectRootRef.current
-      ?? (selectedSession ? (selectedSession.projectRoot ?? selectedSession.cwd) : null);
-    activeProjectRootRef.current = newProject;
+  const handleCwdChange = useCallback(
+    (cwd: string | null, projectRoot?: string | null) => {
+      invalidateWorkspaceRestore();
+      setActiveCwd(cwd);
+      // Skip if cwd is null (initial mount).
+      if (!cwd) return;
+      const newProject = projectRoot ?? cwd;
+      const currentProject =
+        activeProjectRootRef.current ?? (selectedSession ? (selectedSession.projectRoot ?? selectedSession.cwd) : null);
+      activeProjectRootRef.current = newProject;
 
-    // Keep the project identity in sync during the initial URL restore without
-    // remounting the just-created or restored chat.
-    if (suppressCwdBumpRef.current) {
-      suppressCwdBumpRef.current = false;
-      return;
-    }
-    // Worktrees of one repo share a project root. Moving the effective cwd
-    // within the same project (e.g. switching worktree, or clicking a session
-    // that lives in another worktree) must not close the open session.
-    if (currentProject === newProject) {
-      return;
-    }
-    // Close any session that belongs to a different project — it no longer
-    // matches the selected project directory.
-    setSelectedSession(null);
-    setNewSessionCwd((prev) => {
-      if (prev && prev !== cwd) return null;
-      return prev;
-    });
-    setSessionKey((k) => k + 1);
-    setBranchActiveLeafId(null);
-    setActiveTopPanel(null);
-    // Tabs are keyed by absolute path, so tabs opened in the previous project
-    // would otherwise linger after switching to a different project. Reached
-    // only past the same-project early return above, so worktrees of one repo
-    // keep their open tabs. The panel stays open with an empty tab page.
-    setPanelTabs([]);
-    setActivePanelTabId(null);
-    // Restore the workspace we switched to: its last open session, or keep
-    // the default welcome page when none is remembered.
-    restoreWorkspaceContext(newProject);
-    router.replace("/", { scroll: false });
-  }, [router, selectedSession, invalidateWorkspaceRestore, restoreWorkspaceContext]);
-
-  const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
-    // 用户主动打开会话就算读过了：侧栏点击、命令面板、通知点击都走这里。
-    // 自动恢复（isRestore）不算点开，标记保留到用户真的点开为止。
-    if (!isRestore) clearUnreadSessionIds([session.id]);
-    // Mark the target project before the cwd synchronization effect runs.
-    // Otherwise selecting a session in another project looks like a manual
-    // project switch and the just-selected session is cleared.
-    activeProjectRootRef.current = session.projectRoot ?? session.cwd;
-    invalidateWorkspaceRestore();
-    // A current row with a continuation handle can explicitly reopen history,
-    // including recovery from a handle unknown after a server restart.
-    // Keep ordinary same-session clicks as a no-op.
-    if (!isRestore && selectedSession) {
-      const sameProject =
-        (selectedSession.projectRoot ?? selectedSession.cwd) ===
-        (session.projectRoot ?? session.cwd);
-      if (selectedSession.id === session.id && sameProject && !selectedSession.runtimeId) {
-        if (isMobile) setSidebarOpen(false);
+      // Keep the project identity in sync during the initial URL restore without
+      // remounting the just-created or restored chat.
+      if (suppressCwdBumpRef.current) {
+        suppressCwdBumpRef.current = false;
         return;
       }
-    }
-    setNewSessionCwd(null);
-    if (!isRestore) clearSessionContinuation();
-    setSelectedSession({ ...session, runtimeId: isRestore ? session.runtimeId ?? getSessionContinuation(session.id) : undefined });
-    setSessionKey((k) => k + 1);
-    setInitialSessionRestored(true);
-    // On mobile, collapse the overlay drawer so the chat is revealed after pick.
-    if (isMobile && !isRestore) setSidebarOpen(false);
-    if (isRestore) {
-      // Suppress the redundant sessionKey bump that would come from the
-      // onCwdChange effect firing after setSelectedCwd in the sidebar
-      suppressCwdBumpRef.current = true;
-    }
-    // Skip router.replace when restoring from URL — the param is already correct
-    // and calling replace in production Next.js triggers a Suspense remount loop
-    if (!isRestore) {
-      router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
-    }
-  }, [invalidateWorkspaceRestore, router, isMobile, selectedSession]);
+      // Worktrees of one repo share a project root. Moving the effective cwd
+      // within the same project (e.g. switching worktree, or clicking a session
+      // that lives in another worktree) must not close the open session.
+      if (currentProject === newProject) {
+        return;
+      }
+      // Close any session that belongs to a different project — it no longer
+      // matches the selected project directory.
+      setSelectedSession(null);
+      setNewSessionCwd((prev) => {
+        if (prev && prev !== cwd) return null;
+        return prev;
+      });
+      setSessionKey((k) => k + 1);
+      setBranchActiveLeafId(null);
+      setActiveTopPanel(null);
+      // Tabs are keyed by absolute path, so tabs opened in the previous project
+      // would otherwise linger after switching to a different project. Reached
+      // only past the same-project early return above, so worktrees of one repo
+      // keep their open tabs. The panel stays open with an empty tab page.
+      setPanelTabs([]);
+      setActivePanelTabId(null);
+      // Restore the workspace we switched to: its last open session, or keep
+      // the default welcome page when none is remembered.
+      restoreWorkspaceContext(newProject);
+      router.replace("/", { scroll: false });
+    },
+    [router, selectedSession, invalidateWorkspaceRestore, restoreWorkspaceContext],
+  );
 
-  const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
-    clearSessionContinuation();
-    invalidateWorkspaceRestore();
-    setSelectedSession(null);
-    setNewSessionCwd(cwd);
-    setSessionKey((k) => k + 1);
-    setBranchActiveLeafId(null);
-    setActiveTopPanel(null);
-    if (isMobile) setSidebarOpen(false);
-    router.replace("/", { scroll: false });
-  }, [invalidateWorkspaceRestore, router, isMobile]);
+  const handleSelectSession = useCallback(
+    (session: SessionInfo, isRestore = false) => {
+      // 用户主动打开会话就算读过了：侧栏点击、命令面板、通知点击都走这里。
+      // 自动恢复（isRestore）不算点开，标记保留到用户真的点开为止。
+      if (!isRestore) clearUnreadSessionIds([session.id]);
+      // Mark the target project before the cwd synchronization effect runs.
+      // Otherwise selecting a session in another project looks like a manual
+      // project switch and the just-selected session is cleared.
+      activeProjectRootRef.current = session.projectRoot ?? session.cwd;
+      invalidateWorkspaceRestore();
+      // A current row with a continuation handle can explicitly reopen history,
+      // including recovery from a handle unknown after a server restart.
+      // Keep ordinary same-session clicks as a no-op.
+      if (!isRestore && selectedSession) {
+        const sameProject =
+          (selectedSession.projectRoot ?? selectedSession.cwd) === (session.projectRoot ?? session.cwd);
+        if (selectedSession.id === session.id && sameProject && !selectedSession.runtimeId) {
+          if (isMobile) setSidebarOpen(false);
+          return;
+        }
+      }
+      setNewSessionCwd(null);
+      if (!isRestore) clearSessionContinuation();
+      setSelectedSession({
+        ...session,
+        runtimeId: isRestore ? (session.runtimeId ?? getSessionContinuation(session.id)) : undefined,
+      });
+      setSessionKey((k) => k + 1);
+      setInitialSessionRestored(true);
+      // On mobile, collapse the overlay drawer so the chat is revealed after pick.
+      if (isMobile && !isRestore) setSidebarOpen(false);
+      if (isRestore) {
+        // Suppress the redundant sessionKey bump that would come from the
+        // onCwdChange effect firing after setSelectedCwd in the sidebar
+        suppressCwdBumpRef.current = true;
+      }
+      // Skip router.replace when restoring from URL — the param is already correct
+      // and calling replace in production Next.js triggers a Suspense remount loop
+      if (!isRestore) {
+        router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
+      }
+    },
+    [invalidateWorkspaceRestore, router, isMobile, selectedSession],
+  );
+
+  const handleNewSession = useCallback(
+    (_sessionId: string, cwd: string) => {
+      clearSessionContinuation();
+      invalidateWorkspaceRestore();
+      setSelectedSession(null);
+      setNewSessionCwd(cwd);
+      setSessionKey((k) => k + 1);
+      setBranchActiveLeafId(null);
+      setActiveTopPanel(null);
+      if (isMobile) setSidebarOpen(false);
+      router.replace("/", { scroll: false });
+    },
+    [invalidateWorkspaceRestore, router, isMobile],
+  );
 
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
@@ -721,131 +806,150 @@ export function AppShell() {
       .then((d) => {
         const full = d?.sessions.find((s) => s.id === sessionId);
         if (!full) return;
-        setSelectedSession((prev) => (
-          prev?.id === sessionId
-            ? { ...prev, ...full, transient: full.transient ?? false }
-            : prev
-        ));
+        setSelectedSession((prev) =>
+          prev?.id === sessionId ? { ...prev, ...full, transient: full.transient ?? false } : prev,
+        );
       })
       .catch(() => {});
   }, []);
 
   // Open another session from the map (fork descendants live in their own file).
-  const handleOpenSessionById = useCallback(async (sessionId: string): Promise<boolean> => {
-    try {
-      const response = await fetch("/api/sessions", { cache: "no-store" });
-      if (!response.ok) return false;
-      const data = (await response.json()) as { sessions?: SessionInfo[] };
-      const session = data.sessions?.find((candidate) => candidate.id === sessionId);
-      if (!session) return false;
-      handleSelectSession(session);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [handleSelectSession]);
+  const handleOpenSessionById = useCallback(
+    async (sessionId: string): Promise<boolean> => {
+      try {
+        const response = await fetch("/api/sessions", { cache: "no-store" });
+        if (!response.ok) return false;
+        const data = (await response.json()) as { sessions?: SessionInfo[] };
+        const session = data.sessions?.find((candidate) => candidate.id === sessionId);
+        if (!session) return false;
+        handleSelectSession(session);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [handleSelectSession],
+  );
 
   // Called by ChatWindow when a new session gets its real id from omp
-  const handleSessionCreated = useCallback((session: SessionInfo) => {
-    invalidateWorkspaceRestore();
-    setNewSessionCwd(null);
-    setSelectedSession(session);
-    setRefreshKey((k) => k + 1);
-    hydrateSelectedSession(session.id);
-    router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
-  }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
+  const handleSessionCreated = useCallback(
+    (session: SessionInfo) => {
+      invalidateWorkspaceRestore();
+      setNewSessionCwd(null);
+      setSelectedSession(session);
+      setRefreshKey((k) => k + 1);
+      hydrateSelectedSession(session.id);
+      router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
+    },
+    [invalidateWorkspaceRestore, router, hydrateSelectedSession],
+  );
 
-  const deliverSessionNotification = useCallback(({
-    targetSession,
-    title,
-    body,
-    tag,
-  }: {
-    targetSession: SessionInfo | null;
-    title: string;
-    body: string;
-    tag?: string;
-  }) => {
-    if (!("Notification" in window)) return;
-
-    const fire = () => {
-      const sessionUrl = targetSession ? `/?session=${encodeURIComponent(targetSession.id)}` : "/";
-      void showBrowserNotification({
-        title,
-        body,
-        sessionUrl,
-        tag,
-        onClick: () => {
-          window.focus();
-          if (targetSession) handleSelectSession(targetSession);
-        },
-      });
-    };
-
-    if (Notification.permission === "granted") {
-      fire();
-    } else if (Notification.permission === "default") {
-      void Notification.requestPermission().then((p) => { if (p === "granted") fire(); });
-    }
-  }, [handleSelectSession]);
-
-  const handleAgentEnd = useCallback((completedSessionId?: string) => {
-    setRefreshKey((k) => k + 1);
-    setExplorerRefreshKey((k) => k + 1);
-    const targetSession = selectedSession
-      ? { ...selectedSession, id: completedSessionId ?? selectedSession.id }
-      : null;
-    if (targetSession) hydrateSelectedSession(targetSession.id);
-
-    if (!shouldShowBrowserNotification()) return;
-    deliverSessionNotification({
+  const deliverSessionNotification = useCallback(
+    ({
       targetSession,
-      title: targetSession?.name ?? translate("i18n.sessionComplete"),
-      body: translate("i18n.taskFinished"),
-    });
-  }, [deliverSessionNotification, hydrateSelectedSession, selectedSession, translate]);
+      title,
+      body,
+      tag,
+    }: {
+      targetSession: SessionInfo | null;
+      title: string;
+      body: string;
+      tag?: string;
+    }) => {
+      if (!("Notification" in window)) return;
 
-  const handleAttentionNeeded = useCallback((request: BlockingExtensionUiRequest) => {
-    if (!shouldShowBrowserNotification()) return;
-    if (!claimExtensionAttentionNotification(request, notifiedAttentionRequestIdsRef.current)) return;
+      const fire = () => {
+        const sessionUrl = targetSession ? `/?session=${encodeURIComponent(targetSession.id)}` : "/";
+        void showBrowserNotification({
+          title,
+          body,
+          sessionUrl,
+          tag,
+          onClick: () => {
+            window.focus();
+            if (targetSession) handleSelectSession(targetSession);
+          },
+        });
+      };
 
-    deliverSessionNotification({
-      targetSession: selectedSession,
-      title: translate("i18n.attentionNeeded"),
-      body: request.method === "custom"
-        ? translate("i18n.extensionInputNeeded")
-        : request.title,
-      tag: `pi-extension-ui:${request.id}`,
-    });
-  }, [deliverSessionNotification, selectedSession, translate]);
+      if (Notification.permission === "granted") {
+        fire();
+      } else if (Notification.permission === "default") {
+        void Notification.requestPermission().then((p) => {
+          if (p === "granted") fire();
+        });
+      }
+    },
+    [handleSelectSession],
+  );
 
-  const handleSessionForked = useCallback((newSessionId: string, runtimeId?: string | null) => {
-    activeSessionIdRef.current = newSessionId;
-    activeRuntimeIdRef.current = runtimeId ?? undefined;
-    invalidateWorkspaceRestore();
-    setRefreshKey((k) => k + 1);
-    if (runtimeId === undefined) setSessionKey((k) => k + 1);
-    setNewSessionCwd(null);
-    setSelectedSession((prev) => ({
-      ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
-      id: newSessionId,
-      runtimeId: runtimeId ?? undefined,
-      transient: false,
-    }));
-    hydrateSelectedSession(newSessionId);
-    router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
-  }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
+  const handleAgentEnd = useCallback(
+    (completedSessionId?: string) => {
+      setRefreshKey((k) => k + 1);
+      setExplorerRefreshKey((k) => k + 1);
+      const targetSession = selectedSession
+        ? { ...selectedSession, id: completedSessionId ?? selectedSession.id }
+        : null;
+      if (targetSession) hydrateSelectedSession(targetSession.id);
 
-  const handleRuntimeIdentity = useCallback((identity: SessionIdentity, request: SessionIdentity) => {
-    const current = { sessionId: activeSessionIdRef.current ?? "", runtimeId: activeRuntimeIdRef.current ?? null };
-    if (!canApplySessionIdentity(current, identity, request)) return false;
-    if (current.sessionId === identity.sessionId && current.runtimeId === identity.runtimeId) return true;
-    chatInputRef.current?.rekeyDraft(current.sessionId, identity.sessionId);
-    if (identity.runtimeId) rememberSessionContinuation(identity.sessionId, identity.runtimeId);
-    else if (request.runtimeId) clearSessionContinuation(undefined, request.runtimeId);
-    handleSessionForked(identity.sessionId, identity.runtimeId);
-    return true;
-  }, [handleSessionForked]);
+      if (!shouldShowBrowserNotification()) return;
+      deliverSessionNotification({
+        targetSession,
+        title: targetSession?.name ?? translate("i18n.sessionComplete"),
+        body: translate("i18n.taskFinished"),
+      });
+    },
+    [deliverSessionNotification, hydrateSelectedSession, selectedSession, translate],
+  );
+
+  const handleAttentionNeeded = useCallback(
+    (request: BlockingExtensionUiRequest) => {
+      if (!shouldShowBrowserNotification()) return;
+      if (!claimExtensionAttentionNotification(request, notifiedAttentionRequestIdsRef.current)) return;
+
+      deliverSessionNotification({
+        targetSession: selectedSession,
+        title: translate("i18n.attentionNeeded"),
+        body: request.method === "custom" ? translate("i18n.extensionInputNeeded") : request.title,
+        tag: `pi-extension-ui:${request.id}`,
+      });
+    },
+    [deliverSessionNotification, selectedSession, translate],
+  );
+
+  const handleSessionForked = useCallback(
+    (newSessionId: string, runtimeId?: string | null) => {
+      activeSessionIdRef.current = newSessionId;
+      activeRuntimeIdRef.current = runtimeId ?? undefined;
+      invalidateWorkspaceRestore();
+      setRefreshKey((k) => k + 1);
+      if (runtimeId === undefined) setSessionKey((k) => k + 1);
+      setNewSessionCwd(null);
+      setSelectedSession((prev) => ({
+        ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
+        id: newSessionId,
+        runtimeId: runtimeId ?? undefined,
+        transient: false,
+      }));
+      hydrateSelectedSession(newSessionId);
+      router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
+    },
+    [invalidateWorkspaceRestore, router, hydrateSelectedSession],
+  );
+
+  const handleRuntimeIdentity = useCallback(
+    (identity: SessionIdentity, request: SessionIdentity) => {
+      const current = { sessionId: activeSessionIdRef.current ?? "", runtimeId: activeRuntimeIdRef.current ?? null };
+      if (!canApplySessionIdentity(current, identity, request)) return false;
+      if (current.sessionId === identity.sessionId && current.runtimeId === identity.runtimeId) return true;
+      chatInputRef.current?.rekeyDraft(current.sessionId, identity.sessionId);
+      if (identity.runtimeId) rememberSessionContinuation(identity.sessionId, identity.runtimeId);
+      else if (request.runtimeId) clearSessionContinuation(undefined, request.runtimeId);
+      handleSessionForked(identity.sessionId, identity.runtimeId);
+      return true;
+    },
+    [handleSessionForked],
+  );
 
   const handleAutoName = useCallback(async () => {
     const sessionId = selectedSession?.id;
@@ -859,7 +963,12 @@ export function AppShell() {
       const response = await fetch(`/api/sessions/${encodeURIComponent(runtimeId ?? sessionId)}/auto-name`, {
         method: "POST",
       });
-      const body = (await response.json().catch(() => ({}))) as { title?: string; error?: string; sessionId?: string; runtimeId?: string };
+      const body = (await response.json().catch(() => ({}))) as {
+        title?: string;
+        error?: string;
+        sessionId?: string;
+        runtimeId?: string;
+      };
       if (!response.ok || !body.title) {
         throw new Error(body.error || `HTTP ${response.status}`);
       }
@@ -867,12 +976,15 @@ export function AppShell() {
       const title = body.title.trim();
       setRefreshKey((key) => key + 1);
       const canonicalId = body.sessionId ?? sessionId;
-      if (!handleRuntimeIdentity(
-        { sessionId: canonicalId, runtimeId: body.runtimeId ?? null },
-        { sessionId, runtimeId: runtimeId ?? null },
-      )) return;
-      setSelectedSession((current) => current?.id === canonicalId ? { ...current, name: title } : current);
-      setSessionStats((current) => current ? { ...current, sessionId: canonicalId, sessionName: title } : current);
+      if (
+        !handleRuntimeIdentity(
+          { sessionId: canonicalId, runtimeId: body.runtimeId ?? null },
+          { sessionId, runtimeId: runtimeId ?? null },
+        )
+      )
+        return;
+      setSelectedSession((current) => (current?.id === canonicalId ? { ...current, name: title } : current));
+      setSessionStats((current) => (current ? { ...current, sessionId: canonicalId, sessionName: title } : current));
       setAutoNameStatus({ kind: "success" });
       autoNameTimerRef.current = setTimeout(() => setAutoNameStatus({ kind: "idle" }), 1800);
     } catch (error) {
@@ -896,89 +1008,86 @@ export function AppShell() {
     setInitialSessionRestored(true);
   }, []);
 
-  const handleSessionDeleted = useCallback((sessionId: string) => {
-    invalidateWorkspaceRestore();
-    // 会话没了，它的展开状态与延迟正文也没有再用到的地方。
-    transcriptViewState.forgetSession(sessionId);
-    setRefreshKey((k) => k + 1);
-    if (selectedSession?.id === sessionId) {
-      const cwd = selectedSession.cwd;
-      setSelectedSession(null);
-      setNewSessionCwd(cwd ?? null);
-      setSessionKey((k) => k + 1);
-      setBranchActiveLeafId(null);
-      setActiveTopPanel(null);
-      router.replace("/", { scroll: false });
-    }
-  }, [invalidateWorkspaceRestore, selectedSession, router]);
-
-  const handleOpenFile = useCallback((
-    filePath: string,
-    fileName: string,
-    options?: { sourceSessionId?: string | null; modeHint?: "diff" },
-  ) => {
-    const sourceSessionId = options?.sourceSessionId;
-    const modeHint = options?.modeHint;
-    const tabId = `file:${filePath}`;
-    setPanelTabs((prev) => {
-      const existing = prev.find((t) => t.id === tabId);
-      if (!existing) {
-        return [...prev, {
-          id: tabId,
-          kind: "file",
-          label: fileName,
-          filePath,
-          sourceSessionId,
-          initialDisplayMode: modeHint,
-        } satisfies FileTab];
+  const handleSessionDeleted = useCallback(
+    (sessionId: string) => {
+      invalidateWorkspaceRestore();
+      // 会话没了，它的展开状态与延迟正文也没有再用到的地方。
+      transcriptViewState.forgetSession(sessionId);
+      setRefreshKey((k) => k + 1);
+      if (selectedSession?.id === sessionId) {
+        const cwd = selectedSession.cwd;
+        setSelectedSession(null);
+        setNewSessionCwd(cwd ?? null);
+        setSessionKey((k) => k + 1);
+        setBranchActiveLeafId(null);
+        setActiveTopPanel(null);
+        router.replace("/", { scroll: false });
       }
-      if (existing.kind !== "file") return prev;
-      const sourceUnchanged = !sourceSessionId || existing.sourceSessionId === sourceSessionId;
-      const modeUnchanged = !modeHint || existing.initialDisplayMode === modeHint;
-      if (sourceUnchanged && modeUnchanged) return prev;
-      return prev.map((t) => t.id === tabId && t.kind === "file"
-        ? {
-            ...t,
-            ...(sourceSessionId ? { sourceSessionId } : {}),
-            ...(modeHint ? { initialDisplayMode: modeHint } : {}),
-          }
-        : t);
-    });
-    setActivePanelTabId(tabId);
-    setRightPanelOpen(true);
-    // On mobile the file panel is full-screen; close the drawer so it shows.
-    if (isMobile) setSidebarOpen(false);
-  }, [isMobile]);
+    },
+    [invalidateWorkspaceRestore, selectedSession, router],
+  );
 
-  const handleOpenLinkedFile = useCallback((filePath: string) => {
-    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
-  }, [handleOpenFile, selectedSession?.id]);
+  const handleOpenFile = useCallback(
+    (filePath: string, fileName: string, options?: OpenFileOptions) => {
+      const sourceSessionId = options?.sourceSessionId;
+      const modeHint = options?.modeHint;
+      const tabId = `file:${filePath}`;
+      // 序号在 updater 之外先算好：状态更新函数必须是纯函数，
+      // StrictMode 会重复调用它，写在里面会让序号多自增。
+      const request = modeHint
+        ? // 带显示模式提示的打开都是一次新请求，即使同一个文件已经打开过。
+          { filePath, label: fileName, sourceSessionId, modeHint, openSeq: (fileOpenSeqRef.current += 1) }
+        : { filePath, label: fileName, sourceSessionId };
+      setPanelTabs((prev) => mergeOpenFileTab(prev, request));
+      setActivePanelTabId(tabId);
+      setRightPanelOpen(true);
+      // On mobile the file panel is full-screen; close the drawer so it shows.
+      if (isMobile) setSidebarOpen(false);
+    },
+    [isMobile],
+  );
+
+  const handleOpenLinkedFile = useCallback(
+    (filePath: string, options?: OpenFileOptions) => {
+      handleOpenFile(filePath, getFileName(filePath), { ...options, sourceSessionId: selectedSession?.id ?? null });
+    },
+    [handleOpenFile, selectedSession?.id],
+  );
 
   // 文件标签打开的链接沿用该标签的 sourceSessionId；身份稳定，标签正文才能用 memo。
-  const handleOpenFileFromViewer = useCallback((filePath: string, sourceSessionId?: string | null) => {
-    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId });
-  }, [handleOpenFile]);
+  const handleOpenFileFromViewer = useCallback(
+    (filePath: string, sourceSessionId?: string | null) => {
+      handleOpenFile(filePath, getFileName(filePath), { sourceSessionId });
+    },
+    [handleOpenFile],
+  );
 
-  const handleClosePanelTab = useCallback((tabId: string) => {
-    setPanelTabs((prev) => prev.filter((t) => t.id !== tabId));
-    setActivePanelTabId((cur) => {
-      if (cur !== tabId) return cur;
-      const remaining = panelTabs.filter((t) => t.id !== tabId);
-      return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-    });
-  }, [panelTabs]);
+  const handleClosePanelTab = useCallback(
+    (tabId: string) => {
+      setPanelTabs((prev) => prev.filter((t) => t.id !== tabId));
+      setActivePanelTabId((cur) => {
+        if (cur !== tabId) return cur;
+        const remaining = panelTabs.filter((t) => t.id !== tabId);
+        return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
+      });
+    },
+    [panelTabs],
+  );
 
   // 视图入口按钮：未打开时加入标签页并切过去，已是当前标签时再点一次收起。
-  const handleToggleViewTab = useCallback((kind: PanelViewKind) => {
-    const tab = panelViewTab(kind);
-    if (activePanelTabId === tab.id) {
-      handleClosePanelTab(tab.id);
-      return;
-    }
-    setPanelTabs((prev) => prev.some((t) => t.id === tab.id) ? prev : [...prev, tab]);
-    setActivePanelTabId(tab.id);
-    setRightPanelOpen(true);
-  }, [activePanelTabId, handleClosePanelTab, setPanelTabs]);
+  const handleToggleViewTab = useCallback(
+    (kind: PanelViewKind) => {
+      const tab = panelViewTab(kind);
+      if (activePanelTabId === tab.id) {
+        handleClosePanelTab(tab.id);
+        return;
+      }
+      setPanelTabs((prev) => (prev.some((t) => t.id === tab.id) ? prev : [...prev, tab]));
+      setActivePanelTabId(tab.id);
+      setRightPanelOpen(true);
+    },
+    [activePanelTabId, handleClosePanelTab, setPanelTabs],
+  );
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
@@ -993,9 +1102,7 @@ export function AppShell() {
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
   // 手机档顶栏展示的会话标题，与侧栏会话行共用 lib/session-title.ts 的回退顺序。
-  const mobileSessionTitle = selectedSession
-    ? sessionDisplayTitle(selectedSession)
-    : "";
+  const mobileSessionTitle = selectedSession ? sessionDisplayTitle(selectedSession) : "";
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
@@ -1011,7 +1118,7 @@ export function AppShell() {
       signal: controller.signal,
     })
       .then(async (response) => {
-        const data = await response.json() as ProjectTrustStatus & { error?: string };
+        const data = (await response.json()) as ProjectTrustStatus & { error?: string };
         if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
         setProjectTrust(data);
       })
@@ -1032,7 +1139,7 @@ export function AppShell() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cwd: projectTrustCwd }),
       });
-      const data = await response.json() as ProjectTrustStatus & { error?: string };
+      const data = (await response.json()) as ProjectTrustStatus & { error?: string };
       if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
       setProjectTrust(data);
       setProjectTrustDialogOpen(false);
@@ -1047,9 +1154,10 @@ export function AppShell() {
 
   const activePanelTab = panelTabs.find((t) => t.id === activePanelTabId) ?? null;
   const runningSubagentCount = subagents.filter(isSubagentActive).length;
-  const renderedPanelTabs = runningSubagentCount > 0
-    ? panelTabs.map((tab) => tab.kind === "subagents" ? { ...tab, badge: runningSubagentCount } : tab)
-    : panelTabs;
+  const renderedPanelTabs =
+    runningSubagentCount > 0
+      ? panelTabs.map((tab) => (tab.kind === "subagents" ? { ...tab, badge: runningSubagentCount } : tab))
+      : panelTabs;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ompdesk` : "ompdesk";
 
@@ -1065,6 +1173,7 @@ export function AppShell() {
             active={tab.id === activePanelTabId && rightPanelOpen}
             gitRefreshKey={explorerRefreshKey}
             initialDisplayMode={tab.initialDisplayMode}
+            openSeq={tab.openSeq}
             onMentionLines={handleFileLineMention}
             onAtMention={handleAtMention}
             onOpenFile={handleOpenFileFromViewer}
@@ -1081,7 +1190,18 @@ export function AppShell() {
             onAtMentions={handleAtMentions}
           />
         ) : (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+              color: "var(--text-dim)",
+              fontSize: 12,
+              textAlign: "center",
+            }}
+          >
             {translate("files.noProject")}
           </div>
         );
@@ -1154,15 +1274,42 @@ export function AppShell() {
           title={translate("common.settings")}
           className="sidebar-settings-button"
           style={{
-            width: "100%", height: 34, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            background: "none", border: "1px solid var(--border)", borderRadius: 9,
-            color: "var(--text-muted)", cursor: "pointer", fontSize: 12,
-            fontFamily: "var(--font-mono)", transition: "background 0.12s, color 0.12s, border-color 0.12s",
+            width: "100%",
+            height: 34,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            background: "none",
+            border: "1px solid var(--border)",
+            borderRadius: 9,
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            fontSize: 12,
+            fontFamily: "var(--font-mono)",
+            transition: "background 0.12s, color 0.12s, border-color 0.12s",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; e.currentTarget.style.borderColor = "var(--text-dim)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--bg-hover)";
+            e.currentTarget.style.color = "var(--text)";
+            e.currentTarget.style.borderColor = "var(--text-dim)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "none";
+            e.currentTarget.style.color = "var(--text-muted)";
+            e.currentTarget.style.borderColor = "var(--border)";
+          }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.5 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.12.39.33.74.6 1 .3.28.69.42 1.1.4h.09v4h-.09A1.7 1.7 0 0 0 19.4 15Z" />
           </svg>
@@ -1176,12 +1323,16 @@ export function AppShell() {
   const filePanelToggle = (
     <button
       onClick={() => setRightPanelOpen((v) => !v)}
-       aria-controls="file-panel"
-       aria-expanded={rightPanelOpen}
-       title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-       aria-label={runningSubagentCount > 0
-         ? `${rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")} · ${translate("subagents.runningCount", { count: runningSubagentCount })}`
-         : (rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel"))}
+      aria-controls="file-panel"
+      aria-expanded={rightPanelOpen}
+      title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
+      aria-label={
+        runningSubagentCount > 0
+          ? `${rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")} · ${translate("subagents.runningCount", { count: runningSubagentCount })}`
+          : rightPanelOpen
+            ? translate("files.hidePanel")
+            : translate("files.showPanel")
+      }
       style={{
         ...FILE_PANEL_TOGGLE_STYLE,
         ...(isMobile
@@ -1201,11 +1352,25 @@ export function AppShell() {
             }),
         color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = "var(--text)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)";
+      }}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <line x1="15" y1="3" x2="15" y2="21" />
       </svg>
       {runningSubagentCount > 0 && (
         <span
@@ -1236,32 +1401,33 @@ export function AppShell() {
   const autoNameUi: AutoNameUi = (() => {
     // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
     const hasMessages = Boolean(
-      selectedSession
-      && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
+      selectedSession && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
     );
     const disabled = !selectedSession || selectedSession.transient || !hasMessages || autoNameStatus.kind === "naming";
     const isSuccess = autoNameStatus.kind === "success";
     const isError = autoNameStatus.kind === "error";
-    const label = autoNameStatus.kind === "naming"
-      ? translate("title.generating")
-      : isSuccess
-        ? translate("title.updated")
-        : isError
-          ? translate("title.failed")
-          : translate("title.generate");
-    const title = !selectedSession || selectedSession.transient
-      ? translate("title.unsaved")
-      : !hasMessages
-        ? translate("title.noMessages")
-        : isError
-          ? autoNameStatus.message
-          : translate("title.generateSession");
+    const label =
+      autoNameStatus.kind === "naming"
+        ? translate("title.generating")
+        : isSuccess
+          ? translate("title.updated")
+          : isError
+            ? translate("title.failed")
+            : translate("title.generate");
+    const title =
+      !selectedSession || selectedSession.transient
+        ? translate("title.unsaved")
+        : !hasMessages
+          ? translate("title.noMessages")
+          : isError
+            ? autoNameStatus.message
+            : translate("title.generateSession");
     return { disabled, isSuccess, isError, label, title };
   })();
 
   return (
     <>
-    <style>{`
+      <style>{`
       @keyframes session-info-pop {
         0% {
           opacity: 0;
@@ -1337,959 +1503,1327 @@ export function AppShell() {
         }
       }
     `}</style>
-    <div style={{
-      display: "flex",
-      width: "100%",
-      height: "var(--app-viewport-height, 100dvh)",
-      paddingLeft: "env(safe-area-inset-left)",
-      paddingRight: "env(safe-area-inset-right)",
-      overflow: "hidden",
-      background: "var(--bg)",
-    }}>
-      {/* Mobile overlay backdrop */}
       <div
-        className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
-        onClick={() => setSidebarOpen(false)}
         style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 199,
-          background: "rgba(0,0,0,0.4)",
-          opacity: sidebarOpen ? 1 : 0,
-          pointerEvents: sidebarOpen ? "auto" : "none",
-          transition: "opacity 0.25s ease",
-        }}
-      />
-
-      {/* Left sidebar */}
-      <div
-        ref={sidebarResizer.panelRef}
-        id="session-sidebar"
-        className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
-        style={{
-          "--sidebar-width": `${sidebarResizer.width}px`,
-          background: "var(--bg-panel)",
-          borderRight: "1px solid var(--border)",
           display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
-          paddingTop: "env(safe-area-inset-top)",
-          paddingBottom: "env(safe-area-inset-bottom)",
-          zIndex: 200,
-        } as React.CSSProperties}
+          width: "100%",
+          height: "var(--app-viewport-height, 100dvh)",
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
+          overflow: "hidden",
+          background: "var(--bg)",
+        }}
       >
-        {sidebarContent}
-      </div>
-      {sidebarOpen && (
+        {/* Mobile overlay backdrop */}
         <div
-          {...sidebarResizer.separatorProps}
-          aria-controls="session-sidebar"
-          className={`panel-resize-handle sidebar-resize-handle${sidebarResizer.isResizing ? " is-resizing" : ""}`}
-          data-resize-handle="sidebar"
-          title={`${translate("layout.resizeSidebar")}: ${translate("layout.resizeHint")}`}
+          className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 199,
+            background: "rgba(0,0,0,0.4)",
+            opacity: sidebarOpen ? 1 : 0,
+            pointerEvents: sidebarOpen ? "auto" : "none",
+            transition: "opacity 0.25s ease",
+          }}
         />
-      )}
 
-      {/* Center: chat */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: `calc(${topBar.height}px + env(safe-area-inset-top))`, paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}>
-          <button
-            data-toggle="sidebar"
-            onClick={handleSidebarToggle}
-             title={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
-             aria-label={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
+        {/* Left sidebar */}
+        <div
+          ref={sidebarResizer.panelRef}
+          id="session-sidebar"
+          className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
+          style={
+            {
+              "--sidebar-width": `${sidebarResizer.width}px`,
+              background: "var(--bg-panel)",
+              borderRight: "1px solid var(--border)",
+              display: "flex",
+              flexDirection: "column",
+              flexShrink: 0,
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+              zIndex: 200,
+            } as React.CSSProperties
+          }
+        >
+          {sidebarContent}
+        </div>
+        {sidebarOpen && (
+          <div
+            {...sidebarResizer.separatorProps}
+            aria-controls="session-sidebar"
+            className={`panel-resize-handle sidebar-resize-handle${sidebarResizer.isResizing ? " is-resizing" : ""}`}
+            data-resize-handle="sidebar"
+            title={`${translate("layout.resizeSidebar")}: ${translate("layout.resizeHint")}`}
+          />
+        )}
+
+        {/* Center: chat */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+          {/* Top bar with sidebar toggle */}
+          <div
+            ref={topBarRef}
             style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: topBar.iconButton, height: topBar.iconButton, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+              display: "flex",
+              alignItems: "center",
+              flexShrink: 0,
+              borderBottom: "1px solid var(--border)",
+              height: `calc(${topBar.height}px + env(safe-area-inset-top))`,
+              paddingTop: "env(safe-area-inset-top)",
+              background: "var(--bg-panel)",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
           >
-            {sidebarOpen ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
-          </button>
-          {isMobile && showChat && (
-            <div
-              title={mobileSessionTitle}
-              style={{
-                display: "flex", alignItems: "center",
-                flex: 1, minWidth: 0, height: "100%", padding: "0 10px",
-                fontSize: 12, color: "var(--text)", overflow: "hidden",
-                whiteSpace: "nowrap", textOverflow: "ellipsis",
-              }}
-            >
-              {mobileSessionTitle}
-            </div>
-          )}
-          {!isMobile && (
-          <button
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-            }}
-            title={translate(themeLabelKey)}
-            aria-label={translate(themeLabelKey)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: topBar.iconButton, height: topBar.iconButton, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            {preference === "light" ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            ) : preference === "dark" ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <line x1="8" y1="21" x2="16" y2="21" />
-                <line x1="12" y1="17" x2="12" y2="21" />
-              </svg>
-            )}
-           </button>
-          )}
-          {/* 语言切换在两个档位都保留；主题在手机档走 Settings 入口。 */}
-          <button
-             ref={languageBtnRef}
-             type="button"
-             onClick={() => toggleTopPanel("language")}
-             title={translate("common.language")}
-             aria-label={translate("common.language")}
-             aria-haspopup="menu"
-             aria-expanded={activeTopPanel === "language"}
-             aria-pressed={activeTopPanel === "language"}
-             style={{
-               display: "flex", alignItems: "center", justifyContent: "center",
-               width: topBar.iconButton, height: topBar.iconButton, padding: 0,
-               background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
-               border: "none", borderRight: "1px solid var(--border)",
-               color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
-               cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-             }}
-             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-             onMouseLeave={(e) => {
-               e.currentTarget.style.color = activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)";
-             }}
-           >
-             <svg
-               width="16"
-               height="16"
-               viewBox="0 0 24 24"
-               fill="none"
-               stroke="currentColor"
-               strokeWidth="1.8"
-               strokeLinecap="round"
-               strokeLinejoin="round"
-               aria-hidden="true"
-             >
-               <path d="m5 8 6 6" />
-               <path d="m4 14 6-6 2-3" />
-               <path d="M2 5h12" />
-               <path d="M7 2h1" />
-               <path d="m22 22-5-10-5 10" />
-               <path d="M14 18h6" />
-             </svg>
-           </button>
-          {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
-              type="button"
-              onClick={() => {
-                setProjectTrustError(null);
-                setProjectTrustDialogOpen(true);
-              }}
-              title={translate("trust.resourcesNotLoaded")}
-              aria-label={translate("trust.resourcesNotLoaded")}
+              data-toggle="sidebar"
+              onClick={handleSidebarToggle}
+              title={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
+              aria-label={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: isMobile ? "center" : undefined,
-                gap: 6,
-                height: "100%",
-                width: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                padding: isMobile ? 0 : "0 12px",
+                justifyContent: "center",
+                width: topBar.iconButton,
+                height: topBar.iconButton,
+                padding: 0,
                 background: "none",
                 border: "none",
                 borderRight: "1px solid var(--border)",
-                color: "#d97706",
+                color: "var(--text-muted)",
                 cursor: "pointer",
                 flexShrink: 0,
-                fontSize: 11,
-                whiteSpace: "nowrap",
+                transition: "color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "var(--text-muted)";
               }}
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-                <path d="M12 8v4" />
-                <path d="M12 16h.01" />
-              </svg>
-              {!isMobile && <span>{translate("trust.resourcesNotLoaded")}</span>}
-            </button>
-          )}
-          {showChat && (
-            <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-              {!isMobile && (<>
-              <button
-                onClick={handleViewFullHistory}
-                disabled={!selectedSession}
-                 title={selectedSession ? translate("history.full") : translate("history.unsaved")}
-                 aria-label={translate("history.full")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  height: "100%",
-                  padding: "0 12px",
-                  background: "none",
-                  border: "none",
-                  borderTop: "2px solid transparent",
-                  borderRight: "1px solid var(--border)",
-                  color: selectedSession ? "var(--text-muted)" : "var(--text-dim)",
-                  cursor: selectedSession ? "pointer" : "not-allowed",
-                  opacity: selectedSession ? 1 : 0.45,
-                  flexShrink: 0,
-                  fontSize: 11,
-                  whiteSpace: "nowrap",
-                  transition: "color 0.1s, background 0.1s, opacity 0.1s",
-                }}
-                onMouseEnter={(e) => {
-                  if (!selectedSession) return;
-                  e.currentTarget.style.color = "var(--text)";
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = selectedSession ? "var(--text-muted)" : "var(--text-dim)";
-                  e.currentTarget.style.background = "none";
-                }}
-              >
+              {sidebarOpen ? (
                 <svg
-                  width="12"
-                  height="12"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  style={{
-                    color: selectedSession ? "var(--text-muted)" : "var(--text-dim)",
-                    flexShrink: 0,
-                  }}
                 >
-                  <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-                  <path d="M3 3v5h5" />
-                  <path d="M12 7v5l3 2" />
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="9" y1="3" x2="9" y2="21" />
                 </svg>
-                 <span>{translate("history.label")}</span>
-              </button>
-              <AutoNameAction
-                ui={autoNameUi}
-                status={autoNameStatus}
-                variant="top-bar"
-                onClick={() => void handleAutoName()}
-              />
-              </>)}
-              <button
-                type="button"
-                className={isMobile ? "mobile-topbar-map-button" : undefined}
-                onClick={() => {
-                  setActiveTopPanel(null);
-                  setMapOpen((open) => !open);
-                }}
-                title={translate("map.title")}
-                aria-pressed={mapOpen}
-                aria-expanded={mapOpen}
-                aria-label={translate("map.title")}
+              ) : (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              )}
+            </button>
+            {isMobile && showChat && (
+              <div
+                title={mobileSessionTitle}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  flex: 1,
+                  minWidth: 0,
                   height: "100%",
-                  padding: isMobile ? "0 10px" : "0 12px",
-                  background: mapOpen ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  borderTop: mapOpen ? "2px solid var(--accent)" : "2px solid transparent",
-                  borderRight: "1px solid var(--border)",
-                  cursor: "pointer",
-                  color: mapOpen ? "var(--text)" : "var(--text-muted)",
-                  fontSize: 11,
+                  padding: "0 10px",
+                  fontSize: 12,
+                  color: "var(--text)",
+                  overflow: "hidden",
                   whiteSpace: "nowrap",
-                  transition: "color 0.1s, background 0.1s",
+                  textOverflow: "ellipsis",
                 }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="5" cy="6" r="2" />
-                  <circle cx="12" cy="18" r="2" />
-                  <circle cx="19" cy="9" r="2" />
-                  <path d="M6.7 7.1 10.4 16.4M13.7 17.3 17.5 10.6M7 6h10" />
-                </svg>
-                {!isMobile && <span>{translate("map.open")}</span>}
-              </button>
-            </div>
-          )}
-          {/* Session stats — right-aligned in top bar */}
-          {showChat && sessionStats && (() => {
-             const tokens = sessionStats?.tokens;
-            const c = sessionStats?.cost ?? 0;
-            const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
-            const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
-
-            const tooltipParts: string[] = [];
-             if (tokens) {
-               tooltipParts.push(`in: ${tokens.input.toLocaleString(locale)}`);
-               tooltipParts.push(`out: ${tokens.output.toLocaleString(locale)}`);
-               tooltipParts.push(`cache read: ${tokens.cacheRead.toLocaleString(locale)}`);
-               tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString(locale)}`);
-              if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
-            }
-            const tooltip = tooltipParts.join("  |  ");
-
-            return (
-              <button
-                type="button"
-                onClick={() => toggleTopPanel("session")}
-               title={tooltip || translate("session.title")}
-                 aria-label={translate("session.title")}
-                aria-pressed={activeTopPanel === "session"}
-                style={{
-                  marginLeft: "auto",
-                  display: "flex", alignItems: "center", gap: 10,
-                  paddingLeft: 12,
-                  paddingRight: isMobile || rightPanelOpen ? 12 : 48,
-                  minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
-                  height: "100%",
-                  background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  borderTop: activeTopPanel === "session" ? "2px solid var(--accent)" : "2px solid transparent",
-                  fontSize: 11, color: "var(--text-muted)",
-                  whiteSpace: "nowrap", cursor: "pointer",
-                  fontVariantNumeric: "tabular-nums",
-                  transition: "color 0.1s, background 0.1s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = activeTopPanel === "session" ? "var(--text)" : "var(--text-muted)"; }}
-              >
-                {isMobile && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                )}
-                 {!isMobile && tokens && tokens.input > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="8.5" x2="5" y2="1.5" /><polyline points="2 4 5 1.5 8 4" />
-                    </svg>
-                     {fmt(tokens.input)}
-                  </span>
-                )}
-                 {!isMobile && tokens && tokens.output > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
-                    </svg>
-                     {fmt(tokens.output)}
-                  </span>
-                )}
-                 {!isMobile && tokens && tokens.cacheRead > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" /><polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
-                    </svg>
-                     {fmt(tokens.cacheRead)}
-                  </span>
-                )}
-                {!isMobile && costStr && (
-                  <span style={{ display: "flex", alignItems: "center", color: "var(--text)", fontWeight: 500 }}>
-                    {costStr}
-                  </span>
-                )}
-              </button>
-            );
-          })()}
-          {/* Top panel dropdown — shared, only one active at a time */}
-          {activeTopPanel && topPanelPos && (
-            <div style={{
-              position: "fixed",
-              top: topPanelPos.top,
-              left: topPanelPos.left,
-              width: topPanelPos.width,
-              maxHeight: `calc(100dvh - ${topPanelPos.top}px)`,
-              overflowY: "auto",
-              zIndex: 500,
-            }}>
-              {activeTopPanel === "language" && (
-                <div
-                  role="menu"
-                  aria-label={translate("common.language")}
-                  style={{
-                    background: "var(--bg-panel)",
-                    borderLeft: "1px solid var(--border)",
-                    borderRight: "1px solid var(--border)",
-                    borderBottom: "1px solid var(--border)",
-                    overflow: "hidden",
-                    padding: 4,
-                  }}
-                >
-                  {supportedLocales.map((plugin) => (
-                    <button
-                      key={plugin.id}
-                      type="button"
-                      onClick={() => {
-                        setLocale(plugin.id as typeof locale);
-                        setActiveTopPanel(null);
-                      }}
-                      role="menuitemradio"
-                      aria-checked={locale === plugin.id}
-                      style={{
-                        display: "flex", alignItems: "center",
-                        width: "100%", height: isMobile ? MOBILE_HIT_TARGET_PX : 34, padding: "0 10px",
-                        border: "none", borderRadius: 4,
-                        background: locale === plugin.id ? "var(--bg-selected)" : "transparent",
-                        color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
-                        transition: "background 0.1s",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (locale !== plugin.id) e.currentTarget.style.background = "var(--bg-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (locale !== plugin.id) e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <span>{plugin.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {activeTopPanel === "session" && (
-                <div className="session-info-popover" style={{
-                  background: "var(--bg-panel)",
-                  borderBottom: "1px solid var(--border)",
-                  boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
-                  padding: "12px 16px",
-                }}>
-                  {sessionStats ? (() => {
-                    const formatDuration = (ms: number) => {
-                      if (ms <= 0) return "0s";
-                      const totalSec = Math.floor(ms / 1000);
-                      const h = Math.floor(totalSec / 3600);
-                      const m = Math.floor((totalSec % 3600) / 60);
-                      const s = totalSec % 60;
-                      if (h > 0) return `${h}h ${m}m`;
-                      if (m > 0) return `${m}m ${s}s`;
-                      return `${s}s`;
-                    };
-                    const totalActiveMs = sessionStats.totalActiveMs ?? 0;
-                    const sessionRows = [
-                       ...(sessionStats.sessionName ? [{ label: translate("session.name"), value: sessionStats.sessionName, copyField: null }] : []),
-                       { label: translate("session.file"), value: sessionStats.sessionFile ?? translate("session.inMemory"), copyField: "file" as const },
-                       { label: translate("session.id"), value: sessionStats.sessionId, copyField: "id" as const },
-                       ...(totalActiveMs > 0 ? [{ label: translate("session.totalActive"), value: formatDuration(totalActiveMs), copyField: null }] : []),
-                    ];
-                    const messageRows = [
-                       [translate("session.user"), sessionStats.userMessages.toLocaleString(locale)],
-                       [translate("session.assistant"), sessionStats.assistantMessages.toLocaleString(locale)],
-                       [translate("session.toolCalls"), sessionStats.toolCalls.toLocaleString(locale)],
-                       [translate("session.toolResults"), sessionStats.toolResults.toLocaleString(locale)],
-                       [translate("session.total"), sessionStats.totalMessages.toLocaleString(locale)],
-                    ];
-                    const tokenRows = [
-                       [translate("session.input"), sessionStats.tokens.input.toLocaleString(locale)],
-                       [translate("session.output"), sessionStats.tokens.output.toLocaleString(locale)],
-                       ...(sessionStats.tokens.cacheRead > 0 ? [[translate("session.cacheRead"), sessionStats.tokens.cacheRead.toLocaleString(locale)]] : []),
-                       ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("session.cacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString(locale)]] : []),
-                       [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
-                    ];
-                    const ctx = contextUsage ?? sessionStats.contextUsage;
-                    const formatCompact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
-                    const extraTokenRows = [
-                       ...(sessionStats.cost > 0 ? [[translate("session.cost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
-                       ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.tokens !== null ? formatCompact(ctx.tokens) : "?"} / ${formatCompact(ctx.contextWindow)}${ctx.percent !== null ? ` · ${ctx.percent.toFixed(1)}%` : ""}`]] : []),
-                       // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
-                       ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 && sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0
-                         ? [[translate("session.cacheHitRate"), `${(sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input) * 100).toFixed(1)}%`]]
-                         : []),
-                    ];
-                    const section = (
-                      title: string,
-                      sectionRows: string[][],
-                      valueAlign: "left" | "right" = "left",
-                      compact = false,
-                    ) => (
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
-                          <div style={{
-                            display: "grid",
-                            gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
-                            columnGap: compact ? 14 : 12,
-                            rowGap: 4,
-                            justifyContent: compact ? "start" : undefined,
-                          }}>
-                            {sectionRows.map(([label, value]) => (
-                              <div key={`${title}:${label}`} style={{ display: "contents" }}>
-                                <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{label}</div>
-                                <div style={{
-                                  color: "var(--text-muted)",
-                                  minWidth: 0,
-                                  overflowWrap: compact ? "normal" : "anywhere",
-                                  textAlign: valueAlign,
-                                  whiteSpace: valueAlign === "right" ? "nowrap" : "normal",
-                                }}>{value}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    const copyButton = (field: SessionCopyField, value: string) => {
-                      const copied = copiedSessionField === field;
-                      return (
-                        <button
-                          type="button"
-                           title={copied ? translate("session.copied") : translate(field === "file" ? "session.copyFile" : "session.copyId")}
-                          onClick={() => handleCopySessionField(field, value)}
-                          style={{
-                            alignSelf: "start",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 22,
-                            height: 22,
-                            marginTop: -2,
-                            color: copied ? "var(--accent)" : "var(--text-dim)",
-                            background: "transparent",
-                            border: "1px solid var(--border)",
-                            borderRadius: 4,
-                            cursor: "pointer",
-                            flex: "0 0 auto",
-                            transition: "color 0.12s, border-color 0.12s, background 0.12s",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = "var(--accent)";
-                            e.currentTarget.style.borderColor = "var(--accent)";
-                            e.currentTarget.style.background = "var(--bg-hover)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = copied ? "var(--accent)" : "var(--text-dim)";
-                            e.currentTarget.style.borderColor = "var(--border)";
-                            e.currentTarget.style.background = "transparent";
-                          }}
-                        >
-                          {copied ? (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          ) : (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                            </svg>
-                          )}
-                        </button>
-                      );
-                    };
-                    const sessionInfoSection = (
-                      <div style={{ minWidth: 0 }}>
-                         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
-                          {sessionRows.map((row) => (
-                            <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
-                              <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{row.label}</div>
-                              <div style={{
-                                color: "var(--text-muted)",
-                                minWidth: 0,
-                                overflowWrap: "anywhere",
-                                wordBreak: "break-word",
-                                whiteSpace: "normal",
-                              }}>{row.value}</div>
-                              <div>{row.copyField ? copyButton(row.copyField, row.value) : null}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-
-                    return (
-                      <div style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile
-                          ? "1fr"
-                          : "minmax(360px, 1.7fr) minmax(140px, 0.55fr) minmax(190px, 0.75fr)",
-                        gap: isMobile ? 16 : 24,
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        fontFamily: "var(--font-mono)",
-                      }}>
-                        {sessionInfoSection}
-                         {section(translate("session.messages"), messageRows)}
-                         {section(translate("session.tokens"), [...tokenRows, ...extraTokenRows], "right", true)}
-                      </div>
-                    );
-                  })() : (
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                       {translate("session.load")}
-                    </div>
-                  )}
-                  {/* 手机档顶栏不展示全量历史、自动命名与会话地图，统一收进会话面板。 */}
-                  {isMobile && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-                      <button
-                        type="button"
-                        onClick={handleViewFullHistory}
-                        disabled={!selectedSession}
-                        title={selectedSession ? translate("history.full") : translate("history.unsaved")}
-                        style={{
-                          ...MOBILE_SESSION_ACTION_STYLE,
-                          opacity: selectedSession ? 1 : 0.45,
-                          cursor: selectedSession ? "pointer" : "not-allowed",
-                        }}
-                      >
-                        {translate("history.label")}
-                      </button>
-                      <AutoNameAction
-                        ui={autoNameUi}
-                        status={autoNameStatus}
-                        variant="mobile-panel"
-                        onClick={() => void handleAutoName()}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTopPanel(null);
-                          setMapOpen((open) => !open);
-                        }}
-                        disabled={!selectedSession}
-                        aria-pressed={mapOpen}
-                        title={translate("map.title")}
-                        style={{
-                          ...MOBILE_SESSION_ACTION_STYLE,
-                          opacity: selectedSession ? 1 : 0.45,
-                          cursor: selectedSession ? "pointer" : "not-allowed",
-                        }}
-                      >
-                        {translate("map.open")}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {isMobile && filePanelToggle}
-        </div>
-
-        {/* Chat content */}
-        <div className="chat-content-layout">
-          <div className="chat-session-column">
-          {showChat ? (
-            <>
-            <ChatWindow
-              key={sessionKey}
-              session={selectedSession}
-              newSessionCwd={effectiveNewSessionCwd}
-              onAgentEnd={handleAgentEnd}
-              onAttentionNeeded={handleAttentionNeeded}
-              onSessionCreated={handleSessionCreated}
-              onSessionForked={handleSessionForked}
-              modelsRefreshKey={modelsRefreshKey}
-              chatInputRef={chatInputRef}
-              onBranchDataChange={handleBranchDataChange}
-              onSessionStatsChange={handleSessionStatsChange}
-              onSessionStatsPanelOpen={openSessionStatsPanel}
-              onContextUsageChange={handleContextUsageChange}
-              onSubagentsChange={setSubagents}
-              onOpenFile={handleOpenLinkedFile}
-              soundEnabled={soundEnabled}
-              onSoundToggle={onSoundToggle}
-              playDoneSound={playDoneSound}
-              unlockAudio={unlockAudio}
-            />
-            {mapOpen && selectedSession && (
-              <ConversationMap
-                sessionId={selectedSession.id}
-                currentLeafId={branchActiveLeafId}
-                onClose={() => setMapOpen(false)}
-                onSessionForked={(newSessionId) => {
-                  setMapOpen(false);
-                  handleSessionForked(newSessionId);
-                }}
-                onSwitchLeaf={handleBranchLeafChange}
-                onOpenSession={handleOpenSessionById}
-              />
+                {mobileSessionTitle}
+              </div>
             )}
-            </>
-          ) : initialCwdStatus === "validating" ? (
-            <div
-              role="status"
-              style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, color: "var(--text-muted)", textAlign: "center" }}
-            >
-               <div style={{ fontSize: 14, color: "var(--text)" }}>{translate("workspace.opening")}</div>
-              <div style={{ maxWidth: "min(720px, 100%)", overflowWrap: "anywhere", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                {initialNavigation.requestedCwd}
-              </div>
-            </div>
-          ) : initialCwdStatus === "error" ? (
-            <div
-              role="alert"
-              style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, color: "var(--text-muted)", textAlign: "center" }}
-            >
-               <div style={{ fontSize: 14, color: "var(--danger)" }}>{translate("workspace.unable")}</div>
-              <div style={{ maxWidth: "min(720px, 100%)", overflowWrap: "anywhere", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                {initialNavigation.requestedCwd}
-              </div>
-              <div style={{ maxWidth: 720, fontSize: 12 }}>{initialCwdError}</div>
-            </div>
-          ) : showPlaceholder ? (
-            activeCwd ? (
-              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 15 }}>
-                 {translate("workspace.selectSession")}
-              </div>
-            ) : (
-              <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "flex-start", gap: 8, userSelect: "none", pointerEvents: "none" }}>
-                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7, flexShrink: 0 }}>
-                  <line x1="20" y1="12" x2="4" y2="12" /><polyline points="10 6 4 12 10 18" />
-                </svg>
-                <div>
-                   <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>{translate("workspace.getStarted")}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
-                     <span style={{ color: "var(--text-dim)", marginRight: 6 }}>1.</span>{translate("workspace.selectProject")}<br />
-                     <span style={{ color: "var(--text-dim)", marginRight: 6 }}>2.</span>{translate("workspace.addModels")}
-                  </div>
-                </div>
-              </div>
-            )
-          ) : null}
-          </div>
-        </div>
-      </div>
-
-      <div
-        aria-hidden="true"
-        className={`right-panel-overlay-backdrop${rightPanelOpen ? " is-open" : ""}`}
-        onClick={() => setRightPanelOpen(false)}
-      />
-      {rightPanelOpen && (
-        <div
-          {...rightPanelResizer.separatorProps}
-          aria-controls="file-panel"
-          className={`panel-resize-handle right-panel-resize-handle${rightPanelResizer.isResizing ? " is-resizing" : ""}`}
-          data-resize-handle="right-panel"
-          title={`${translate("layout.resizeFilePanel")}: ${translate("layout.resizeHint")}`}
-        />
-      )}
-
-      {/* Right panel: file viewer — always mounted, width animated via CSS */}
-      <div
-        ref={rightPanelResizer.panelRef}
-        id="file-panel"
-        inert={!rightPanelOpen}
-        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
-        style={{
-          "--right-panel-width": `${rightPanelResizer.width}px`,
-          display: "flex",
-          flexDirection: "column",
-          borderLeft: "1px solid var(--border)",
-          background: "var(--bg)",
-        } as React.CSSProperties}
-      >
-        {/* Right panel header: view entries and the open tab strip */}
-        <div className="panel-tab-header" style={{
-          display: "flex",
-          alignItems: "center",
-          flexShrink: 0,
-          height: `calc(${topBar.height}px + env(safe-area-inset-top))`,
-          paddingTop: "env(safe-area-inset-top)",
-          background: "var(--bg-panel)",
-          borderBottom: "1px solid var(--border)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, paddingLeft: 4 }}>
-            <PanelViewButton
-              active={activePanelTab?.kind === "explorer"}
-              title={translate("files.explorer")}
-              onClick={() => handleToggleViewTab("explorer")}
-              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
-            >
-              <PanelViewIcon kind="explorer" />
-            </PanelViewButton>
-            <PanelViewButton
-              active={activePanelTab?.kind === "git"}
-              title={translate("git.title")}
-              onClick={() => handleToggleViewTab("git")}
-              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
-            >
-              <PanelViewIcon kind="git" />
-            </PanelViewButton>
-            <PanelViewButton
-              active={activePanelTab?.kind === "subagents"}
-              title={translate("subagents.title")}
-              onClick={() => handleToggleViewTab("subagents")}
-              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
-              showDot={runningSubagentCount > 0 && activePanelTab?.kind !== "subagents"}
-            >
-              <PanelViewIcon kind="subagents" />
-            </PanelViewButton>
-            <PanelViewButton
-              active={activePanelTab?.kind === "comments"}
-              title={translate("comments.title")}
-              onClick={() => handleToggleViewTab("comments")}
-              size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
-            >
-              <PanelViewIcon kind="comments" />
-            </PanelViewButton>
-          </div>
-          <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-            <TabBar
-              tabs={renderedPanelTabs}
-              activeTabId={activePanelTabId}
-              onSelectTab={setActivePanelTabId}
-              onCloseTab={handleClosePanelTab}
-            />
-          </div>
-          {/* The fixed panel toggle sits in this corner. On mobile the top bar
-              owns the toggle and the tab bar already reserves its width. */}
-          {!isMobile && (
-            <div style={{ width: RIGHT_PANEL_HEADER_RESERVED_WIDTH, flexShrink: 0 }} aria-hidden="true" />
-          )}
-        </div>
-
-        {renderedPanelTabs.map((tab) => (
-          <div
-            key={tab.id}
-            style={{
-              display: tab.id === activePanelTabId ? "flex" : "none",
-              flexDirection: "column",
-              flex: 1,
-              minHeight: 0,
-              overflow: "hidden",
-              paddingBottom: "env(safe-area-inset-bottom)",
-            }}
-          >
-            {panelTabBody(tab)}
-          </div>
-        ))}
-        {renderedPanelTabs.length === 0 && (
-          <div style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            padding: "10px 8px",
-            paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
-          }}>
-            {PANEL_VIEW_KINDS.map((kind) => (
+            {!isMobile && (
               <button
-                key={kind}
-                onClick={() => handleToggleViewTab(kind)}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                }}
+                title={translate(themeLabelKey)}
+                aria-label={translate(themeLabelKey)}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
-                  height: isMobile ? MOBILE_HIT_TARGET_PX : 30,
-                  padding: "0 8px",
-                  flexShrink: 0,
+                  justifyContent: "center",
+                  width: topBar.iconButton,
+                  height: topBar.iconButton,
+                  padding: 0,
                   background: "none",
                   border: "none",
-                  borderRadius: 6,
+                  borderRight: "1px solid var(--border)",
                   color: "var(--text-muted)",
-                  fontSize: 12,
-                  textAlign: "left",
                   cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "color 0.12s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
                   e.currentTarget.style.color = "var(--text)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
                   e.currentTarget.style.color = "var(--text-muted)";
                 }}
               >
-                <PanelViewIcon kind={kind} />
-                {translate(PANEL_VIEW_LABEL_KEYS[kind])}
-                {kind === "subagents" && runningSubagentCount > 0 && (
-                  <span style={{
-                    marginLeft: "auto",
-                    minWidth: 16,
-                    height: 16,
-                    padding: "0 5px",
-                    borderRadius: 8,
-                    background: "var(--bg-selected)",
-                    color: "var(--accent)",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    lineHeight: "16px",
-                    textAlign: "center",
-                  }}>
-                    {runningSubagentCount}
-                  </span>
+                {preference === "light" ? (
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                  </svg>
+                ) : preference === "dark" ? (
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
                 )}
               </button>
-            ))}
+            )}
+            {/* 语言切换在两个档位都保留；主题在手机档走 Settings 入口。 */}
+            <button
+              ref={languageBtnRef}
+              type="button"
+              onClick={() => toggleTopPanel("language")}
+              title={translate("common.language")}
+              aria-label={translate("common.language")}
+              aria-haspopup="menu"
+              aria-expanded={activeTopPanel === "language"}
+              aria-pressed={activeTopPanel === "language"}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: topBar.iconButton,
+                height: topBar.iconButton,
+                padding: 0,
+                background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
+                border: "none",
+                borderRight: "1px solid var(--border)",
+                color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
+                cursor: "pointer",
+                flexShrink: 0,
+                transition: "color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)";
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m5 8 6 6" />
+                <path d="m4 14 6-6 2-3" />
+                <path d="M2 5h12" />
+                <path d="M7 2h1" />
+                <path d="m22 22-5-10-5 10" />
+                <path d="M14 18h6" />
+              </svg>
+            </button>
+            {showChat && projectTrust?.requiresTrust && !projectTrust.trusted && (
+              <button
+                type="button"
+                onClick={() => {
+                  setProjectTrustError(null);
+                  setProjectTrustDialogOpen(true);
+                }}
+                title={translate("trust.resourcesNotLoaded")}
+                aria-label={translate("trust.resourcesNotLoaded")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: isMobile ? "center" : undefined,
+                  gap: 6,
+                  height: "100%",
+                  width: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                  minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                  padding: isMobile ? 0 : "0 12px",
+                  background: "none",
+                  border: "none",
+                  borderRight: "1px solid var(--border)",
+                  color: "#d97706",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  fontSize: 11,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+                  <path d="M12 8v4" />
+                  <path d="M12 16h.01" />
+                </svg>
+                {!isMobile && <span>{translate("trust.resourcesNotLoaded")}</span>}
+              </button>
+            )}
+            {showChat && (
+              <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
+                {!isMobile && (
+                  <>
+                    <button
+                      onClick={handleViewFullHistory}
+                      disabled={!selectedSession}
+                      title={selectedSession ? translate("history.full") : translate("history.unsaved")}
+                      aria-label={translate("history.full")}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        height: "100%",
+                        padding: "0 12px",
+                        background: "none",
+                        border: "none",
+                        borderTop: "2px solid transparent",
+                        borderRight: "1px solid var(--border)",
+                        color: selectedSession ? "var(--text-muted)" : "var(--text-dim)",
+                        cursor: selectedSession ? "pointer" : "not-allowed",
+                        opacity: selectedSession ? 1 : 0.45,
+                        flexShrink: 0,
+                        fontSize: 11,
+                        whiteSpace: "nowrap",
+                        transition: "color 0.1s, background 0.1s, opacity 0.1s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!selectedSession) return;
+                        e.currentTarget.style.color = "var(--text)";
+                        e.currentTarget.style.background = "var(--bg-hover)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = selectedSession ? "var(--text-muted)" : "var(--text-dim)";
+                        e.currentTarget.style.background = "none";
+                      }}
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{
+                          color: selectedSession ? "var(--text-muted)" : "var(--text-dim)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M12 7v5l3 2" />
+                      </svg>
+                      <span>{translate("history.label")}</span>
+                    </button>
+                    <AutoNameAction
+                      ui={autoNameUi}
+                      status={autoNameStatus}
+                      variant="top-bar"
+                      onClick={() => void handleAutoName()}
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  className={isMobile ? "mobile-topbar-map-button" : undefined}
+                  onClick={() => {
+                    setActiveTopPanel(null);
+                    setMapOpen((open) => !open);
+                  }}
+                  title={translate("map.title")}
+                  aria-pressed={mapOpen}
+                  aria-expanded={mapOpen}
+                  aria-label={translate("map.title")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    height: "100%",
+                    padding: isMobile ? "0 10px" : "0 12px",
+                    background: mapOpen ? "var(--bg-selected)" : "none",
+                    border: "none",
+                    borderTop: mapOpen ? "2px solid var(--accent)" : "2px solid transparent",
+                    borderRight: "1px solid var(--border)",
+                    cursor: "pointer",
+                    color: mapOpen ? "var(--text)" : "var(--text-muted)",
+                    fontSize: 11,
+                    whiteSpace: "nowrap",
+                    transition: "color 0.1s, background 0.1s",
+                  }}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="5" cy="6" r="2" />
+                    <circle cx="12" cy="18" r="2" />
+                    <circle cx="19" cy="9" r="2" />
+                    <path d="M6.7 7.1 10.4 16.4M13.7 17.3 17.5 10.6M7 6h10" />
+                  </svg>
+                  {!isMobile && <span>{translate("map.open")}</span>}
+                </button>
+              </div>
+            )}
+            {/* Session stats — right-aligned in top bar */}
+            {showChat &&
+              sessionStats &&
+              (() => {
+                const tokens = sessionStats?.tokens;
+                const c = sessionStats?.cost ?? 0;
+                const fmt = (n: number) =>
+                  n >= 1_000_000
+                    ? `${(n / 1_000_000).toFixed(1)}M`
+                    : n >= 1000
+                      ? `${(n / 1000).toFixed(0)}k`
+                      : String(n);
+                const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
+
+                const tooltipParts: string[] = [];
+                if (tokens) {
+                  tooltipParts.push(`in: ${tokens.input.toLocaleString(locale)}`);
+                  tooltipParts.push(`out: ${tokens.output.toLocaleString(locale)}`);
+                  tooltipParts.push(`cache read: ${tokens.cacheRead.toLocaleString(locale)}`);
+                  tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString(locale)}`);
+                  if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
+                }
+                const tooltip = tooltipParts.join("  |  ");
+
+                return (
+                  <button
+                    type="button"
+                    onClick={() => toggleTopPanel("session")}
+                    title={tooltip || translate("session.title")}
+                    aria-label={translate("session.title")}
+                    aria-pressed={activeTopPanel === "session"}
+                    style={{
+                      marginLeft: "auto",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      paddingLeft: 12,
+                      paddingRight: isMobile || rightPanelOpen ? 12 : 48,
+                      minWidth: isMobile ? MOBILE_HIT_TARGET_PX : undefined,
+                      height: "100%",
+                      background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
+                      border: "none",
+                      borderTop: activeTopPanel === "session" ? "2px solid var(--accent)" : "2px solid transparent",
+                      fontSize: 11,
+                      color: "var(--text-muted)",
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                      fontVariantNumeric: "tabular-nums",
+                      transition: "color 0.1s, background 0.1s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = activeTopPanel === "session" ? "var(--text)" : "var(--text-muted)";
+                    }}
+                  >
+                    {isMobile && (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="16" x2="12" y2="12" />
+                        <line x1="12" y1="8" x2="12.01" y2="8" />
+                      </svg>
+                    )}
+                    {!isMobile && tokens && tokens.input > 0 && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 10 10"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="5" y1="8.5" x2="5" y2="1.5" />
+                          <polyline points="2 4 5 1.5 8 4" />
+                        </svg>
+                        {fmt(tokens.input)}
+                      </span>
+                    )}
+                    {!isMobile && tokens && tokens.output > 0 && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 10 10"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="5" y1="1.5" x2="5" y2="8.5" />
+                          <polyline points="2 6 5 8.5 8 6" />
+                        </svg>
+                        {fmt(tokens.output)}
+                      </span>
+                    )}
+                    {!isMobile && tokens && tokens.cacheRead > 0 && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 10 10"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" />
+                          <polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
+                        </svg>
+                        {fmt(tokens.cacheRead)}
+                      </span>
+                    )}
+                    {!isMobile && costStr && (
+                      <span style={{ display: "flex", alignItems: "center", color: "var(--text)", fontWeight: 500 }}>
+                        {costStr}
+                      </span>
+                    )}
+                  </button>
+                );
+              })()}
+            {/* Top panel dropdown — shared, only one active at a time */}
+            {activeTopPanel && topPanelPos && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: topPanelPos.top,
+                  left: topPanelPos.left,
+                  width: topPanelPos.width,
+                  maxHeight: `calc(100dvh - ${topPanelPos.top}px)`,
+                  overflowY: "auto",
+                  zIndex: 500,
+                }}
+              >
+                {activeTopPanel === "language" && (
+                  <div
+                    role="menu"
+                    aria-label={translate("common.language")}
+                    style={{
+                      background: "var(--bg-panel)",
+                      borderLeft: "1px solid var(--border)",
+                      borderRight: "1px solid var(--border)",
+                      borderBottom: "1px solid var(--border)",
+                      overflow: "hidden",
+                      padding: 4,
+                    }}
+                  >
+                    {supportedLocales.map((plugin) => (
+                      <button
+                        key={plugin.id}
+                        type="button"
+                        onClick={() => {
+                          setLocale(plugin.id as typeof locale);
+                          setActiveTopPanel(null);
+                        }}
+                        role="menuitemradio"
+                        aria-checked={locale === plugin.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          width: "100%",
+                          height: isMobile ? MOBILE_HIT_TARGET_PX : 34,
+                          padding: "0 10px",
+                          border: "none",
+                          borderRadius: 4,
+                          background: locale === plugin.id ? "var(--bg-selected)" : "transparent",
+                          color: "var(--text)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontSize: 12,
+                          transition: "background 0.1s",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (locale !== plugin.id) e.currentTarget.style.background = "var(--bg-hover)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (locale !== plugin.id) e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        <span>{plugin.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {activeTopPanel === "session" && (
+                  <div
+                    className="session-info-popover"
+                    style={{
+                      background: "var(--bg-panel)",
+                      borderBottom: "1px solid var(--border)",
+                      boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
+                      padding: "12px 16px",
+                    }}
+                  >
+                    {sessionStats ? (
+                      (() => {
+                        const formatDuration = (ms: number) => {
+                          if (ms <= 0) return "0s";
+                          const totalSec = Math.floor(ms / 1000);
+                          const h = Math.floor(totalSec / 3600);
+                          const m = Math.floor((totalSec % 3600) / 60);
+                          const s = totalSec % 60;
+                          if (h > 0) return `${h}h ${m}m`;
+                          if (m > 0) return `${m}m ${s}s`;
+                          return `${s}s`;
+                        };
+                        const totalActiveMs = sessionStats.totalActiveMs ?? 0;
+                        const sessionRows = [
+                          ...(sessionStats.sessionName
+                            ? [{ label: translate("session.name"), value: sessionStats.sessionName, copyField: null }]
+                            : []),
+                          {
+                            label: translate("session.file"),
+                            value: sessionStats.sessionFile ?? translate("session.inMemory"),
+                            copyField: "file" as const,
+                          },
+                          { label: translate("session.id"), value: sessionStats.sessionId, copyField: "id" as const },
+                          ...(totalActiveMs > 0
+                            ? [
+                                {
+                                  label: translate("session.totalActive"),
+                                  value: formatDuration(totalActiveMs),
+                                  copyField: null,
+                                },
+                              ]
+                            : []),
+                        ];
+                        const messageRows = [
+                          [translate("session.user"), sessionStats.userMessages.toLocaleString(locale)],
+                          [translate("session.assistant"), sessionStats.assistantMessages.toLocaleString(locale)],
+                          [translate("session.toolCalls"), sessionStats.toolCalls.toLocaleString(locale)],
+                          [translate("session.toolResults"), sessionStats.toolResults.toLocaleString(locale)],
+                          [translate("session.total"), sessionStats.totalMessages.toLocaleString(locale)],
+                        ];
+                        const tokenRows = [
+                          [translate("session.input"), sessionStats.tokens.input.toLocaleString(locale)],
+                          [translate("session.output"), sessionStats.tokens.output.toLocaleString(locale)],
+                          ...(sessionStats.tokens.cacheRead > 0
+                            ? [[translate("session.cacheRead"), sessionStats.tokens.cacheRead.toLocaleString(locale)]]
+                            : []),
+                          ...(sessionStats.tokens.cacheWrite > 0
+                            ? [[translate("session.cacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString(locale)]]
+                            : []),
+                          [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
+                        ];
+                        const ctx = contextUsage ?? sessionStats.contextUsage;
+                        const formatCompact = (n: number) =>
+                          n >= 1_000_000
+                            ? `${(n / 1_000_000).toFixed(1)}M`
+                            : n >= 1000
+                              ? `${(n / 1000).toFixed(0)}k`
+                              : String(n);
+                        const extraTokenRows = [
+                          ...(sessionStats.cost > 0
+                            ? [[translate("session.cost"), `$${sessionStats.cost.toFixed(4)}`]]
+                            : []),
+                          ...(ctx?.contextWindow
+                            ? [
+                                [
+                                  translate("session.context"),
+                                  `${ctx.tokens !== null ? formatCompact(ctx.tokens) : "?"} / ${formatCompact(ctx.contextWindow)}${ctx.percent !== null ? ` · ${ctx.percent.toFixed(1)}%` : ""}`,
+                                ],
+                              ]
+                            : []),
+                          // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
+                          ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 &&
+                          sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0
+                            ? [
+                                [
+                                  translate("session.cacheHitRate"),
+                                  `${((sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input)) * 100).toFixed(1)}%`,
+                                ],
+                              ]
+                            : []),
+                        ];
+                        const section = (
+                          title: string,
+                          sectionRows: string[][],
+                          valueAlign: "left" | "right" = "left",
+                          compact = false,
+                        ) => (
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>
+                              {title}
+                            </div>
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
+                                columnGap: compact ? 14 : 12,
+                                rowGap: 4,
+                                justifyContent: compact ? "start" : undefined,
+                              }}
+                            >
+                              {sectionRows.map(([label, value]) => (
+                                <div key={`${title}:${label}`} style={{ display: "contents" }}>
+                                  <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{label}</div>
+                                  <div
+                                    style={{
+                                      color: "var(--text-muted)",
+                                      minWidth: 0,
+                                      overflowWrap: compact ? "normal" : "anywhere",
+                                      textAlign: valueAlign,
+                                      whiteSpace: valueAlign === "right" ? "nowrap" : "normal",
+                                    }}
+                                  >
+                                    {value}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                        const copyButton = (field: SessionCopyField, value: string) => {
+                          const copied = copiedSessionField === field;
+                          return (
+                            <button
+                              type="button"
+                              title={
+                                copied
+                                  ? translate("session.copied")
+                                  : translate(field === "file" ? "session.copyFile" : "session.copyId")
+                              }
+                              onClick={() => handleCopySessionField(field, value)}
+                              style={{
+                                alignSelf: "start",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: 22,
+                                height: 22,
+                                marginTop: -2,
+                                color: copied ? "var(--accent)" : "var(--text-dim)",
+                                background: "transparent",
+                                border: "1px solid var(--border)",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                flex: "0 0 auto",
+                                transition: "color 0.12s, border-color 0.12s, background 0.12s",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = "var(--accent)";
+                                e.currentTarget.style.borderColor = "var(--accent)";
+                                e.currentTarget.style.background = "var(--bg-hover)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = copied ? "var(--accent)" : "var(--text-dim)";
+                                e.currentTarget.style.borderColor = "var(--border)";
+                                e.currentTarget.style.background = "transparent";
+                              }}
+                            >
+                              {copied ? (
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              ) : (
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                              )}
+                            </button>
+                          );
+                        };
+                        const sessionInfoSection = (
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>
+                              {translate("session.infoSection")}
+                            </div>
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "auto minmax(0, 1fr) auto",
+                                columnGap: 12,
+                                rowGap: 8,
+                                alignItems: "start",
+                              }}
+                            >
+                              {sessionRows.map((row) => (
+                                <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
+                                  <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{row.label}</div>
+                                  <div
+                                    style={{
+                                      color: "var(--text-muted)",
+                                      minWidth: 0,
+                                      overflowWrap: "anywhere",
+                                      wordBreak: "break-word",
+                                      whiteSpace: "normal",
+                                    }}
+                                  >
+                                    {row.value}
+                                  </div>
+                                  <div>{row.copyField ? copyButton(row.copyField, row.value) : null}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+
+                        return (
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: isMobile
+                                ? "1fr"
+                                : "minmax(360px, 1.7fr) minmax(140px, 0.55fr) minmax(190px, 0.75fr)",
+                              gap: isMobile ? 16 : 24,
+                              fontSize: 12,
+                              lineHeight: 1.5,
+                              fontFamily: "var(--font-mono)",
+                            }}
+                          >
+                            {sessionInfoSection}
+                            {section(translate("session.messages"), messageRows)}
+                            {section(translate("session.tokens"), [...tokenRows, ...extraTokenRows], "right", true)}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
+                        {translate("session.load")}
+                      </div>
+                    )}
+                    {/* 手机档顶栏不展示全量历史、自动命名与会话地图，统一收进会话面板。 */}
+                    {isMobile && (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 8,
+                          marginTop: 14,
+                          paddingTop: 14,
+                          borderTop: "1px solid var(--border)",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={handleViewFullHistory}
+                          disabled={!selectedSession}
+                          title={selectedSession ? translate("history.full") : translate("history.unsaved")}
+                          style={{
+                            ...MOBILE_SESSION_ACTION_STYLE,
+                            opacity: selectedSession ? 1 : 0.45,
+                            cursor: selectedSession ? "pointer" : "not-allowed",
+                          }}
+                        >
+                          {translate("history.label")}
+                        </button>
+                        <AutoNameAction
+                          ui={autoNameUi}
+                          status={autoNameStatus}
+                          variant="mobile-panel"
+                          onClick={() => void handleAutoName()}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTopPanel(null);
+                            setMapOpen((open) => !open);
+                          }}
+                          disabled={!selectedSession}
+                          aria-pressed={mapOpen}
+                          title={translate("map.title")}
+                          style={{
+                            ...MOBILE_SESSION_ACTION_STYLE,
+                            opacity: selectedSession ? 1 : 0.45,
+                            cursor: selectedSession ? "pointer" : "not-allowed",
+                          }}
+                        >
+                          {translate("map.open")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isMobile && filePanelToggle}
           </div>
+
+          {/* Chat content */}
+          <div className="chat-content-layout">
+            <div className="chat-session-column">
+              {showChat ? (
+                <>
+                  <ChatWindow
+                    key={sessionKey}
+                    session={selectedSession}
+                    newSessionCwd={effectiveNewSessionCwd}
+                    onAgentEnd={handleAgentEnd}
+                    onAttentionNeeded={handleAttentionNeeded}
+                    onSessionCreated={handleSessionCreated}
+                    onSessionForked={handleSessionForked}
+                    modelsRefreshKey={modelsRefreshKey}
+                    chatInputRef={chatInputRef}
+                    onBranchDataChange={handleBranchDataChange}
+                    onSessionStatsChange={handleSessionStatsChange}
+                    onSessionStatsPanelOpen={openSessionStatsPanel}
+                    onContextUsageChange={handleContextUsageChange}
+                    onSubagentsChange={setSubagents}
+                    onOpenFile={handleOpenLinkedFile}
+                    soundEnabled={soundEnabled}
+                    onSoundToggle={onSoundToggle}
+                    playDoneSound={playDoneSound}
+                    unlockAudio={unlockAudio}
+                  />
+                  {mapOpen && selectedSession && (
+                    <ConversationMap
+                      sessionId={selectedSession.id}
+                      currentLeafId={branchActiveLeafId}
+                      onClose={() => setMapOpen(false)}
+                      onSessionForked={(newSessionId) => {
+                        setMapOpen(false);
+                        handleSessionForked(newSessionId);
+                      }}
+                      onSwitchLeaf={handleBranchLeafChange}
+                      onOpenSession={handleOpenSessionById}
+                    />
+                  )}
+                </>
+              ) : initialCwdStatus === "validating" ? (
+                <div
+                  role="status"
+                  style={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    padding: 24,
+                    color: "var(--text-muted)",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 14, color: "var(--text)" }}>{translate("workspace.opening")}</div>
+                  <div
+                    style={{
+                      maxWidth: "min(720px, 100%)",
+                      overflowWrap: "anywhere",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                    }}
+                  >
+                    {initialNavigation.requestedCwd}
+                  </div>
+                </div>
+              ) : initialCwdStatus === "error" ? (
+                <div
+                  role="alert"
+                  style={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    padding: 24,
+                    color: "var(--text-muted)",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 14, color: "var(--danger)" }}>{translate("workspace.unable")}</div>
+                  <div
+                    style={{
+                      maxWidth: "min(720px, 100%)",
+                      overflowWrap: "anywhere",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                    }}
+                  >
+                    {initialNavigation.requestedCwd}
+                  </div>
+                  <div style={{ maxWidth: 720, fontSize: 12 }}>{initialCwdError}</div>
+                </div>
+              ) : showPlaceholder ? (
+                activeCwd ? (
+                  <div
+                    style={{
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--text-muted)",
+                      fontSize: 15,
+                    }}
+                  >
+                    {translate("workspace.selectSession")}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 12,
+                      left: 12,
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      userSelect: "none",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <svg
+                      width="44"
+                      height="44"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--accent)"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ opacity: 0.7, flexShrink: 0 }}
+                    >
+                      <line x1="20" y1="12" x2="4" y2="12" />
+                      <polyline points="10 6 4 12 10 18" />
+                    </svg>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>
+                        {translate("workspace.getStarted")}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
+                        <span style={{ color: "var(--text-dim)", marginRight: 6 }}>1.</span>
+                        {translate("workspace.selectProject")}
+                        <br />
+                        <span style={{ color: "var(--text-dim)", marginRight: 6 }}>2.</span>
+                        {translate("workspace.addModels")}
+                      </div>
+                    </div>
+                  </div>
+                )
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div
+          aria-hidden="true"
+          className={`right-panel-overlay-backdrop${rightPanelOpen ? " is-open" : ""}`}
+          onClick={() => setRightPanelOpen(false)}
+        />
+        {rightPanelOpen && (
+          <div
+            {...rightPanelResizer.separatorProps}
+            aria-controls="file-panel"
+            className={`panel-resize-handle right-panel-resize-handle${rightPanelResizer.isResizing ? " is-resizing" : ""}`}
+            data-resize-handle="right-panel"
+            title={`${translate("layout.resizeFilePanel")}: ${translate("layout.resizeHint")}`}
+          />
         )}
+
+        {/* Right panel: file viewer — always mounted, width animated via CSS */}
+        <div
+          ref={rightPanelResizer.panelRef}
+          id="file-panel"
+          inert={!rightPanelOpen}
+          className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
+          style={
+            {
+              "--right-panel-width": `${rightPanelResizer.width}px`,
+              display: "flex",
+              flexDirection: "column",
+              borderLeft: "1px solid var(--border)",
+              background: "var(--bg)",
+            } as React.CSSProperties
+          }
+        >
+          {/* Right panel header: view entries and the open tab strip */}
+          <div
+            className="panel-tab-header"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              flexShrink: 0,
+              height: `calc(${topBar.height}px + env(safe-area-inset-top))`,
+              paddingTop: "env(safe-area-inset-top)",
+              background: "var(--bg-panel)",
+              borderBottom: "1px solid var(--border)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, paddingLeft: 4 }}>
+              <PanelViewButton
+                active={activePanelTab?.kind === "explorer"}
+                title={translate("files.explorer")}
+                onClick={() => handleToggleViewTab("explorer")}
+                size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+              >
+                <PanelViewIcon kind="explorer" />
+              </PanelViewButton>
+              <PanelViewButton
+                active={activePanelTab?.kind === "git"}
+                title={translate("git.title")}
+                onClick={() => handleToggleViewTab("git")}
+                size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+              >
+                <PanelViewIcon kind="git" />
+              </PanelViewButton>
+              <PanelViewButton
+                active={activePanelTab?.kind === "subagents"}
+                title={translate("subagents.title")}
+                onClick={() => handleToggleViewTab("subagents")}
+                size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+                showDot={runningSubagentCount > 0 && activePanelTab?.kind !== "subagents"}
+              >
+                <PanelViewIcon kind="subagents" />
+              </PanelViewButton>
+              <PanelViewButton
+                active={activePanelTab?.kind === "comments"}
+                title={translate("comments.title")}
+                onClick={() => handleToggleViewTab("comments")}
+                size={isMobile ? MOBILE_HIT_TARGET_PX : 26}
+              >
+                <PanelViewIcon kind="comments" />
+              </PanelViewButton>
+            </div>
+            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+              <TabBar
+                tabs={renderedPanelTabs}
+                activeTabId={activePanelTabId}
+                onSelectTab={setActivePanelTabId}
+                onCloseTab={handleClosePanelTab}
+              />
+            </div>
+            {/* The fixed panel toggle sits in this corner. On mobile the top bar
+              owns the toggle and the tab bar already reserves its width. */}
+            {!isMobile && (
+              <div style={{ width: RIGHT_PANEL_HEADER_RESERVED_WIDTH, flexShrink: 0 }} aria-hidden="true" />
+            )}
+          </div>
+
+          {renderedPanelTabs.map((tab) => (
+            <div
+              key={tab.id}
+              style={{
+                display: tab.id === activePanelTabId ? "flex" : "none",
+                flexDirection: "column",
+                flex: 1,
+                minHeight: 0,
+                overflow: "hidden",
+                paddingBottom: "env(safe-area-inset-bottom)",
+              }}
+            >
+              {panelTabBody(tab)}
+            </div>
+          ))}
+          {renderedPanelTabs.length === 0 && (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                padding: "10px 8px",
+                paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
+              }}
+            >
+              {PANEL_VIEW_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  onClick={() => handleToggleViewTab(kind)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    height: isMobile ? MOBILE_HIT_TARGET_PX : 30,
+                    padding: "0 8px",
+                    flexShrink: 0,
+                    background: "none",
+                    border: "none",
+                    borderRadius: 6,
+                    color: "var(--text-muted)",
+                    fontSize: 12,
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                    e.currentTarget.style.color = "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "none";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  <PanelViewIcon kind={kind} />
+                  {translate(PANEL_VIEW_LABEL_KEYS[kind])}
+                  {kind === "subagents" && runningSubagentCount > 0 && (
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        minWidth: 16,
+                        height: 16,
+                        padding: "0 5px",
+                        borderRadius: 8,
+                        background: "var(--bg-selected)",
+                        color: "var(--accent)",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        lineHeight: "16px",
+                        textAlign: "center",
+                      }}
+                    >
+                      {runningSubagentCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-    {/* File panel toggle — desktop fixed overlay; on mobile it sits at the end of the top bar */}
-    {!isMobile && filePanelToggle}
-    {settingsConfigOpen && (
-      <SettingsConfig
-        cwd={projectTrustCwd}
-        sessionId={selectedSession?.id ?? null}
-        runtimeId={selectedSession?.runtimeId}
-        onRuntimeIdentity={handleRuntimeIdentity}
-        onClose={() => setSettingsConfigOpen(false)}
-        onModelsChanged={() => setModelsRefreshKey((key) => key + 1)}
-        onReloaded={(runtimeId) => {
-          const ownsSession = runtimeId
-            ? activeRuntimeIdRef.current === runtimeId
-            : activeSessionIdRef.current === selectedSession?.id && !activeRuntimeIdRef.current;
-          if (ownsSession) setSessionKey((key) => key + 1);
-        }}
-      />
-    )}
-    {projectTrustDialogOpen && projectTrustCwd && (
-      <ProjectTrustDialog
-        cwd={projectTrustCwd}
-        busy={projectTrustBusy}
-        error={projectTrustError}
-        onCancel={() => {
-          if (!projectTrustBusy) setProjectTrustDialogOpen(false);
-        }}
-        onConfirm={() => void handleTrustProject()}
-      />
-    )}
+      {/* File panel toggle — desktop fixed overlay; on mobile it sits at the end of the top bar */}
+      {!isMobile && filePanelToggle}
+      {settingsConfigOpen && (
+        <SettingsConfig
+          cwd={projectTrustCwd}
+          sessionId={selectedSession?.id ?? null}
+          runtimeId={selectedSession?.runtimeId}
+          onRuntimeIdentity={handleRuntimeIdentity}
+          onClose={() => setSettingsConfigOpen(false)}
+          onModelsChanged={() => setModelsRefreshKey((key) => key + 1)}
+          onReloaded={(runtimeId) => {
+            const ownsSession = runtimeId
+              ? activeRuntimeIdRef.current === runtimeId
+              : activeSessionIdRef.current === selectedSession?.id && !activeRuntimeIdRef.current;
+            if (ownsSession) setSessionKey((key) => key + 1);
+          }}
+        />
+      )}
+      {projectTrustDialogOpen && projectTrustCwd && (
+        <ProjectTrustDialog
+          cwd={projectTrustCwd}
+          busy={projectTrustBusy}
+          error={projectTrustError}
+          onCancel={() => {
+            if (!projectTrustBusy) setProjectTrustDialogOpen(false);
+          }}
+          onConfirm={() => void handleTrustProject()}
+        />
+      )}
     </>
   );
 }

@@ -209,6 +209,6 @@ proxy.ts            访问控制：密码校验、主机与跨站检查；控制
 instrumentation.ts  启动时接线（代理、日志）
 next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
 bin/                启动器（start/status/stop/foreground）、实例记录、密码存储、Bun 定位
-scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息）
+scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息、pr-queue 列开放 PR 的阻塞项）
 test-support/       测试样本：会话夹具经 SessionManager 生成，测试与手工验证共用同一入口
 ```

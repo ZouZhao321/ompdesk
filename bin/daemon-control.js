@@ -148,7 +148,7 @@ function probePort(host, port, timeoutMs = PROBE_TIMEOUT_MS) {
 async function waitForPort(host, port, timeoutMs, expectOpen) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await probePort(host, port) === expectOpen) return true;
+    if ((await probePort(host, port)) === expectOpen) return true;
     await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS));
   }
   return false;
@@ -182,29 +182,32 @@ function fetchActivity(record, timeoutMs = 5_000) {
       resolve(value);
     };
 
-    const request = http.request({
-      hostname: connectableHost(record.host),
-      port: record.port,
-      path: "/api/control/activity",
-      headers: { [CONTROL_TOKEN_HEADER]: record.controlToken },
-      timeout: timeoutMs,
-    }, (response) => {
-      if (response.statusCode !== 200) {
-        response.resume();
-        finish(null);
-        return;
-      }
-      const chunks = [];
-      response.on("data", (chunk) => chunks.push(chunk));
-      response.on("end", () => {
-        try {
-          finish(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-        } catch {
+    const request = http.request(
+      {
+        hostname: connectableHost(record.host),
+        port: record.port,
+        path: "/api/control/activity",
+        headers: { [CONTROL_TOKEN_HEADER]: record.controlToken },
+        timeout: timeoutMs,
+      },
+      (response) => {
+        if (response.statusCode !== 200) {
+          response.resume();
           finish(null);
+          return;
         }
-      });
-      response.on("error", () => finish(null));
-    });
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          try {
+            finish(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+          } catch {
+            finish(null);
+          }
+        });
+        response.on("error", () => finish(null));
+      },
+    );
 
     request.on("error", () => finish(null));
     request.on("timeout", () => {
@@ -316,7 +319,8 @@ function formatStatus(record, activity) {
 }
 
 /** Stop refuses while any session is mid-turn; `--force` is the explicit override. */
-const UNKNOWN_TASK_STATE = "Session state is unavailable, so ompdesk cannot tell whether a task is running. Re-run with --force to stop anyway.";
+const UNKNOWN_TASK_STATE =
+  "Session state is unavailable, so ompdesk cannot tell whether a task is running. Re-run with --force to stop anyway.";
 
 /**
  * Should `stop` refuse?

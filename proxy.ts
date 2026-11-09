@@ -1,8 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import {
-  isApiRequestAllowed,
-  isApiRequestHostAllowed,
-} from "@/lib/request-security";
+import { isApiRequestAllowed, isApiRequestHostAllowed } from "@/lib/request-security";
 import { logEvent } from "@/lib/logging";
 import {
   ACTOR_HEADER,
@@ -11,12 +8,7 @@ import {
   resolveForwardedAddress,
   type RequestActor,
 } from "@/lib/request-headers";
-import {
-  CONTROL_ROUTES,
-  CONTROL_TOKEN_ENV,
-  CONTROL_TOKEN_HEADER,
-  controlTokensMatch,
-} from "@/lib/control-token";
+import { CONTROL_ROUTES, CONTROL_TOKEN_ENV, CONTROL_TOKEN_HEADER, controlTokensMatch } from "@/lib/control-token";
 import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 
 /**
@@ -75,11 +67,7 @@ function unauthorizedPage(): string {
  * Forward the correlation headers to the route handler. The client's own values
  * are replaced, so a caller cannot choose the id their request is logged under.
  */
-function continueWithRequestHeaders(
-  request: NextRequest,
-  requestId: string,
-  actor: RequestActor,
-): NextResponse {
+function continueWithRequestHeaders(request: NextRequest, requestId: string, actor: RequestActor): NextResponse {
   const headers = new Headers(request.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
   headers.set(ACTOR_HEADER, actor);
@@ -100,23 +88,16 @@ export function proxy(request: NextRequest) {
     method: request.method,
   };
   const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
-  const isTrustedRequest = isApiRequest
-    ? isApiRequestAllowed(request)
-    : isApiRequestHostAllowed(request);
+  const isTrustedRequest = isApiRequest ? isApiRequestAllowed(request) : isApiRequestHostAllowed(request);
 
   if (!isTrustedRequest) {
     // The combined check already rejected the request; asking about the host
     // again only narrows the reason, it never lets a rejected request through.
     const hostDenied = !isApiRequestHostAllowed(request);
-    logEvent(
-      "warn",
-      "security",
-      hostDenied ? "security.host.denied" : "security.origin.denied",
-      {
-        ...securityFields,
-        reason: hostDenied ? "untrusted-host" : "cross-site-request",
-      },
-    );
+    logEvent("warn", "security", hostDenied ? "security.host.denied" : "security.origin.denied", {
+      ...securityFields,
+      reason: hostDenied ? "untrusted-host" : "cross-site-request",
+    });
     if (!isApiRequest) {
       return new NextResponse("Untrusted request", { status: 403, headers: SECURITY_HEADERS });
     }
@@ -158,19 +139,21 @@ export function proxy(request: NextRequest) {
     return continueWithRequestHeaders(request, requestId, "recovery");
   }
 
-  const authorization = authorizeWebRequestWithActor(
-    request.headers.get("authorization"),
-  );
+  const authorization = authorizeWebRequestWithActor(request.headers.get("authorization"));
 
   if (authorization.decision === "unavailable") {
     logEvent("warn", "security", "security.auth.unavailable", {
       ...securityFields,
       reason: "credential-file-unreadable",
     });
-    const message = "Password access is enabled but the ompdesk credential file could not be read."
-      + " Run `ompdesk --reset-password` on the server to set a new password.";
+    const message =
+      "Password access is enabled but the ompdesk credential file could not be read." +
+      " Run `ompdesk --reset-password` on the server to set a new password.";
     return isApiRequest
-      ? NextResponse.json({ error: message }, { status: 503, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } })
+      ? NextResponse.json(
+          { error: message },
+          { status: 503, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } },
+        )
       : new NextResponse(message, { status: 503, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } });
   }
 
@@ -181,13 +164,13 @@ export function proxy(request: NextRequest) {
     });
     return isApiRequest
       ? NextResponse.json(
-        { error: "Authentication required", recoveryPath: RECOVERY_PAGE },
-        { status: 401, headers: AUTHENTICATE_HEADERS },
-      )
+          { error: "Authentication required", recoveryPath: RECOVERY_PAGE },
+          { status: 401, headers: AUTHENTICATE_HEADERS },
+        )
       : new NextResponse(unauthorizedPage(), {
-        status: 401,
-        headers: { ...AUTHENTICATE_HEADERS, "Content-Type": "text/html; charset=utf-8" },
-      });
+          status: 401,
+          headers: { ...AUTHENTICATE_HEADERS, "Content-Type": "text/html; charset=utf-8" },
+        });
   }
 
   return continueWithRequestHeaders(request, requestId, authorization.actor);

@@ -47,9 +47,7 @@ export function usePopupPlacement(
       preferredPopupHeight(height, viewportFraction, cap),
       { gap, margin, minHeight, prefer },
     );
-    setPlacement((current) => (
-      current.side === next.side && current.maxHeight === next.maxHeight ? current : next
-    ));
+    setPlacement((current) => (current.side === next.side && current.maxHeight === next.maxHeight ? current : next));
   }, [anchorRef, cap, gap, margin, minHeight, prefer, viewportFraction]);
 
   useEffect(() => {

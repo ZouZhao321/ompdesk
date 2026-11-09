@@ -6,7 +6,8 @@
  *
  * 两者都要还原成 `/skill:<名> <参数>` 再显示。
  */
-const SKILL_EXPANSION_RE = /^<skill name="([^"\n]+)" location="([^"\n]+)">\nReferences are relative to [^\n]+\.\n\n([\s\S]*)\n<\/skill>(?:\n\n([\s\S]+))?$/;
+const SKILL_EXPANSION_RE =
+  /^<skill name="([^"\n]+)" location="([^"\n]+)">\nReferences are relative to [^\n]+\.\n\n([\s\S]*)\n<\/skill>(?:\n\n([\s\S]+))?$/;
 
 /**
  * Restore a complete SDK skill expansion to its compact command form.
@@ -42,10 +43,7 @@ export interface SkillPromptDetailsLike {
  * SDK 用同一个 `skill-prompt` 类型记录自动加载的技能（`attribution: "agent"`、
  * `display: false`），只有 `attribution === "user"` 的那条是用户发起的回合。
  */
-export function isUserSkillPrompt(message: {
-  customType?: string;
-  attribution?: string;
-}): boolean {
+export function isUserSkillPrompt(message: { customType?: string; attribution?: string }): boolean {
   return message.customType === SKILL_PROMPT_MESSAGE_TYPE && message.attribution === "user";
 }
 

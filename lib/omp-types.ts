@@ -11,7 +11,6 @@ import type { Goal } from "@oh-my-pi/pi-tui/tools/goal";
 import type { ExtensionAskDialogQuestion, ExtensionAskDialogResult } from "./types";
 import type { ChatDraftImage } from "./draft-store";
 
-
 export interface ContextUsage {
   percent: number | null;
   contextWindow: number;
@@ -108,7 +107,10 @@ type WidgetOptionsLike = {
 
 export interface ExtensionUiContextLike {
   readonly timeoutStartsOnPresentation?: boolean;
-  askDialog?(questions: ExtensionAskDialogQuestion[], opts?: DialogOptionsLike): Promise<ExtensionAskDialogResult | undefined>;
+  askDialog?(
+    questions: ExtensionAskDialogQuestion[],
+    opts?: DialogOptionsLike,
+  ): Promise<ExtensionAskDialogResult | undefined>;
   select(title: string, options: string[], opts?: DialogOptionsLike): Promise<string | undefined>;
   confirm(title: string, message: string, opts?: DialogOptionsLike): Promise<boolean>;
   input(title: string, placeholder?: string, opts?: DialogOptionsLike): Promise<string | undefined>;
@@ -120,7 +122,11 @@ export interface ExtensionUiContextLike {
   setWorkingVisible(visible: boolean): void;
   setWorkingIndicator(options?: { frames?: string[]; intervalMs?: number }): void;
   setHiddenThinkingLabel(label?: string): void;
-  setWidget(key: string, content: string[] | ((...args: never[]) => unknown) | undefined, options?: WidgetOptionsLike): void;
+  setWidget(
+    key: string,
+    content: string[] | ((...args: never[]) => unknown) | undefined,
+    options?: WidgetOptionsLike,
+  ): void;
   setFooter(factory: unknown): void;
   setHeader(factory: unknown): void;
   setTitle(title: string): void;
@@ -173,16 +179,27 @@ export interface AgentSessionLike {
   reload(options?: { beforeSessionStart?: () => void | Promise<void> }): Promise<void>;
   refreshSkills?(): Promise<void>;
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
-  prompt(text: string, options?: {
-    images?: Array<{ type: "image"; data: string; mimeType: string }>;
-    streamingBehavior?: "steer" | "followUp";
-    userInitiated?: boolean;
-  }): Promise<boolean>;
+  prompt(
+    text: string,
+    options?: {
+      images?: Array<{ type: "image"; data: string; mimeType: string }>;
+      streamingBehavior?: "steer" | "followUp";
+      userInitiated?: boolean;
+    },
+  ): Promise<boolean>;
   abort(options?: { reason?: string }): Promise<void>;
-  executeBash(command: string, onChunk?: (chunk: string) => void, options?: { excludeFromContext?: boolean }): Promise<{ output: string; exitCode?: number; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string }>;
+  executeBash(
+    command: string,
+    onChunk?: (chunk: string) => void,
+    options?: { excludeFromContext?: boolean },
+  ): Promise<{ output: string; exitCode?: number; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string }>;
   abortBash(): void;
   readonly isBashRunning: boolean;
-  setModel(model: ModelLike, role?: string, options?: { selector?: string; thinkingLevel?: string; persist?: boolean }): Promise<{ switched: boolean }>;
+  setModel(
+    model: ModelLike,
+    role?: string,
+    options?: { selector?: string; thinkingLevel?: string; persist?: boolean },
+  ): Promise<{ switched: boolean }>;
   resolveRoleModel(role: string): ModelLike | undefined;
   navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<NavigateTreeResult>;
   branch(entryId: string): Promise<{ cancelled: boolean }>;
@@ -214,22 +231,32 @@ export interface AgentSessionLike {
   getEnabledToolNames(): string[];
   setActiveToolsByName(names: string[]): Promise<void>;
   abortCompaction(): void;
-  getPlanModeState?(): {
-    enabled: boolean;
-    planFilePath: string;
-    workflow?: "parallel" | "sequential";
-    reentry?: boolean;
-  } | undefined;
-  setPlanModeState?(state: {
-    enabled: boolean;
-    planFilePath: string;
-    workflow?: "parallel" | "sequential";
-    reentry?: boolean;
-  } | undefined): void;
-  setPlanProposalHandler?(handler: ((title: string) => Promise<{
-    content: Array<{ type: "text"; text: string }>;
-    details?: unknown;
-  }>) | null): void;
+  getPlanModeState?():
+    | {
+        enabled: boolean;
+        planFilePath: string;
+        workflow?: "parallel" | "sequential";
+        reentry?: boolean;
+      }
+    | undefined;
+  setPlanModeState?(
+    state:
+      | {
+          enabled: boolean;
+          planFilePath: string;
+          workflow?: "parallel" | "sequential";
+          reentry?: boolean;
+        }
+      | undefined,
+  ): void;
+  setPlanProposalHandler?(
+    handler:
+      | ((title: string) => Promise<{
+          content: Array<{ type: "text"; text: string }>;
+          details?: unknown;
+        }>)
+      | null,
+  ): void;
   preparePlanForReview?(title: string): Promise<{
     content: Array<{ type: "text"; text: string }>;
     details?: { planFilePath?: string; title?: string; planExists?: boolean };
@@ -247,9 +274,7 @@ export interface AgentSessionLike {
   promptCustomMessage(
     message: {
       customType: string;
-      content: string | Array<
-        { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
-      >;
+      content: string | Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
       display?: boolean;
       details?: unknown;
       attribution?: "user" | "agent";

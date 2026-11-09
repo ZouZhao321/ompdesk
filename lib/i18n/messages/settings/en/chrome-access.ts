@@ -22,8 +22,7 @@ export const chromeAccess: Record<string, string> = {
   "settings.access.replacePassword": "Replace the password",
   "settings.access.setPassword": "Set a password",
   "settings.access.newPassword": "New password",
-  "settings.access.newPasswordHint":
-    "At least {count} characters. Saving a password also turns password access on.",
+  "settings.access.newPasswordHint": "At least {count} characters. Saving a password also turns password access on.",
   "settings.access.confirmPassword": "Confirm password",
   "settings.access.confirmPasswordHint": "Both entries have to match before it can be saved.",
   "settings.access.lastChanged": "Last changed {time}",
@@ -42,8 +41,10 @@ export const chromeAccess: Record<string, string> = {
   "settings.access.basicAuthDetail":
     "The password crosses the network in a reversible encoding. Over plain HTTP on an untrusted network it can be read in transit, so put ompdesk behind HTTPS or a trusted VPN before exposing it beyond loopback.",
   "settings.access.mismatch": "The two passwords do not match.",
-  "settings.access.saved": "Password saved and password access turned on. The browser will ask for the username \"{username}\" and this password on the next request.",
-  "settings.access.enabled": "Password access is on. The browser will ask for the username \"{username}\" and your password on the next request.",
+  "settings.access.saved":
+    'Password saved and password access turned on. The browser will ask for the username "{username}" and this password on the next request.',
+  "settings.access.enabled":
+    'Password access is on. The browser will ask for the username "{username}" and your password on the next request.',
   "settings.access.disabled": "Password access is off. The stored password is kept and can be switched back on here.",
   "settings.access.cleared": "The stored password was removed and password access is off.",
 };
