@@ -53,3 +53,7 @@ test("未发布段落为空时拒绝发版", () => {
 test("缺少未发布段落时拒绝发版", () => {
   assert.throws(() => promoteChangelog("## [1.0.26] - 2026-11-02\n\n- a\n", "1.0.27", "2026-11-03"), /未发布/);
 });
+
+test("版本段落按完整标题匹配，不接受更长版本的前缀", () => {
+  assert.throws(() => extractChangelogSection(SAMPLE, "1.0.2"), /1\.0\.2/);
+});

@@ -100,10 +100,10 @@ export function promoteChangelog(content: string, version: string, date: string)
 
 /** 取某个版本段落的内容，用作 GitHub Release 的说明。 */
 export function extractChangelogSection(content: string, version: string): string {
-  const escaped = version.replace(/\./g, "\\.");
-  const heading = new RegExp(`^## \\[${escaped}\\][^\\n]*$`, "m").exec(content);
+  const prefix = `## [${version}]`;
+  const heading = [...content.matchAll(/^## [^\n]*$/gm)].find((match) => match[0].startsWith(prefix));
   if (!heading) throw new Error(`CHANGELOG.md 里没有 ${version} 的段落`);
-  const bodyStart = heading.index + heading[0].length;
+  const bodyStart = (heading.index ?? 0) + heading[0].length;
   const next = /^## /m.exec(content.slice(bodyStart));
   const bodyEnd = next ? bodyStart + next.index : content.length;
   return content.slice(bodyStart, bodyEnd).trim();
