@@ -20,38 +20,17 @@
 import path from "node:path";
 import ts from "typescript";
 
+import { MODULE_SUFFIXES, parseSource } from "./source-scan";
+
 /** 命名空间导入的通配标记：该模块的任意导出名都算被导入。 */
 const ANY_IMPORTED_NAME = "*";
-
-const IMPORT_SUFFIXES = [
-  "",
-  ".ts",
-  ".tsx",
-  ".mts",
-  ".cts",
-  ".js",
-  ".jsx",
-  ".mjs",
-  ".cjs",
-  "/index.ts",
-  "/index.tsx",
-  "/index.js",
-  "/index.jsx",
-];
-
-function scriptKindOf(fileName: string): ts.ScriptKind {
-  if (fileName.endsWith(".tsx")) return ts.ScriptKind.TSX;
-  if (fileName.endsWith(".jsx")) return ts.ScriptKind.JSX;
-  if (/\.(mjs|cjs|js)$/.test(fileName)) return ts.ScriptKind.JS;
-  return ts.ScriptKind.TS;
-}
 
 /** `./x` 相对导入的目标路径候选；包名与越出仓库根的路径返回 null。 */
 function resolveSpecifier(fromFile: string, specifier: string): string[] | null {
   if (!specifier.startsWith(".")) return null;
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier));
   if (base.startsWith("..")) return null;
-  return IMPORT_SUFFIXES.map((suffix) => `${base}${suffix}`);
+  return MODULE_SUFFIXES.map((suffix) => `${base}${suffix}`);
 }
 
 /** 一个 `import` 声明贡献的名字；命名空间导入贡献通配标记。 */
@@ -153,13 +132,7 @@ export function collectTestImports(sources: ReadonlyMap<string, string>): Map<st
   const index = new Map<string, Set<string>>();
 
   for (const [filePath, sourceText] of sources) {
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      sourceText,
-      ts.ScriptTarget.Latest,
-      /* setParentNodes */ true,
-      scriptKindOf(filePath),
-    );
+    const sourceFile = parseSource(filePath, sourceText, /* setParentNodes */ true);
 
     for (const statement of sourceFile.statements) {
       if (!ts.isImportDeclaration(statement)) continue;

@@ -7,6 +7,10 @@
  * - 路径先统一成正斜杠，再折叠 `.` 与 `..` 段；
  * - `..` 开头、绝对路径、折叠后逃出仓库根的记录整条丢弃；
  * - 同一路径带 `?mtime=` 查询串重复出现时，按首次出现的记录计。
+ *
+ * 判定因此与平台无关：Windows 上产出的反斜杠路径与 Linux 上产出的正斜杠路径归一成同一
+ * 个键，同一份提交在本地与持续集成得到相同结论。持续集成（Linux）是权威结论，Windows
+ * 专属分支走豁免清单。
  */
 
 const SOURCE_LINE_RE = /^(LF|LH|FNF|FNH):(.*)$/;
@@ -29,7 +33,7 @@ export interface CoverageTotals {
   functionsHit: number;
 }
 
-export interface LcovParseResult {
+interface LcovParseResult {
   files: FileCoverage[];
   /** 因仓库外、绝对路径或越界而丢弃的原始路径。 */
   dropped: string[];

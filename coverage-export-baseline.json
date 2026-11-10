@@ -1,16 +1,6 @@
 {
   "symbols": [
     {
-      "path": "components/BranchNavigator.tsx",
-      "name": "compressChain",
-      "kind": "runtime"
-    },
-    {
-      "path": "components/BranchNavigator.tsx",
-      "name": "selectTopLevelBranches",
-      "kind": "runtime"
-    },
-    {
       "path": "components/ChatInput.tsx",
       "name": "AttachedImage",
       "kind": "type"
@@ -606,6 +596,16 @@
       "kind": "type"
     },
     {
+      "path": "lib/control-activity.ts",
+      "name": "ProjectActivity",
+      "kind": "type"
+    },
+    {
+      "path": "lib/control-activity.ts",
+      "name": "SessionActivity",
+      "kind": "type"
+    },
+    {
       "path": "lib/coverage-gate/cli.ts",
       "name": "CoverageGateDependencies",
       "kind": "type"
@@ -622,18 +622,8 @@
     },
     {
       "path": "lib/coverage-gate/cli.ts",
-      "name": "DEFAULT_BASE_REF",
-      "kind": "runtime"
-    },
-    {
-      "path": "lib/coverage-gate/cli.ts",
       "name": "GitQueries",
       "kind": "type"
-    },
-    {
-      "path": "lib/coverage-gate/cli.ts",
-      "name": "runCoverageGate",
-      "kind": "runtime"
     },
     {
       "path": "lib/coverage-gate/git.ts",
@@ -649,11 +639,6 @@
       "path": "lib/coverage-gate/report.ts",
       "name": "ReportInput",
       "kind": "type"
-    },
-    {
-      "path": "lib/coverage-gate/rules/index.ts",
-      "name": "RULES",
-      "kind": "runtime"
     },
     {
       "path": "lib/coverage-gate/rules/rule-new-files.ts",
@@ -903,6 +888,16 @@
     {
       "path": "lib/initial-navigation.ts",
       "name": "InitialNavigation",
+      "kind": "type"
+    },
+    {
+      "path": "lib/lint-diff.ts",
+      "name": "errorSignature",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/lint-diff.ts",
+      "name": "LintMessage",
       "kind": "type"
     },
     {
@@ -1252,6 +1247,11 @@
     },
     {
       "path": "lib/omp-settings.ts",
+      "name": "getDefault",
+      "kind": "runtime"
+    },
+    {
+      "path": "lib/omp-settings.ts",
       "name": "SettingTab",
       "kind": "type"
     },
@@ -1317,6 +1317,21 @@
     },
     {
       "path": "lib/panel-tabs.ts",
+      "name": "DisplayMode",
+      "kind": "type"
+    },
+    {
+      "path": "lib/panel-tabs.ts",
+      "name": "FileTab",
+      "kind": "type"
+    },
+    {
+      "path": "lib/panel-tabs.ts",
+      "name": "OpenFileRequest",
+      "kind": "type"
+    },
+    {
+      "path": "lib/panel-tabs.ts",
       "name": "PANEL_VIEW_TAB_IDS",
       "kind": "runtime"
     },
@@ -1359,6 +1374,31 @@
       "path": "lib/popup-placement.ts",
       "name": "POPUP_VIEWPORT_MARGIN_PX",
       "kind": "runtime"
+    },
+    {
+      "path": "lib/pr-queue.ts",
+      "name": "Blocker",
+      "kind": "type"
+    },
+    {
+      "path": "lib/pr-queue.ts",
+      "name": "BlockerKind",
+      "kind": "type"
+    },
+    {
+      "path": "lib/pr-queue.ts",
+      "name": "ContainmentGroup",
+      "kind": "type"
+    },
+    {
+      "path": "lib/pr-queue.ts",
+      "name": "Mergeable",
+      "kind": "type"
+    },
+    {
+      "path": "lib/pr-queue.ts",
+      "name": "Verdict",
+      "kind": "type"
     },
     {
       "path": "lib/project-tree.ts",
@@ -1493,6 +1533,11 @@
     {
       "path": "lib/session-marker.ts",
       "name": "TaskEndAttribution",
+      "kind": "type"
+    },
+    {
+      "path": "lib/session-reader.ts",
+      "name": "BuildSessionContextOptions",
       "kind": "type"
     },
     {
@@ -1634,21 +1679,6 @@
       "path": "lib/testing/render-harness.mjs",
       "name": "visibleText",
       "kind": "runtime"
-    },
-    {
-      "path": "lib/tool-presets.ts",
-      "name": "getPresetFromTools",
-      "kind": "runtime"
-    },
-    {
-      "path": "lib/tool-presets.ts",
-      "name": "PRESET_NONE",
-      "kind": "runtime"
-    },
-    {
-      "path": "lib/tool-presets.ts",
-      "name": "ToolPreset",
-      "kind": "type"
     },
     {
       "path": "lib/transcript-follow.ts",
@@ -1823,6 +1853,11 @@
     {
       "path": "lib/workspace-activity.ts",
       "name": "WorkspaceActivity",
+      "kind": "type"
+    },
+    {
+      "path": "lib/worktree-switch.ts",
+      "name": "WorktreeSwitchRequest",
       "kind": "type"
     },
     {

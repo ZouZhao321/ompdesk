@@ -56,8 +56,8 @@ export interface DistortionNote {
 
 /** 对应不完整时退回的行覆盖对照。 */
 export interface LineFallback {
-  /** 组的两侧路径，用于输出。 */
-  files: string;
+  /** 组的两侧路径，用于输出，形如「旧1、旧2 → 新1」。 */
+  label: string;
   baseLinesHit: number;
   baseLinesFound: number;
   headLinesHit: number;
@@ -302,7 +302,7 @@ export function analyzeDistortion(facts: DistortionFacts): DistortionResult {
     const base = sumLines(group.basePaths, facts.baseCoverage);
     const head = sumLines(group.headPaths, facts.coverage);
     lineFallbacks.push({
-      files: groupFileLabel(group),
+      label: groupFileLabel(group),
       baseLinesHit: base.hit,
       baseLinesFound: base.found,
       headLinesHit: head.hit,

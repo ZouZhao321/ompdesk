@@ -140,6 +140,30 @@ normalize.ts         normalizeToolCalls()：文件格式与本地类型之间的
 worktree.ts          项目解析、本地分支清单、按分支确保工作副本与增删
 worktree-types.ts    /api/worktrees 的 checkout 与本地分支类型，侧栏与 Git 面板共用
 worktree-switch.ts   分支切换请求的发布与订阅：Git 面板发起，侧栏执行目录解析
+coverage-gate/       覆盖率门禁，见下方
+```
+
+### lib/coverage-gate/
+
+合并检查用的覆盖率与导出引用判定。判定输入是两份 lcov、一份改动清单与一次源码扫描，
+不联网、不读写 agent 目录。规则与入口见 `docs/coverage-gate.md`。
+
+```
+cli.ts              判定入口：runCoverageGate（规则一、二）与 runExportGate（规则三），退出码 0/1/2
+lcov.ts             解析 lcov：反斜杠路径、?mtime= 去重、仓库外记录剔除、加权合计
+git.ts              git 查询：改动清单（含未跟踪）、受管源文件、生产引用来源、分叉点
+base-coverage.ts    分叉点基准：临时工作副本 + 同一条测试命令产出 lcov，读完即删
+function-names.ts   两版文件的函数名集合：定义、重导出与差集
+test-imports.ts     测试文件的导入索引，供被动覆盖的静态检查
+test-command.ts     测试命令、覆盖率产物路径与运行环境的唯一定义
+source-scan.ts      TypeScript 语法树解析入口：扩展名到 ScriptKind、导入候选后缀
+exports.ts          导出符号提取与引用索引（含转出口与命名空间导入）
+export-usage.ts     一次导出引用判定的数据采集：新增导出、引用索引、基线
+export-baseline.ts  基线文件格式与按分叉点生成
+framework-exports.ts 框架按文件名或路径调用的导出白名单
+exceptions.ts       豁免清单解析、校验与生效判定
+report.ts           报告渲染：覆盖率报告与静态引用检查报告
+rules/              三条规则与失真处理（改名、拆分、合并、替换）
 ```
 
 ## components/
@@ -213,6 +237,8 @@ proxy.ts            访问控制：密码校验、主机与跨站检查；控制
 instrumentation.ts  启动时接线（代理、日志）
 next.config.ts      构建配置：@oh-my-pi/* externalize、distDir
 bin/                启动器（start/status/stop/foreground）、实例记录、密码存储、Bun 定位
-scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息、pr-queue 列开放 PR 的阻塞项）
+scripts/            开发辅助（scratch 建临时目录、smoke-dev 开发冒烟、check-commit-msg 校验提交信息、pr-queue 列开放 PR 的阻塞项、coverage-gate 覆盖率门禁入口）
 test-support/       测试样本：会话夹具经 SessionManager 生成，测试与手工验证共用同一入口
+coverage-exceptions.json    覆盖率门禁的豁免清单（path、rule、reason、alternativeVerification、expires）
+coverage-export-baseline.json 分叉点之前就存在的无引用导出，规则三据此不重复拦存量
 ```
