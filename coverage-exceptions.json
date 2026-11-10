@@ -1,3 +1,11 @@
 {
-  "exceptions": []
+  "exceptions": [
+    {
+      "path": "bin/ompdesk.js",
+      "rule": "rule-1",
+      "reason": "CLI 入口在模块加载时解析命令行参数，遇到错误或子命令会直接退出，测试进程无法 import；启动前的清理逻辑放在 bin/runtime.js",
+      "alternativeVerification": "bin/runtime.test.mjs 覆盖 clearStaleRouteCache 的删除与空操作；真实安装上用 ompdesk start 启动后核对首页引用的 chunk 属于本次构建",
+      "expires": "2027-02-11"
+    }
+  ]
 }

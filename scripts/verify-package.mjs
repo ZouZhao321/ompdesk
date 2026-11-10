@@ -14,7 +14,7 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -69,6 +69,20 @@ if (providedTarball) {
 
 Bun.write(join(CONSUMER, "package.json"), '{"name":"pack-check","private":true}\n');
 run(process.execPath, ["add", tarballPath], CONSUMER);
+
+// 1.0.27 把运行时生成的路由缓存打进了包：升级不会删除它，next start 会继续
+// 返回其中预渲染的旧首页。产物里只要出现这个目录，就说明打包排除失效了。
+const installedRouteCache = join(CONSUMER, "node_modules", "ompdesk", ".next", "server", "route-cache");
+if (existsSync(installedRouteCache)) {
+  process.stderr.write(`[pack] 安装包带着 .next/server/route-cache：升级后会继续返回旧页面\n`);
+  process.exit(1);
+}
+
+// 模拟从旧版本升级：安装目录里留着上一版的路由缓存。启动器必须在拉起 next
+// 之前删掉它；next 运行时自己重建的缓存不带这个标记文件。
+const staleMarker = join(installedRouteCache, "pack-check-stale.txt");
+mkdirSync(installedRouteCache, { recursive: true });
+Bun.write(staleMarker, "stale route cache from the previous version\n");
 
 const server = spawn(
   process.execPath,
@@ -126,6 +140,11 @@ try {
 if (status !== 200) {
   process.stderr.write(`[pack] 首页在 ${STARTUP_TIMEOUT_MS / 1000} 秒内没有返回 200\n`);
   process.stderr.write(output.join("").split(/\r?\n/).slice(-60).join("\n"));
+  process.exit(1);
+}
+
+if (existsSync(staleMarker)) {
+  process.stderr.write(`[pack] 启动前没有清理上一版留下的 .next/server/route-cache\n`);
   process.exit(1);
 }
 

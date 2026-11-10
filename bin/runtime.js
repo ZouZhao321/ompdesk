@@ -1,7 +1,7 @@
 "use strict";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { existsSync } = require("fs");
+const { existsSync, rmSync } = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { delimiter, join } = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -114,8 +114,25 @@ function withLoopbackNoProxy(env) {
   return { ...env, NO_PROXY: value, no_proxy: value };
 }
 
+/**
+ * 删除上一版留在安装目录里的 ISR 路由缓存。
+ *
+ * 旧版本把 `.next/server/route-cache` 一起打进了 npm 包。升级只覆盖新包里的
+ * 文件，这层缓存不会被替换，`next start` 会优先返回其中预渲染的首页，而首页
+ * 引用的是上一轮的构建产物，界面因此停在旧版本。启动前清掉它，让服务用本次
+ * 安装的 `server/app` 重新生成页面。
+ */
+function clearStaleRouteCache(nextDir) {
+  if (!nextDir) return false;
+  const cacheDir = join(nextDir, "server", "route-cache");
+  if (!existsSync(cacheDir)) return false;
+  rmSync(cacheDir, { recursive: true, force: true });
+  return true;
+}
+
 module.exports = {
   MIN_BUN_VERSION,
+  clearStaleRouteCache,
   getMissingBunMessage,
   getUnsupportedBunVersionMessage,
   isBunVersionSupported,

@@ -28,6 +28,7 @@
     ".next",
     "!.next/cache",
     "!.next/dev",
+    "!.next/server/route-cache",
     "!.next/**/*.js.map",
     "public",
     "next.config.ts",

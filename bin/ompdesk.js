@@ -2,6 +2,7 @@
 "use strict";
 
 const {
+  clearStaleRouteCache,
   getMissingBunMessage,
   getUnsupportedBunVersionMessage,
   isBunVersionSupported,
@@ -221,6 +222,7 @@ function openInBrowser(url) {
  * endpoint has to answer without the web password.
  */
 function spawnServer({ stdio, detached, controlToken }) {
+  clearStaleRouteCache(nextDir);
   return spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", serverHost], {
     cwd: pkgDir,
     stdio,
