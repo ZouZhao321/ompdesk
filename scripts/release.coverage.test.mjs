@@ -451,7 +451,7 @@ test("cmdFinish dry run prints the tag plan without tagging anything", () => {
 
   const output = captureConsole(() => release.cmdFinish(`v${PACKAGE_VERSION}`, true));
   assert.match(output, /提交：01234567/);
-  assert.match(output, new RegExp(`标签：v${PACKAGE_VERSION.replace(/\./g, "\\.")}`));
+  assert.ok(output.includes(`标签：v${PACKAGE_VERSION}`), "tag plan missing from dry run");
   assert.match(output, /仓库：owner\/repo/);
   assert.match(output, /发布说明：/);
   assert.match(output, /只做检查，没有打标签、没有推送/);
@@ -462,7 +462,7 @@ test("cmdFinish pushes the tag and then watches CI", () => {
   useCommands({ ciRuns: [[{ databaseId: 5, name: "test", status: "completed", conclusion: "success" }]] });
 
   const output = captureConsole(() => release.cmdFinish(PACKAGE_VERSION, false));
-  assert.match(output, new RegExp(`已推出 v${PACKAGE_VERSION.replace(/\./g, "\\.")}`));
+  assert.ok(output.includes(`已推出 v${PACKAGE_VERSION}`), "pushed tag missing from output");
   assert.match(output, /发布完成/);
   const tagCall = commands.find((record) => record.args[0] === "tag");
   assert.ok(tagCall, "the annotated tag is created");
