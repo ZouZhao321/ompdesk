@@ -113,10 +113,17 @@ export async function generateBaseCoverage(request: BaseCoverageRequest): Promis
 
     try {
       await execFileAsync(
-        // 门禁本身在 bun 下运行，基准运行直接复用当前进程的可执行文件。
+        // 门禁本身在 bun 下运行，基准运行直接复用当前进程的可执行文件。环境先剥掉仓库
+        // 定位变量：基准跑的是分叉点版本的测试，那份代码可能还没有 createGitEnv 这层隔离，
+        // 钩子注入的 GIT_DIR 会让它作用到真实仓库上。
         process.versions.bun ? process.execPath : "bun",
         coverageTestArgs(coverageDir),
-        { cwd: worktreePath, timeout: BASE_TEST_TIMEOUT_MS, maxBuffer: MAX_BUFFER, env: coverageTestEnv() },
+        {
+          cwd: worktreePath,
+          timeout: BASE_TEST_TIMEOUT_MS,
+          maxBuffer: MAX_BUFFER,
+          env: coverageTestEnv(createGitEnv()),
+        },
       );
     } catch (error) {
       return {
