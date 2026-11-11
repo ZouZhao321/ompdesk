@@ -225,9 +225,23 @@ function isChildProcessRequire(node) {
   );
 }
 
-/** `import("child_process")` 或 `await import("child_process")`。 */
+/** 去掉括号、`await` 与类型断言，拿到真正的表达式。 */
+function unwrapExpression(node) {
+  let current = node;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAwaitExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+/** `import("child_process")`，可带括号与 `await`。 */
 function isChildProcessDynamicImport(node) {
-  const expression = ts.isAwaitExpression(node) ? node.expression : node;
+  const expression = unwrapExpression(node);
   return (
     ts.isCallExpression(expression) &&
     expression.expression.kind === ts.SyntaxKind.ImportKeyword &&
@@ -237,9 +251,10 @@ function isChildProcessDynamicImport(node) {
   );
 }
 
-/** 初始化表达式是否取到整个 `child_process` 模块：`require(…)` 或动态 `import(…)`。 */
+/** 取到整个 `child_process` 模块：`require(…)` 或动态 `import(…)`，可带括号与 `await`。 */
 function isChildProcessModuleExpression(node) {
-  return isChildProcessRequire(node) || isChildProcessDynamicImport(node);
+  const expression = unwrapExpression(node);
+  return isChildProcessRequire(expression) || isChildProcessDynamicImport(expression);
 }
 
 /**
@@ -257,15 +272,18 @@ function childProcessBindings(sourceFile) {
       isChildProcessModule(node.moduleSpecifier.text)
     ) {
       const clause = node.importClause;
-      if (clause?.name) namespaces.add(clause.name.text);
-      const bindings = clause?.namedBindings;
-      if (bindings && ts.isNamedImports(bindings)) {
-        for (const element of bindings.elements) {
-          const imported = (element.propertyName ?? element.name).text;
-          if (SUBPROCESS_ENTRY_POINTS.includes(imported)) named.add(element.name.text);
+      if (clause && !clause.isTypeOnly) {
+        if (clause.name) namespaces.add(clause.name.text);
+        const bindings = clause.namedBindings;
+        if (bindings && ts.isNamedImports(bindings)) {
+          for (const element of bindings.elements) {
+            if (element.isTypeOnly) continue;
+            const imported = (element.propertyName ?? element.name).text;
+            if (SUBPROCESS_ENTRY_POINTS.includes(imported)) named.add(element.name.text);
+          }
+        } else if (bindings && ts.isNamespaceImport(bindings)) {
+          namespaces.add(bindings.name.text);
         }
-      } else if (bindings && ts.isNamespaceImport(bindings)) {
-        namespaces.add(bindings.name.text);
       }
     }
     if (ts.isVariableDeclaration(node) && node.initializer && isChildProcessModuleExpression(node.initializer)) {
@@ -289,8 +307,21 @@ function childProcessBindings(sourceFile) {
 
 /** 源码是否取用到 `child_process` 模块，用于「提到模块却没有调用点」的检查。 */
 export function mentionsChildProcessModule(source, filename = "source.ts") {
-  const { named, namespaces } = childProcessBindings(parseSource(source, filename));
-  return named.size > 0 || namespaces.size > 0;
+  const sourceFile = parseSource(source, filename);
+  const { named, namespaces } = childProcessBindings(sourceFile);
+  if (named.size > 0 || namespaces.size > 0) return true;
+
+  let found = false;
+  const visit = (node) => {
+    if (found) return;
+    if (isChildProcessModuleExpression(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
 }
 
 /**
@@ -309,7 +340,15 @@ export function subprocessCalls(source, filename = "source.ts") {
   const visit = (node) => {
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
-      if (isNamespaceMember(callee, namespaces) || (ts.isIdentifier(callee) && names.has(callee.text))) {
+      const isInlineCall =
+        ts.isPropertyAccessExpression(callee) &&
+        SUBPROCESS_ENTRY_POINTS.includes(callee.name.text) &&
+        isChildProcessModuleExpression(callee.expression);
+      if (
+        isInlineCall ||
+        isNamespaceMember(callee, namespaces) ||
+        (ts.isIdentifier(callee) && names.has(callee.text))
+      ) {
         const options = findOptionsArgument(node, declarations);
         calls.push({
           line: lineOf(sourceFile, node),
@@ -328,18 +367,49 @@ export function subprocessCalls(source, filename = "source.ts") {
 const WINDOW_FLAG_MODULE = "subprocess-window";
 const WINDOW_FLAG_NAME = "HIDE_CHILD_WINDOW";
 
+/** 模块名是否指向共享窗口开关模块；`./subprocess-window`、`@/lib/subprocess-window` 都算。 */
+function isWindowFlagModule(specifier) {
+  return specifier === WINDOW_FLAG_MODULE || specifier.endsWith(`/${WINDOW_FLAG_MODULE}`);
+}
+
+/** `require("./subprocess-window")`，供 CJS 与测试里的写法识别。 */
+function isWindowFlagRequire(node) {
+  const expression = unwrapExpression(node);
+  return (
+    ts.isCallExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === "require" &&
+    expression.arguments.length > 0 &&
+    ts.isStringLiteral(expression.arguments[0]) &&
+    isWindowFlagModule(expression.arguments[0].text)
+  );
+}
+
 /** 从共享窗口开关模块导入的本地名字。 */
 function windowFlagNames(sourceFile) {
   const names = new Set();
   const visit = (node) => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-      const specifier = node.moduleSpecifier.text;
-      const fromModule = specifier === WINDOW_FLAG_MODULE || specifier.endsWith(`/${WINDOW_FLAG_MODULE}`);
-      const bindings = node.importClause?.namedBindings;
-      if (fromModule && bindings && ts.isNamedImports(bindings)) {
-        for (const element of bindings.elements) {
-          if ((element.propertyName ?? element.name).text === WINDOW_FLAG_NAME) names.add(element.name.text);
+      const clause = node.importClause;
+      const bindings = clause?.namedBindings;
+      if (isWindowFlagModule(node.moduleSpecifier.text) && clause && !clause.isTypeOnly && bindings) {
+        if (ts.isNamedImports(bindings)) {
+          for (const element of bindings.elements) {
+            if (element.isTypeOnly) continue;
+            if ((element.propertyName ?? element.name).text === WINDOW_FLAG_NAME) names.add(element.name.text);
+          }
         }
+      }
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer && isWindowFlagRequire(node.initializer)) {
+      if (!ts.isObjectBindingPattern(node.name)) {
+        // `const flags = require(…)` 之后按属性访问取值，不做名字追踪。
+        return;
+      }
+      for (const element of node.name.elements) {
+        if (!ts.isIdentifier(element.name)) continue;
+        const source = element.propertyName ?? element.name;
+        if (ts.isIdentifier(source) && source.text === WINDOW_FLAG_NAME) names.add(element.name.text);
       }
     }
     ts.forEachChild(node, visit);
@@ -372,25 +442,41 @@ function resolveDeclaration(identifier, declarations) {
   return null;
 }
 
+/** 标识符被外层函数的形参遮蔽：与本地重新声明同样算冒名。 */
+function isParameterShadow(identifier) {
+  for (let scope = identifier.parent; scope; scope = scope.parent) {
+    if (!ts.isFunctionLike(scope)) continue;
+    const shadowed = scope.parameters.some(
+      (parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === identifier.text,
+    );
+    if (shadowed) return true;
+  }
+  return false;
+}
+
 /**
  * `windowsHide` 的取值是否挡住窗口。字面量 `true` 直接算；计算表达式交给作者，字面量
- * `false` 一律不算；标识符按最近的声明判定：本地重新声明的同名变量不算冒名通过，
- * `detached` 要求同一份 options 里也传了它，其余只认共享开关模块的导入。
+ * `false`（含括号、断言、非空断言）一律不算；标识符按最近的声明判定：本地重新声明或形参
+ * 遮蔽不算、`detached` 要求同一份 options 里也传了它、其余只认共享开关模块的导入。
+ * 取值后面还有展开属性时无法判定，按未挡住处理。
  */
 function hidesChildWindow(objectLiteral, windowFlags, declarations) {
   const property = lastProperty(objectLiteral, "windowsHide");
   if (!property) return false;
   if (ts.isShorthandPropertyAssignment(property)) return false;
 
-  const value = property.initializer;
+  const following = objectLiteral.properties.slice(objectLiteral.properties.indexOf(property) + 1);
+  if (following.some((candidate) => ts.isSpreadAssignment(candidate))) return false;
+
+  const value = unwrapExpression(property.initializer);
   if (value.kind === ts.SyntaxKind.TrueKeyword) return true;
   if (value.kind === ts.SyntaxKind.FalseKeyword) return false;
   if (!ts.isIdentifier(value)) return true;
 
   const declaration = resolveDeclaration(value, declarations);
-  const reassigned = declaration !== null && declaration.initializer?.kind === ts.SyntaxKind.FalseKeyword;
-  if (value.text === "detached") return !reassigned && lastProperty(objectLiteral, "detached") !== null;
-  if (declaration) return false;
+  const knownFalse = declaration !== null && declaration.initializer?.kind === ts.SyntaxKind.FalseKeyword;
+  if (value.text === "detached") return !knownFalse && lastProperty(objectLiteral, "detached") !== null;
+  if (declaration || isParameterShadow(value)) return false;
   return windowFlags.has(value.text);
 }
 
