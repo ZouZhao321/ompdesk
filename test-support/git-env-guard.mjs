@@ -26,6 +26,7 @@ export const SUBPROCESS_ENTRY_POINTS = Object.freeze([
   "execFile",
   "execFileSync",
   "execSync",
+  "fork",
   "spawn",
   "spawnSync",
 ]);
@@ -147,23 +148,42 @@ function referenceName(node) {
   return null;
 }
 
-/** `promisify(execFile)` 与 `promisify(cp.execFile)` 这类把入口包一层的写法。 */
-function isPromisifiedEntry(expression, names) {
-  if (!ts.isCallExpression(expression)) return false;
-  if (referenceName(expression.expression) !== "promisify") return false;
-  return expression.arguments.some((argument) => names.has(referenceName(argument)));
+/** 命名空间成员的引用：`cp.execFile`，且 `cp` 来自 `child_process`。 */
+function isNamespaceMember(expression, namespaces) {
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    namespaces.has(expression.expression.text) &&
+    SUBPROCESS_ENTRY_POINTS.includes(expression.name.text)
+  );
 }
 
-/** 初始化表达式是否只是入口的别名：`const run = execFile`、`const execFileAsync = promisify(execFile)`。 */
-function aliasesEntryPoint(expression, names) {
-  return names.has(referenceName(expression)) || isPromisifiedEntry(expression, names);
+/** `promisify(execFile)` 与 `promisify(cp.execFile)` 这类把入口包一层的写法。 */
+function isPromisifiedEntry(expression, names, namespaces) {
+  if (!ts.isCallExpression(expression)) return false;
+  if (referenceName(expression.expression) !== "promisify") return false;
+  return expression.arguments.some(
+    (argument) => names.has(referenceName(argument)) || isNamespaceMember(argument, namespaces),
+  );
 }
 
 /**
- * 入口名集合：给定的初始名字（默认是清单里的六个），加上本地声明的别名。别名套别名按声明
+ * 初始化表达式是否只是入口的别名：`const run = execFile`、`const run = cp.execFile`、
+ * `const execFileAsync = promisify(execFile)`。
+ */
+function aliasesEntryPoint(expression, names, namespaces) {
+  return (
+    names.has(referenceName(expression)) ||
+    isNamespaceMember(expression, namespaces) ||
+    isPromisifiedEntry(expression, names, namespaces)
+  );
+}
+
+/**
+ * 入口名集合：给定的初始名字（默认是清单里的名字），加上本地声明的别名。别名套别名按声明
  * 迭代到不再新增，`const run = execFileAsync` 也能解析到 `execFile`。
  */
-function entryPointNames(sourceFile, seeds = SUBPROCESS_ENTRY_POINTS) {
+function entryPointNames(sourceFile, seeds = SUBPROCESS_ENTRY_POINTS, namespaces = new Set()) {
   const names = new Set(seeds);
   const declarations = [];
   const collect = (node) => {
@@ -179,7 +199,7 @@ function entryPointNames(sourceFile, seeds = SUBPROCESS_ENTRY_POINTS) {
     added = false;
     for (const declaration of declarations) {
       if (names.has(declaration.name.text)) continue;
-      if (aliasesEntryPoint(declaration.initializer, names)) {
+      if (aliasesEntryPoint(declaration.initializer, names, namespaces)) {
         names.add(declaration.name.text);
         added = true;
       }
@@ -256,7 +276,7 @@ export function subprocessCalls(source, filename = "source.ts") {
   const sourceFile = parseSource(source, filename);
   const declarations = declarationScopes(sourceFile);
   const { named, namespaces } = childProcessBindings(sourceFile);
-  const names = entryPointNames(sourceFile, named);
+  const names = entryPointNames(sourceFile, named, namespaces);
 
   const calls = [];
   const visit = (node) => {
@@ -277,23 +297,32 @@ export function subprocessCalls(source, filename = "source.ts") {
   return calls;
 }
 
-/** 对象字面量里是否写了 `windowsHide: true`。 */
+/**
+ * 对象字面量里的 `windowsHide` 是否挡住窗口：字面量 `true`，或者与 `detached` 同值
+ * （前台继承启动器控制台，后台没有控制台才隐藏）。
+ */
 export function hasHiddenWindowProperty(objectLiteral) {
   return objectLiteral.properties.some((property) => {
     if (!ts.isPropertyAssignment(property)) return false;
     const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : null;
-    return name === "windowsHide" && property.initializer.kind === ts.SyntaxKind.TrueKeyword;
+    if (name !== "windowsHide") return false;
+    const value = property.initializer;
+    return value.kind === ts.SyntaxKind.TrueKeyword || (ts.isIdentifier(value) && value.text === "detached");
   });
 }
 
 /**
- * 断言每个子进程调用都隐藏了窗口。后台服务没有控制台，Windows 上子进程会各开一个可见的
- * 控制台窗口；`windowsHide: true` 是唯一挡住它的开关。`label` 指明出处，用在报错里。
+ * 断言每个子进程调用都挡住了控制台窗口。后台服务没有控制台，Windows 上子进程会各开一个
+ * 可见的控制台窗口；`windowsHide` 是唯一挡住它的开关。需要继承启动器控制台的调用写
+ * `windowsHide: detached`。`label` 指明出处，用在报错里。
  */
 export function assertHiddenWindow(calls, label) {
   for (const { line, options } of calls) {
     assert.ok(options, `${label} 第 ${line} 行的子进程调用必须传 options 对象字面量`);
-    assert.ok(hasHiddenWindowProperty(options), `${label} 第 ${line} 行的子进程调用要传 windowsHide: true`);
+    assert.ok(
+      hasHiddenWindowProperty(options),
+      `${label} 第 ${line} 行的子进程调用要传 windowsHide: true，需要继承控制台时写 windowsHide: detached`,
+    );
   }
 }
 

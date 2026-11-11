@@ -227,8 +227,8 @@ function spawnServer({ stdio, detached, controlToken }) {
     cwd: pkgDir,
     stdio,
     detached,
-    // 后台实例没有控制台；前台实例的 Ctrl+C 由 runAttached 显式转发，隐藏窗口不影响它。
-    windowsHide: true,
+    // 前台实例继承启动器的控制台，Ctrl+C 与关闭窗口要能送达服务端；后台实例没有控制台，隐藏子进程窗口。
+    windowsHide: detached,
     env: {
       ...withLoopbackNoProxy(process.env),
       OMPDESK_HOSTNAME: serverHost,
