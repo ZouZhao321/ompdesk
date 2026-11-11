@@ -297,31 +297,73 @@ export function subprocessCalls(source, filename = "source.ts") {
   return calls;
 }
 
+/** 共享窗口开关所在的模块；`lib/subprocess-window.ts`。 */
+const WINDOW_FLAG_MODULE = "subprocess-window";
+const WINDOW_FLAG_NAME = "HIDE_CHILD_WINDOW";
+
 /**
- * 对象字面量里的 `windowsHide` 是否挡住窗口：字面量 `true`，或者与 `detached` 同值
- * （前台继承启动器控制台，后台没有控制台才隐藏）。
+ * 从共享窗口开关模块导入的本地名字。`windowsHide: HIDE_CHILD_WINDOW` 的取值由那个模块
+ * 按当前进程有没有控制台决定，守卫只确认名字确实来自它，避免同名变量冒充。
  */
-export function hasHiddenWindowProperty(objectLiteral) {
+export function importedWindowFlags(source, filename = "source.ts") {
+  const sourceFile = parseSource(source, filename);
+  const names = new Set();
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const specifier = node.moduleSpecifier.text;
+      const fromModule = specifier === WINDOW_FLAG_MODULE || specifier.endsWith(`/${WINDOW_FLAG_MODULE}`);
+      const bindings = node.importClause?.namedBindings;
+      if (fromModule && bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          if ((element.propertyName ?? element.name).text === WINDOW_FLAG_NAME) names.add(element.name.text);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+}
+
+/** 同一份 options 里是否传了 `detached`：只有它存在时，`windowsHide: detached` 才有意义。 */
+function declaresDetached(objectLiteral) {
+  return objectLiteral.properties.some((property) => {
+    if (ts.isShorthandPropertyAssignment(property)) return property.name.text === "detached";
+    if (!ts.isPropertyAssignment(property)) return false;
+    const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : null;
+    return name === "detached";
+  });
+}
+
+/**
+ * 对象字面量里的 `windowsHide` 是否挡住窗口：字面量 `true`、来自共享开关模块的标识符，
+ * 或者 `detached`（且同一份 options 里确实传了 `detached`：前台继承启动器控制台，后台没有
+ * 控制台才隐藏）。
+ */
+export function hasHiddenWindowProperty(objectLiteral, windowFlags = new Set()) {
   return objectLiteral.properties.some((property) => {
     if (!ts.isPropertyAssignment(property)) return false;
     const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : null;
     if (name !== "windowsHide") return false;
     const value = property.initializer;
-    return value.kind === ts.SyntaxKind.TrueKeyword || (ts.isIdentifier(value) && value.text === "detached");
+    if (value.kind === ts.SyntaxKind.TrueKeyword) return true;
+    if (!ts.isIdentifier(value)) return false;
+    if (value.text === "detached") return declaresDetached(objectLiteral);
+    return windowFlags.has(value.text);
   });
 }
 
 /**
  * 断言每个子进程调用都挡住了控制台窗口。后台服务没有控制台，Windows 上子进程会各开一个
- * 可见的控制台窗口；`windowsHide` 是唯一挡住它的开关。需要继承启动器控制台的调用写
- * `windowsHide: detached`。`label` 指明出处，用在报错里。
+ * 可见的控制台窗口；`windowsHide` 是唯一挡住它的开关。`label` 指明出处，用在报错里；
+ * `windowFlags` 是该文件从共享开关模块导入的名字。
  */
-export function assertHiddenWindow(calls, label) {
+export function assertHiddenWindow(calls, label, windowFlags = new Set()) {
   for (const { line, options } of calls) {
     assert.ok(options, `${label} 第 ${line} 行的子进程调用必须传 options 对象字面量`);
     assert.ok(
-      hasHiddenWindowProperty(options),
-      `${label} 第 ${line} 行的子进程调用要传 windowsHide: true，需要继承控制台时写 windowsHide: detached`,
+      hasHiddenWindowProperty(options, windowFlags),
+      `${label} 第 ${line} 行的子进程调用要传 windowsHide: HIDE_CHILD_WINDOW（或 true；继承控制台时写 detached）`,
     );
   }
 }

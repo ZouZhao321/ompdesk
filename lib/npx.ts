@@ -3,6 +3,7 @@ import { promisify } from "util";
 import { existsSync } from "fs";
 import { dirname, join } from "path";
 import { execPath } from "process";
+import { HIDE_CHILD_WINDOW } from "./subprocess-window";
 
 const execFileAsync = promisify(execFile);
 
@@ -94,7 +95,7 @@ export async function runNpx(args: string[], opts: RunNpxOptions = {}): Promise<
     timeout: opts.timeout,
     cwd: opts.cwd,
     env: opts.env,
-    // npx 在 Windows 上会再起 cmd 一层，不隐藏时后台服务每调一次就闪一个窗口。
-    windowsHide: true,
+    // npx 在 Windows 上会再起 cmd 一层；后台实例没有控制台时隐藏子进程窗口。
+    windowsHide: HIDE_CHILD_WINDOW,
   });
 }

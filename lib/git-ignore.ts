@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createGitEnv } from "./git-env";
+import { HIDE_CHILD_WINDOW } from "./subprocess-window";
 
 /** 判定超时；大目录的输入可能有几 MB，输出只包含命中的名字。 */
 const GIT_CHECK_IGNORE_TIMEOUT_MS = 10_000;
@@ -60,7 +61,7 @@ export function checkIgnoredEntries(dirPath: string, names: string[]): Promise<S
   try {
     child = spawn("git", ["-C", dirPath, "check-ignore", "-z", "--stdin"], {
       env: createGitEnv(),
-      windowsHide: true,
+      windowsHide: HIDE_CHILD_WINDOW,
       stdio: ["pipe", "pipe", "ignore"],
     });
   } catch {

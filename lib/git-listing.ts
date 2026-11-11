@@ -1,6 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { createGitEnv } from "./git-env";
+import { HIDE_CHILD_WINDOW } from "./subprocess-window";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,7 +22,7 @@ export async function listGitFiles(cwd: string): Promise<string[] | null> {
       {
         timeout: GIT_LIST_TIMEOUT_MS,
         maxBuffer: GIT_LIST_MAX_BUFFER,
-        windowsHide: true,
+        windowsHide: HIDE_CHILD_WINDOW,
         env: createGitEnv(),
       },
     );
