@@ -2,6 +2,7 @@
 "use strict";
 
 const {
+  canClearRouteCache,
   clearStaleRouteCache,
   getMissingBunMessage,
   getUnsupportedBunVersionMessage,
@@ -222,7 +223,12 @@ function openInBrowser(url) {
  * endpoint has to answer without the web password.
  */
 function spawnServer({ stdio, detached, controlToken }) {
-  clearStaleRouteCache(nextDir);
+  // 同一份安装可以有多个实例，各自占用不同端口；它们共用 `.next`，正在服务的
+  // 实例还要读里面的路由缓存，这时清掉等于抽走对方正在用的文件。
+  const liveRecords = listRecords(stateDirPath).filter(
+    (record) => record.pid !== process.pid && isProcessAlive(record.pid),
+  );
+  if (canClearRouteCache(liveRecords, pkgDir)) clearStaleRouteCache(nextDir);
   return spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", serverHost], {
     cwd: pkgDir,
     stdio,
@@ -343,6 +349,7 @@ async function startDaemon() {
     controlToken,
     log: logPath,
     cwd: process.cwd(),
+    install: pkgDir,
   };
   writeRecord(instanceFile, record);
 

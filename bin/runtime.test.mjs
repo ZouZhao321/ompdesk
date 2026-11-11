@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
-const { clearStaleRouteCache } = require("./runtime.js");
+const { canClearRouteCache, clearStaleRouteCache } = require("./runtime.js");
 
 function withNextDir(run) {
   const root = mkdtempSync(join(tmpdir(), "ompdesk-route-cache-"));
@@ -37,4 +37,26 @@ test("clearStaleRouteCache leaves a build that never wrote the cache alone", () 
     assert.equal(clearStaleRouteCache(nextDir), false);
     assert.equal(existsSync(join(nextDir, "server", "app", "index.html")), true);
   });
+});
+
+test("canClearRouteCache keeps the cache while this install serves another port", () => {
+  const live = [{ pid: 4242, port: 30141, install: "/opt/ompdesk" }];
+
+  assert.equal(canClearRouteCache(live, "/opt/ompdesk"), false);
+});
+
+test("canClearRouteCache ignores instances from another install", () => {
+  const live = [{ pid: 4242, port: 30141, install: "/opt/ompdesk-after-upgrade" }];
+
+  assert.equal(canClearRouteCache(live, "/opt/ompdesk"), true);
+});
+
+test("canClearRouteCache counts a record without install as this install", () => {
+  const live = [{ pid: 4242, port: 30141 }];
+
+  assert.equal(canClearRouteCache(live, "/opt/ompdesk"), false);
+});
+
+test("canClearRouteCache clears when nothing else is running", () => {
+  assert.equal(canClearRouteCache([], "/opt/ompdesk"), true);
 });
