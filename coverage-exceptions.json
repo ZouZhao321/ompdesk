@@ -1,3 +1,11 @@
 {
-  "exceptions": []
+  "exceptions": [
+    {
+      "path": "bin/ompdesk.js",
+      "rule": "rule-1",
+      "reason": "启动器入口脚本，import 时立即执行 main() 并按结果退出进程，测试进程无法加载它",
+      "alternativeVerification": "手工执行 ompdesk start / status / stop 走启动与停止路径；共用逻辑（实例记录、探活、终止）由 bin/daemon-control.test.mjs 覆盖",
+      "expires": "2027-05-11"
+    }
+  ]
 }
