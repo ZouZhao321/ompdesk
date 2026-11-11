@@ -30,7 +30,9 @@
     ".next*/dev/types/**/*.ts",
     ".next*/dev/dev/types/**/*.ts",
     ".next-v1.0.28/types/**/*.ts",
-    ".next-v1.0.28/dev/types/**/*.ts"
+    ".next-v1.0.28/dev/types/**/*.ts",
+    ".next-smoke/types/**/*.ts",
+    ".next-smoke/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }
