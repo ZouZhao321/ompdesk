@@ -82,7 +82,7 @@ if (existsSync(installedRouteCache)) {
 // 之前删掉它；next 运行时自己重建的缓存不带这个标记文件。
 const staleMarker = join(installedRouteCache, "pack-check-stale.txt");
 mkdirSync(installedRouteCache, { recursive: true });
-Bun.write(staleMarker, "stale route cache from the previous version\n");
+await Bun.write(staleMarker, "stale route cache from the previous version\n");
 
 const server = spawn(
   process.execPath,
