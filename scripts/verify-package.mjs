@@ -59,6 +59,18 @@ if (providedTarball) {
   }
 } else {
   mkdirSync(PACK_DIR, { recursive: true });
+  // `files` 里的 `.next-v*/**` 会匹配工作区里每个版本的产物目录：旧版本的目录
+  // 留着时会被一起打进 tgz，包体积翻倍，包里还带着别的构建的预渲染结果。
+  const repoVersion = (await Bun.file(join(ROOT, "package.json")).json()).version;
+  const staleDistDirs = readdirSync(ROOT).filter(
+    (name) => name.startsWith(".next-v") && name !== `.next-v${repoVersion}`,
+  );
+  if (staleDistDirs.length > 0) {
+    process.stderr.write(
+      `[pack] 仓库里留着旧版本的产物目录：${staleDistDirs.join("、")}；先删掉它们再打包，否则 tgz 会把别的构建一起带上\n`,
+    );
+    process.exit(1);
+  }
   run("npm", ["pack", "--pack-destination", PACK_DIR], ROOT);
   const tarball = readdirSync(PACK_DIR).find((name) => name.endsWith(".tgz"));
   if (!tarball) {
@@ -124,11 +136,17 @@ server.stderr.on("data", record);
 function stopServer() {
   // `start` 把 next 拉成后台进程后启动器自己就退出了，只结束启动器接管不到真正在
   // 服务的那个进程；交给装好的 CLI 按端口停，免得遗留的 next 继续占着端口应答。
-  spawnSync(process.execPath, [installedCli, "stop", "--force", "-p", String(PORT)], {
+  const stopped = spawnSync(process.execPath, [installedCli, "stop", "--force", "-p", String(PORT)], {
     cwd: CONSUMER,
     env: consumerEnv,
-    stdio: "ignore",
+    encoding: "utf8",
   });
+  if (stopped.status !== 0) {
+    process.stderr.write(
+      `[pack] 停服务失败（退出码 ${stopped.status}），后续断言会读到上一个进程的回答：\n${stopped.stdout ?? ""}${stopped.stderr ?? ""}`,
+    );
+    process.exit(1);
+  }
   if (server.exitCode !== null) return;
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], {
