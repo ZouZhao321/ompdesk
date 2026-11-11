@@ -470,11 +470,13 @@ function hidesChildWindow(objectLiteral, windowFlags, declarations) {
 
   const value = unwrapExpression(property.initializer);
   if (value.kind === ts.SyntaxKind.TrueKeyword) return true;
-  if (value.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (value.kind === ts.SyntaxKind.FalseKeyword || value.kind === ts.SyntaxKind.NullKeyword) return false;
   if (!ts.isIdentifier(value)) return true;
 
   const declaration = resolveDeclaration(value, declarations);
-  const knownFalse = declaration !== null && declaration.initializer?.kind === ts.SyntaxKind.FalseKeyword;
+  const knownFalse =
+    declaration?.initializer !== undefined &&
+    unwrapExpression(declaration.initializer).kind === ts.SyntaxKind.FalseKeyword;
   if (value.text === "detached") return !knownFalse && lastProperty(objectLiteral, "detached") !== null;
   if (declaration || isParameterShadow(value)) return false;
   return windowFlags.has(value.text);
