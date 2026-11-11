@@ -201,6 +201,8 @@ function openInBrowser(url) {
     shell: isWindows,
     stdio: "ignore",
     detached: true,
+    // 后台实例没有控制台，`start` 经 cmd 运行时会被分配一个新窗口。
+    windowsHide: true,
   });
 
   opener.on("error", (error) => {
@@ -225,7 +227,8 @@ function spawnServer({ stdio, detached, controlToken }) {
     cwd: pkgDir,
     stdio,
     detached,
-    windowsHide: detached,
+    // 后台实例没有控制台；前台实例的 Ctrl+C 由 runAttached 显式转发，隐藏窗口不影响它。
+    windowsHide: true,
     env: {
       ...withLoopbackNoProxy(process.env),
       OMPDESK_HOSTNAME: serverHost,

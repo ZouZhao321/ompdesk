@@ -122,16 +122,18 @@ async function resolveGitTreeHash(install: SkillInstallInfo): Promise<string> {
   try {
     await execFileAsync("git", ["init", "--bare", gitDir], {
       timeout: GIT_CHECK_TIMEOUT_MS,
+      windowsHide: true,
       env: createGitEnv(),
     });
     await execFileAsync(
       "git",
       [`--git-dir=${gitDir}`, "fetch", "--depth=1", "--filter=blob:none", "--no-tags", repository, ref],
-      { timeout: GIT_CHECK_TIMEOUT_MS, env: createGitEnv() },
+      { timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true, env: createGitEnv() },
     );
     const revision = folder ? `FETCH_HEAD:${folder}` : "FETCH_HEAD^{tree}";
     const { stdout } = await execFileAsync("git", [`--git-dir=${gitDir}`, "rev-parse", revision], {
       timeout: GIT_CHECK_TIMEOUT_MS,
+      windowsHide: true,
       env: createGitEnv(),
     });
     const hash = stdout.trim();

@@ -93,6 +93,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: GIT_TIMEOUT_MS,
     maxBuffer: GIT_MAX_BUFFER,
+    windowsHide: true,
     env: createGitEnv(),
   });
   return stdout;

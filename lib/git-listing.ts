@@ -21,6 +21,7 @@ export async function listGitFiles(cwd: string): Promise<string[] | null> {
       {
         timeout: GIT_LIST_TIMEOUT_MS,
         maxBuffer: GIT_LIST_MAX_BUFFER,
+        windowsHide: true,
         env: createGitEnv(),
       },
     );

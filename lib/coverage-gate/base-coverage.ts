@@ -72,6 +72,7 @@ async function git(cwd: string, args: string[]): Promise<void> {
   await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: GIT_TIMEOUT_MS,
     maxBuffer: MAX_BUFFER,
+    windowsHide: true,
     env: createGitEnv(),
   });
 }
@@ -122,6 +123,7 @@ export async function generateBaseCoverage(request: BaseCoverageRequest): Promis
           cwd: worktreePath,
           timeout: BASE_TEST_TIMEOUT_MS,
           maxBuffer: MAX_BUFFER,
+          windowsHide: true,
           env: coverageTestEnv(createGitEnv()),
         },
       );

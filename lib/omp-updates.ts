@@ -275,6 +275,7 @@ export async function installUpdate({ manager }: InstallOptions): Promise<Ompdes
   const result = await execFileAsync(command.executable, command.args, {
     timeout: UPDATE_TIMEOUT_MS,
     maxBuffer: 1_000_000,
+    windowsHide: true,
     env: getSafeNpxEnv({
       CI: "1",
       NPM_CONFIG_UPDATE_NOTIFIER: "false",

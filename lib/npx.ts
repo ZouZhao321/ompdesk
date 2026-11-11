@@ -94,5 +94,7 @@ export async function runNpx(args: string[], opts: RunNpxOptions = {}): Promise<
     timeout: opts.timeout,
     cwd: opts.cwd,
     env: opts.env,
+    // npx 在 Windows 上会再起 cmd 一层，不隐藏时后台服务每调一次就闪一个窗口。
+    windowsHide: true,
   });
 }
