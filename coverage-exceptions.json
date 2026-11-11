@@ -20,6 +20,20 @@
       "reason": "ESLint 由 lint 命令加载配置，测试进程不 import；这份配置只声明忽略的目录与规则",
       "alternativeVerification": "CI 的 Lint changed files 作业执行 lint，忽略规则失效时版本化产物目录会被扫进来并直接报错",
       "expires": "2027-02-11"
+    },
+    {
+      "path": "app/api/file-index/route.ts",
+      "rule": "rule-1",
+      "reason": "Next 路由处理器由框架加载，测试进程不直接 import；判断目录是否属于构建产物的谓词在 lib/build-output.ts",
+      "alternativeVerification": "lib/build-output.test.mjs 覆盖 isNextDistDirName；开发冒烟里请求 /api/home 与文件索引链路会走到这条分支",
+      "expires": "2027-02-11"
+    },
+    {
+      "path": "app/api/files/[...path]/route.ts",
+      "rule": "rule-1",
+      "reason": "Next 路由处理器由框架加载，测试进程不直接 import；判断目录是否属于构建产物的谓词在 lib/build-output.ts",
+      "alternativeVerification": "lib/build-output.test.mjs 覆盖 isNextDistDirName；开发冒烟里打开项目文件列表会走到这条分支",
+      "expires": "2027-02-11"
     }
   ]
 }
