@@ -222,12 +222,14 @@ function openInBrowser(url) {
  * `controlToken` is set only for a background instance, where the control
  * endpoint has to answer without the web password.
  */
-function spawnServer({ stdio, detached, controlToken }) {
+async function spawnServer({ stdio, detached, controlToken }) {
   // 同一份安装可以有多个实例，各自占用不同端口；它们共用 `.next`，正在服务的
-  // 实例还要读里面的路由缓存，这时清掉等于抽走对方正在用的文件。
-  const liveRecords = listRecords(stateDirPath).filter(
-    (record) => record.pid !== process.pid && isProcessAlive(record.pid),
-  );
+  // 实例还要读里面的路由缓存，这时清掉等于抽走对方正在用的文件。记录里的 pid
+  // 可能已被系统回收，所以还要那个端口真的在应答，才算这个实例仍在服务。
+  const liveRecords = [];
+  for (const record of listRecords(stateDirPath)) {
+    if (isProcessAlive(record.pid) && (await probePort(record.host, record.port))) liveRecords.push(record);
+  }
   if (canClearRouteCache(liveRecords, pkgDir)) clearStaleRouteCache(nextDir);
   return spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", serverHost], {
     cwd: pkgDir,
@@ -259,7 +261,7 @@ async function runAttached() {
   await configurePasswordAccess();
   warnAboutExposure();
 
-  const child = spawnServer({ stdio: ["inherit", "inherit", "inherit"], detached: false });
+  const child = await spawnServer({ stdio: ["inherit", "inherit", "inherit"], detached: false });
   for (const [signal, code] of [
     ["SIGINT", 130],
     ["SIGTERM", 143],
@@ -315,7 +317,7 @@ async function startDaemon() {
 
   let child;
   try {
-    child = spawnServer({
+    child = await spawnServer({
       stdio: ["ignore", logHandle, logHandle],
       detached: true,
       controlToken,
