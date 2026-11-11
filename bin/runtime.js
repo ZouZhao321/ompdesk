@@ -114,11 +114,32 @@ function withLoopbackNoProxy(env) {
   return { ...env, NO_PROXY: value, no_proxy: value };
 }
 
+/**
+ * 构建产物目录名，构建与服务端必须得到同一个名字。
+ *
+ * 目录名带上版本，是因为安装只会覆盖新包里的文件：服务端运行时写下的
+ * `.next/server/route-cache` 会留在安装目录里继续被读写，而 next 的路由缓存键
+ * 不含构建标识（`/route-cache/<kind>/<sha256(route)>/$<path>`），下一版会把它当成
+ * 自己这次构建的预渲染结果返回，界面就停在旧版本。每个版本只读自己的目录，别的
+ * 版本留下的缓存不可能被读到，启动时也就不需要删任何文件。
+ *
+ * `OMPDESK_DIST_DIR` 仍然整体换目录：冒烟测试靠它把产物与日常开发隔开。
+ *
+ * @param {string} version `package.json` 里的版本号
+ * @param {string} [override] `OMPDESK_DIST_DIR`
+ * @returns {string}
+ */
+function resolveDistDir(version, override) {
+  const explicit = typeof override === "string" ? override.trim() : "";
+  return explicit || `.next-v${version}`;
+}
+
 module.exports = {
   MIN_BUN_VERSION,
   getMissingBunMessage,
   getUnsupportedBunVersionMessage,
   isBunVersionSupported,
   resolveBunPath,
+  resolveDistDir,
   withLoopbackNoProxy,
 };
