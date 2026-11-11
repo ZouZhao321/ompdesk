@@ -19,9 +19,8 @@
 # OCR 审核输出（见 .agents/skills/ompdesk-dev 的审核门禁）
 /.ocr/
 
-# next.js
-/.next/
-/.next-smoke/
+# next.js（产物目录按版本分开，见 bin/runtime.js 的 resolveDistDir）
+/.next*/
 /out/
 
 # production

@@ -1,6 +1,5 @@
 node_modules
-.next
-.next-smoke
+.next*
 .worktrees
 .tmp
 .backups

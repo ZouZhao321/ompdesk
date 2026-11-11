@@ -25,11 +25,11 @@
   },
   "files": [
     "bin",
-    ".next",
-    "!.next/cache",
-    "!.next/dev",
-    "!.next/server/route-cache",
-    "!.next/**/*.js.map",
+    ".next-v*/**",
+    "!.next-v*/cache",
+    "!.next-v*/dev",
+    "!.next-v*/server/route-cache",
+    "!.next-v*/**/*.js.map",
     "public",
     "next.config.ts",
     "package.json"

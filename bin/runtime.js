@@ -1,7 +1,7 @@
 "use strict";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { existsSync, rmSync } = require("fs");
+const { existsSync } = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { delimiter, join } = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -115,40 +115,31 @@ function withLoopbackNoProxy(env) {
 }
 
 /**
- * 删除上一版留在安装目录里的 ISR 路由缓存。
+ * 构建产物目录名，构建与服务端必须得到同一个名字。
  *
- * 旧版本把 `.next/server/route-cache` 一起打进了 npm 包。升级只覆盖新包里的
- * 文件，这层缓存不会被替换，`next start` 会优先返回其中预渲染的首页，而首页
- * 引用的是上一轮的构建产物，界面因此停在旧版本。启动前清掉它，让服务用本次
- * 安装的 `server/app` 重新生成页面。
- */
-function clearStaleRouteCache(nextDir) {
-  if (!nextDir) return false;
-  const cacheDir = join(nextDir, "server", "route-cache");
-  if (!existsSync(cacheDir)) return false;
-  rmSync(cacheDir, { recursive: true, force: true });
-  return true;
-}
-
-/**
- * 判断安装目录里的路由缓存是否可以删除。
+ * 目录名带上版本，是因为安装只会覆盖新包里的文件：服务端运行时写下的
+ * `.next/server/route-cache` 会留在安装目录里继续被读写，而 next 的路由缓存键
+ * 不含构建标识（`/route-cache/<kind>/<sha256(route)>/$<path>`），下一版会把它当成
+ * 自己这次构建的预渲染结果返回，界面就停在旧版本。每个版本只读自己的目录，别的
+ * 版本留下的缓存不可能被读到，启动时也就不需要删任何文件。
  *
- * `.next` 是整份安装共用的，同一份安装可以在不同端口上跑多个实例；正在服务
- * 的实例会读这层缓存，删掉它等于抽走对方正在用的文件，Windows 上文件被占用
- * 时还会让删除直接失败。记录里没有 `install` 字段的实例无法判断归属，按同一
- * 份安装处理，宁可这次不清，等实例停了再清。
+ * `OMPDESK_DIST_DIR` 仍然整体换目录：冒烟测试靠它把产物与日常开发隔开。
+ *
+ * @param {string} version `package.json` 里的版本号
+ * @param {string} [override] `OMPDESK_DIST_DIR`
+ * @returns {string}
  */
-function canClearRouteCache(liveRecords, installDir) {
-  return !liveRecords.some((record) => !record.install || record.install === installDir);
+function resolveDistDir(version, override) {
+  const explicit = typeof override === "string" ? override.trim() : "";
+  return explicit || `.next-v${version}`;
 }
 
 module.exports = {
   MIN_BUN_VERSION,
-  canClearRouteCache,
-  clearStaleRouteCache,
   getMissingBunMessage,
   getUnsupportedBunVersionMessage,
   isBunVersionSupported,
   resolveBunPath,
+  resolveDistDir,
   withLoopbackNoProxy,
 };

@@ -3,7 +3,7 @@
  * 打包冒烟：按用户实际下载安装的路径验证产物。
  *
  * `npm pack` 出 tgz，装进一个空项目，用装出来的 `ompdesk` 起服务并请求首页。
- * `package.json` 的 `files` 漏项、`bin` 路径写错、`.next` 没打进去这类问题，
+ * `package.json` 的 `files` 漏项、`bin` 路径写错、产物目录没打进去这类问题，
  * 只有走这条路才会暴露；`bun run build` 只看得到源码树里的构建结果。
  *
  * CI 在 PR 上跑一次，`release.yml` 在标签上跑一次，两边共用这一份步骤。
@@ -17,6 +17,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { resolveDistDir } from "../bin/runtime.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WORK = join(ROOT, ".tmp", "pack-check");
@@ -70,24 +72,39 @@ if (providedTarball) {
 Bun.write(join(CONSUMER, "package.json"), '{"name":"pack-check","private":true}\n');
 run(process.execPath, ["add", tarballPath], CONSUMER);
 
-// 1.0.27 把运行时生成的路由缓存打进了包：升级不会删除它，next start 会继续
-// 返回其中预渲染的旧首页。产物里只要出现这个目录，就说明打包排除失效了。
-const installedRouteCache = join(CONSUMER, "node_modules", "ompdesk", ".next", "server", "route-cache");
+// 启动器与服务端都按包里的版本号算产物目录，装得太浅（例如漏了 `files` 里那条
+// 通配）就是启动时报「Build artifacts not found」，所以这里先认准目录存在。
+const installedPkg = join(CONSUMER, "node_modules", "ompdesk");
+const installedVersion = (await Bun.file(join(installedPkg, "package.json")).json()).version;
+const installedDistDir = join(installedPkg, resolveDistDir(installedVersion));
+if (!existsSync(installedDistDir)) {
+  process.stderr.write(`[pack] 安装包缺少产物目录 .next-v${installedVersion}\n`);
+  process.exit(1);
+}
+
+// 服务端运行时写下的路由缓存不能进包：安装只覆盖新包里的文件，缓存里预渲染的
+// 页面会被下一版当成自己这次构建的结果返回。产物里出现这个目录就说明打包排除
+// 失效了。
+const installedRouteCache = join(installedDistDir, "server", "route-cache");
 if (existsSync(installedRouteCache)) {
-  process.stderr.write(`[pack] 安装包带着 .next/server/route-cache：升级后会继续返回旧页面\n`);
+  process.stderr.write(`[pack] 安装包带着 ${installedRouteCache}：升级后会继续返回旧页面\n`);
   process.exit(1);
 }
 
 // 装好的 CLI 既用来启动，也用来收尾：`start` 把 next 拉成后台进程后自己就退出，
 // 光结束启动器进程接管不到真正在服务的那个。
-const installedCli = join(CONSUMER, "node_modules", "ompdesk", "bin", "ompdesk.js");
+const installedCli = join(installedPkg, "bin", "ompdesk.js");
 const consumerEnv = { ...process.env, PI_CODING_AGENT_DIR: join(CONSUMER, "agent") };
+// 断言针对默认产物目录，外部环境变量会把它换掉。
+delete consumerEnv.OMPDESK_DIST_DIR;
 
-// 模拟从旧版本升级：安装目录里留着上一版的路由缓存。启动器必须在拉起 next
-// 之前删掉它；next 运行时自己重建的缓存不带这个标记文件。
-const staleMarker = join(installedRouteCache, "pack-check-stale.txt");
-mkdirSync(installedRouteCache, { recursive: true });
-await Bun.write(staleMarker, "stale route cache from the previous version\n");
+// 模拟升级：安装目录里躺着共用产物目录时留下的路由缓存，它里面预渲染的页面
+// 属于别的构建。产物目录按版本分开之后服务端根本不会读到它，启动器也不再删
+// 安装目录里的任何文件——两件事都在启动之后断言。
+const legacyRouteCache = join(installedPkg, ".next", "server", "route-cache");
+const staleMarker = join(legacyRouteCache, "pack-check-stale.txt");
+mkdirSync(legacyRouteCache, { recursive: true });
+await Bun.write(staleMarker, "route cache from another build\n");
 
 const server = spawn(process.execPath, [installedCli, "--no-open", "-p", String(PORT)], {
   cwd: CONSUMER,
@@ -126,6 +143,7 @@ function stopServer() {
 
 const deadline = Date.now() + STARTUP_TIMEOUT_MS;
 let status = 0;
+let html = "";
 try {
   while (Date.now() < deadline) {
     try {
@@ -134,6 +152,7 @@ try {
       });
       if (response.status === 200) {
         status = 200;
+        html = await response.text();
         break;
       }
     } catch {
@@ -151,8 +170,24 @@ if (status !== 200) {
   process.exit(1);
 }
 
-if (existsSync(staleMarker)) {
-  process.stderr.write(`[pack] 启动前没有清理上一版留下的 .next/server/route-cache\n`);
+// 首页引用的静态产物必须全都装在这次安装的产物目录里：能满足这一点的只有本次
+// 构建渲染出来的页面，别处预渲染留下的 HTML 指向的是别的构建的文件。
+const referencedAssets = new Set(Array.from(html.matchAll(/\/_next\/static\/[^"'\s<>)\\]+/g), ([url]) => url));
+if (referencedAssets.size === 0) {
+  process.stderr.write("[pack] 首页没有引用任何静态产物，无法判断返回的是哪次构建\n");
+  process.exit(1);
+}
+const missingAssets = [...referencedAssets].filter(
+  (url) => !existsSync(join(installedDistDir, url.slice("/_next/".length))),
+);
+if (missingAssets.length > 0) {
+  process.stderr.write(`[pack] 首页引用了产物目录里没有的文件：${missingAssets.slice(0, 5).join(", ")}\n`);
+  process.exit(1);
+}
+
+// 启动过程不删安装目录里的任何文件：清理失败不得让应用起不来。
+if (!existsSync(staleMarker)) {
+  process.stderr.write(`[pack] 启动过程删除了安装目录里的文件：${staleMarker}\n`);
   process.exit(1);
 }
 

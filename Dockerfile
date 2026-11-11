@@ -15,7 +15,9 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY . .
-RUN bun run build
+# 镜像每次都是全新产物，不存在「装上新版本、目录里却留着旧版本文件」的情况，所以
+# 这里固定用 `.next`：运行阶段按这个路径整目录拷走，不依赖版本号拼出来的名字。
+RUN OMPDESK_DIST_DIR=.next bun run build
 
 # ---------------------------------------------------------------------------
 # Runtime: the built app, its dependencies, and the CLI that launches them.
@@ -66,6 +68,7 @@ COPY --from=build --chown=omp:omp /app/next.config.ts /app/package.json ./
 ENV HOME=/home/omp \
     NODE_ENV=production \
     PORT=30141 \
+    OMPDESK_DIST_DIR=.next \
     OMPDESK_HOSTNAME=0.0.0.0 \
     OMPDESK_ALLOW_NON_LOOPBACK=1 \
     OMPDESK_NO_OPEN=1

@@ -2,12 +2,11 @@
 "use strict";
 
 const {
-  canClearRouteCache,
-  clearStaleRouteCache,
   getMissingBunMessage,
   getUnsupportedBunVersionMessage,
   isBunVersionSupported,
   resolveBunPath,
+  resolveDistDir,
   withLoopbackNoProxy,
   // eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require("./runtime");
@@ -59,9 +58,11 @@ const {
 } = require("./daemon-control");
 
 const pkgDir = path.join(__dirname, "..");
-// `next.config.ts` takes its `distDir` from the same variable, so the launcher
-// has to check the directory the server will actually serve.
-const nextDir = path.resolve(pkgDir, process.env.OMPDESK_DIST_DIR?.trim() || ".next");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { version: pkgVersion } = require("../package.json");
+// `next.config.ts` 用同一个函数、同一个版本号算产物目录，启动器检查的目录就是
+// 服务端接下来要服务的目录。
+const nextDir = path.resolve(pkgDir, resolveDistDir(pkgVersion, process.env.OMPDESK_DIST_DIR));
 
 // Resolve next's CLI entry directly to avoid relying on .bin symlinks (which
 // may not exist when installed via npx/bunx).
@@ -219,18 +220,14 @@ function openInBrowser(url) {
  * same runtime instead of handing its shebang to node. The omp SDK ships
  * TypeScript sources and `bun:` builtins, so the API routes only resolve here.
  *
+ * 启动过程不碰安装目录里的任何文件：产物目录按版本分开（`resolveDistDir`），
+ * 别的版本留下的缓存不可能被这次服务读到，因此这里没有需要清理的东西，也没有
+ * 「删不掉就起不来」这条路径。
+ *
  * `controlToken` is set only for a background instance, where the control
  * endpoint has to answer without the web password.
  */
-async function spawnServer({ stdio, detached, controlToken }) {
-  // 同一份安装可以有多个实例，各自占用不同端口；它们共用 `.next`，正在服务的
-  // 实例还要读里面的路由缓存，这时清掉等于抽走对方正在用的文件。记录里的 pid
-  // 可能已被系统回收，所以还要那个端口真的在应答，才算这个实例仍在服务。
-  const liveRecords = [];
-  for (const record of listRecords(stateDirPath)) {
-    if (isProcessAlive(record.pid) && (await probePort(record.host, record.port))) liveRecords.push(record);
-  }
-  if (canClearRouteCache(liveRecords, pkgDir)) clearStaleRouteCache(nextDir);
+function spawnServer({ stdio, detached, controlToken }) {
   return spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", serverHost], {
     cwd: pkgDir,
     stdio,
@@ -261,7 +258,7 @@ async function runAttached() {
   await configurePasswordAccess();
   warnAboutExposure();
 
-  const child = await spawnServer({ stdio: ["inherit", "inherit", "inherit"], detached: false });
+  const child = spawnServer({ stdio: ["inherit", "inherit", "inherit"], detached: false });
   for (const [signal, code] of [
     ["SIGINT", 130],
     ["SIGTERM", 143],
@@ -317,7 +314,7 @@ async function startDaemon() {
 
   let child;
   try {
-    child = await spawnServer({
+    child = spawnServer({
       stdio: ["ignore", logHandle, logHandle],
       detached: true,
       controlToken,
@@ -351,7 +348,6 @@ async function startDaemon() {
     controlToken,
     log: logPath,
     cwd: process.cwd(),
-    install: pkgDir,
   };
   writeRecord(instanceFile, record);
 
