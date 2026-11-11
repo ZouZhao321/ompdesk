@@ -9,6 +9,7 @@ import {
   isWindowsAbsolutePath,
 } from "@/lib/file-access";
 import { buildEntriesFromFiles, filterFileEntries, type FileIndexEntry } from "@/lib/file-fuzzy";
+import { isNextDistDirName } from "@/lib/build-output";
 import { listGitFiles } from "@/lib/git-listing";
 import { isApiRequestAllowed } from "@/lib/request-security";
 
@@ -17,7 +18,6 @@ import { isApiRequestAllowed } from "@/lib/request-security";
 const IGNORED_NAMES = new Set([
   "node_modules",
   ".git",
-  ".next",
   "dist",
   "build",
   "__pycache__",
@@ -91,7 +91,8 @@ function listWithWalk(cwd: string): FileListing {
       continue;
     }
     for (const d of dirents) {
-      if (IGNORED_NAMES.has(d.name) || IGNORED_SUFFIXES.some((s) => d.name.endsWith(s))) continue;
+      if (IGNORED_NAMES.has(d.name) || isNextDistDirName(d.name)) continue;
+      if (IGNORED_SUFFIXES.some((s) => d.name.endsWith(s))) continue;
       const childRel = rel ? `${rel}/${d.name}` : d.name;
       if (d.isDirectory()) {
         if (depth + 1 <= MAX_WALK_DEPTH) {

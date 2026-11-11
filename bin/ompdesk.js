@@ -6,6 +6,7 @@ const {
   getUnsupportedBunVersionMessage,
   isBunVersionSupported,
   resolveBunPath,
+  resolveDistDir,
   withLoopbackNoProxy,
   // eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require("./runtime");
@@ -57,9 +58,11 @@ const {
 } = require("./daemon-control");
 
 const pkgDir = path.join(__dirname, "..");
-// `next.config.ts` takes its `distDir` from the same variable, so the launcher
-// has to check the directory the server will actually serve.
-const nextDir = path.resolve(pkgDir, process.env.OMPDESK_DIST_DIR?.trim() || ".next");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { version: pkgVersion } = require("../package.json");
+// `next.config.ts` 用同一个函数、同一个版本号算产物目录，启动器检查的目录就是
+// 服务端接下来要服务的目录。
+const nextDir = path.resolve(pkgDir, resolveDistDir(pkgVersion, process.env.OMPDESK_DIST_DIR));
 
 // Resolve next's CLI entry directly to avoid relying on .bin symlinks (which
 // may not exist when installed via npx/bunx).
@@ -218,6 +221,10 @@ function openInBrowser(url) {
  * The launcher itself runs on Bun, and `--bun` keeps next's CLI entry on the
  * same runtime instead of handing its shebang to node. The omp SDK ships
  * TypeScript sources and `bun:` builtins, so the API routes only resolve here.
+ *
+ * 启动过程不碰安装目录里的任何文件：产物目录按版本分开（`resolveDistDir`），
+ * 别的版本留下的缓存不可能被这次服务读到，因此这里没有需要清理的东西，也没有
+ * 「删不掉就起不来」这条路径。
  *
  * `controlToken` is set only for a background instance, where the control
  * endpoint has to answer without the web password.
