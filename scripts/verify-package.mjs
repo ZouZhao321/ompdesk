@@ -15,10 +15,9 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { resolveDistDir } from "../bin/runtime.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WORK = join(ROOT, ".tmp", "pack-check");
@@ -74,11 +73,14 @@ run(process.execPath, ["add", tarballPath], CONSUMER);
 
 // 启动器与服务端都按包里的版本号算产物目录，装得太浅（例如漏了 `files` 里那条
 // 通配）就是启动时报「Build artifacts not found」，所以这里先认准目录存在。
+// 目录名由安装包自己的 `bin/runtime.js` 计算：脚本支持校验外部 tgz，工作区的
+// 命名规则可能与那份产物不一致。
 const installedPkg = join(CONSUMER, "node_modules", "ompdesk");
 const installedVersion = (await Bun.file(join(installedPkg, "package.json")).json()).version;
-const installedDistDir = join(installedPkg, resolveDistDir(installedVersion));
+const installedRuntime = createRequire(join(installedPkg, "package.json"))("./bin/runtime.js");
+const installedDistDir = join(installedPkg, installedRuntime.resolveDistDir(installedVersion));
 if (!existsSync(installedDistDir)) {
-  process.stderr.write(`[pack] 安装包缺少产物目录 .next-v${installedVersion}\n`);
+  process.stderr.write(`[pack] 安装包缺少产物目录 ${installedDistDir}\n`);
   process.exit(1);
 }
 
