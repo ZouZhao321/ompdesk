@@ -78,23 +78,24 @@ if (existsSync(installedRouteCache)) {
   process.exit(1);
 }
 
+// 装好的 CLI 既用来启动，也用来收尾：`start` 把 next 拉成后台进程后自己就退出，
+// 光结束启动器进程接管不到真正在服务的那个。
+const installedCli = join(CONSUMER, "node_modules", "ompdesk", "bin", "ompdesk.js");
+const consumerEnv = { ...process.env, PI_CODING_AGENT_DIR: join(CONSUMER, "agent") };
+
 // 模拟从旧版本升级：安装目录里留着上一版的路由缓存。启动器必须在拉起 next
 // 之前删掉它；next 运行时自己重建的缓存不带这个标记文件。
 const staleMarker = join(installedRouteCache, "pack-check-stale.txt");
 mkdirSync(installedRouteCache, { recursive: true });
 await Bun.write(staleMarker, "stale route cache from the previous version\n");
 
-const server = spawn(
-  process.execPath,
-  [join(CONSUMER, "node_modules", "ompdesk", "bin", "ompdesk.js"), "--no-open", "-p", String(PORT)],
-  {
-    cwd: CONSUMER,
-    env: { ...process.env, PI_CODING_AGENT_DIR: join(CONSUMER, "agent") },
-    // POSIX 下放进独立进程组，收尾时整组结束，避免孙进程继续占着端口。
-    detached: process.platform !== "win32",
-    stdio: ["ignore", "pipe", "pipe"],
-  },
-);
+const server = spawn(process.execPath, [installedCli, "--no-open", "-p", String(PORT)], {
+  cwd: CONSUMER,
+  env: consumerEnv,
+  // POSIX 下放进独立进程组，收尾时整组结束，避免孙进程继续占着端口。
+  detached: process.platform !== "win32",
+  stdio: ["ignore", "pipe", "pipe"],
+});
 
 const output = [];
 const record = (chunk) => output.push(chunk.toString());
@@ -102,6 +103,13 @@ server.stdout.on("data", record);
 server.stderr.on("data", record);
 
 function stopServer() {
+  // `start` 把 next 拉成后台进程后启动器自己就退出了，只结束启动器接管不到真正在
+  // 服务的那个进程；交给装好的 CLI 按端口停，免得遗留的 next 继续占着端口应答。
+  spawnSync(process.execPath, [installedCli, "stop", "--force", "-p", String(PORT)], {
+    cwd: CONSUMER,
+    env: consumerEnv,
+    stdio: "ignore",
+  });
   if (server.exitCode !== null) return;
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], {
