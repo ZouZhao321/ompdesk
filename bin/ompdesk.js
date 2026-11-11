@@ -223,12 +223,14 @@ function openInBrowser(url) {
  * endpoint has to answer without the web password.
  */
 function spawnServer({ stdio, detached, controlToken }) {
+  // 启动器带控制台时子进程保持同组，Ctrl+C 与关闭终端才能送达；不带控制台时必须隐藏，
+  // 否则 Windows 会给子进程新分配一个常驻控制台。后台实例一定没有控制台。
+  const launcherHasConsole = Boolean(process.stdin.isTTY || process.stdout.isTTY || process.stderr.isTTY);
   return spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", serverHost], {
     cwd: pkgDir,
     stdio,
     detached,
-    // 前台实例继承启动器的控制台，Ctrl+C 与关闭窗口要能送达服务端；后台实例没有控制台，隐藏子进程窗口。
-    windowsHide: detached,
+    windowsHide: detached || !launcherHasConsole,
     env: {
       ...withLoopbackNoProxy(process.env),
       OMPDESK_HOSTNAME: serverHost,
