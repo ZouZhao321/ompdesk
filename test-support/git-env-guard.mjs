@@ -325,6 +325,37 @@ export function mentionsChildProcessModule(source, filename = "source.ts") {
 }
 
 /**
+ * 文件只把 `child_process` 的入口换成替身（`childProcess.spawn = fake`），一次真实调用也没有。
+ *
+ * 这类文件取用模块是为了在加载期拦截，本身没有需要 `windowsHide` 的调用点；同文件里若还
+ * 有真实调用，`subprocessCalls` 会扫到，文件因此不会进入「取到模块却扫不出调用点」的名单。
+ */
+export function replacesChildProcessEntry(source, filename = "source.ts") {
+  const sourceFile = parseSource(source, filename);
+  const { namespaces } = childProcessBindings(sourceFile);
+  if (namespaces.size === 0) return false;
+
+  let found = false;
+  const visit = (node) => {
+    if (found) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isPropertyAccessExpression(node.left) &&
+      ts.isIdentifier(node.left.expression) &&
+      namespaces.has(node.left.expression.text) &&
+      SUBPROCESS_ENTRY_POINTS.includes(node.left.name.text)
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+/**
  * 源码里每个子进程调用、它的 options 对象，以及 `windowsHide` 是否确实挡住了窗口。
  * 入口名只认从 `child_process` 导入或解构出来的绑定，加上 `promisify(execFile)` 这类本地
  * 别名；同名的普通方法（`pattern.exec(…)`）不在其中。

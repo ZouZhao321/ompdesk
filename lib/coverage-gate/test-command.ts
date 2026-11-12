@@ -16,7 +16,7 @@ export const LCOV_PATH = `${COVERAGE_DIR}/${LCOV_FILE_NAME}`;
 
 /** 产出 lcov 的测试参数，带上产物目录；基准运行换一个目录，参数其余部分不变。 */
 export function coverageTestArgs(coverageDir: string = COVERAGE_DIR): string[] {
-  return ["test", "--coverage", "--coverage-reporter=lcov", `--coverage-dir=${coverageDir}`];
+  return ["test", "--isolate", "--coverage", "--coverage-reporter=lcov", `--coverage-dir=${coverageDir}`];
 }
 
 /**
