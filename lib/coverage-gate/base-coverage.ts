@@ -15,6 +15,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { createGitEnv } from "../git-env";
+import { HIDE_CHILD_WINDOW } from "../subprocess-window";
 import { readFileAtRevision, type ChangedFile } from "./git";
 import { indexByPath, parseLcov, type FileCoverage } from "./lcov";
 import { coverageTestArgs, coverageTestEnv, LCOV_FILE_NAME } from "./test-command";
@@ -72,6 +73,7 @@ async function git(cwd: string, args: string[]): Promise<void> {
   await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: GIT_TIMEOUT_MS,
     maxBuffer: MAX_BUFFER,
+    windowsHide: HIDE_CHILD_WINDOW,
     env: createGitEnv(),
   });
 }
@@ -122,6 +124,7 @@ export async function generateBaseCoverage(request: BaseCoverageRequest): Promis
           cwd: worktreePath,
           timeout: BASE_TEST_TIMEOUT_MS,
           maxBuffer: MAX_BUFFER,
+          windowsHide: HIDE_CHILD_WINDOW,
           env: coverageTestEnv(createGitEnv()),
         },
       );

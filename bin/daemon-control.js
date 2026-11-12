@@ -232,7 +232,7 @@ function fetchActivity(record, timeoutMs = 5_000) {
 function terminateInstance(pid, force) {
   if (!Number.isInteger(pid) || pid <= 0) return;
   if (process.platform === "win32") {
-    spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
     return;
   }
   const signal = force ? "SIGKILL" : "SIGTERM";

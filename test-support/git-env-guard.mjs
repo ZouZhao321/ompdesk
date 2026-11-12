@@ -26,6 +26,7 @@ export const SUBPROCESS_ENTRY_POINTS = Object.freeze([
   "execFile",
   "execFileSync",
   "execSync",
+  "fork",
   "spawn",
   "spawnSync",
 ]);
@@ -147,24 +148,43 @@ function referenceName(node) {
   return null;
 }
 
-/** `promisify(execFile)` 与 `promisify(cp.execFile)` 这类把入口包一层的写法。 */
-function isPromisifiedEntry(expression, names) {
-  if (!ts.isCallExpression(expression)) return false;
-  if (referenceName(expression.expression) !== "promisify") return false;
-  return expression.arguments.some((argument) => names.has(referenceName(argument)));
+/** 命名空间成员的引用：`cp.execFile`，且 `cp` 来自 `child_process`。 */
+function isNamespaceMember(expression, namespaces) {
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    namespaces.has(expression.expression.text) &&
+    SUBPROCESS_ENTRY_POINTS.includes(expression.name.text)
+  );
 }
 
-/** 初始化表达式是否只是入口的别名：`const run = execFile`、`const execFileAsync = promisify(execFile)`。 */
-function aliasesEntryPoint(expression, names) {
-  return names.has(referenceName(expression)) || isPromisifiedEntry(expression, names);
+/** `promisify(execFile)` 与 `promisify(cp.execFile)` 这类把入口包一层的写法。 */
+function isPromisifiedEntry(expression, names, namespaces) {
+  if (!ts.isCallExpression(expression)) return false;
+  if (referenceName(expression.expression) !== "promisify") return false;
+  return expression.arguments.some(
+    (argument) => names.has(referenceName(argument)) || isNamespaceMember(argument, namespaces),
+  );
 }
 
 /**
- * 入口名集合：清单里的六个名字，加上本地声明的别名。别名套别名按声明迭代到不再新增，
- * `const run = execFileAsync` 也能解析到 `execFile`。
+ * 初始化表达式是否只是入口的别名：`const run = execFile`、`const run = cp.execFile`、
+ * `const execFileAsync = promisify(execFile)`。
  */
-function entryPointNames(sourceFile) {
-  const names = new Set(SUBPROCESS_ENTRY_POINTS);
+function aliasesEntryPoint(expression, names, namespaces) {
+  return (
+    names.has(referenceName(expression)) ||
+    isNamespaceMember(expression, namespaces) ||
+    isPromisifiedEntry(expression, names, namespaces)
+  );
+}
+
+/**
+ * 入口名集合：给定的初始名字（默认是清单里的名字），加上本地声明的别名。别名套别名按声明
+ * 迭代到不再新增，`const run = execFileAsync` 也能解析到 `execFile`。
+ */
+function entryPointNames(sourceFile, seeds = SUBPROCESS_ENTRY_POINTS, namespaces = new Set()) {
+  const names = new Set(seeds);
   const declarations = [];
   const collect = (node) => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
@@ -179,13 +199,301 @@ function entryPointNames(sourceFile) {
     added = false;
     for (const declaration of declarations) {
       if (names.has(declaration.name.text)) continue;
-      if (aliasesEntryPoint(declaration.initializer, names)) {
+      if (aliasesEntryPoint(declaration.initializer, names, namespaces)) {
         names.add(declaration.name.text);
         added = true;
       }
     }
   }
   return names;
+}
+
+/** 模块名是 `child_process` 的两种写法。 */
+function isChildProcessModule(specifier) {
+  return specifier === "child_process" || specifier === "node:child_process";
+}
+
+/** `require("child_process")` 调用，供 CommonJS 的 `bin/` 脚本识别入口名。 */
+function isChildProcessRequire(node) {
+  return (
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === "require" &&
+    node.arguments.length > 0 &&
+    ts.isStringLiteral(node.arguments[0]) &&
+    isChildProcessModule(node.arguments[0].text)
+  );
+}
+
+/** 去掉括号、`await` 与类型断言，拿到真正的表达式。 */
+function unwrapExpression(node) {
+  let current = node;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAwaitExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+/** `import("child_process")`，可带括号与 `await`。 */
+function isChildProcessDynamicImport(node) {
+  const expression = unwrapExpression(node);
+  return (
+    ts.isCallExpression(expression) &&
+    expression.expression.kind === ts.SyntaxKind.ImportKeyword &&
+    expression.arguments.length > 0 &&
+    ts.isStringLiteral(expression.arguments[0]) &&
+    isChildProcessModule(expression.arguments[0].text)
+  );
+}
+
+/** 取到整个 `child_process` 模块：`require(…)` 或动态 `import(…)`，可带括号与 `await`。 */
+function isChildProcessModuleExpression(node) {
+  const expression = unwrapExpression(node);
+  return isChildProcessRequire(expression) || isChildProcessDynamicImport(expression);
+}
+
+/**
+ * 从 `child_process` 导入或解构出来的绑定。按来源认子进程调用，不按名字硬匹配：`regex.exec()`
+ * 这类同名方法不会误算，而 `execFile(gitBinary, …)` 这类换个名字调用的写法仍认得出。
+ * 默认导入与动态导入都按命名空间处理。返回 `named`（具名绑定）与 `namespaces`（模块对象绑定）。
+ */
+function childProcessBindings(sourceFile) {
+  const named = new Set();
+  const namespaces = new Set();
+  const visit = (node) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      isChildProcessModule(node.moduleSpecifier.text)
+    ) {
+      const clause = node.importClause;
+      if (clause && !clause.isTypeOnly) {
+        if (clause.name) namespaces.add(clause.name.text);
+        const bindings = clause.namedBindings;
+        if (bindings && ts.isNamedImports(bindings)) {
+          for (const element of bindings.elements) {
+            if (element.isTypeOnly) continue;
+            const imported = (element.propertyName ?? element.name).text;
+            if (SUBPROCESS_ENTRY_POINTS.includes(imported)) named.add(element.name.text);
+          }
+        } else if (bindings && ts.isNamespaceImport(bindings)) {
+          namespaces.add(bindings.name.text);
+        }
+      }
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer && isChildProcessModuleExpression(node.initializer)) {
+      if (ts.isObjectBindingPattern(node.name)) {
+        for (const element of node.name.elements) {
+          if (!ts.isIdentifier(element.name)) continue;
+          const source = element.propertyName ?? element.name;
+          if (ts.isIdentifier(source) && SUBPROCESS_ENTRY_POINTS.includes(source.text)) {
+            named.add(element.name.text);
+          }
+        }
+      } else if (ts.isIdentifier(node.name)) {
+        namespaces.add(node.name.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return { named, namespaces };
+}
+
+/** 源码是否取用到 `child_process` 模块，用于「提到模块却没有调用点」的检查。 */
+export function mentionsChildProcessModule(source, filename = "source.ts") {
+  const sourceFile = parseSource(source, filename);
+  const { named, namespaces } = childProcessBindings(sourceFile);
+  if (named.size > 0 || namespaces.size > 0) return true;
+
+  let found = false;
+  const visit = (node) => {
+    if (found) return;
+    if (isChildProcessModuleExpression(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+/**
+ * 源码里每个子进程调用、它的 options 对象，以及 `windowsHide` 是否确实挡住了窗口。
+ * 入口名只认从 `child_process` 导入或解构出来的绑定，加上 `promisify(execFile)` 这类本地
+ * 别名；同名的普通方法（`pattern.exec(…)`）不在其中。
+ */
+export function subprocessCalls(source, filename = "source.ts") {
+  const sourceFile = parseSource(source, filename);
+  const declarations = declarationScopes(sourceFile);
+  const { named, namespaces } = childProcessBindings(sourceFile);
+  const names = entryPointNames(sourceFile, named, namespaces);
+  const windowFlags = windowFlagNames(sourceFile);
+
+  const calls = [];
+  const visit = (node) => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const isInlineCall =
+        ts.isPropertyAccessExpression(callee) &&
+        SUBPROCESS_ENTRY_POINTS.includes(callee.name.text) &&
+        isChildProcessModuleExpression(callee.expression);
+      if (
+        isInlineCall ||
+        isNamespaceMember(callee, namespaces) ||
+        (ts.isIdentifier(callee) && names.has(callee.text))
+      ) {
+        const options = findOptionsArgument(node, declarations);
+        calls.push({
+          line: lineOf(sourceFile, node),
+          options,
+          hiddenWindow: options ? hidesChildWindow(options, windowFlags, declarations) : false,
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return calls;
+}
+
+/** 共享窗口开关所在的模块与导出名；`lib/subprocess-window.ts`。 */
+const WINDOW_FLAG_MODULE = "subprocess-window";
+const WINDOW_FLAG_NAME = "HIDE_CHILD_WINDOW";
+
+/** 模块名是否指向共享窗口开关模块；`./subprocess-window`、`@/lib/subprocess-window` 都算。 */
+function isWindowFlagModule(specifier) {
+  return specifier === WINDOW_FLAG_MODULE || specifier.endsWith(`/${WINDOW_FLAG_MODULE}`);
+}
+
+/** `require("./subprocess-window")`，供 CJS 与测试里的写法识别。 */
+function isWindowFlagRequire(node) {
+  const expression = unwrapExpression(node);
+  return (
+    ts.isCallExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === "require" &&
+    expression.arguments.length > 0 &&
+    ts.isStringLiteral(expression.arguments[0]) &&
+    isWindowFlagModule(expression.arguments[0].text)
+  );
+}
+
+/** 从共享窗口开关模块导入的本地名字。 */
+function windowFlagNames(sourceFile) {
+  const names = new Set();
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const clause = node.importClause;
+      const bindings = clause?.namedBindings;
+      if (isWindowFlagModule(node.moduleSpecifier.text) && clause && !clause.isTypeOnly && bindings) {
+        if (ts.isNamedImports(bindings)) {
+          for (const element of bindings.elements) {
+            if (element.isTypeOnly) continue;
+            if ((element.propertyName ?? element.name).text === WINDOW_FLAG_NAME) names.add(element.name.text);
+          }
+        }
+      }
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer && isWindowFlagRequire(node.initializer)) {
+      if (!ts.isObjectBindingPattern(node.name)) {
+        // `const flags = require(…)` 之后按属性访问取值，不做名字追踪。
+        return;
+      }
+      for (const element of node.name.elements) {
+        if (!ts.isIdentifier(element.name)) continue;
+        const source = element.propertyName ?? element.name;
+        if (ts.isIdentifier(source) && source.text === WINDOW_FLAG_NAME) names.add(element.name.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+}
+
+/** 对象字面量里最后一个同名属性；重复键时生效的是最后一个。 */
+function lastProperty(objectLiteral, propertyName) {
+  let found = null;
+  for (const property of objectLiteral.properties) {
+    if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name.text === propertyName) found = property;
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : null;
+    if (name === propertyName) found = property;
+  }
+  return found;
+}
+
+/** 标识符在作用域链上最近的变量声明；参数与导入都不在其中。 */
+function resolveDeclaration(identifier, declarations) {
+  for (let scope = identifier.parent; scope; scope = scope.parent) {
+    const declaration = declarations.get(scope)?.get(identifier.text);
+    if (declaration) return declaration;
+  }
+  return null;
+}
+
+/** 标识符被外层函数的形参遮蔽：与本地重新声明同样算冒名。 */
+function isParameterShadow(identifier) {
+  for (let scope = identifier.parent; scope; scope = scope.parent) {
+    if (!ts.isFunctionLike(scope)) continue;
+    const shadowed = scope.parameters.some(
+      (parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === identifier.text,
+    );
+    if (shadowed) return true;
+  }
+  return false;
+}
+
+/**
+ * `windowsHide` 的取值是否挡住窗口。字面量 `true` 直接算；计算表达式交给作者，字面量
+ * `false`（含括号、断言、非空断言）一律不算；标识符按最近的声明判定：本地重新声明或形参
+ * 遮蔽不算、`detached` 要求同一份 options 里也传了它、其余只认共享开关模块的导入。
+ * 取值后面还有展开属性时无法判定，按未挡住处理。
+ */
+function hidesChildWindow(objectLiteral, windowFlags, declarations) {
+  const property = lastProperty(objectLiteral, "windowsHide");
+  if (!property) return false;
+  if (ts.isShorthandPropertyAssignment(property)) return false;
+
+  const following = objectLiteral.properties.slice(objectLiteral.properties.indexOf(property) + 1);
+  if (following.some((candidate) => ts.isSpreadAssignment(candidate))) return false;
+
+  const value = unwrapExpression(property.initializer);
+  if (value.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (value.kind === ts.SyntaxKind.FalseKeyword || value.kind === ts.SyntaxKind.NullKeyword) return false;
+  if (!ts.isIdentifier(value)) return true;
+
+  const declaration = resolveDeclaration(value, declarations);
+  const knownFalse =
+    declaration?.initializer !== undefined &&
+    unwrapExpression(declaration.initializer).kind === ts.SyntaxKind.FalseKeyword;
+  if (value.text === "detached") return !knownFalse && lastProperty(objectLiteral, "detached") !== null;
+  if (declaration || isParameterShadow(value)) return false;
+  return windowFlags.has(value.text);
+}
+
+/**
+ * 断言每个子进程调用都挡住了控制台窗口。后台服务没有控制台，Windows 上子进程会各开一个
+ * 可见的控制台窗口；`windowsHide` 是唯一挡住它的开关。`label` 指明出处，用在报错里。
+ */
+export function assertHiddenWindow(calls, label) {
+  for (const { line, options, hiddenWindow } of calls) {
+    assert.ok(options, `${label} 第 ${line} 行的子进程调用必须传 options 对象字面量`);
+    assert.ok(
+      hiddenWindow,
+      `${label} 第 ${line} 行的子进程调用要传 windowsHide: HIDE_CHILD_WINDOW（或 true；继承启动器控制台时写 detached）`,
+    );
+  }
 }
 
 /**
