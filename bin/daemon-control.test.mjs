@@ -89,7 +89,7 @@ test("删除记录后不再列出，重复删除不报错", async () => {
 
 test("已经退出的进程不会被当成运行中", async () => {
   const { spawn } = await import("node:child_process");
-  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore", windowsHide: true });
   await new Promise((resolve) => child.on("exit", resolve));
   assert.equal(isProcessAlive(child.pid), false);
   assert.equal(isProcessAlive(process.pid), true);
