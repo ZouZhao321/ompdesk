@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { HIDE_CHILD_WINDOW } from "../lib/subprocess-window";
+
 const daemonModule = await import("./daemon-control.js");
 const daemonApi = Object.assign({}, daemonModule.default, daemonModule);
 const {
@@ -247,7 +249,7 @@ test("端口等待与进程终止处理边界输入", async () => {
   terminateInstance(undefined);
   terminateInstance(-1);
   const { spawn } = await import("node:child_process");
-  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore", windowsHide: HIDE_CHILD_WINDOW });
   await new Promise((resolve) => child.on("exit", resolve));
   terminateInstance(child.pid, true);
 });

@@ -349,11 +349,18 @@ test("renderPrBody spells out the release checklist and the changelog section", 
   assert.match(body, /## 发布内容\n\n- fix\(sidebar\)：某条更新/);
 });
 
-test("cmdPrepare dry run stops before writing when the changelog has nothing unreleased", () => {
-  useCommands({});
+test("promoteChangelog refuses an empty unreleased section", () => {
+  // 用夹具正文而不是仓库的 CHANGELOG.md：任何人在「未发布」下加一条记录都不该让这个用例失败。
+  const content = "# 更新记录\n\n## 未发布\n\n## [1.0.28] - 2026-11-10\n\n- fix(cli)：某条更新\n";
 
-  // promoteChangelog 直接抛错：它描述的是更新记录本身不成立，不是「用法错误」。
-  assert.throws(() => release.cmdPrepare("patch", true), /段落是空的/);
+  assert.throws(() => release.promoteChangelog(content, "1.0.29", "2026-11-12"), /段落是空的/);
+});
+
+test("cmdPrepare stops before writing when the worktree root is not ignored", () => {
+  useCommands({ checkIgnore: 1 });
+
+  const message = expectFailure(() => release.cmdPrepare("patch", true));
+  assert.match(message, /没有被 Git 忽略/);
   assert.ok(
     commands.some((record) => record.args[0] === "check-ignore"),
     "the worktree ignore rule is checked",
