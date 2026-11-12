@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test, { after, beforeEach } from "node:test";
 import { createJiti } from "jiti";
@@ -9,24 +9,16 @@ import { createJiti } from "jiti";
  * 每个用例用 `.tmp/` 下自己的会话目录与归档目录，运行时注册表换成内存替身。
  */
 const TASK_DIR = path.join(process.cwd(), ".tmp", "sessions-route-coverage");
-const RUN_DIR = path.join(TASK_DIR, `run-${process.pid}`);
+/**
+ * 每次运行一个唯一目录：覆盖率门禁会并行跑基准与本次两套测试，同名目录会让先启动的
+ * 进程删掉另一个进程正在用的会话文件与 history.db。
+ */
+mkdirSync(TASK_DIR, { recursive: true });
+const RUN_DIR = mkdtempSync(path.join(TASK_DIR, "run-"));
 const AGENT_DIR = path.join(RUN_DIR, "agent");
-/** 清掉上一轮留下的目录：它们的 history.db 句柄已随进程退出释放。 */
-try {
-  for (const entry of readdirSync(TASK_DIR)) {
-    try {
-      rmSync(path.join(TASK_DIR, entry), { recursive: true, force: true });
-    } catch {
-      // 句柄仍在的目录跳过即可，按进程命名的新目录不受影响。
-    }
-  }
-} catch {
-  // TASK_DIR 还不存在。
-}
 
-const { getAgentDir, setAgentDir } = await import("@oh-my-pi/pi-utils");
-const originalAgentDir = getAgentDir();
-setAgentDir(AGENT_DIR);
+const { restoreAgentDir, switchAgentDir } = await import("../../../../test-support/agent-dir-sandbox");
+const agentDirSnapshot = switchAgentDir(AGENT_DIR);
 
 const jiti = createJiti(import.meta.url, {
   alias: { "@": process.cwd() },
@@ -64,7 +56,7 @@ beforeEach(() => {
 
 after(() => {
   for (const [key, value] of previousState) globalThis[key] = value;
-  setAgentDir(originalAgentDir);
+  restoreAgentDir(agentDirSnapshot);
   // SDK 的 history.db 句柄活到进程结束，Windows 上删不掉 agent 目录本身；
   // 用例的会话文件与归档注册表都清掉，只剩 `.tmp/` 里这一份被占用的临时目录。
   for (const entry of readdirSync(RUN_DIR)) {

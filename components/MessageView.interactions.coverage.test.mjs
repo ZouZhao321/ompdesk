@@ -165,8 +165,8 @@ test("a plain tool result renders its text after the call is expanded", async ()
 
 test("truncated bash output can load its full body", async () => {
   const restore = installDom();
+  const originalFetch = globalThis.fetch;
   try {
-    const originalFetch = globalThis.fetch;
     globalThis.fetch = async () =>
       new Response(JSON.stringify({ success: true, data: { output: "full output body" } }), {
         headers: { "content-type": "application/json" },
@@ -194,8 +194,8 @@ test("truncated bash output can load its full body", async () => {
     assert.ok(view.container.textContent.includes("full output body"));
 
     view.unmount();
-    globalThis.fetch = originalFetch;
   } finally {
+    globalThis.fetch = originalFetch;
     await restore();
   }
 });
