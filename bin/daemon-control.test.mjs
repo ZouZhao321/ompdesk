@@ -2,26 +2,36 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRequire } from "node:module";
 import test from "node:test";
 
-const require = createRequire(import.meta.url);
+import { HIDE_CHILD_WINDOW } from "../lib/subprocess-window";
+
+const daemonModule = await import("./daemon-control.js");
+const daemonApi = Object.assign({}, daemonModule.default, daemonModule);
 const {
   CONTROL_TOKEN_HEADER,
   buildUrl,
+  connectableHost,
+  createControlToken,
   describeActivity,
   fetchActivity,
   formatStatus,
   isProcessAlive,
   listRecords,
+  logFile,
   probePort,
+  projectLabel,
   readRecord,
   recordFile,
   removeRecord,
+  stateDir,
   stopRefusal,
+  terminateInstance,
+  waitForPort,
   writeRecord,
-} = require("./daemon-control.js");
-const { parseLaunchOptions } = require("./ompdesk-options.js");
+} = daemonApi;
+const optionsModule = await import("./ompdesk-options.js");
+const { parseLaunchOptions } = Object.assign({}, optionsModule.default, optionsModule);
 
 async function withStateDir(run) {
   const dir = await mkdtemp(join(tmpdir(), "ompdesk-daemon-"));
@@ -81,7 +91,7 @@ test("删除记录后不再列出，重复删除不报错", async () => {
 
 test("已经退出的进程不会被当成运行中", async () => {
   const { spawn } = await import("node:child_process");
-  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore", windowsHide: true });
   await new Promise((resolve) => child.on("exit", resolve));
   assert.equal(isProcessAlive(child.pid), false);
   assert.equal(isProcessAlive(process.pid), true);
@@ -209,4 +219,37 @@ test("命令解析识别 status、stop、foreground 与未知命令", () => {
   assert.equal(parseLaunchOptions(["status", "--port", "30200"], {}).portExplicit, true);
   assert.equal(parseLaunchOptions(["status"], {}).portExplicit, false);
   assert.equal(parseLaunchOptions(["status"], { PORT: "30141" }).portExplicit, false);
+});
+
+test("守护进程辅助函数覆盖地址、记录路径与令牌", () => {
+  assert.equal(connectableHost("0.0.0.0"), "127.0.0.1");
+  assert.equal(connectableHost("::"), "127.0.0.1");
+  assert.equal(connectableHost("[::1]"), "::1");
+  assert.equal(connectableHost(""), "127.0.0.1");
+  assert.equal(connectableHost("10.0.0.5"), "10.0.0.5");
+
+  assert.match(stateDir({ PI_CODING_AGENT_DIR: "C:/agent" }), /agent$/);
+  assert.equal(logFile("/state", 30141).endsWith("ompdesk-daemon-30141.log"), true);
+  assert.match(createControlToken(), /^[0-9a-f]{48}$/);
+
+  assert.equal(projectLabel("/"), "/");
+  assert.equal(projectLabel("C:\\work\\demo\\"), "demo");
+  assert.equal(projectLabel(""), "(unknown)");
+});
+
+test("端口等待与进程终止处理边界输入", async () => {
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("ok") });
+  try {
+    assert.equal(await waitForPort("127.0.0.1", server.port, 1000, true), true);
+  } finally {
+    server.stop(true);
+  }
+  assert.equal(await waitForPort("127.0.0.1", server.port, 100, true), false);
+
+  terminateInstance(undefined);
+  terminateInstance(-1);
+  const { spawn } = await import("node:child_process");
+  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore", windowsHide: HIDE_CHILD_WINDOW });
+  await new Promise((resolve) => child.on("exit", resolve));
+  terminateInstance(child.pid, true);
 });

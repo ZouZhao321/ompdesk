@@ -1,6 +1,41 @@
 {
   "exceptions": [
     {
+      "path": "bin/ompdesk.js",
+      "rule": "rule-1",
+      "reason": "CLI 入口在模块加载时解析命令行参数，遇到错误或子命令会直接退出，测试进程无法 import；产物目录命名放在 bin/runtime.js",
+      "alternativeVerification": "bin/runtime.test.mjs 覆盖 resolveDistDir；scripts/verify-package.mjs 用装出来的包启动服务，并核对首页引用的静态产物都活在本次安装的产物目录里",
+      "expires": "2027-02-11"
+    },
+    {
+      "path": "next.config.ts",
+      "rule": "rule-1",
+      "reason": "Next 自己加载这份配置，测试进程不 import 它；distDir 的计算复用 bin/runtime.js 的 resolveDistDir",
+      "alternativeVerification": "bin/runtime.test.mjs 覆盖 resolveDistDir；scripts/verify-package.mjs 从装好的包启动服务，产物目录与启动器检查的目录不一致时首页静态产物核对会失败",
+      "expires": "2027-02-11"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "rule": "rule-1",
+      "reason": "ESLint 由 lint 命令加载配置，测试进程不 import；这份配置只声明忽略的目录与规则",
+      "alternativeVerification": "CI 的 Lint changed files 作业执行 lint，忽略规则失效时版本化产物目录会被扫进来并直接报错",
+      "expires": "2027-02-11"
+    },
+    {
+      "path": "app/api/file-index/route.ts",
+      "rule": "rule-1",
+      "reason": "Next 路由处理器由框架加载，测试进程不直接 import；判断目录是否属于构建产物的谓词在 lib/build-output.ts",
+      "alternativeVerification": "lib/build-output.test.mjs 覆盖 isNextDistDirName；开发冒烟里请求 /api/home 与文件索引链路会走到这条分支",
+      "expires": "2027-02-11"
+    },
+    {
+      "path": "app/api/files/[...path]/route.ts",
+      "rule": "rule-1",
+      "reason": "Next 路由处理器由框架加载，测试进程不直接 import；判断目录是否属于构建产物的谓词在 lib/build-output.ts",
+      "alternativeVerification": "lib/build-output.test.mjs 覆盖 isNextDistDirName；开发冒烟里打开项目文件列表会走到这条分支",
+      "expires": "2027-02-11"
+    },
+    {
       "path": "components/ChatWindow.tsx",
       "rule": "rule-1",
       "reason": "组件依赖 useAgentSession，该 hook 在渲染期把 onIdentity 挂到 useRef 对象上；React 开发构建冻结 ref，服务端渲染测试直接抛错，仓库内只能用源码文本断言与浏览器实测覆盖",

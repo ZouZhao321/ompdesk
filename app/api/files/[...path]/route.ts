@@ -22,6 +22,7 @@ import {
 import { resolveDirentIsDirectory } from "@/lib/file-dirent";
 import { checkIgnoredEntries } from "@/lib/git-ignore";
 import { isFilePathReferencedBySession } from "@/lib/session-file-references";
+import { isNextDistDirName } from "@/lib/build-output";
 import { isApiRequestAllowed } from "@/lib/request-security";
 import { inspectUploadTargets, parseUploadConflictStrategy, validateUploadFileNames } from "@/lib/file-upload";
 import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
@@ -29,7 +30,6 @@ import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounde
 const IGNORED_NAMES = new Set([
   "node_modules",
   ".git",
-  ".next",
   "dist",
   "build",
   "__pycache__",
@@ -661,7 +661,8 @@ async function getRouteHandler(request: NextRequest, { params }: { params: Promi
       filePath,
       dirents.map((d) => d.name),
     );
-    const visibleDirents = ignoredNames === null ? dirents.filter((d) => !IGNORED_NAMES.has(d.name)) : dirents;
+    const visibleDirents =
+      ignoredNames === null ? dirents.filter((d) => !IGNORED_NAMES.has(d.name) && !isNextDistDirName(d.name)) : dirents;
     const entries = visibleDirents
       .flatMap((d) => {
         const isDir = resolveDirentIsDirectory(d, path.join(filePath, d.name));

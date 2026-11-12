@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { withRequestLog } from "@/lib/api-request-log";
 import { NextResponse } from "next/server";
 import { isApiRequestAllowed } from "@/lib/request-security";
+import { HIDE_CHILD_WINDOW } from "@/lib/subprocess-window";
 import { getRpcSession, getFinalRpcSessionId } from "@/lib/rpc-manager";
 import { resolveSessionPath } from "@/lib/session-reader";
 
@@ -76,6 +77,7 @@ async function exportSession(filePath: string, outputPath: string): Promise<void
     await execFileAsync(process.execPath, [cliPath, "--export", filePath, outputPath], {
       cwd: process.cwd(),
       timeout: 30_000,
+      windowsHide: HIDE_CHILD_WINDOW,
       env: {
         ...process.env,
         PI_OFFLINE: "1",

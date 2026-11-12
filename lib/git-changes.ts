@@ -4,6 +4,7 @@ import path from "path";
 import { promisify } from "util";
 import { TEXT_PREVIEW_MAX_BYTES } from "./file-types";
 import { createGitEnv } from "./git-env";
+import { HIDE_CHILD_WINDOW } from "./subprocess-window";
 import type { GitFileDiffResponse, GitFileStatus, GitStatusResponse } from "./git-types";
 import { classifyGitStatus, parseGitPorcelainV1, type GitPorcelainEntry } from "./git-status";
 
@@ -15,6 +16,7 @@ async function git(cwd: string, args: string[], maxBuffer = GIT_STATUS_MAX_BUFFE
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: GIT_TIMEOUT_MS,
     maxBuffer,
+    windowsHide: HIDE_CHILD_WINDOW,
     env: createGitEnv(),
   });
   return stdout;

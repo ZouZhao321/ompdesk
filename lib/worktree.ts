@@ -4,6 +4,7 @@ import { basename, dirname, join, normalize, resolve } from "path";
 import { promisify } from "util";
 import { allowFileRoot } from "./allowed-roots";
 import { createGitEnv } from "./git-env";
+import { HIDE_CHILD_WINDOW } from "./subprocess-window";
 
 const execFileAsync = promisify(execFile);
 
@@ -61,6 +62,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: 10_000,
     maxBuffer: 1024 * 1024,
+    windowsHide: HIDE_CHILD_WINDOW,
     // Pin the message locale so error-text matching (e.g. the dirty-worktree
     // detection in the DELETE route) works regardless of system language.
     env: createGitEnv(),

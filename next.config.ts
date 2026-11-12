@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { resolveDistDir } from "./bin/runtime.js";
 
 const { version } = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf8")) as { version: string };
 let ompVersion = "unknown";
@@ -24,9 +25,12 @@ try {
 const OMP_SDK_REQUEST = /^@oh-my-pi\//;
 
 const nextConfig: NextConfig = {
-  // Smoke runs (scripts/smoke-dev.mjs) redirect the build output away from the
-  // dev `.next/` directory through this override.
-  distDir: process.env.OMPDESK_DIST_DIR || ".next",
+  // 产物目录按版本分开：安装只覆盖新包里的文件，上一版服务端运行时写下的路由
+  // 缓存会留在安装目录里，共用目录时它会被当成本次构建的预渲染结果返回。分版本
+  // 之后旧缓存不可能被读到，启动过程也就不需要清理任何文件。
+  // Smoke runs (scripts/smoke-dev.mjs) redirect the build output through the
+  // same override.
+  distDir: resolveDistDir(version, process.env.OMPDESK_DIST_DIR),
   outputFileTracingRoot: __dirname,
   // The repository manages AGENTS.md itself; `next dev` must not write its own
   // block into that file or create one in a fresh worktree.
