@@ -23,6 +23,8 @@ import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { normalizeCustomPanelLines, parseAnsiLine, stripAnsi } from "@/lib/ansi";
 import { isUserSkillPrompt, skillPromptCommandLabel, type SkillPromptDetailsLike } from "@/lib/slash-display";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
+import { getFileIcon } from "./FileIcons";
+import { getFileName } from "@/lib/file-paths";
 import type { OpenFileOptions } from "@/lib/panel-tabs";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import type {
@@ -37,6 +39,7 @@ import type {
   ImageContent,
   ToolCallContent,
   ThinkingContent,
+  FileMentionMessage,
 } from "@/lib/types";
 
 // CJK chars ~1 token each (GLM/DeepSeek/GPT-o200k); other chars ~4 chars/token.
@@ -313,6 +316,9 @@ export const MessageView = memo(
       // Rendered inline under its toolCall — skip standalone rendering if paired
       return null;
     }
+    if (message.role === "fileMention") {
+      return <FileMentionView message={message as FileMentionMessage} onOpenFile={onOpenFile} />;
+    }
     if (message.role === "custom") {
       const customType = (message as CustomMessage).customType;
       if (customType === "compaction") {
@@ -364,6 +370,54 @@ export const MessageView = memo(
     );
   },
 );
+
+/**
+ * `@` 提及文件的记录。omp 把展开后的文件正文写进同一个条目，这里只列路径：
+ * 正文是给模型的输入，放在对话里会把整份文件铺满屏幕。
+ */
+function FileMentionView({
+  message,
+  onOpenFile,
+}: {
+  message: FileMentionMessage;
+  onOpenFile?: (filePath: string, options?: OpenFileOptions) => void;
+}) {
+  const { t } = useI18n();
+  if (message.files.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+      {message.files.map((file, index) => (
+        <button
+          key={`${file.path}#${index}`}
+          type="button"
+          className="file-chip-button"
+          title={file.path}
+          aria-label={t("chat.openWrittenFile", { name: file.path })}
+          onClick={() => onOpenFile?.(file.path)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "2px 8px",
+            maxWidth: "100%",
+            fontSize: 12,
+            fontFamily: "var(--font-mono)",
+            color: "var(--text)",
+            background: "var(--bg-subtle)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            cursor: "pointer",
+          }}
+        >
+          {getFileIcon(getFileName(file.path), 12)}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+            {file.path}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function UserMessageView({
   message,

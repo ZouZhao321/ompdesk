@@ -41,6 +41,13 @@
       "reason": "组件依赖 useAgentSession，该 hook 在渲染期把 onIdentity 挂到 useRef 对象上；React 开发构建冻结 ref，服务端渲染测试直接抛错，仓库内只能用源码文本断言与浏览器实测覆盖",
       "alternativeVerification": "1440×900 与 390×844 两档浏览器实测新会话空状态版本区，配合 bun run typecheck",
       "expires": "2027-02-28"
+    },
+    {
+      "path": "lib/types.ts",
+      "rule": "rule-1",
+      "reason": "只声明类型与接口，没有运行时代码，任何 import 都只留下被擦除的类型；文件本身不可能出现在覆盖率产物里",
+      "alternativeVerification": "bun run typecheck 校验这些类型的用法；读取会话消息的 lib/transcript-items.test.mjs 与 lib/session-reader.test.mjs 覆盖实现侧行为",
+      "expires": "2027-02-11"
     }
   ]
 }

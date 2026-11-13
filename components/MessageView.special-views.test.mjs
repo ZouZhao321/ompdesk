@@ -147,3 +147,29 @@ test("renders a cancelled bash execution as an error", () => {
 
   assert.ok(text.includes("sleep 30"), "command missing");
 });
+
+test("renders the paths of mentioned files without their contents", () => {
+  const text = visibleText(
+    renderMessage({
+      role: "fileMention",
+      files: [
+        { path: "docs/产品笔试准备指南.md", content: "# 正文\n被提及文件的全文" },
+        { path: "src/app.ts", content: "export const app = 1;" },
+      ],
+    }),
+  );
+
+  assert.ok(text.includes("docs/产品笔试准备指南.md"), "first mention path missing");
+  assert.ok(text.includes("src/app.ts"), "second mention path missing");
+  assert.ok(!text.includes("被提及文件的全文"), "file contents must stay out of the transcript");
+});
+
+test("renders nothing for a file mention without files", () => {
+  assert.equal(
+    renderMessage({
+      role: "fileMention",
+      files: [],
+    }),
+    "",
+  );
+});
