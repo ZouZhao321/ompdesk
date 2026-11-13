@@ -109,7 +109,29 @@ export interface BashExecutionMessage {
   timestamp?: number;
 }
 
-export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage | CustomMessage | BashExecutionMessage;
+/** `@` 提及的文件条目：`content` 是文件正文，界面只展示 `path`。 */
+export interface FileMentionItem {
+  path: string;
+  content?: string;
+  lineCount?: number;
+  byteSize?: number;
+  skippedReason?: "tooLarge" | "binary";
+}
+
+/** omp 在用户消息之前写入的提及文件记录，一条对应一次 `@` 展开。 */
+export interface FileMentionMessage {
+  role: "fileMention";
+  files: FileMentionItem[];
+  timestamp?: number;
+}
+
+export type AgentMessage =
+  | UserMessage
+  | AssistantMessage
+  | ToolResultMessage
+  | CustomMessage
+  | BashExecutionMessage
+  | FileMentionMessage;
 export interface ExtensionAskDialogOption {
   label: string;
   description?: string;
