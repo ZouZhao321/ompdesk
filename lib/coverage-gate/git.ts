@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createGitEnv } from "../git-env";
+import { HIDE_CHILD_WINDOW } from "../subprocess-window";
 import { SOURCE_EXTENSIONS } from "./source-scan";
 
 const execFileAsync = promisify(execFile);
@@ -93,6 +94,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
     timeout: GIT_TIMEOUT_MS,
     maxBuffer: GIT_MAX_BUFFER,
+    windowsHide: HIDE_CHILD_WINDOW,
     env: createGitEnv(),
   });
   return stdout;

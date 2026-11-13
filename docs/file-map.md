@@ -75,6 +75,7 @@ worktrees/route.ts              GET/POST/DELETE git worktree；GET 同时给出�
 ```
 agent-client.ts      为 /api/agent 命令提供带类型的 fetch 辅助
 api-request-log.ts   withRequestLog：统一请求日志与耗时
+build-output.ts      isNextDistDirName：判断目录是不是 Next 产物目录（`.next` 与按版本分开的 `.next-v<版本>`），文件索引、文件浏览器与注释扫描共用
 comment-entries.ts   注释词条提取：TypeScript 语法树的注释区间、合并连续单行、排除横幅与单词标题、含中文即归中文、计算字典键
 comment-sources.ts   词条来源文件：git 仓库以 .gitignore 为准，非仓库退回目录遍历
 comment-dictionary.ts 本机注释字典：按键读写人工译文、来源标记、只返回当前项目相关记录

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getSafeNpxEnv, redactNpxOutput } from "@/lib/npx";
+import { HIDE_CHILD_WINDOW } from "@/lib/subprocess-window";
 import type {
   OmpdeskInstallPlan,
   OmpdeskPackageInfo,
@@ -275,6 +276,7 @@ export async function installUpdate({ manager }: InstallOptions): Promise<Ompdes
   const result = await execFileAsync(command.executable, command.args, {
     timeout: UPDATE_TIMEOUT_MS,
     maxBuffer: 1_000_000,
+    windowsHide: HIDE_CHILD_WINDOW,
     env: getSafeNpxEnv({
       CI: "1",
       NPM_CONFIG_UPDATE_NOTIFIER: "false",

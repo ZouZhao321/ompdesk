@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { promisify } from "util";
 import { createGitEnv } from "./git-env";
+import { HIDE_CHILD_WINDOW } from "./subprocess-window";
 import type { SkillInstallInfo, SkillUpdateResult } from "@/lib/api-types";
 
 const CHECK_TIMEOUT_MS = 15_000;
@@ -122,16 +123,18 @@ async function resolveGitTreeHash(install: SkillInstallInfo): Promise<string> {
   try {
     await execFileAsync("git", ["init", "--bare", gitDir], {
       timeout: GIT_CHECK_TIMEOUT_MS,
+      windowsHide: HIDE_CHILD_WINDOW,
       env: createGitEnv(),
     });
     await execFileAsync(
       "git",
       [`--git-dir=${gitDir}`, "fetch", "--depth=1", "--filter=blob:none", "--no-tags", repository, ref],
-      { timeout: GIT_CHECK_TIMEOUT_MS, env: createGitEnv() },
+      { timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: HIDE_CHILD_WINDOW, env: createGitEnv() },
     );
     const revision = folder ? `FETCH_HEAD:${folder}` : "FETCH_HEAD^{tree}";
     const { stdout } = await execFileAsync("git", [`--git-dir=${gitDir}`, "rev-parse", revision], {
       timeout: GIT_CHECK_TIMEOUT_MS,
+      windowsHide: HIDE_CHILD_WINDOW,
       env: createGitEnv(),
     });
     const hash = stdout.trim();

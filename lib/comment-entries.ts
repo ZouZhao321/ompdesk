@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { isNextDistDirName } from "./build-output";
 
 /** 注释词条的语言：文本里出现中文字符即中文，否则英文。 */
 export type CommentLanguage = "zh" | "en";
@@ -33,7 +34,6 @@ export interface CommentExtraction {
 /** 依赖、产物、工作副本与临时目录都不参与扫描。 */
 const SKIPPED_DIRS: Record<string, true> = {
   ".git": true,
-  ".next": true,
   ".tmp": true,
   ".turbo": true,
   ".worktrees": true,
@@ -52,7 +52,7 @@ const WORD_RE = /\p{L}+/gu;
 const HAN_RE = /\p{Script=Han}/u;
 
 export function isSkippedCommentSourceDir(name: string): boolean {
-  return SKIPPED_DIRS[name.toLowerCase()] === true;
+  return SKIPPED_DIRS[name.toLowerCase()] === true || isNextDistDirName(name);
 }
 
 export function isCommentSourceFile(relativePath: string): boolean {
