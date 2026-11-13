@@ -110,7 +110,7 @@ export interface BashExecutionMessage {
 }
 
 /** `@` 提及的文件条目：`content` 是文件正文，界面只展示 `path`。 */
-export interface FileMentionItem {
+interface FileMentionItem {
   path: string;
   content?: string;
   lineCount?: number;
