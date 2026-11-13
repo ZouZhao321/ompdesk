@@ -60,6 +60,11 @@ export interface TranscriptItem {
   writtenFiles: WrittenFile[];
   /** 正式回答之后、下一个锚点之前的消息下标。 */
   tailIndices: number[];
+  /**
+   * 本轮里 `@` 提及文件的记录。这些条目紧跟提问，内容属于用户回合，
+   * 不折进过程组。
+   */
+  mentionIndices: number[];
   /** 是否是运行中的最后一轮。 */
   isLiveTail: boolean;
   /** true 表示按消息逐条渲染，不折叠过程组。 */
@@ -176,6 +181,7 @@ function buildStandaloneMessageItem(entryIds: readonly string[], index: number):
     toolCallCount: 0,
     writtenFiles: [],
     tailIndices: [],
+    mentionIndices: [],
     isLiveTail: false,
     isStandalone: true,
     messageIndices: [index],
@@ -201,7 +207,7 @@ function buildTurn(
   const visibleProcessIndices = processIndices.filter((processIdx) =>
     hasDisplayableProcessMessage(messages[processIdx], displayOptions),
   );
-
+  const mentionIndices = processIndices.filter((processIdx) => messages[processIdx]?.role === "fileMention");
   if (finalAssistantIndex === -1) {
     return {
       key: itemKey(entryIds, anchorIndex),
@@ -217,6 +223,7 @@ function buildTurn(
       toolCallCount: countToolCalls(messages, visibleProcessIndices, displayOptions),
       writtenFiles: [],
       tailIndices: [],
+      mentionIndices: [],
       isLiveTail,
       isStandalone: true,
       messageIndices: sequence(anchorIndex, endIndex),
@@ -254,6 +261,7 @@ function buildTurn(
       countToolCalls(messages, visibleProcessIndices, displayOptions) + countToolCallBlocks(finalSplit.processBlocks),
     writtenFiles,
     tailIndices: sequence(finalAssistantIndex + 1, endIndex),
+    mentionIndices: isStandalone ? [] : mentionIndices,
     isLiveTail,
     isStandalone,
     messageIndices: isStandalone ? sequence(anchorIndex, endIndex) : [],
