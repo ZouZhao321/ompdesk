@@ -359,7 +359,7 @@ test("promoteChangelog refuses an empty unreleased section", () => {
 test("cmdPrepare stops before writing when the worktree root is not ignored", () => {
   useCommands({ checkIgnore: 1 });
 
-  const message = expectFailure(() => release.cmdPrepare("hotfix", true));
+  const message = expectFailure(() => release.cmdPrepare("major", true));
   assert.match(message, /没有被 Git 忽略/);
   assert.ok(
     commands.some((record) => record.args[0] === "check-ignore"),
@@ -385,7 +385,7 @@ test("cmdPrepare refuses a repository where .worktrees is not ignored", () => {
   useCommands({ checkIgnore: 1 });
 
   assert.match(
-    expectFailure(() => release.cmdPrepare("hotfix", true)),
+    expectFailure(() => release.cmdPrepare("major", true)),
     /没有被 Git 忽略/,
   );
 });
