@@ -1977,6 +1977,9 @@ export function getRpcSession(sessionId: string): AgentSessionWrapper | undefine
 
 function runtimeMessageText(entry: SessionMessageEntry): string {
   if (entry.message.role === "bashExecution") return "";
+  if (entry.message.role === "fileMention") {
+    return entry.message.files.map((file) => file.path).join(" ");
+  }
   if (entry.message.role === "custom" && isUserSkillPrompt(entry.message)) {
     return skillPromptCommandLabel(entry.message.details as SkillPromptDetailsLike | undefined);
   }

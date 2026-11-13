@@ -393,6 +393,9 @@ function renderTranscriptItem(row: TranscriptRowContext, item: TranscriptListIte
   return (
     <>
       {renderRowMessage(row, item.anchorIndex, { turnAnchorEntryId })}
+      {item.mentionIndices.map((messageIndex) =>
+        renderRowMessage(row, messageIndex, { keyPrefix: "mention", turnAnchorEntryId }),
+      )}
       {item.processMessageCount > 0 && (
         <div key={`process-group-${item.anchorIndex}-${item.finalAssistantIndex}`}>
           <ProcessDetailsGroup
