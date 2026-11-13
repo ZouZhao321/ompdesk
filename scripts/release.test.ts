@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bumpVersion, compareVersions, extractChangelogSection, normalizeVersion, promoteChangelog } from "./release";
+import {
+  bumpVersion,
+  changelogKindProblem,
+  classifyVersion,
+  compareVersions,
+  countCycleFeatures,
+  extractChangelogSection,
+  inferContentKind,
+  lastFixVersion,
+  normalizeVersion,
+  promoteChangelog,
+  unpublishedEntries,
+} from "./release";
 
 test("版本号只接受三段数字", () => {
   assert.equal(normalizeVersion("v1.2.3"), "1.2.3");
@@ -56,4 +68,68 @@ test("缺少未发布段落时拒绝发版", () => {
 
 test("版本段落按完整标题匹配，不接受更长版本的前缀", () => {
   assert.throws(() => extractChangelogSection(SAMPLE, "1.0.2"), /1\.0\.2/);
+});
+
+test("未发布条目只取短横线开头的行", () => {
+  assert.deepEqual(unpublishedEntries(SAMPLE), [
+    "- feat(telemetry)：接入 OTLP 导出链路（#13）",
+    "- fix(sidebar)：项目行未读徽标按静态状态着色（#93）",
+  ]);
+});
+
+test("功能版本要求至少一条 feat 记录", () => {
+  assert.equal(changelogKindProblem("feature", SAMPLE), null);
+  assert.match(
+    changelogKindProblem("feature", "## 未发布\n\n- fix(x)：修一下\n\n## [1.0.0] - 2026-01-01\n") ?? "",
+    /feat/,
+  );
+});
+
+test("修复版本拒绝 feat 记录", () => {
+  assert.match(changelogKindProblem("fix", SAMPLE) ?? "", /feat/);
+  assert.equal(changelogKindProblem("fix", "## 未发布\n\n- fix(x)：修一下\n- docs：补文档\n"), null);
+});
+
+test("指定版本号按与最新标签的差值判断记录类型", () => {
+  assert.equal(inferContentKind("1.1.0", "1.0.28"), "feature");
+  assert.equal(inferContentKind("1.1.1", "1.1.0"), "fix");
+  assert.equal(inferContentKind("2.0.0", "1.1.1"), null);
+});
+
+test("版本递增类型", () => {
+  assert.equal(classifyVersion("2.0.0", "1.9.9"), "major");
+  assert.equal(classifyVersion("1.10.0", "1.9.0"), "feature");
+  assert.equal(classifyVersion("1.9.1", "1.9.0"), "fix");
+  assert.equal(classifyVersion("1.9.0", "1.9.0"), "same");
+});
+
+const CYCLE = `# 更新记录
+
+## 未发布
+
+- fix(x)：修一下
+
+## [1.1.1] - 2026-11-05
+
+- fix(y)：再修一下
+
+## [1.1.0] - 2026-11-04
+
+- feat(a)：功能一
+- feat(b)：功能二
+
+## [1.0.28] - 2026-11-03
+
+- fix(c)：旧修复
+`;
+
+test("取最近一次修复版本", () => {
+  assert.equal(lastFixVersion(["v1.0.27", "v1.0.28"]), "1.0.28");
+  assert.equal(lastFixVersion(["v1.0.27", "v1.0.28", "v1.1.0"]), "1.0.28");
+  assert.equal(lastFixVersion(["v1.0.28", "v1.1.0", "v1.1.1"]), "1.1.1");
+});
+
+test("统计本周期已发布的功能记录", () => {
+  assert.equal(countCycleFeatures(CYCLE, ["v1.0.28", "v1.1.0"]), 2);
+  assert.equal(countCycleFeatures(CYCLE, ["v1.0.28", "v1.1.0", "v1.1.1"]), 0);
 });

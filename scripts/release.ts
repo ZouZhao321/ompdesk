@@ -2,10 +2,12 @@
 /**
  * 发版脚本。
  *
- *   bun scripts/release.ts 1.0.27        准备发版：开 chore/release-1.0.27 分支，写版本号与
- *                                       CHANGELOG，提交、推送、开 PR
- *   bun scripts/release.ts patch         以最新标签为基准递增：major / minor / patch
- *   bun scripts/release.ts finish 1.0.27 合并后执行：打标签、推标签、建 GitHub Release、盯 CI
+ *   bun scripts/release.ts feature       功能版本：次版本号加一，要求「未发布」里至少一条 feat 记录
+ *   bun scripts/release.ts fix           修复版本：修订号加一，要求距上个修复版本已有两个功能版本且没有 feat 记录
+ *   bun scripts/release.ts hotfix        紧急修复：修订号加一，不受功能版本数量限制
+ *   bun scripts/release.ts 1.2.1         指定版本号：按与最新标签的差值校验记录类型，不做周期检查
+ *   bun scripts/release.ts status        打印最近版本、已发功能版本数与下一步建议
+ *   bun scripts/release.ts finish 1.2.1  合并后执行：打标签、推标签、建 GitHub Release、盯 CI
  *   bun scripts/release.ts ... --dry-run 只做检查并打印计划，不写文件、不推送
  *
  * 版本号只在准备阶段进入 main：标签由 finish 在版本已经合并后才创建，所以
@@ -26,6 +28,10 @@ const CI_WAIT_LIMIT_MS = 45 * 60 * 1000;
 const CI_POLL_MS = 10_000;
 
 type Bump = "major" | "minor" | "patch";
+/** 发版类型：功能、定期修复、紧急修复、主版本。 */
+type ReleaseKind = "feature" | "fix" | "hotfix" | "major";
+/** 一个周期内的功能版本数量，达到后才可以发定期修复版本。 */
+const FEATURES_PER_CYCLE = 2;
 
 interface RunOptions {
   /** 命令的工作目录，默认仓库根。 */
@@ -80,11 +86,39 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/**
- * 把「未发布」段落转成带日期的版本段落，并在它上面留一个空的「未发布」。
- * 段落为空时抛错：没有改动就不该发版。
- */
-export function promoteChangelog(content: string, version: string, date: string): string {
+/** 与上一个版本相比的递增类型。 */
+export function classifyVersion(version: string, previous: string): "major" | "feature" | "fix" | "same" {
+  const current = parseVersion(version);
+  const before = parseVersion(previous);
+  if (current[0] !== before[0]) return "major";
+  if (current[1] !== before[1]) return "feature";
+  if (current[2] !== before[2]) return "fix";
+  return "same";
+}
+
+/** 最近一次修复版本的版本号；没有修复版本时返回 null。修订号大于零即修复版本。 */
+export function lastFixVersion(tags: string[]): string | null {
+  const versions = [...new Set(tags.map((tag) => normalizeVersion(tag)).filter((v): v is string => v !== null))];
+  versions.sort(compareVersions);
+  const fixes = versions.filter((version) => parseVersion(version)[2] > 0);
+  return fixes.length > 0 ? fixes[fixes.length - 1] : null;
+}
+
+/** 本周期已发布的功能记录数：最近一次修复版本之后各版本段落里的 feat 条目。 */
+export function countCycleFeatures(content: string, tags: string[]): number {
+  const lastFix = lastFixVersion(tags);
+  let count = 0;
+  for (const match of content.matchAll(/^## \[([0-9]+\.[0-9]+\.[0-9]+)\][^\n]*$/gm)) {
+    const version = match[1];
+    if (lastFix && compareVersions(version, lastFix) <= 0) continue;
+    const section = extractChangelogSection(content, version);
+    count += section.split("\n").filter((line) => /^-\s*feat(?:\([^)]*\))?[：:]/.test(line.trim())).length;
+  }
+  return count;
+}
+
+/** 「未发布」段落的起始位置与条目文本。 */
+function unpublishedRange(content: string): { headingStart: number; bodyEnd: number; items: string } {
   const heading = /^## 未发布[^\n]*$/m.exec(content);
   if (!heading) throw new Error("CHANGELOG.md 里没有「## 未发布」段落");
   const headingStart = heading.index;
@@ -93,6 +127,35 @@ export function promoteChangelog(content: string, version: string, date: string)
   const bodyEnd = next ? bodyStart + next.index : content.length;
   const items = content.slice(bodyStart, bodyEnd).trim();
   if (!items) throw new Error("「未发布」段落是空的，没有可发布的改动");
+  return { headingStart, bodyEnd, items };
+}
+
+/** 「未发布」段落里的条目，每条以 `- ` 开头。 */
+export function unpublishedEntries(content: string): string[] {
+  return unpublishedRange(content)
+    .items.split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "));
+}
+
+/** 功能版本必须带 feat 记录，修复版本不能带 feat 记录；返回问题描述，没有问题时返回 null。 */
+export function changelogKindProblem(kind: "feature" | "fix", content: string): string | null {
+  const features = unpublishedEntries(content).filter((entry) => /^-\s*feat(?:\([^)]*\))?[：:]/.test(entry));
+  if (kind === "feature" && features.length === 0) {
+    return "功能版本要求「未发布」里至少有一条 feat 记录；只有修复时用 fix 或 hotfix";
+  }
+  if (kind === "fix" && features.length > 0) {
+    return `修复版本不能包含 feat 记录：\n${features.join("\n")}`;
+  }
+  return null;
+}
+
+/**
+ * 把「未发布」段落转成带日期的版本段落，并在它上面留一个空的「未发布」。
+ * 段落为空时抛错：没有改动就不该发版。
+ */
+export function promoteChangelog(content: string, version: string, date: string): string {
+  const { headingStart, bodyEnd, items } = unpublishedRange(content);
   const released = `## [${version}] - ${date}\n\n${items}\n\n`;
   const rest = content.slice(bodyEnd).replace(/^\n+/, "");
   return `${content.slice(0, headingStart)}## 未发布\n\n${released}${rest}`;
@@ -184,6 +247,13 @@ function latestTag(): string {
   return normalized;
 }
 
+function allTags(): string[] {
+  return git(["tag", "--list", TAG_PATTERN])
+    .stdout.split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 /** main 分支、工作区干净、HEAD 不落后于 origin/main。 */
 function assertRepoState(): void {
   const branch = git(["branch", "--show-current"]).stdout.trim();
@@ -195,11 +265,26 @@ function assertRepoState(): void {
   if (behind.code !== 0) fail("HEAD 落后于 origin/main，先同步 main");
 }
 
-function resolveTarget(input: string, latest: string): string {
-  if (input === "major" || input === "minor" || input === "patch") return bumpVersion(latest, input);
+const RELEASE_KINDS: ReleaseKind[] = ["feature", "fix", "hotfix", "major"];
+
+function resolveTarget(input: string, latest: string): { target: string; kind: ReleaseKind | null } {
+  if (RELEASE_KINDS.includes(input as ReleaseKind)) {
+    const kind = input as ReleaseKind;
+    if (kind === "feature") return { target: bumpVersion(latest, "minor"), kind };
+    if (kind === "major") return { target: bumpVersion(latest, "major"), kind };
+    return { target: bumpVersion(latest, "patch"), kind };
+  }
   const normalized = normalizeVersion(input);
-  if (!normalized) fail(`版本号「${input}」不合法，写 1.0.27、v1.0.27 或 major/minor/patch`);
-  return normalized;
+  if (!normalized) fail(`版本号「${input}」不合法，写 1.2.1 这样的三段版本号，或 feature / fix / hotfix / major`);
+  return { target: normalized, kind: null };
+}
+
+/** 指定版本号时按与最新标签的差值判断记录类型；跨主版本不检查记录。 */
+export function inferContentKind(target: string, latest: string): "feature" | "fix" | null {
+  const kind = classifyVersion(target, latest);
+  if (kind === "major") return null;
+  if (kind === "feature") return "feature";
+  return "fix";
 }
 
 function assertTagAbsent(tag: string): void {
@@ -245,8 +330,25 @@ function cmdPrepare(input: string, dryRun: boolean): void {
     fail(`package.json 的版本 ${current} 与最新标签 v${latest} 不一致，先对齐再发版`);
   }
 
-  const target = resolveTarget(input, latest);
+  const { target, kind } = resolveTarget(input, latest);
   if (compareVersions(target, latest) <= 0) fail(`版本 ${target} 必须大于最新标签 ${latest}`);
+
+  let contentKind: "feature" | "fix" | null = null;
+  if (kind === "feature") contentKind = "feature";
+  else if (kind === "fix" || kind === "hotfix") contentKind = "fix";
+  else if (kind === null) contentKind = inferContentKind(target, latest);
+
+  const changelogContent = fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8");
+  if (contentKind) {
+    const problem = changelogKindProblem(contentKind, changelogContent);
+    if (problem) fail(problem);
+  }
+  if (kind === "fix") {
+    const shipped = countCycleFeatures(changelogContent, allTags());
+    if (shipped < FEATURES_PER_CYCLE) {
+      fail(`本周期只发布了 ${shipped} 条功能记录，定期修复至少要 ${FEATURES_PER_CYCLE} 条；紧急修复用 hotfix`);
+    }
+  }
 
   const tag = `v${target}`;
   assertTagAbsent(tag);
@@ -256,7 +358,7 @@ function cmdPrepare(input: string, dryRun: boolean): void {
   }
 
   const today = todayStamp();
-  const promoted = promoteChangelog(fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"), target, today);
+  const promoted = promoteChangelog(changelogContent, target, today);
   const section = extractChangelogSection(promoted, target);
 
   const branch = `chore/release-${target}`;
@@ -356,7 +458,7 @@ function watchCI(sha: string, slug: string): void {
 
 function cmdFinish(input: string, dryRun: boolean): void {
   const target = normalizeVersion(input);
-  if (!target) fail(`版本号「${input}」不合法，写 1.0.27 或 v1.0.27`);
+  if (!target) fail(`版本号「${input}」不合法，写 1.2.1 或 v1.2.1`);
 
   assertRepoState();
 
@@ -392,9 +494,35 @@ function cmdFinish(input: string, dryRun: boolean): void {
   console.log(`\n${tag} 发布完成。`);
 }
 
+function cmdStatus(): void {
+  const tags = allTags();
+  const versions = [...new Set(tags.map((tag) => normalizeVersion(tag)).filter((v): v is string => v !== null))];
+  versions.sort(compareVersions);
+  if (versions.length === 0) {
+    console.log("还没有版本标签");
+    return;
+  }
+
+  console.log("最近版本：");
+  for (let i = Math.max(versions.length - 6, 0); i < versions.length; i++) {
+    const kind =
+      i === 0 ? (parseVersion(versions[0])[2] > 0 ? "fix" : "initial") : classifyVersion(versions[i], versions[i - 1]);
+    console.log(`  ${versions[i]}\t${kind}`);
+  }
+
+  const shipped = countCycleFeatures(fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"), tags);
+  console.log(`\n本周期已发布的功能记录：${shipped}`);
+  if (shipped >= FEATURES_PER_CYCLE) {
+    console.log(`下一步：fix（本周期功能记录已达到 ${FEATURES_PER_CYCLE} 条）`);
+  } else {
+    console.log(`下一步：feature（本周期还需 ${FEATURES_PER_CYCLE - shipped} 条功能记录才能发定期修复）`);
+  }
+  console.log("紧急修复随时可用 hotfix。");
+}
+
 function cmdNotes(input: string): void {
   const target = normalizeVersion(input);
-  if (!target) fail(`版本号「${input}」不合法，写 1.0.27 或 v1.0.27`);
+  if (!target) fail(`版本号「${input}」不合法，写 1.2.1 或 v1.2.1`);
   const section = extractChangelogSection(fs.readFileSync(path.join(ROOT, CHANGELOG), "utf8"), target);
   process.stdout.write(`${section}\n`);
 }
@@ -407,7 +535,12 @@ if (import.meta.main) {
 
   if (!command || command === "--help" || command === "help") {
     console.error(`用法：
-  bun scripts/release.ts <版本|major|minor|patch>   准备发版并开 PR
+  bun scripts/release.ts feature                    功能版本：次版本号加一，要求有 feat 记录
+  bun scripts/release.ts fix                        定期修复：两个功能版本之后的修订号加一
+  bun scripts/release.ts hotfix                     紧急修复：随时可用，修订号加一
+  bun scripts/release.ts major                      主版本：大版本号加一
+  bun scripts/release.ts <版本>                     指定版本号，按差值校验记录类型
+  bun scripts/release.ts status                     最近版本、功能版本数与下一步建议
   bun scripts/release.ts finish <版本>              合并后打标签、推标签、盯 CI
   bun scripts/release.ts notes <版本>               打印这一版的更新记录，供 CI 生成 Release 说明
   bun scripts/release.ts ... --dry-run              只检查并打印计划`);
@@ -419,6 +552,8 @@ if (import.meta.main) {
   } else if (command === "notes") {
     if (!value) fail("notes 需要版本号");
     cmdNotes(value);
+  } else if (command === "status") {
+    cmdStatus();
   } else {
     cmdPrepare(command, dryRun);
   }

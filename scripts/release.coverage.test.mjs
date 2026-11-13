@@ -37,7 +37,7 @@ Bun.plugin({
       // 入口，因此把守卫打开，并用一段安全的 argv 让它走 `notes` 分支。
       const asEntry = source.replace("if (import.meta.main) {", "if (true) {");
       return {
-        contents: `${asEntry}\nexport { fail, run, git, readPackageVersion, writePackageVersion, latestTag, assertRepoState, resolveTarget, assertTagAbsent, renderPrBody, cmdPrepare, watchCI, cmdFinish, cmdNotes };\n`,
+        contents: `${asEntry}\nexport { fail, run, git, readPackageVersion, writePackageVersion, latestTag, assertRepoState, assertTagAbsent, renderPrBody, cmdPrepare, watchCI, cmdFinish, cmdNotes };\n`,
         loader: "ts",
       };
     });
@@ -308,14 +308,14 @@ test("assertRepoState requires main, a clean tree and an up-to-date HEAD", () =>
   );
 });
 
-test("resolveTarget accepts bumps and exact versions, and rejects everything else", () => {
-  assert.equal(release.resolveTarget("patch", "1.0.0"), "1.0.1");
-  assert.equal(release.resolveTarget("minor", "1.0.0"), "1.1.0");
-  assert.equal(release.resolveTarget("major", "1.0.0"), "2.0.0");
-  assert.equal(release.resolveTarget("v2.3.4", "1.0.0"), "2.3.4");
+test("inferContentKind reads the version delta against the latest tag", () => {
+  assert.equal(release.inferContentKind("1.0.29", "1.0.28"), "fix");
+  assert.equal(release.inferContentKind("1.1.0", "1.0.28"), "feature");
+  assert.equal(release.inferContentKind("2.0.0", "1.0.28"), null);
 
+  useCommands({});
   assert.match(
-    expectFailure(() => release.resolveTarget("2.3", "1.0.0")),
+    expectFailure(() => release.cmdPrepare("2.3", true)),
     /版本号「2\.3」不合法/,
   );
 });
@@ -359,7 +359,7 @@ test("promoteChangelog refuses an empty unreleased section", () => {
 test("cmdPrepare stops before writing when the worktree root is not ignored", () => {
   useCommands({ checkIgnore: 1 });
 
-  const message = expectFailure(() => release.cmdPrepare("patch", true));
+  const message = expectFailure(() => release.cmdPrepare("hotfix", true));
   assert.match(message, /没有被 Git 忽略/);
   assert.ok(
     commands.some((record) => record.args[0] === "check-ignore"),
@@ -370,7 +370,7 @@ test("cmdPrepare stops before writing when the worktree root is not ignored", ()
 test("cmdPrepare refuses a package version that drifted from the latest tag", () => {
   useCommands({ describe: "v0.0.1" });
 
-  const message = expectFailure(() => release.cmdPrepare("patch", true));
+  const message = expectFailure(() => release.cmdPrepare("hotfix", true));
   assert.match(message, /与最新标签 v0\.0\.1 不一致/);
 });
 
@@ -385,7 +385,7 @@ test("cmdPrepare refuses a repository where .worktrees is not ignored", () => {
   useCommands({ checkIgnore: 1 });
 
   assert.match(
-    expectFailure(() => release.cmdPrepare("patch", true)),
+    expectFailure(() => release.cmdPrepare("hotfix", true)),
     /没有被 Git 忽略/,
   );
 });
