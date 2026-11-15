@@ -61,22 +61,19 @@ async function runLocalModule<T>(
  * `bin/hidden-console.js` 是零依赖 CommonJS，两个运行时都能加载，且随包分发；静态导入会把
  * `bun:ffi` 带进 Next 的 instrumentation 打包图，因此按 URL 加载。
  */
-async function establishHiddenConsole(): Promise<void> {
-  try {
-    const moduleUrl = await localModuleUrl(path.join("bin", "hidden-console.js"));
-    const hiddenConsole = await importRuntimeModule<HiddenConsoleModule>(moduleUrl);
-    hiddenConsole.ensureHiddenConsole();
-  } catch (error) {
-    // 拿不到隐藏控制台只会让后台实例的子进程弹窗，不该挡住整个进程启动。
-    console.error("[ompdesk] 隐藏控制台失败：", error);
-  }
-}
-
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
   // 先于任何请求：服务进程此后启动的每个子进程都受这一条影响。
-  await establishHiddenConsole();
+  // 拿不到隐藏控制台只会让后台实例的子进程弹窗，不该挡住整个进程启动。
+  try {
+    const hiddenConsole = await importRuntimeModule<HiddenConsoleModule>(
+      await localModuleUrl(path.join("bin", "hidden-console.js")),
+    );
+    hiddenConsole.ensureHiddenConsole();
+  } catch (error) {
+    console.error("[ompdesk] 隐藏控制台失败：", error);
+  }
 
   // Server logging is part of the process bootstrap: apply the transport
   // policy and write the `process.start` marker before any request is served.

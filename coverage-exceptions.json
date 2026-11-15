@@ -48,6 +48,13 @@
       "reason": "只声明类型与接口，没有运行时代码，任何 import 都只留下被擦除的类型；文件本身不可能出现在覆盖率产物里",
       "alternativeVerification": "bun run typecheck 校验这些类型的用法；读取会话消息的 lib/transcript-items.test.mjs 与 lib/session-reader.test.mjs 覆盖实现侧行为",
       "expires": "2027-02-11"
+    },
+    {
+      "path": "instrumentation.ts",
+      "rule": "rule-1",
+      "reason": "Next 在服务进程启动时加载这份入口，测试进程不 import 它；它只做接线，隐藏控制台的实现放在 bin/hidden-console.js",
+      "alternativeVerification": "bin/hidden-console.branches.test.mjs 覆盖 ensureHiddenConsole 的每条分支；bin/hidden-console.test.mjs 启动被测进程跑 register()，按真实窗口枚举起停判定子进程是否弹窗",
+      "expires": "2027-11-16"
     }
   ]
 }

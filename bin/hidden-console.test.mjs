@@ -136,10 +136,10 @@ const windowCheck = {
 
 test("instrumentation 在服务进程启动时补上隐藏控制台", () => {
   const source = readFileSync(path.join(root, "instrumentation.ts"), "utf8");
-  assert.match(source, /establishHiddenConsole\(\)/, "instrumentation 必须在 register() 里调用隐藏控制台");
+  assert.match(source, /ensureHiddenConsole\(\)/, "instrumentation 必须在 register() 里补隐藏控制台");
   assert.match(source, /hidden-console\.js/, "必须加载 bin/hidden-console.js，那是随包分发的实现");
 
-  const bootstrap = source.indexOf("await establishHiddenConsole()");
+  const bootstrap = source.indexOf("ensureHiddenConsole()");
   const logging = source.indexOf('"lib/logging-startup.ts"');
   assert.ok(bootstrap >= 0 && logging > bootstrap, "隐藏控制台要早于其它启动步骤，任何请求之前生效");
 });
