@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { existsSync as ExistsSync } from "node:fs";
 import type { pathToFileURL as PathToFileURL } from "node:url";
 import type { configureHttpDispatcher as ConfigureHttpDispatcher } from "@/lib/http-dispatcher";
@@ -67,9 +66,7 @@ export async function register(): Promise<void> {
   // 先于任何请求：服务进程此后启动的每个子进程都受这一条影响。
   // 拿不到隐藏控制台只会让后台实例的子进程弹窗，不该挡住整个进程启动。
   try {
-    const hiddenConsole = await importRuntimeModule<HiddenConsoleModule>(
-      await localModuleUrl(path.join("bin", "hidden-console.js")),
-    );
+    const hiddenConsole = await importRuntimeModule<HiddenConsoleModule>(await localModuleUrl("bin/hidden-console.js"));
     hiddenConsole.ensureHiddenConsole();
   } catch (error) {
     console.error("[ompdesk] 隐藏控制台失败：", error);
