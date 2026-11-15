@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { existsSync as ExistsSync } from "node:fs";
 import type { pathToFileURL as PathToFileURL } from "node:url";
 import type { configureHttpDispatcher as ConfigureHttpDispatcher } from "@/lib/http-dispatcher";
@@ -7,6 +8,7 @@ import { importRuntimeModule } from "@/lib/runtime-import";
 type DispatcherModule = { configureHttpDispatcher: typeof ConfigureHttpDispatcher };
 type LoggingModule = { startLogging: typeof StartLogging };
 type FsModule = { existsSync: typeof ExistsSync };
+type HiddenConsoleModule = { ensureHiddenConsole: () => boolean };
 
 /**
  * 本地 TypeScript 源码的 file URL。
@@ -46,8 +48,35 @@ async function runLocalModule<T>(
   }
 }
 
+/**
+ * 给服务进程补一个不可见的控制台。
+ *
+ * Windows 上，没有控制台的进程再启动控制台程序时，系统会给每个子进程新分配一个**可见**的
+ * 控制台窗口并抢走前台焦点，全屏运行的程序会被踢出全屏。后台实例由启动器以 detached 拉起，
+ * 服务进程正是这种状态。
+ *
+ * ompdesk 自己的子进程调用都带 `windowsHide`，但 agent 执行命令走 SDK 的原生 shell，那条
+ * 路径不接受这个参数——只能由宿主先给自己一个隐藏控制台，让子进程改为继承它。
+ *
+ * `bin/hidden-console.js` 是零依赖 CommonJS，两个运行时都能加载，且随包分发；静态导入会把
+ * `bun:ffi` 带进 Next 的 instrumentation 打包图，因此按 URL 加载。
+ */
+async function establishHiddenConsole(): Promise<void> {
+  try {
+    const moduleUrl = await localModuleUrl(path.join("bin", "hidden-console.js"));
+    const hiddenConsole = await importRuntimeModule<HiddenConsoleModule>(moduleUrl);
+    hiddenConsole.ensureHiddenConsole();
+  } catch (error) {
+    // 拿不到隐藏控制台只会让后台实例的子进程弹窗，不该挡住整个进程启动。
+    console.error("[ompdesk] 隐藏控制台失败：", error);
+  }
+}
+
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
+  // 先于任何请求：服务进程此后启动的每个子进程都受这一条影响。
+  await establishHiddenConsole();
 
   // Server logging is part of the process bootstrap: apply the transport
   // policy and write the `process.start` marker before any request is served.

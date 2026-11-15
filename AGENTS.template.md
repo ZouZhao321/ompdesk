@@ -101,6 +101,12 @@ gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
 进程内创建。扩展通过 omp 的 `initializeExtensions()` 绑定，与 `omp --mode rpc`
 同一套接线，上层叠加浏览器实现的 `ExtensionUIContext`。
 
+服务进程没有控制台时，它启动的每个控制台程序都会被 Windows 各开一个可见窗口并抢走
+前台焦点，全屏程序被踢出全屏。ompdesk 自己的子进程调用带 `windowsHide`，但 agent
+执行命令走 SDK 的原生 shell，那条路径不接受该参数：`instrumentation.ts` 在
+`register()` 里调用 `bin/hidden-console.js` 给宿主补一个隐藏控制台，子进程改为继承它。
+改动启动流程时不能省掉这一步，`bin/hidden-console.test.mjs` 用真实窗口枚举守住它。
+
 ## 侧边栏项目排序与置顶
 
 - 排序方式为 `time`（默认，最近活动）或 `name`（目录最后一段；同名用完整路径码元顺序）；存在 `ompdesk:project-sort`，`time` 不写键。
