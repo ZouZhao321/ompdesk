@@ -1566,7 +1566,19 @@ function ArchivedSessionsSection({
   if (sessions.length === 0 && !open) return null;
 
   return (
-    <section style={{ borderTop: "1px solid var(--border)", marginTop: 4 }}>
+    <section
+      style={{
+        borderTop: "1px solid var(--border)",
+        marginTop: 4,
+        // 归档区与项目列表是兄弟节点，父级 overflow 为 hidden：这里自己限制高度并给列表
+        // 一个滚动区，条目多过剩余空间时才滚得到最后一条；上限取一半，项目列表不被挤没。
+        display: "flex",
+        flexDirection: "column",
+        flex: "0 1 auto",
+        minHeight: 0,
+        maxHeight: "50%",
+      }}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -1584,6 +1596,7 @@ function ArchivedSessionsSection({
           fontSize: 12,
           fontWeight: 600,
           textAlign: "left",
+          flexShrink: 0,
         }}
       >
         <svg
@@ -1602,7 +1615,7 @@ function ArchivedSessionsSection({
         {t("sidebar.archived")} ({sessions.length})
       </button>
       {open && (
-        <div style={{ paddingLeft: 12 }}>
+        <div style={{ paddingLeft: 12, flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
           {sessions.length === 0 && (
             <div style={{ padding: "4px 12px 8px 20px", color: "var(--text-dim)", fontSize: 11 }}>
               {t("sidebar.noArchivedSessions")}
