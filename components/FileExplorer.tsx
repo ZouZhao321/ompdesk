@@ -14,6 +14,7 @@ import type { GitFileStatus, GitStatusResponse } from "@/lib/git-types";
 import type { OpenFileOptions } from "@/lib/panel-tabs";
 import { GIT_STATUS_COLORS, GitStatusBadge } from "./GitStatusBadge";
 import type { Translate } from "@/lib/i18n/types";
+import { describeFileLoadFailure, type FileLoadFailureMessage } from "@/lib/file-load-error";
 import { useI18n } from "@/hooks/useI18n";
 
 /** 被 Git 忽略的条目颜色，由运行期主题变量推导，明暗两套主题通用。 */
@@ -81,18 +82,26 @@ interface PendingConflict {
   nonReplaceable: string[];
 }
 
-async function fetchEntries(dirPath: string): Promise<FileNode[]> {
-  const res = await fetch(getFileApiUrl(dirPath, "list"));
-  if (!res.ok) {
-    let message = `Failed to load files (HTTP ${res.status})`;
-    try {
-      const data = (await res.json()) as { error?: string };
-      if (data.error) message = data.error;
-    } catch {
-      // ignore non-JSON error bodies
-    }
-    throw new Error(message);
+/** 目录列表请求的失败：带上 HTTP 状态码，界面据此决定文案。 */
+class FileListError extends Error {
+  /** 响应状态码；请求没拿到响应（断连、响应不是 HTTP）时为 `null`。 */
+  readonly status: number | null;
+
+  constructor(status: number | null) {
+    super(status === null ? "File list request failed" : `File list request failed (HTTP ${status})`);
+    this.name = "FileListError";
+    this.status = status;
   }
+}
+
+async function fetchEntries(dirPath: string): Promise<FileNode[]> {
+  let res: Response;
+  try {
+    res = await fetch(getFileApiUrl(dirPath, "list"));
+  } catch {
+    throw new FileListError(null);
+  }
+  if (!res.ok) throw new FileListError(res.status);
   const data = (await res.json()) as { entries?: FileEntry[] };
   return (data.entries ?? []).map((e) => ({
     name: e.name,
@@ -250,6 +259,7 @@ function TreeNode({
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [loadError, setLoadError] = useState<FileLoadFailureMessage | null>(null);
 
   const loadChildren = useCallback(
     async (force = false) => {
@@ -258,9 +268,12 @@ function TreeNode({
       try {
         const entries = await fetchEntries(node.fullPath);
         setChildren(entries);
+        setLoadError(null);
         setLoaded(true);
-      } catch {
-        // ignore
+      } catch (failure) {
+        // 失败时不标记已加载，下次展开或整树刷新会重新请求。
+        setChildren([]);
+        setLoadError(describeFileLoadFailure(failure instanceof FileListError ? failure.status : null));
       } finally {
         setLoading(false);
       }
@@ -463,6 +476,21 @@ function TreeNode({
       </div>
       {node.isDir && open && (
         <div>
+          {loadError && (
+            <div
+              role="alert"
+              style={{
+                paddingLeft: 8 + (depth + 1) * 14,
+                paddingRight: 8,
+                fontSize: 11,
+                lineHeight: 1.35,
+                color: "#f87171",
+                overflowWrap: "anywhere",
+              }}
+            >
+              {t(loadError.key, loadError.params)}
+            </div>
+          )}
           {children.map((child) => (
             <TreeNode
               key={child.fullPath}
@@ -480,7 +508,7 @@ function TreeNode({
               t={t}
             />
           ))}
-          {children.length === 0 && loaded && (
+          {children.length === 0 && loaded && !loadError && (
             <div
               style={{
                 paddingLeft: 8 + (depth + 1) * 14,
@@ -491,7 +519,7 @@ function TreeNode({
                 alignItems: "center",
               }}
             >
-              empty
+              {t("files.noFiles")}
             </div>
           )}
         </div>
@@ -571,7 +599,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [rootError, setRootError] = useState<FileLoadFailureMessage | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
   const [highlightedPaths, setHighlightedPaths] = useState<Set<string>>(new Set());
@@ -740,14 +768,16 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     }
 
     if (cwdChanged) setLoading(true);
-    setError(null);
+    setRootError(null);
     let cancelled = false;
     fetchEntries(cwd)
       .then((entries) => {
         if (!cancelled) setRoots(entries);
       })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      .catch((failure) => {
+        if (!cancelled) {
+          setRootError(describeFileLoadFailure(failure instanceof FileListError ? failure.status : null));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -1134,8 +1164,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         <div style={{ padding: "2px 4px" }}>
           {loading ? (
             <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("files.loading")}</div>
-          ) : error ? (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "#f87171" }}>{error}</div>
+          ) : rootError ? (
+            <div role="alert" style={{ padding: "8px 12px", fontSize: 11, color: "#f87171", overflowWrap: "anywhere" }}>
+              {t(rootError.key, rootError.params)}
+            </div>
           ) : (
             roots.map((node) => (
               <TreeNode
@@ -1155,7 +1187,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               />
             ))
           )}
-          {!loading && !error && roots.length === 0 && (
+          {!loading && !rootError && roots.length === 0 && (
             <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("files.noFiles")}</div>
           )}
         </div>
