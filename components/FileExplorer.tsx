@@ -281,9 +281,11 @@ function TreeNode({
     [loaded, node.fullPath],
   );
 
-  // Re-fetch children when the tree refreshes and the directory is open.
+  // Re-fetch children when the tree refreshes and the directory is open. A node whose
+  // previous load failed is not marked as loaded, so it must be included here or it
+  // would never be retried.
   useEffect(() => {
-    if (open && loaded) {
+    if (open) {
       loadChildren(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -291,13 +293,19 @@ function TreeNode({
 
   const handleClick = useCallback(() => {
     if (node.isDir) {
+      // A failed directory is still expanded; clicking it means "try again", not
+      // "collapse", so the user sees the result of the click.
+      if (open && loadError) {
+        void loadChildren(true);
+        return;
+      }
       const next = !open;
       onToggleExpanded(node.fullPath, next);
       if (next && !loaded) loadChildren();
     } else {
       onOpenFile(node.fullPath, node.name);
     }
-  }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onToggleExpanded]);
+  }, [node.isDir, node.fullPath, node.name, loaded, loadError, open, loadChildren, onOpenFile, onToggleExpanded]);
 
   return (
     <div>
