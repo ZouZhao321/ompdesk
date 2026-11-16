@@ -514,8 +514,8 @@ function hidesChildWindow(objectLiteral, windowFlags, declarations) {
 }
 
 /**
- * 断言每个子进程调用都挡住了控制台窗口。后台服务没有控制台，Windows 上子进程会各开一个
- * 可见的控制台窗口；`windowsHide` 是唯一挡住它的开关。`label` 指明出处，用在报错里。
+ * 断言每个子进程调用都挡住了控制台窗口。没有控制台的服务进程在 Windows 上启动控制台程序时，
+ * 子进程会各开一个可见的控制台窗口；`windowsHide` 是唯一挡住它的开关。`label` 指明出处，用在报错里。
  */
 export function assertHiddenWindow(calls, label) {
   for (const { line, options, hiddenWindow } of calls) {

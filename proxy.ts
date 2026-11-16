@@ -8,7 +8,6 @@ import {
   resolveForwardedAddress,
   type RequestActor,
 } from "@/lib/request-headers";
-import { CONTROL_ROUTES, CONTROL_TOKEN_ENV, CONTROL_TOKEN_HEADER, controlTokensMatch } from "@/lib/control-token";
 import { authorizeWebRequestWithActor } from "@/lib/web-auth";
 
 /**
@@ -104,32 +103,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403, headers: SECURITY_HEADERS });
   }
 
-  // The launcher's control channel answers without the web password, because
-  // the CLI only ever holds a one-way digest of it. A per-start token, stored
-  // owner-only next to the instance record, takes its place; anything without
-  // it gets a 404 so the route does not advertise itself.
-  if (CONTROL_ROUTES.has(pathname)) {
-    if (!controlTokensMatch(request.headers.get(CONTROL_TOKEN_HEADER), process.env[CONTROL_TOKEN_ENV])) {
-      // Recorded like every other denial: a silent 404 would make a repeated CLI
-      // failure impossible to tell apart from a matcher change that never reaches
-      // this branch. The token itself is never written.
-      logEvent("warn", "security", "security.control.denied", {
-        ...securityFields,
-        reason: request.headers.get(CONTROL_TOKEN_HEADER) ? "invalid-token" : "missing-token",
-      });
-      return NextResponse.json(
-        { error: "Not found" },
-        { status: 404, headers: { ...SECURITY_HEADERS, "Cache-Control": "no-store" } },
-      );
-    }
-    logEvent("info", "security", "security.control.access", {
-      ...securityFields,
-      reason: "control-token",
-    });
-    return continueWithRequestHeaders(request, requestId, "local");
-  }
-
-  // Recovery stays reachable while locked out — that is the whole point of it —
+  // Recovery stays reachable while locked out
   // but only after the host and cross-site checks above have run.
   if (pathname === RECOVERY_PAGE || pathname === RECOVERY_API) {
     logEvent("info", "security", "security.recovery.access", {

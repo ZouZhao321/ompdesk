@@ -8,15 +8,9 @@ LAN address or sits behind a tunnel, it needs a lock.
 The lock is HTTP Basic Auth over every page and every API route. The username is
 always `omp`; the password is the only secret.
 
-Two surfaces answer without that password, and only these two:
-
-- `/recover` and its API, which mint a one-time code printed on the server's own
-  console rather than returned over HTTP.
-- `/api/control/*`, which the `ompdesk` launcher reads. It is gated by a token
-  generated fresh on every start and stored in the instance record next to the
-  running server's pid, mode `0600`; a request without the matching token gets a
-  404. The launcher needs this because the stored credential is a one-way digest,
-  so the CLI could never present it.
+One surface answers without that password: `/recover` and its API, which mint a
+one-time code printed on the server's own console rather than returned over
+HTTP.
 
 ## Turning it on
 
@@ -39,10 +33,10 @@ password is already stored, the flag just switches the lock back on.
 
 `OMPDESK_AUTHENTICATED=1` does the same thing from the environment.
 
-Non-interactive launches — systemd, Docker, `ompdesk foreground` under a service
-manager — cannot answer a prompt, so `--authenticated` fails there with a message
-instead of hanging. Set the password once interactively, or use the environment
-variable below.
+Non-interactive launches — systemd, Docker, a service manager starting `ompdesk` —
+cannot answer a prompt, so `--authenticated` fails there with a message instead
+of hanging. Set the password once interactively, or use the environment variable
+below.
 
 **From the environment.**
 
@@ -95,7 +89,7 @@ Asks for a new password, stores it, and starts the server.
 server — a tmux pane, a service log, a Docker `logs` stream:
 
 1. Open `/recover`. The page is reachable without credentials, as is the
-   launcher's control channel described above; nothing else is.
+   recovery API behind it; nothing else is.
 2. Ask for a recovery code. ompdesk prints it **on its own console** — the
    terminal running the server — and never returns it over HTTP.
 3. Type the code and a new password into the page.

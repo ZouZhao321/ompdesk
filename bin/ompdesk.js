@@ -37,25 +37,6 @@ const {
   readNewPassword,
   // eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require("./password-prompt");
-const {
-  buildUrl,
-  createControlToken,
-  fetchActivity,
-  formatStatus,
-  isProcessAlive,
-  listRecords,
-  logFile,
-  probePort,
-  readRecord,
-  recordFile,
-  removeRecord,
-  stateDir,
-  stopRefusal,
-  terminateInstance,
-  waitForPort,
-  writeRecord,
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-} = require("./daemon-control");
 
 const pkgDir = path.join(__dirname, "..");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -80,8 +61,7 @@ try {
 }
 
 const options = parseLaunchOptions();
-const { force, port, hostname, openBrowser, authenticated, resetPassword, help } = options;
-const command = options.command;
+const { port, hostname, openBrowser, authenticated, resetPassword, help } = options;
 
 if (options.error) {
   console.error(options.error);
@@ -98,17 +78,13 @@ const loopbackHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 // launcher and the Next.js process can never disagree about which credential
 // file is in force.
 const webAuthFile = resolveWebAuthFile();
-const stateDirPath = stateDir();
-const instanceFile = recordFile(stateDirPath, port);
-const portNumber = Number(port);
 // `[::1]` is accepted by the loopback check as a way of writing an address, but
 // it is not something `net.connect` or `next -H` accept: they want the bare
-// `::1`. Normalising once here keeps the record, the probe and the child in step.
+// `::1`. Normalising once here keeps the probe and the child in step.
 const serverHost = hostname.replace(/^\[|\]$/g, "");
 
 let bunPath = null;
 
-/** Checks only the server path needs; `status` and `stop` work from the record alone. */
 function requireServerPrerequisites() {
   const bindingError = loopbackBindingError(hostname);
   if (bindingError) {
@@ -204,7 +180,7 @@ function openInBrowser(url) {
     shell: isWindows,
     stdio: "ignore",
     detached: true,
-    // 后台实例没有控制台，`start` 经 cmd 运行时会被分配一个新窗口。
+    // 没有控制台时 `start` 经 cmd 运行会被分配一个新窗口。
     windowsHide: true,
   });
 
@@ -216,7 +192,7 @@ function openInBrowser(url) {
 }
 
 /**
- * Start the Next.js server.
+ * Start the Next.js server in this terminal and stay attached to it.
  *
  * The launcher itself runs on Bun, and `--bun` keeps next's CLI entry on the
  * same runtime instead of handing its shebang to node. The omp SDK ships
@@ -226,18 +202,20 @@ function openInBrowser(url) {
  * 别的版本留下的缓存不可能被这次服务读到，因此这里没有需要清理的东西，也没有
  * 「删不掉就起不来」这条路径。
  *
- * `controlToken` is set only for a background instance, where the control
- * endpoint has to answer without the web password.
+ * stdin 与 stderr 保持继承，Ctrl+C 才送达服务端；stdout 单独接管，只为了在服务端
+ * 报告就绪时打开浏览器，其余内容原样转发。
  */
-function spawnServer({ stdio, detached, controlToken }) {
-  // 启动器带控制台时子进程保持同组，Ctrl+C 与关闭终端才能送达；不带控制台时必须隐藏，
-  // 否则 Windows 会给子进程新分配一个常驻控制台。后台实例一定没有控制台。
+function startServer() {
+  warnAboutExposure();
+
+  // 同一条终端里子进程必须继承控制台：Ctrl+C 与关闭终端才带得走它；启动器自己
+  // 就没有控制台时（服务管理器、输出全部重定向）才隐藏窗口，否则 Windows 会给
+  // 子进程新分配一个常驻控制台。
   const launcherHasConsole = Boolean(process.stdin.isTTY || process.stdout.isTTY || process.stderr.isTTY);
-  return spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", serverHost], {
+  const child = spawn(bunPath, ["--bun", nextBin, "start", "-p", port, "-H", serverHost], {
     cwd: pkgDir,
-    stdio,
-    detached,
-    windowsHide: detached || !launcherHasConsole,
+    stdio: ["inherit", "pipe", "inherit"],
+    windowsHide: !launcherHasConsole,
     env: {
       ...withLoopbackNoProxy(process.env),
       OMPDESK_HOSTNAME: serverHost,
@@ -245,225 +223,44 @@ function spawnServer({ stdio, detached, controlToken }) {
       // Preserve the directory from which `ompdesk` was launched so relative
       // project paths in the browser resolve against the user's shell cwd.
       OMPDESK_LAUNCH_CWD: process.cwd(),
-      ...(controlToken ? { OMPDESK_CONTROL_TOKEN: controlToken } : {}),
     },
   });
-}
 
-/**
- * Run the server in the foreground and stay attached.
- *
- * `start` detaches so a closing terminal cannot take the server with it; a
- * container or a service manager wants the opposite — the process it launched
- * has to stay in the foreground until it is told to stop, and signals have to
- * reach the server.
- */
-async function runAttached() {
-  requireServerPrerequisites();
-  await configurePasswordAccess();
-  warnAboutExposure();
-
-  const child = spawnServer({ stdio: ["inherit", "inherit", "inherit"], detached: false });
-  for (const [signal, code] of [
-    ["SIGINT", 130],
-    ["SIGTERM", 143],
-  ]) {
-    process.on(signal, () => {
-      try {
-        child.kill(signal);
-      } catch {
-        // The server already exited; fall through to the normal exit path.
-      }
-      setTimeout(() => process.exit(code), 5_000).unref();
-    });
-  }
+  // SIGTERM 只会发到启动器本身（服务管理器按 pid 终止），不转发就停在半路；
+  // SIGINT 由终端发给整个进程组，服务端自己已经收到，重复转发会让它在收尾时再被打断。
+  process.on("SIGTERM", () => {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // The server already exited; fall through to the normal exit path.
+    }
+    setTimeout(() => process.exit(143), 5_000).unref();
+  });
 
   child.on("error", (error) => {
     console.error(`Failed to launch ompdesk through Bun (${bunPath}): ${error.message}`);
     process.exit(1);
   });
+
+  let browserOpened = false;
+  const url = `http://${serverHost}:${port}`;
+
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (text) => {
+    process.stdout.write(text);
+    if (openBrowser && !browserOpened && text.includes("Ready")) {
+      browserOpened = true;
+      openInBrowser(url);
+    }
+  });
+
   child.on("exit", (code) => process.exit(code ?? 0));
 }
 
-/**
- * Start in the background and hand the prompt back.
- *
- * The server itself is the detached process: its pid is what the record holds,
- * so a stop reaches exactly the process holding the port and nothing has to
- * outlive it. Output goes to the run log, and the terminal it was started from
- * has no claim on it.
- */
-async function startDaemon() {
-  requireServerPrerequisites();
-  await configurePasswordAccess();
-  // The warning belongs to the launch, not to the terminal: it is the person
-  // starting ompdesk who can still decide to drop `-H`.
-  warnAboutExposure();
-
-  const existing = readRecord(instanceFile);
-  if (existing && isProcessAlive(existing.pid) && (await probePort(existing.host, existing.port))) {
-    console.error(`ompdesk is already running at ${existing.url}`);
-    process.exit(1);
-  }
-  if (existing) removeRecord(instanceFile);
-
-  if (await probePort(serverHost, portNumber)) {
-    console.error(`Port ${port} is already in use by another process. Stop it, or start ompdesk with --port.`);
-    process.exit(1);
-  }
-
-  const controlToken = createControlToken();
-  const logPath = logFile(stateDirPath, port);
-  fs.mkdirSync(stateDirPath, { recursive: true });
-  const logHandle = fs.openSync(logPath, "a");
-
-  let child;
-  try {
-    child = spawnServer({
-      stdio: ["ignore", logHandle, logHandle],
-      detached: true,
-      controlToken,
-    });
-  } finally {
-    fs.closeSync(logHandle);
-  }
-
-  let exited = null;
-  child.on("exit", (code, signal) => {
-    exited = { code, signal };
-  });
-  child.on("error", (error) => {
-    exited = { error };
-  });
-  child.unref();
-
-  const started = await waitForPort(serverHost, portNumber, startupTimeoutMs(), true);
-  if (!started || exited) {
-    console.error(`ompdesk did not start. Inspect the run log: ${logPath}`);
-    terminateInstance(child.pid, true);
-    process.exit(1);
-  }
-
-  const record = {
-    pid: child.pid,
-    host: serverHost,
-    port: portNumber,
-    url: buildUrl(serverHost, portNumber),
-    startedAt: new Date().toISOString(),
-    controlToken,
-    log: logPath,
-    cwd: process.cwd(),
-  };
-  writeRecord(instanceFile, record);
-
-  console.log(`ompdesk is running at ${record.url}`);
-  console.log(`pid ${record.pid} · log ${logPath}`);
-  if (openBrowser) openInBrowser(record.url);
-  process.exit(0);
-}
-
-function startupTimeoutMs() {
-  const raw = Number(process.env.OMPDESK_STARTUP_TIMEOUT_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : 120_000;
-}
-
-/** `--port` selects one instance; without it every recorded instance is in play. */
-function selectInstances() {
-  return options.portExplicit ? [readRecord(instanceFile)].filter(Boolean) : listRecords(stateDirPath);
-}
-
-/** A record only counts while its process answers; anything else is a leftover to drop. */
-async function liveRecord(record) {
-  if (isProcessAlive(record.pid) && (await probePort(record.host, record.port))) return true;
-  removeRecord(recordFile(stateDirPath, record.port));
-  return false;
-}
-
-async function runStatus() {
-  const records = selectInstances();
-  if (records.length === 0) {
-    console.log("ompdesk is not running.");
-    return 0;
-  }
-
-  for (const record of records) {
-    if (!(await liveRecord(record))) {
-      console.log(`ompdesk on port ${record.port} is not running (removed a stale record).`);
-      continue;
-    }
-    console.log(formatStatus(record, await fetchActivity(record)).join("\n"));
-  }
-  return 0;
-}
-
-/**
- * Stop one instance and report whether the port actually came back.
- *
- * Printing "stopped" while the port stays bound would leave a server running
- * with no record to reach it, so the record is only dropped once the probe says
- * the port is free. `force` skips the graceful signal instead of waiting for it.
- */
-async function stopInstance(record, { force: forceful }) {
-  terminateInstance(record.pid, forceful);
-  const released = await waitForPort(record.host, record.port, forceful ? 4_000 : 8_000, false);
-  if (!released) {
-    terminateInstance(record.pid, true);
-    if (await waitForPort(record.host, record.port, 4_000, false)) {
-      removeRecord(recordFile(stateDirPath, record.port));
-      return true;
-    }
-    return false;
-  }
-  removeRecord(recordFile(stateDirPath, record.port));
-  return true;
-}
-
-async function runStop() {
-  const records = selectInstances();
-  if (records.length === 0) {
-    console.log("ompdesk is not running.");
-    return 0;
-  }
-
-  let status = 0;
-  for (const record of records) {
-    if (!(await liveRecord(record))) {
-      console.log(`ompdesk on port ${record.port} is not running (removed a stale record).`);
-      continue;
-    }
-
-    const refusal = stopRefusal(await fetchActivity(record));
-    if (refusal && !force) {
-      console.error(`Refusing to stop ompdesk on port ${record.port}: ${refusal}`);
-      status = 1;
-      continue;
-    }
-
-    if (await stopInstance(record, { force })) {
-      console.log(`ompdesk on port ${record.port} stopped.`);
-    } else {
-      console.error(
-        `ompdesk on port ${record.port} is still listening. Stop it from the process list, or retry with --force.`,
-      );
-      status = 1;
-    }
-  }
-  return status;
-}
-
-async function main() {
-  if (command === "status") return runStatus();
-  if (command === "stop") return runStop();
-  if (command === "foreground") {
-    await runAttached();
-    return 0;
-  }
-  return startDaemon();
-}
-
-main().then(
-  (code) => {
-    if (code) process.exit(code);
+configurePasswordAccess().then(
+  () => {
+    requireServerPrerequisites();
+    startServer();
   },
   (error) => {
     if (error instanceof PromptAbortedError) process.exit(130);

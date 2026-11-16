@@ -48,6 +48,20 @@
       "reason": "只声明类型与接口，没有运行时代码，任何 import 都只留下被擦除的类型；文件本身不可能出现在覆盖率产物里",
       "alternativeVerification": "bun run typecheck 校验这些类型的用法；读取会话消息的 lib/transcript-items.test.mjs 与 lib/session-reader.test.mjs 覆盖实现侧行为",
       "expires": "2027-02-11"
+    },
+    {
+      "path": "bin/ompdesk-options.js",
+      "rule": "rule-2",
+      "reason": "本次改动删除了 readCommand 与 start/status/stop/foreground 子命令解析，函数总数与被调用数各减少 3，两侧减少来自同一批删除；这些函数的测试已随实现一起移除，剩下 8 个函数仍全部被测试调用",
+      "alternativeVerification": "lib/ompdesk-options.test.mjs 覆盖全部剩余函数，并断言 status/stop/foreground 等位置参数被拒绝、--force 不出现在帮助文本里",
+      "expires": "2027-02-11"
+    },
+    {
+      "path": "bin/ompdesk.js",
+      "rule": "rule-2",
+      "reason": "CLI 入口在模块加载时即启动服务，测试进程无法 import，覆盖率产物里这个文件恒为 0/0；startServer 由原有 spawnServer 与 runAttached 合并而来，前台启动路径只能在真实进程里验证",
+      "alternativeVerification": "scripts/verify-package.mjs 用 npm pack 安装出来的包运行 ompdesk，请求首页确认前台服务已起来；CI 的 smoke:dev 走同一条启动路径",
+      "expires": "2027-02-11"
     }
   ]
 }

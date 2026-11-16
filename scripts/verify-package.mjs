@@ -105,8 +105,7 @@ if (existsSync(installedRouteCache)) {
   process.exit(1);
 }
 
-// 装好的 CLI 既用来启动，也用来收尾：`start` 把 next 拉成后台进程后自己就退出，
-// 光结束启动器进程接管不到真正在服务的那个。
+// 装好的 CLI 就是启动器本身：它在前台运行服务，结束它就把整棵进程树一起结束。
 const installedCli = join(installedPkg, "bin", "ompdesk.js");
 const consumerEnv = { ...process.env, PI_CODING_AGENT_DIR: join(CONSUMER, "agent") };
 // 断言针对默认产物目录，外部环境变量会把它换掉。
@@ -134,19 +133,8 @@ server.stdout.on("data", record);
 server.stderr.on("data", record);
 
 function stopServer() {
-  // `start` 把 next 拉成后台进程后启动器自己就退出了，只结束启动器接管不到真正在
-  // 服务的那个进程；交给装好的 CLI 按端口停，免得遗留的 next 继续占着端口应答。
-  const stopped = spawnSync(process.execPath, [installedCli, "stop", "--force", "-p", String(PORT)], {
-    cwd: CONSUMER,
-    env: consumerEnv,
-    encoding: "utf8",
-  });
-  if (stopped.status !== 0) {
-    process.stderr.write(
-      `[pack] 停服务失败（退出码 ${stopped.status}），后续断言会读到上一个进程的回答：\n${stopped.stdout ?? ""}${stopped.stderr ?? ""}`,
-    );
-    process.exit(1);
-  }
+  // 启动器与 next 都在前台：结束启动器就要连它的子进程一起结束，否则遗留的 next
+  // 继续占着端口应答，后面的断言会读到上一个进程的回答。
   if (server.exitCode !== null) return;
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], {

@@ -88,14 +88,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD bun --eval 'const r = await fetch(`http://127.0.0.1:${process.env.PORT ?? 30141}/`); process.exit(r.status < 500 ? 0 : 1)'
 
 # The published CLI, so the container honours the same flags and environment
-# variables as a local `ompdesk` — including `--authenticated`. `foreground`
-# keeps the server in the entrypoint process instead of detaching: a container
-# whose PID 1 exits would be torn down with it.
-#
-# It stays in ENTRYPOINT rather than CMD: any argument after the image name
-# replaces CMD wholesale, so `docker run <image> --port 8080` would lose
-# `foreground` and detach a server whose parent exits immediately. Options still
-# reach the launcher — `docker run <image> --port 8080` becomes
-# `foreground --port 8080` — but a subcommand does not, which is why the image
-# is documented as running the server and nothing else.
-ENTRYPOINT ["bun", "/app/bin/ompdesk.js", "foreground"]
+# variables as a local `ompdesk` — including `--authenticated`. The launcher
+# keeps the server in its own process until it exits, which is what a container
+# needs: when PID 1 exits the container is torn down with it.
+ENTRYPOINT ["bun", "/app/bin/ompdesk.js"]
