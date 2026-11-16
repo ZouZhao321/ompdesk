@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
-import { consoleWindowCheck, measureNewConsoleWindows, REPO_ROOT } from "../console-window-guard.mjs";
+import { consoleWindowCheck, measureNewConsoleWindows, REPO_ROOT, WINDOW_TMP_ROOT } from "../console-window-guard.mjs";
 
 const jiti = createJiti(import.meta.url);
 const { createGitEnv } = await jiti.import(path.join(REPO_ROOT, "lib", "git-env.ts"));
@@ -29,7 +29,7 @@ function git(cwd, args) {
  * 非 git 目录必须落在仓库之外：git 会向上发现 `.tmp` 所属的仓库，落在里面就得不到降级结果。
  */
 function makeFixture(t) {
-  const root = path.join(REPO_ROOT, ".tmp", `file-index-fixture-${process.pid}-${Date.now()}`);
+  const root = path.join(WINDOW_TMP_ROOT, "file-index", `${process.pid}-${Date.now()}`);
   fs.mkdirSync(root, { recursive: true });
   const plain = fs.mkdtempSync(path.join(os.tmpdir(), "ompdesk-file-index-plain-"));
   t.after(() => {

@@ -27,6 +27,13 @@ export const consoleWindowCheck = {
   timeout: 120_000,
 };
 
+/**
+ * 这一批用例的临时目录：每一轮判定各占一个子目录，跑完删掉；空了也把父目录一并删掉，
+ * 仓库里不留空壳。目录在仓库内，被测进程才能从仓库根解析到 SDK 的依赖。夹具仓库同样
+ * 建在它下面，各占一个按用例命名的子目录。
+ */
+export const WINDOW_TMP_ROOT = path.join(REPO_ROOT, ".tmp", "console-window");
+
 /** 轮询间隔：窗口存活时间在几十毫秒量级，间隔再大就会漏掉。 */
 const POLL_INTERVAL_MS = 5;
 /** 轮询器启动到基线之间的等待：`Add-Type` 编译需要时间。 */
@@ -88,12 +95,7 @@ function readWindows(file) {
  * @returns {Promise<{newWindows: {handle:number,title:string}[], exitCode: number|null, timedOut: boolean}>}
  */
 export async function measureNewConsoleWindows({ mode, scenario, env = {}, timeoutMs = 60_000 }) {
-  const workDir = path.join(
-    REPO_ROOT,
-    ".tmp",
-    "console-window",
-    `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  );
+  const workDir = path.join(WINDOW_TMP_ROOT, `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   fs.mkdirSync(workDir, { recursive: true });
   const outFile = path.join(workDir, "windows.log");
   const stopFile = path.join(workDir, "stop");
@@ -158,6 +160,11 @@ export async function measureNewConsoleWindows({ mode, scenario, env = {}, timeo
     return { newWindows: fresh, exitCode, timedOut, subjectResult, durationMs: Date.now() - startedAt };
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
+    try {
+      fs.rmdirSync(WINDOW_TMP_ROOT);
+    } catch {
+      // 还有别的用例在用这个父目录，或者父目录本来就不存在，留着即可。
+    }
   }
 }
 

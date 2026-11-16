@@ -9,13 +9,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { consoleWindowCheck, measureNewConsoleWindows, REPO_ROOT } from "../console-window-guard.mjs";
+import { consoleWindowCheck, measureNewConsoleWindows, WINDOW_TMP_ROOT } from "../console-window-guard.mjs";
 
 const EXPORT_SCENARIO = path.join(import.meta.dir, "export-scenario.mjs");
 
-/** 场景目录建在仓库的 `.tmp/` 下，用例结束整体删除。 */
+/** 场景目录建在用例的临时目录下，用例结束整体删除。 */
 function makeScenarioRoot(t) {
-  const root = path.join(REPO_ROOT, ".tmp", "export-scenario", `${process.pid}-${Date.now()}`);
+  const root = path.join(WINDOW_TMP_ROOT, "export", `${process.pid}-${Date.now()}`);
   fs.mkdirSync(root, { recursive: true });
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;

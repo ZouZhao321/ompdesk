@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
-import { consoleWindowCheck, measureNewConsoleWindows, REPO_ROOT } from "../console-window-guard.mjs";
+import { consoleWindowCheck, measureNewConsoleWindows, REPO_ROOT, WINDOW_TMP_ROOT } from "../console-window-guard.mjs";
 
 const jiti = createJiti(import.meta.url);
 const { createGitEnv } = await jiti.import(path.join(REPO_ROOT, "lib", "git-env.ts"));
@@ -23,7 +23,7 @@ function git(cwd, args) {
 
 /** 夹具：一个已提交的文件被改动，另有被忽略与未被忽略的文件各一个。 */
 function makeFixture(t) {
-  const root = path.join(REPO_ROOT, ".tmp", "console-window-parity", String(process.pid), String(Date.now()));
+  const root = path.join(WINDOW_TMP_ROOT, "parity", String(process.pid), String(Date.now()));
   fs.mkdirSync(root, { recursive: true });
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -57,7 +57,7 @@ async function runOnce({ mode, fixture, snapshotFile }) {
 
 test("有控制台与无控制台两种模式下命令结果一致", consoleWindowCheck, async (t) => {
   const fixture = makeFixture(t);
-  const workDir = path.join(REPO_ROOT, ".tmp", "console-window-parity-snapshots", String(process.pid));
+  const workDir = path.join(WINDOW_TMP_ROOT, "parity-snapshots", String(process.pid));
   fs.mkdirSync(workDir, { recursive: true });
   t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
   const withFile = path.join(workDir, "with.json");
