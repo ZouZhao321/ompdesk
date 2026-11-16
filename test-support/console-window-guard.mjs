@@ -101,6 +101,7 @@ function readWindows(file) {
  *   `subjectResult` 是被测进程写的场景结果，没有写回时为 `null`。
  */
 export async function measureNewConsoleWindows({ mode, scenario, env = {}, timeoutMs = 60_000 }) {
+  const release = await acquireMeasureLock();
   const workDir = path.join(WINDOW_TMP_ROOT, `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   fs.mkdirSync(workDir, { recursive: true });
   const outFile = path.join(workDir, "windows.log");
@@ -165,7 +166,46 @@ export async function measureNewConsoleWindows({ mode, scenario, env = {}, timeo
     return { newWindows: fresh, exitCode, timedOut, subjectResult };
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
+    release();
     removeWindowTmpRoot();
+  }
+}
+
+/**
+ * 同一时刻只允许一轮判定。窗口枚举是全机口径：两轮并行时，一方被测进程开的窗口会被另一方
+ * 的轮询器记成「新增」，判定因此偶发变红。用目录创建做跨进程锁，进程崩掉留下的锁按修改
+ * 时间判过期。
+ */
+const LOCK_DIR = path.join(WINDOW_TMP_ROOT, "measure.lock");
+const LOCK_WAIT_MS = 300_000;
+const LOCK_STALE_MS = 600_000;
+
+async function acquireMeasureLock() {
+  fs.mkdirSync(WINDOW_TMP_ROOT, { recursive: true });
+  const startedAt = Date.now();
+  for (;;) {
+    try {
+      fs.mkdirSync(LOCK_DIR);
+      return () => {
+        try {
+          fs.rmdirSync(LOCK_DIR);
+        } catch {
+          // 已经被清掉了。
+        }
+      };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      try {
+        if (Date.now() - fs.statSync(LOCK_DIR).mtimeMs > LOCK_STALE_MS) {
+          fs.rmSync(LOCK_DIR, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        // 锁刚好被释放，下一轮重试。
+      }
+      if (Date.now() - startedAt > LOCK_WAIT_MS) throw new Error("等待窗口判定锁超时");
+      await sleep(100);
+    }
   }
 }
 
