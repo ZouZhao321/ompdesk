@@ -21,11 +21,6 @@
 /** 隐藏控制台窗口的 `ShowWindow` 命令；`SW_HIDE`。 */
 const SW_HIDE = 0;
 
-/** 进程是否运行在 Bun 上；`bun:ffi` 只有 Bun 提供。 */
-function isBunRuntime() {
-  return typeof process.versions.bun === "string";
-}
-
 /**
  * 让当前进程拥有一个不可见的控制台。
  *
@@ -39,7 +34,7 @@ function isBunRuntime() {
  */
 function ensureHiddenConsole(deps = {}) {
   if ((deps.platform ?? process.platform) !== "win32") return false;
-  if (!(deps.isBun ?? isBunRuntime())) return false;
+  if (!(deps.isBun ?? typeof process.versions.bun === "string")) return false;
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { dlopen, FFIType } = deps.ffi ?? require("bun:ffi");
