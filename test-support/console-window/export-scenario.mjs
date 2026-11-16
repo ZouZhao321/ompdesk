@@ -2,8 +2,8 @@
  * 场景：会话导出路由的 GET。
  *
  * 走真实路由模块：先铺一份会话样本并把它所在的 agent 目录切成活动目录，再按路由的调用
- * 形状传入 `Request` 与 `params`。成功路径要求 200 与非空 HTML，并要求导出用的临时产物
- * 被清理；失败路径要求不存在的会话 id 得到 404，而不是抛错或挂起。
+ * 形状传入 `Request` 与 `params`。成功路径要求 200 与真实体量的 HTML（≥ 100KB），并要求
+ * 导出用的临时产物被清理；失败路径要求不存在的会话 id 得到 404，而不是抛错或挂起。
  */
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -74,7 +74,10 @@ export async function run() {
     if (!disposition.startsWith("attachment")) throw new Error(`导出结果不是附件下载：${disposition}`);
     const body = await response.text();
     if (!body.startsWith("<!DOCTYPE html>")) throw new Error(`导出结果不是 HTML 文档：${body.slice(0, 80)}`);
-    if (body.length < 1_000) throw new Error(`导出结果内容为空：${body.length} 字节`);
+    // 真实导出把整份会话渲染进 HTML，本机实测约 550KB；1KB 量级的响应体只可能是错误页或
+    // 空壳。已知限制：这里无法区分「omp CLI 子进程导出」与「进程内降级导出」，两者都不弹窗，
+    // 窗口判定覆盖不到降级分支。
+    if (body.length < 100_000) throw new Error(`导出结果不像真实导出：${body.length} 字节`);
   } else {
     if (response.status !== 404)
       throw new Error(`缺失会话的导出没有返回 404：${response.status} ${await response.text()}`);

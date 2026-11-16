@@ -46,7 +46,7 @@ export async function run() {
     worktrees: worktrees.map((worktree) => ({ path: normalize(worktree.path), isMain: worktree.isMain })),
     files: (files ?? []).map(normalize).sort(),
     ignored: [...(ignored ?? [])].sort(),
-    npx: { exitCode: npx ? 0 : 1, version: npx.stdout.trim() },
+    npx: { version: npx.stdout.trim() },
   };
 
   fs.writeFileSync(snapshotFile, JSON.stringify(snapshot, null, 2));

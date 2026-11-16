@@ -92,7 +92,13 @@ function readWindows(file) {
  * @param {string} options.scenario 场景模块的绝对路径，模块导出 `run()`。
  * @param {Record<string,string>} [options.env] 追加给被测进程与场景的环境变量。
  * @param {number} [options.timeoutMs] 被测进程的最长运行时间。
- * @returns {Promise<{newWindows: {handle:number,title:string}[], exitCode: number|null, timedOut: boolean}>}
+ * @returns {Promise<{
+ *   newWindows: {handle:number,title:string}[],
+ *   exitCode: number|null,
+ *   timedOut: boolean,
+ *   subjectResult: {ok: boolean, error?: string}|null
+ * }>} `newWindows` 是基线之后新出现的可见控制台窗口；`exitCode` 为 `null` 表示超时或启动失败；
+ *   `subjectResult` 是被测进程写的场景结果，没有写回时为 `null`。
  */
 export async function measureNewConsoleWindows({ mode, scenario, env = {}, timeoutMs = 60_000 }) {
   const workDir = path.join(WINDOW_TMP_ROOT, `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -121,7 +127,6 @@ export async function measureNewConsoleWindows({ mode, scenario, env = {}, timeo
       env: { ...process.env, ...env, OMPDESK_CONSOLE_SUBJECT_RESULT: subjectResultFile },
     });
 
-    const startedAt = Date.now();
     let timedOut = false;
     const exitCode = await new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -157,7 +162,7 @@ export async function measureNewConsoleWindows({ mode, scenario, env = {}, timeo
     const subjectResult = fs.existsSync(subjectResultFile)
       ? JSON.parse(fs.readFileSync(subjectResultFile, "utf8"))
       : null;
-    return { newWindows: fresh, exitCode, timedOut, subjectResult, durationMs: Date.now() - startedAt };
+    return { newWindows: fresh, exitCode, timedOut, subjectResult };
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
     try {
