@@ -103,6 +103,7 @@ allowed-roots.ts     allowFileRoot() 与额外允许根
 path-security.ts     路径越界判定
 draft-store.ts       内存草稿表（刷新即失效）
 file-access.ts       /api/files 与 worktree 允许的文件根
+file-load-error.ts   目录列表失败的状态码分类：文案键与插值参数
 file-paths.ts        客户端与服务端的路径编码辅助
 image-zoom.ts        图片缩放的几何计算（适配、锚点缩放、边界收敛）
 map-layout.ts        按轮树的布局计算（lane + 主干优先）
