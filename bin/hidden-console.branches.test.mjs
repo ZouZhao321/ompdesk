@@ -67,6 +67,13 @@ test("非 Bun 运行时不做任何事", () => {
   assert.deepEqual(fake.libraries, [], "不该加载任何系统库");
 });
 
+test("不注入运行时时按当前进程判断", () => {
+  // 生产调用不传 isBun，这一条走真实的运行时判断，守住那条默认路径。
+  const fake = fakeFfi({ initialWindows: 1 });
+  assert.equal(ensureHiddenConsole({ platform: "win32", ffi: fake.ffi }), false);
+  assert.deepEqual(fake.libraries, ["kernel32.dll"]);
+});
+
 test("进程已有控制台时不动它", () => {
   const fake = fakeFfi({ initialWindows: 1234 });
 
