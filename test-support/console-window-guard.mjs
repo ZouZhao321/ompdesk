@@ -165,11 +165,19 @@ export async function measureNewConsoleWindows({ mode, scenario, env = {}, timeo
     return { newWindows: fresh, exitCode, timedOut, subjectResult };
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
-    try {
-      fs.rmdirSync(WINDOW_TMP_ROOT);
-    } catch {
-      // 还有别的用例在用这个父目录，或者父目录本来就不存在，留着即可。
-    }
+    removeWindowTmpRoot();
+  }
+}
+
+/**
+ * 删掉已经空了的临时目录父目录。多个用例同时跑时里面还有别人的目录，删不掉就留着，
+ * 调用方不必关心结果。
+ */
+export function removeWindowTmpRoot() {
+  try {
+    fs.rmdirSync(WINDOW_TMP_ROOT);
+  } catch {
+    // 还有别的用例在用这个父目录，或者父目录本来就不存在。
   }
 }
 

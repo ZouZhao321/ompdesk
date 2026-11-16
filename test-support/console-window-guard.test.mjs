@@ -11,7 +11,13 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
-import { consoleWindowCheck, measureNewConsoleWindows, REPO_ROOT, WINDOW_TMP_ROOT } from "./console-window-guard.mjs";
+import {
+  consoleWindowCheck,
+  measureNewConsoleWindows,
+  removeWindowTmpRoot,
+  REPO_ROOT,
+  WINDOW_TMP_ROOT,
+} from "./console-window-guard.mjs";
 
 const jiti = createJiti(import.meta.url);
 const { createGitEnv } = await jiti.import(path.join(REPO_ROOT, "lib", "git-env.ts"));
@@ -26,9 +32,12 @@ function git(cwd, args) {
 
 /** 临时夹具仓库：一个已提交的文件被改动，供状态与 diff 共同使用。 */
 function makeFixture(t) {
-  const root = path.join(WINDOW_TMP_ROOT, "fixture", String(process.pid), String(Date.now()));
+  const root = path.join(WINDOW_TMP_ROOT, `fixture-${process.pid}-${Date.now()}`);
   fs.mkdirSync(root, { recursive: true });
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+    removeWindowTmpRoot();
+  });
 
   git(root, ["init", "-q"]);
   git(root, ["config", "user.email", "test@example.com"]);
