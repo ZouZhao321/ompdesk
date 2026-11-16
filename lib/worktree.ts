@@ -152,6 +152,10 @@ export async function resolveProject(cwd: string): Promise<ProjectInfo> {
     info = { projectRoot: cwd, branch: null, isWorktree: false, isTopLevel: false };
   }
 
+  // git prints paths with forward slashes while a recorded cwd keeps whatever
+  // the user typed. Consumers group sessions by the raw projectRoot string, so
+  // one directory must not reach them as two projects.
+  info = { ...info, projectRoot: normalize(info.projectRoot) };
   cache.set(cwd, { info, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
   return info;
 }
