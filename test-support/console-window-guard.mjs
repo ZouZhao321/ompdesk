@@ -23,7 +23,12 @@ export const SUBJECT_SCRIPT = path.join(HERE, "console-window-subject.mjs");
 
 /** 判定依赖真实的窗口枚举，只在 Windows 桌面会话里有意义。 */
 export const consoleWindowCheck = {
-  skip: process.platform === "win32" ? false : "控制台窗口只出现在 Windows 上",
+  skip:
+    process.platform !== "win32"
+      ? "控制台窗口只出现在 Windows 上"
+      : process.env.GITHUB_ACTIONS === "true"
+        ? "窗口枚举依赖交互桌面会话，GitHub 托管的无人值守会话里枚举不到可见窗口"
+        : false,
   timeout: 120_000,
 };
 

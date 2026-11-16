@@ -58,7 +58,8 @@ bun test test-support/console-window-guard.test.mjs
 bun test test-support/console-window
 ```
 
-用例只在 Windows 上运行；其它平台在注册时跳过并写明原因。
+用例只在 Windows 上运行；其它平台在注册时跳过并写明原因。GitHub 托管的 runner 上同样在注册
+时跳过：那里的会话枚举不到可见窗口，「必须出现窗口」的对照会失败，而正向用例会恒真。
 
 ## CI
 
