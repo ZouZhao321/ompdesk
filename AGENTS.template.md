@@ -106,6 +106,8 @@ gh pr comment <PR> --body-file <文件> --attach <截图> --attach <视频>
 执行命令走 SDK 的原生 shell，那条路径不接受该参数：`instrumentation.ts` 在
 `register()` 里调用 `bin/hidden-console.js` 给宿主补一个隐藏控制台，子进程改为继承它。
 改动启动流程时不能省掉这一步，`bin/hidden-console.test.mjs` 用真实窗口枚举守住它。
+命令级覆盖与判据说明见 `docs/console-window-tests.md`；那组用例只在 Windows 桌面会话里
+运行，不进 CI，改动子进程调用或启动流程时在本机跑一次。
 
 ## 侧边栏项目排序与置顶
 
