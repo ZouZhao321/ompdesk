@@ -39,7 +39,8 @@ function isBunRuntime() {
  */
 function ensureHiddenConsole(deps = {}) {
   if ((deps.platform ?? process.platform) !== "win32") return false;
-  if (!(deps.isBun ?? isBunRuntime())) return false;
+  const bunRuntime = isBunRuntime();
+  if (!(deps.isBun ?? bunRuntime)) return false;
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { dlopen, FFIType } = deps.ffi ?? require("bun:ffi");

@@ -137,7 +137,12 @@ function countNewConsoleWindows(mode) {
 // 判定依赖真实的控制台窗口枚举，只在 Windows 桌面会话里有意义。
 // 每轮先起轮询器建立基线、再等被测进程跑完 SDK shell、再等窗口收尾，单轮约 2 秒。
 const windowCheck = {
-  skip: process.platform === "win32" ? false : "只在 Windows 上出现控制台窗口",
+  skip:
+    process.platform !== "win32"
+      ? "只在 Windows 上出现控制台窗口"
+      : process.env.GITHUB_ACTIONS === "true"
+        ? "窗口枚举依赖交互桌面会话，GitHub 托管的无人值守会话里枚举不到可见窗口"
+        : false,
   timeout: 30_000,
 };
 
