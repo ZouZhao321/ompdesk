@@ -29,7 +29,7 @@
 - `test-support/console-window/*.mjs`：各命令的场景，导出 `run()`，用
   `process.env` 接收夹具路径。
 - `test-support/console-window-guard.test.mjs`：反向对照与 git 状态、diff 的覆盖。
-- `bin/hidden-console.test.mjs`：SDK 原生 shell 这条路径的正反对照，同样走上面两份共用件。
+- `bin/hidden-console.test.mjs`：SDK 原生 shell 这条路径的正反对照，自带一套窗口轮询。
 
 被测进程以 detached、隐藏窗口、输出丢弃的方式启动，与后台实例同形。场景里的失败经结果
 文件带回：被测进程的标准输出被丢弃，断言不能靠读它的输出。
