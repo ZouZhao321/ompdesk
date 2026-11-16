@@ -11,16 +11,29 @@ export interface FileLoadFailureMessage {
   params?: TranslationParams;
 }
 
+/** 目录列表请求的失败：带上 HTTP 状态码，界面据此决定文案。 */
+export class FileListError extends Error {
+  /** 响应状态码；请求没拿到响应（断连、响应不是 HTTP）时为 `null`。 */
+  readonly status: number | null;
+
+  constructor(status: number | null) {
+    super(status === null ? "File list request failed" : `File list request failed (HTTP ${status})`);
+    this.name = "FileListError";
+    this.status = status;
+  }
+}
+
 /**
- * 把一次目录列表失败的状态码翻成文案。
+ * 把一次目录列表失败翻成文案。
  *
- * `403` 是授权拒绝；其它数字是服务端错误；没有状态码（连接中断、响应不是 HTTP）
- * 单独一类，用户才能分清是自己的权限问题、服务端问题，还是网络断了。
+ * `403` 是授权拒绝；其它状态码是服务端错误；拿不到状态码（连接中断、响应不是 HTTP、
+ * 响应体不是 JSON）单独一类，用户才能分清是自己的权限问题、服务端问题，还是网络断了。
  *
- * @param status HTTP 状态码，请求没拿到响应时为 `null`
+ * @param error 取数函数抛出的异常
  * @returns 要显示的文案键与插值参数
  */
-export function describeFileLoadFailure(status: number | null): FileLoadFailureMessage {
+export function describeFileLoadFailure(error: unknown): FileLoadFailureMessage {
+  const status = error instanceof FileListError ? error.status : null;
   if (status === 403) return { key: "files.unauthorized" };
   if (status === null) return { key: "files.loadFailedNetwork" };
   return { key: "files.loadFailed", params: { status } };

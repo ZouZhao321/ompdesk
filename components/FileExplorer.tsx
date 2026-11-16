@@ -14,7 +14,7 @@ import type { GitFileStatus, GitStatusResponse } from "@/lib/git-types";
 import type { OpenFileOptions } from "@/lib/panel-tabs";
 import { GIT_STATUS_COLORS, GitStatusBadge } from "./GitStatusBadge";
 import type { Translate } from "@/lib/i18n/types";
-import { describeFileLoadFailure, type FileLoadFailureMessage } from "@/lib/file-load-error";
+import { describeFileLoadFailure, FileListError, type FileLoadFailureMessage } from "@/lib/file-load-error";
 import { useI18n } from "@/hooks/useI18n";
 
 /** 被 Git 忽略的条目颜色，由运行期主题变量推导，明暗两套主题通用。 */
@@ -82,18 +82,6 @@ interface PendingConflict {
   nonReplaceable: string[];
 }
 
-/** 目录列表请求的失败：带上 HTTP 状态码，界面据此决定文案。 */
-class FileListError extends Error {
-  /** 响应状态码；请求没拿到响应（断连、响应不是 HTTP）时为 `null`。 */
-  readonly status: number | null;
-
-  constructor(status: number | null) {
-    super(status === null ? "File list request failed" : `File list request failed (HTTP ${status})`);
-    this.name = "FileListError";
-    this.status = status;
-  }
-}
-
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
   let res: Response;
   try {
@@ -102,7 +90,12 @@ async function fetchEntries(dirPath: string): Promise<FileNode[]> {
     throw new FileListError(null);
   }
   if (!res.ok) throw new FileListError(res.status);
-  const data = (await res.json()) as { entries?: FileEntry[] };
+  let data: { entries?: FileEntry[] };
+  try {
+    data = (await res.json()) as { entries?: FileEntry[] };
+  } catch {
+    throw new FileListError(null);
+  }
   return (data.entries ?? []).map((e) => ({
     name: e.name,
     fullPath: joinFilePath(dirPath, e.name),
@@ -271,9 +264,9 @@ function TreeNode({
         setLoadError(null);
         setLoaded(true);
       } catch (failure) {
-        // 失败时不标记已加载，下次展开或整树刷新会重新请求。
-        setChildren([]);
-        setLoadError(describeFileLoadFailure(failure instanceof FileListError ? failure.status : null));
+        // 失败时不标记已加载，下次展开或整树刷新会重新请求；已经显示过的内容保留，
+        // 免得一次刷新抖动就把可看的目录清空。
+        setLoadError(describeFileLoadFailure(failure));
       } finally {
         setLoading(false);
       }
@@ -281,9 +274,8 @@ function TreeNode({
     [loaded, node.fullPath],
   );
 
-  // Re-fetch children when the tree refreshes and the directory is open. A node whose
-  // previous load failed is not marked as loaded, so it must be included here or it
-  // would never be retried.
+  // 整树刷新时重取已展开目录的子项。上一轮失败的节点不会被标记为已加载，因此必须
+  // 一并包含在这里，否则它永远等不到重试。
   useEffect(() => {
     if (open) {
       loadChildren(true);
@@ -293,8 +285,8 @@ function TreeNode({
 
   const handleClick = useCallback(() => {
     if (node.isDir) {
-      // A failed directory is still expanded; clicking it means "try again", not
-      // "collapse", so the user sees the result of the click.
+      // 失败的目录仍处于展开状态，此时点击的含义是「重试」而不是「收起」，
+      // 用户才看得到自己这一下点击的结果。
       if (open && loadError) {
         void loadChildren(true);
         return;
@@ -784,7 +776,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       })
       .catch((failure) => {
         if (!cancelled) {
-          setRootError(describeFileLoadFailure(failure instanceof FileListError ? failure.status : null));
+          setRootError(describeFileLoadFailure(failure));
         }
       })
       .finally(() => {
