@@ -21,24 +21,28 @@
 /** 隐藏控制台窗口的 `ShowWindow` 命令；`SW_HIDE`。 */
 const SW_HIDE = 0;
 
+/** 进程是否运行在 Bun 上；`bun:ffi` 只有 Bun 提供。 */
+function isBunRuntime() {
+  return typeof process.versions.bun === "string";
+}
+
 /**
  * 让当前进程拥有一个不可见的控制台。
  *
- * @param {{ platform?: string, ffi?: { dlopen: Function, FFIType: object } }} [deps]
- *   平台与 FFI 入口按参数传入，用例才能在不改全局 `Bun` 的前提下覆盖每条分支。
+ * @param {{ platform?: string, isBun?: boolean, ffi?: { dlopen: Function, FFIType: object } }} [deps]
+ *   平台、运行时所处环境与 FFI 入口按参数传入，用例才能在不改全局 `Bun`、不依赖宿主平台的
+ *   前提下覆盖每条分支；生产调用不传参数。
  * @returns {boolean} 是否真的分配并隐藏了控制台。
  *
- * 返回 `false` 的三种情况都是「保持原状」：当前平台不需要、进程本来就有控制台、
+ * 返回 `false` 的四种情况都是「保持原状」：非 Windows、非 Bun 运行时、进程本来就有控制台、
  * 分配失败。分配失败保持原状——没有控制台只是会弹窗，不该让服务起不来。
  */
 function ensureHiddenConsole(deps = {}) {
-  const platform = deps.platform ?? process.platform;
-  if (platform !== "win32") return false;
-  if (typeof process.versions.bun !== "string") return false;
+  if ((deps.platform ?? process.platform) !== "win32") return false;
+  if (!(deps.isBun ?? isBunRuntime())) return false;
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ffi = deps.ffi ?? require("bun:ffi");
-  const { dlopen, FFIType } = ffi;
+  const { dlopen, FFIType } = deps.ffi ?? require("bun:ffi");
 
   const kernel32 = dlopen("kernel32.dll", {
     AllocConsole: { args: [], returns: FFIType.i32 },
@@ -49,13 +53,13 @@ function ensureHiddenConsole(deps = {}) {
   if (Number(kernel32.symbols.GetConsoleWindow()) !== 0) return false;
   if (Number(kernel32.symbols.AllocConsole()) === 0) return false;
 
-  const window = kernel32.symbols.GetConsoleWindow();
-  if (Number(window) === 0) return false;
+  const handle = kernel32.symbols.GetConsoleWindow();
+  if (Number(handle) === 0) return false;
 
   const user32 = dlopen("user32.dll", {
     ShowWindow: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
   });
-  user32.symbols.ShowWindow(window, SW_HIDE);
+  user32.symbols.ShowWindow(handle, SW_HIDE);
   return true;
 }
 
