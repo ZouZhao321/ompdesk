@@ -16,6 +16,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
+import net from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,6 +27,8 @@ const CONSUMER = join(WORK, "consumer");
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.OMPDESK_PACK_PORT ?? 30198);
 const STARTUP_TIMEOUT_MS = 120_000;
+// 收尾时等子进程退出的上限：SIGTERM 一次、SIGKILL 一次，两次都超时就是清理失败。
+const STOP_TIMEOUT_MS = 10_000;
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -132,20 +135,80 @@ const record = (chunk) => output.push(chunk.toString());
 server.stdout.on("data", record);
 server.stderr.on("data", record);
 
-function stopServer() {
-  // 启动器与 next 都在前台：结束启动器就要连它的子进程一起结束，否则遗留的 next
-  // 继续占着端口应答，后面的断言会读到上一个进程的回答。
-  if (server.exitCode !== null) return;
-  if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], {
-      stdio: "ignore",
+/** 子进程是否已经退出：被信号结束时 `exitCode` 是 null，`signalCode` 才有值。 */
+function hasExited() {
+  return server.exitCode !== null || server.signalCode !== null;
+}
+
+/** 等到子进程退出；超时返回 false。 */
+function exitWithin(timeoutMs) {
+  if (hasExited()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    server.once("exit", () => {
+      clearTimeout(timer);
+      resolve(true);
     });
+  });
+}
+
+/** 把信号送到整棵进程树。 */
+function signalTree(signal) {
+  if (process.platform === "win32") {
+    // Windows 没有进程组，带得走 next 的只有 taskkill 的强制结束。
+    spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], { stdio: "ignore" });
     return;
   }
   try {
-    process.kill(-server.pid, "SIGTERM");
-  } catch {
-    server.kill("SIGTERM");
+    process.kill(-server.pid, signal);
+  } catch (error) {
+    // ESRCH：进程组已经空了，没有可送的对象；别的错误照常抛。
+    if (error.code !== "ESRCH") throw error;
+  }
+}
+
+/** 端口当前是否还有人应答。 */
+function portAnswers() {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: HOST, port: PORT });
+    const finish = (open) => {
+      socket.destroy();
+      resolve(open);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(1_000, () => finish(false));
+  });
+}
+
+/**
+ * 收尾：请求停止，等它真的退出，再确认端口空出来。
+ *
+ * 启动器与 next 都在前台，结束启动器就要连它的子进程一起结束，否则遗留的 next
+ * 继续占着端口应答，后面的断言会读到上一个进程的回答。发完信号就走会把「没停下
+ * 来」当成通过，所以这里等到退出为止；超时用 SIGKILL 收尾，再超时就判失败。
+ * 退出码不是判据：按信号结束的进程在 POSIX 上报 143/130、在 Windows 上报 1，
+ * 能说明清理成功的是「进程没了、端口空了」。
+ */
+async function stopServer() {
+  if (!hasExited()) {
+    signalTree("SIGTERM");
+    if (!(await exitWithin(STOP_TIMEOUT_MS))) {
+      signalTree("SIGKILL");
+      if (!(await exitWithin(STOP_TIMEOUT_MS))) {
+        process.stderr.write(`[pack] 装出来的服务（pid ${server.pid}）结束不掉，端口 ${PORT} 仍被占用\n`);
+        process.exit(1);
+      }
+    }
+  }
+
+  const portDeadline = Date.now() + STOP_TIMEOUT_MS;
+  while (await portAnswers()) {
+    if (Date.now() > portDeadline) {
+      process.stderr.write(`[pack] 收尾后端口 ${PORT} 仍有人应答，服务没有真正停下\n`);
+      process.exit(1);
+    }
+    await Bun.sleep(250);
   }
 }
 
@@ -169,7 +232,7 @@ try {
     await Bun.sleep(1_000);
   }
 } finally {
-  stopServer();
+  await stopServer();
 }
 
 if (status !== 200) {
