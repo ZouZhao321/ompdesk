@@ -152,6 +152,21 @@ function exitWithin(timeoutMs) {
   });
 }
 
+/**
+ * 进程组是否还有人。整组结束之后 pgid 会被释放，再按它投递就可能打到复用了该号码
+ * 的无关进程组，所以投递前先探测。
+ */
+function groupAlive(pgid) {
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch (error) {
+    // ESRCH：组已经不在了，没有可送的对象；别的错误照常抛。
+    if (error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
 /** 把信号送到整棵进程树。 */
 function signalTree(signal) {
   if (process.platform === "win32") {
@@ -159,10 +174,11 @@ function signalTree(signal) {
     spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], { stdio: "ignore" });
     return;
   }
+  if (!groupAlive(server.pid)) return;
   try {
     process.kill(-server.pid, signal);
   } catch (error) {
-    // ESRCH：进程组已经空了，没有可送的对象；别的错误照常抛。
+    // ESRCH：探测之后到投递之间整组刚好退出。
     if (error.code !== "ESRCH") throw error;
   }
 }
@@ -216,6 +232,12 @@ async function stopServer() {
   // 应答端口，SIGKILL 升级就发不出去。先给收尾一个窗口，端口还有人应答就对整棵
   // 进程树补一次 SIGKILL（进程组还在，组领导的 pid 可以用来投递），再判。
   if (await waitForPortRelease(STOP_TIMEOUT_MS)) return;
+  if (process.platform === "win32") {
+    // 启动器退出后 Windows 追不到 next：`taskkill /T` 按父进程的 pid 树枚举，父
+    // 进程没了就没有入口，补发信号只是空操作。这里直接判失败。
+    process.stderr.write(`[pack] 启动器已退出，端口 ${PORT} 仍有进程应答，Windows 上无法再追到子进程\n`);
+    process.exit(1);
+  }
   signalTree("SIGKILL");
   if (await waitForPortRelease(STOP_TIMEOUT_MS)) return;
   process.stderr.write(`[pack] 收尾后端口 ${PORT} 仍有人应答，服务没有真正停下\n`);
