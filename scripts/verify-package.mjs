@@ -152,21 +152,6 @@ function exitWithin(timeoutMs) {
   });
 }
 
-/**
- * 进程组是否还有人。整组结束之后 pgid 会被释放，再按它投递就可能打到复用了该号码
- * 的无关进程组，所以投递前先探测。
- */
-function groupAlive(pgid) {
-  try {
-    process.kill(-pgid, 0);
-    return true;
-  } catch (error) {
-    // ESRCH：组已经不在了，没有可送的对象；别的错误照常抛。
-    if (error.code === "ESRCH") return false;
-    throw error;
-  }
-}
-
 /** 把信号送到整棵进程树。 */
 function signalTree(signal) {
   if (process.platform === "win32") {
@@ -174,11 +159,10 @@ function signalTree(signal) {
     spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], { stdio: "ignore" });
     return;
   }
-  if (!groupAlive(server.pid)) return;
   try {
     process.kill(-server.pid, signal);
   } catch (error) {
-    // ESRCH：探测之后到投递之间整组刚好退出。
+    // ESRCH：投递这一刻组里已经没人了；别的错误照常抛。
     if (error.code !== "ESRCH") throw error;
   }
 }
