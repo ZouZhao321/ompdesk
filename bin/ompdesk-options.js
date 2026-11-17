@@ -23,12 +23,15 @@ function isLoopbackHostname(hostname) {
  * 客户端真正能连上的主机。
  *
  * `0.0.0.0` 与 `::` 是「监听所有地址」的写法，本身不是可连接的目标：监听它们的
- * 服务从回环地址访问。IPv6 方括号属于 URL 语法而不是套接字语法，这里一并去掉，
- * 让 `[::1]` 与 `::1` 得到同一个主机。
+ * 服务从回环地址访问。IPv4 全家桶的回环是 `127.0.0.1`，IPv6 全家桶的回环是
+ * `::1`——`::` 上能不能连回 `127.0.0.1` 取决于双栈，`net.ipv6.bindv6only=1`
+ * 时那个套接字只接受 IPv6。IPv6 方括号属于 URL 语法而不是套接字语法，这里一并
+ * 去掉，让 `[::1]` 与 `::1` 得到同一个主机。
  */
 function connectableHost(hostname) {
   const bare = String(hostname ?? "").replace(/^\[|\]$/g, "");
-  if (bare === "" || bare === "0.0.0.0" || bare === "::") return "127.0.0.1";
+  if (bare === "" || bare === "0.0.0.0") return "127.0.0.1";
+  if (bare === "::") return "::1";
   return bare;
 }
 
