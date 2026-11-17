@@ -251,7 +251,9 @@ function startServer() {
     }
   });
 
-  child.on("exit", (code, signal) => process.exit(code ?? signalExitCode(signal) ?? 0));
+  // 子进程被信号杀死时 `code` 是 null，退出码只能由 `signalExitCode` 给出；两者
+  // 都拿不到（从未真正启动）才按失败收尾，报 0 会让服务管理器当成正常结束。
+  child.on("exit", (code, signal) => process.exit(code ?? signalExitCode(signal) ?? 1));
 }
 
 configurePasswordAccess().then(
