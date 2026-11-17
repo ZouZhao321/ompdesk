@@ -22,6 +22,17 @@ function signalExitCode(signal) {
 }
 
 /**
+ * 是否需要把 SIGINT 转给子进程。
+ *
+ * 有控制台时终端按进程组投递 Ctrl+C，同组的子进程已经收到一次；只有启动器单独
+ * 收到信号的情形才需要转发：没有控制台的服务管理器，以及容器里作为 PID 1 的
+ * 启动器（`docker stop` 只送到 PID 1）。
+ */
+function shouldForwardInterrupt({ hasConsole, pid }) {
+  return !hasConsole || pid === 1;
+}
+
+/**
  * 把 SIGTERM 与 SIGINT 转给子进程，返回注销信号处理函数的方法。
  *
  * `interrupt` 为假时不接管 SIGINT：终端里的 Ctrl+C 按进程组投递，同组的子进程
@@ -47,4 +58,4 @@ function forwardStopSignals(child, exit, { interrupt = true, timeoutMs = FORWARD
   };
 }
 
-module.exports = { STOP_SIGNALS, forwardStopSignals, signalExitCode };
+module.exports = { STOP_SIGNALS, forwardStopSignals, shouldForwardInterrupt, signalExitCode };

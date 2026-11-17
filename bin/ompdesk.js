@@ -25,7 +25,7 @@ const fs = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parseLaunchOptions, loopbackBindingError, usageText, browserUrl } = require("./ompdesk-options");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { forwardStopSignals, signalExitCode } = require("./stop-signals");
+const { forwardStopSignals, shouldForwardInterrupt, signalExitCode } = require("./stop-signals");
 const {
   getWebAuthStatus,
   resolveWebAuthFile,
@@ -229,7 +229,9 @@ function startServer() {
   });
 
   // 启动器自己退出不会带走子进程：信号必须转给 next，否则它成为孤儿继续占着端口。
-  const stopForwarding = forwardStopSignals(child, (code) => process.exit(code));
+  // SIGINT 只在启动器单独收到信号时才转，见 `shouldForwardInterrupt`。
+  const interrupt = shouldForwardInterrupt({ hasConsole: launcherHasConsole, pid: process.pid });
+  const stopForwarding = forwardStopSignals(child, (code) => process.exit(code), { interrupt });
   child.once("exit", stopForwarding);
 
   child.on("error", (error) => {
