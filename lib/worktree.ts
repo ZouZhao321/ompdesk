@@ -122,36 +122,39 @@ export async function resolveProject(cwd: string): Promise<ProjectInfo> {
   try {
     if (!existsSync(cwd)) {
       info = inferRemovedWorktree(cwd) ?? { projectRoot: cwd, branch: null, isWorktree: false, isTopLevel: false };
-      cache.set(cwd, { info, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
-      return info;
+    } else {
+      const out = await git(cwd, [
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-common-dir",
+        "--git-dir",
+        "--show-toplevel",
+        "--abbrev-ref",
+        "HEAD",
+      ]);
+      const [commonDir, gitDir, toplevel, ref] = out.split("\n").map((l) => l.trim());
+      // For a linked worktree, --git-dir differs from --git-common-dir.
+      // Only collapse *worktree toplevels* into the main repo. A session whose
+      // cwd is a subdirectory of a repo keeps its own project identity —
+      // grouping subdirs under the repo root would change where new sessions
+      // are created for existing users.
+      const isTopLevel = directoryKey(toplevel) === directoryKey(cwd);
+      const isWorktreeTopLevel = gitDir !== commonDir && isTopLevel;
+      info = {
+        projectRoot: isWorktreeTopLevel ? dirname(commonDir) : cwd,
+        branch: ref && ref !== "HEAD" ? ref : null,
+        isWorktree: isWorktreeTopLevel,
+        isTopLevel,
+      };
     }
-    const out = await git(cwd, [
-      "rev-parse",
-      "--path-format=absolute",
-      "--git-common-dir",
-      "--git-dir",
-      "--show-toplevel",
-      "--abbrev-ref",
-      "HEAD",
-    ]);
-    const [commonDir, gitDir, toplevel, ref] = out.split("\n").map((l) => l.trim());
-    // For a linked worktree, --git-dir differs from --git-common-dir.
-    // Only collapse *worktree toplevels* into the main repo. A session whose
-    // cwd is a subdirectory of a repo keeps its own project identity —
-    // grouping subdirs under the repo root would change where new sessions
-    // are created for existing users.
-    const isTopLevel = directoryKey(toplevel) === directoryKey(cwd);
-    const isWorktreeTopLevel = gitDir !== commonDir && isTopLevel;
-    info = {
-      projectRoot: isWorktreeTopLevel ? dirname(commonDir) : cwd,
-      branch: ref && ref !== "HEAD" ? ref : null,
-      isWorktree: isWorktreeTopLevel,
-      isTopLevel,
-    };
   } catch {
     info = { projectRoot: cwd, branch: null, isWorktree: false, isTopLevel: false };
   }
 
+  // git prints paths with forward slashes while a recorded cwd keeps whatever
+  // the user typed. Consumers group sessions by the raw projectRoot string, so
+  // one directory must not reach them as two projects.
+  info = { ...info, projectRoot: normalize(info.projectRoot) };
   cache.set(cwd, { info, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
   return info;
 }
