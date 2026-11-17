@@ -24,6 +24,8 @@ const path = require("path");
 const fs = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parseLaunchOptions, loopbackBindingError, usageText, browserUrl } = require("./ompdesk-options");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { forwardStopSignals, signalExitCode } = require("./stop-signals");
 const {
   getWebAuthStatus,
   resolveWebAuthFile,
@@ -202,8 +204,8 @@ function openInBrowser(url) {
  * 别的版本留下的缓存不可能被这次服务读到，因此这里没有需要清理的东西，也没有
  * 「删不掉就起不来」这条路径。
  *
- * stdin 与 stderr 保持继承，Ctrl+C 才送达服务端；stdout 单独接管，只为了在服务端
- * 报告就绪时打开浏览器，其余内容原样转发。
+ * stdin 与 stderr 保持继承，终端输入输出照旧直达服务端；stdout 单独接管，只为了在
+ * 服务端报告就绪时打开浏览器，其余内容原样转发。停止信号由启动器转发给子进程。
  */
 function startServer() {
   warnAboutExposure();
@@ -226,16 +228,9 @@ function startServer() {
     },
   });
 
-  // SIGTERM 只会发到启动器本身（服务管理器按 pid 终止），不转发就停在半路；
-  // SIGINT 由终端发给整个进程组，服务端自己已经收到，重复转发会让它在收尾时再被打断。
-  process.on("SIGTERM", () => {
-    try {
-      child.kill("SIGTERM");
-    } catch {
-      // The server already exited; fall through to the normal exit path.
-    }
-    setTimeout(() => process.exit(143), 5_000).unref();
-  });
+  // 启动器自己退出不会带走子进程：信号必须转给 next，否则它成为孤儿继续占着端口。
+  const stopForwarding = forwardStopSignals(child, (code) => process.exit(code));
+  child.once("exit", stopForwarding);
 
   child.on("error", (error) => {
     console.error(`Failed to launch ompdesk through Bun (${bunPath}): ${error.message}`);
@@ -256,7 +251,7 @@ function startServer() {
     }
   });
 
-  child.on("exit", (code) => process.exit(code ?? 0));
+  child.on("exit", (code, signal) => process.exit(code ?? signalExitCode(signal) ?? 0));
 }
 
 configurePasswordAccess().then(
