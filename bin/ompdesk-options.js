@@ -20,6 +20,25 @@ function isLoopbackHostname(hostname) {
 }
 
 /**
+ * 客户端真正能连上的主机。
+ *
+ * `0.0.0.0` 与 `::` 是「监听所有地址」的写法，本身不是可连接的目标：监听它们的
+ * 服务从回环地址访问。IPv6 方括号属于 URL 语法而不是套接字语法，这里一并去掉，
+ * 让 `[::1]` 与 `::1` 得到同一个主机。
+ */
+function connectableHost(hostname) {
+  const bare = String(hostname ?? "").replace(/^\[|\]$/g, "");
+  if (bare === "" || bare === "0.0.0.0" || bare === "::") return "127.0.0.1";
+  return bare;
+}
+
+/** 打开浏览器用的地址：IPv6 字面量要加方括号，`--host ::1` 才拼得出合法 URL。 */
+function browserUrl(hostname, port) {
+  const host = connectableHost(hostname);
+  return `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
+}
+
+/**
  * ompdesk listens on the loopback interface and nowhere else, so that reaching
  * the port stays restricted to processes on this machine. Remote devices go
  * through a Tailscale forward of that loopback port (docs/deployment.md).
@@ -143,4 +162,11 @@ function usageText() {
   ].join("\n");
 }
 
-module.exports = { DEFAULT_PORT, parseLaunchOptions, loopbackBindingError, usageText };
+module.exports = {
+  DEFAULT_PORT,
+  parseLaunchOptions,
+  loopbackBindingError,
+  usageText,
+  connectableHost,
+  browserUrl,
+};

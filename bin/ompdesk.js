@@ -23,7 +23,7 @@ const path = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { parseLaunchOptions, loopbackBindingError, usageText } = require("./ompdesk-options");
+const { parseLaunchOptions, loopbackBindingError, usageText, browserUrl } = require("./ompdesk-options");
 const {
   getWebAuthStatus,
   resolveWebAuthFile,
@@ -243,7 +243,9 @@ function startServer() {
   });
 
   let browserOpened = false;
-  const url = `http://${serverHost}:${port}`;
+  // 监听地址不等于可打开的地址：`0.0.0.0` / `::` 要从回环访问，IPv6 字面量在
+  // URL 里要带方括号。
+  const url = browserUrl(hostname, port);
 
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (text) => {
