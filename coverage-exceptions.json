@@ -52,7 +52,7 @@
     {
       "path": "bin/ompdesk-options.js",
       "rule": "rule-2",
-      "reason": "本次改动删除了 readCommand 与 start/status/stop/foreground 子命令解析，函数总数与被调用数各减少 3，两侧减少来自同一批删除；这些函数的测试已随实现一起移除，剩下 8 个函数仍全部被测试调用",
+      "reason": "启动器只解析选项，没有子命令解析，函数总数与被调用数同步减少 3（11 → 8），两侧减少来自同一批删除；剩余 8 个函数仍全部被测试调用",
       "alternativeVerification": "lib/ompdesk-options.test.mjs 覆盖全部剩余函数，并断言 status/stop/foreground 等位置参数被拒绝、--force 不出现在帮助文本里",
       "expires": "2027-02-11"
     },

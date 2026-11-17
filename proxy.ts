@@ -103,8 +103,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: "Untrusted API request" }, { status: 403, headers: SECURITY_HEADERS });
   }
 
-  // Recovery stays reachable while locked out
-  // but only after the host and cross-site checks above have run.
+  // Recovery stays reachable while locked out, but only after the host and cross-site checks above have run.
   if (pathname === RECOVERY_PAGE || pathname === RECOVERY_API) {
     logEvent("info", "security", "security.recovery.access", {
       ...securityFields,

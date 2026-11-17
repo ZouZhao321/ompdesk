@@ -45,7 +45,7 @@ function loopbackBindingError(hostname, env = process.env) {
  *
  * `ERR_PARSE_ARGS_INVALID_OPTION_VALUE` covers two different mistakes that need
  * different advice — a string option with no value, and a boolean flag given one
- * (`--force=1`) — so the message decides which. The regexes also keep this
+ * (`--no-open=true`) — so the message decides which. The regexes also keep this
  * working on runtimes that omit `code`.
  */
 function describeParseError(error) {
