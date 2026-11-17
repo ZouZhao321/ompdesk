@@ -46,9 +46,17 @@ function shouldForwardInterrupt({ hasConsole, pid }) {
  */
 function forwardStopSignals(child, exit, { interrupt = true, timeoutMs = FORWARD_TIMEOUT_MS } = {}) {
   const handlers = [];
+  // 先后到达的多个信号只按第一个设一次兜底：`exit` 是调用方注入的收尾动作，
+  // 重复执行没有意义。
+  let armed = false;
+  const armExit = (signal) => {
+    if (armed) return;
+    armed = true;
+    setTimeout(() => exit(signalExitCode(signal)), timeoutMs).unref();
+  };
   const forward = (signal) => () => {
     if (child.exitCode === null && child.signalCode === null) child.kill(signal);
-    setTimeout(() => exit(signalExitCode(signal)), timeoutMs).unref();
+    armExit(signal);
   };
   const forwarded = interrupt ? STOP_SIGNALS : STOP_SIGNALS.filter((signal) => signal !== "SIGINT");
   for (const signal of forwarded) {
@@ -59,7 +67,7 @@ function forwardStopSignals(child, exit, { interrupt = true, timeoutMs = FORWARD
   if (!interrupt) {
     // 每一次 SIGINT 都要接住：收尾窗口里用户常会再按一次 Ctrl+C，`once` 只挡住
     // 第一次，第二次就退回默认动作，启动器仍然抢在子进程前面退出。
-    const absorb = () => setTimeout(() => exit(signalExitCode("SIGINT")), timeoutMs).unref();
+    const absorb = () => armExit("SIGINT");
     process.on("SIGINT", absorb);
     handlers.push(["SIGINT", absorb]);
   }
