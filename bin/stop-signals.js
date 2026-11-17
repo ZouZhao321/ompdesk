@@ -38,7 +38,8 @@ function shouldForwardInterrupt({ hasConsole, pid }) {
  * `interrupt` 为假时不转发 SIGINT：终端里的 Ctrl+C 按进程组投递，同组的子进程
  * 已经收到一次，再转一次就是第二次信号。但启动器自己这一份也必须接住——默认动作
  * 会让启动器先于子进程退出，子进程的 stdout 管道读端随之关闭，收尾中再写日志就
- * 会拿到 EPIPE。接住之后启动器等子进程自己走完，超时按 130 收尾。
+ * 会拿到 EPIPE。接住之后启动器等子进程自己走完，超时按 130 收尾；重复按 Ctrl+C
+ * 同样被接住，等待时间由这个超时兜底，不会无限挂着。
  *
  * 子进程已经退出时不再送信号；无论子进程回不回得来，超时后都按该信号的退出码
  * 收尾，启动器不会一直挂着。
@@ -56,8 +57,10 @@ function forwardStopSignals(child, exit, { interrupt = true, timeoutMs = FORWARD
     handlers.push([signal, handler]);
   }
   if (!interrupt) {
+    // 每一次 SIGINT 都要接住：收尾窗口里用户常会再按一次 Ctrl+C，`once` 只挡住
+    // 第一次，第二次就退回默认动作，启动器仍然抢在子进程前面退出。
     const absorb = () => setTimeout(() => exit(signalExitCode("SIGINT")), timeoutMs).unref();
-    process.once("SIGINT", absorb);
+    process.on("SIGINT", absorb);
     handlers.push(["SIGINT", absorb]);
   }
   return () => {
