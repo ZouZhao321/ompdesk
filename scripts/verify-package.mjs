@@ -181,6 +181,16 @@ function portAnswers() {
   });
 }
 
+/** 等端口空出来，超时返回 false。 */
+async function waitForPortRelease(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (await portAnswers()) {
+    if (Date.now() > deadline) return false;
+    await Bun.sleep(250);
+  }
+  return true;
+}
+
 /**
  * 收尾：请求停止，等它真的退出，再确认端口空出来。
  *
@@ -202,14 +212,14 @@ async function stopServer() {
     }
   }
 
-  const portDeadline = Date.now() + STOP_TIMEOUT_MS;
-  while (await portAnswers()) {
-    if (Date.now() > portDeadline) {
-      process.stderr.write(`[pack] 收尾后端口 ${PORT} 仍有人应答，服务没有真正停下\n`);
-      process.exit(1);
-    }
-    await Bun.sleep(250);
-  }
+  // 启动器退出不等于整棵树退出：`exitWithin` 只看启动器，同组里卡住的 next 仍可能
+  // 应答端口，SIGKILL 升级就发不出去。先给收尾一个窗口，端口还有人应答就对整棵
+  // 进程树补一次 SIGKILL（进程组还在，组领导的 pid 可以用来投递），再判。
+  if (await waitForPortRelease(STOP_TIMEOUT_MS)) return;
+  signalTree("SIGKILL");
+  if (await waitForPortRelease(STOP_TIMEOUT_MS)) return;
+  process.stderr.write(`[pack] 收尾后端口 ${PORT} 仍有人应答，服务没有真正停下\n`);
+  process.exit(1);
 }
 
 const deadline = Date.now() + STARTUP_TIMEOUT_MS;
