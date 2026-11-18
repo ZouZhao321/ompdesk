@@ -142,6 +142,10 @@ const record = (chunk) => output.push(chunk.toString());
 server.stdout.on("data", record);
 server.stderr.on("data", record);
 
+// 收尾要等 stdio 读空，所以这个 Promise 在 spawn 时就挂上：等到需要它的时候
+// `close` 可能已经触发过，之后再监听就永远等不到。
+const closed = new Promise((resolve) => server.once("close", resolve));
+
 /** 子进程是否已经退出：被信号结束时 `exitCode` 是 null，`signalCode` 才有值。 */
 function hasExited() {
   return server.exitCode !== null || server.signalCode !== null;
@@ -165,14 +169,14 @@ function exitWithin(timeoutMs) {
  * `exit` 早于管道读完触发，紧接着读 `output` 打日志尾巴时，最后几行——往往正是
  * 收尾失败或报错的那几行——可能还没到。
  */
-function drainedWithin(timeoutMs) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(false), timeoutMs);
-    server.once("close", () => {
-      clearTimeout(timer);
-      resolve(true);
-    });
+async function drainedWithin(timeoutMs) {
+  let timer;
+  const timedOut = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
   });
+  const drained = await Promise.race([closed.then(() => true), timedOut]);
+  clearTimeout(timer);
+  return drained;
 }
 
 /** 失败收尾：连同采集到的服务端日志一起报出来，否则「为什么停不下来」无从判断。 */
