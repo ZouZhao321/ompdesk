@@ -8,13 +8,6 @@ const { isIP } = require("net");
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 const DEFAULT_PORT = "30141";
-const COMMANDS = [
-  ["start", "Start in the background and return to the prompt (default)."],
-  ["status", "Report each recorded instance: running or not, address, pid, log, per-project sessions."],
-  ["stop", "Stop the recorded instances. Refuses while a session is mid-turn."],
-  ["foreground", "Run attached to this terminal, for containers and service managers."],
-];
-const COMMAND_NAMES = COMMANDS.map(([name]) => name);
 
 function isEnabled(value) {
   return typeof value === "string" && TRUE_VALUES.has(value.trim().toLowerCase());
@@ -24,6 +17,28 @@ function isLoopbackHostname(hostname) {
   const value = String(hostname).trim().toLowerCase();
   if (value === "localhost" || value === "::1" || value === "[::1]") return true;
   return isIP(value) === 4 && value.startsWith("127.");
+}
+
+/**
+ * 客户端真正能连上的主机。
+ *
+ * `0.0.0.0` 与 `::` 是「监听所有地址」的写法，本身不是可连接的目标：监听它们的
+ * 服务从回环地址访问。IPv4 全家桶的回环是 `127.0.0.1`，IPv6 全家桶的回环是
+ * `::1`——`::` 上能不能连回 `127.0.0.1` 取决于双栈，`net.ipv6.bindv6only=1`
+ * 时那个套接字只接受 IPv6。IPv6 方括号属于 URL 语法而不是套接字语法，这里一并
+ * 去掉，让 `[::1]` 与 `::1` 得到同一个主机。
+ */
+function connectableHost(hostname) {
+  const bare = String(hostname ?? "").replace(/^\[|\]$/g, "");
+  if (bare === "" || bare === "0.0.0.0") return "127.0.0.1";
+  if (bare === "::") return "::1";
+  return bare;
+}
+
+/** 打开浏览器用的地址：IPv6 字面量要加方括号，`--host ::1` 才拼得出合法 URL。 */
+function browserUrl(hostname, port) {
+  const host = connectableHost(hostname);
+  return `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
 }
 
 /**
@@ -48,28 +63,11 @@ function loopbackBindingError(hostname, env = process.env) {
 }
 
 /**
- * First positional argument selects the command; none means `start`.
- *
- * The first positional is checked before the count: `ompdesk bogus status`
- * should say the command is unknown, not complain about the extra word.
- */
-function readCommand(positionals) {
-  const [first, ...rest] = positionals;
-  if (first && !COMMAND_NAMES.includes(first)) {
-    return { error: `Unknown command: ${first}. Use ${COMMAND_NAMES.join(", ")}.` };
-  }
-  if (rest.length > 0) {
-    return { error: `Unexpected argument "${rest.join(" ")}"; one command at a time.` };
-  }
-  return { command: first || "start" };
-}
-
-/**
  * Explain a `parseArgs` rejection without echoing its whole paragraph.
  *
  * `ERR_PARSE_ARGS_INVALID_OPTION_VALUE` covers two different mistakes that need
  * different advice — a string option with no value, and a boolean flag given one
- * (`--force=1`) — so the message decides which. The regexes also keep this
+ * (`--no-open=true`) — so the message decides which. The regexes also keep this
  * working on runtimes that omit `code`.
  */
 function describeParseError(error) {
@@ -91,11 +89,13 @@ function describeParseError(error) {
 }
 
 /**
- * Unknown options are rejected rather than ignored.
+ * Unknown options are rejected rather than ignored: a silently dropped
+ * `--authenticated` starts an unlocked server on a network that was asked to be
+ * locked.
  *
- * With positional commands in play, silently ignoring an unknown flag changes
- * what the command does: `ompdesk --stop` used to parse as no command at all and
- * therefore as `start`, so someone trying to stop the server started another one.
+ * Positional arguments are rejected too. The launcher only ever runs the server
+ * in this terminal, so a word here is a leftover from a command that no longer
+ * exists; saying so beats starting a server the caller did not ask for.
  */
 function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
   let parsed;
@@ -112,8 +112,6 @@ function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
         // Recovery from the machine itself: replaces the stored password without
         // needing the old one.
         "reset-password": { type: "boolean" },
-        // `stop --force` interrupts running tasks instead of refusing.
-        force: { type: "boolean", short: "f" },
         help: { type: "boolean", short: "h" },
       },
       strict: true,
@@ -124,25 +122,23 @@ function parseLaunchOptions(args = process.argv.slice(2), env = process.env) {
   }
 
   const { values: cliArgs, positionals } = parsed;
-  const command = readCommand(positionals);
-  if (command.error) return withDefaults({ error: command.error, env });
+
+  if (positionals.length > 0) {
+    return withDefaults({
+      error: `Unexpected argument "${positionals.join(" ")}"; ompdesk takes options only. Run \`ompdesk --help\`.`,
+      env,
+    });
+  }
 
   return withDefaults({
-    command: command.command,
     env,
     cliArgs,
     help: Boolean(cliArgs.help),
   });
 }
 
-function withDefaults({ command = "start", env, cliArgs = {}, help = false, error }) {
+function withDefaults({ env, cliArgs = {}, help = false, error }) {
   const options = {
-    command,
-    force: Boolean(cliArgs.force),
-    // Naming a port with `--port` selects one instance; `status` and `stop`
-    // otherwise cover every recorded instance. An inherited `PORT` sets the
-    // default port for `start`, not which instances the other commands look at.
-    portExplicit: cliArgs.port !== undefined,
     port: cliArgs.port ?? env.PORT ?? DEFAULT_PORT,
     hostname: cliArgs.hostname ?? env.OMPDESK_HOSTNAME ?? "127.0.0.1",
     openBrowser: !cliArgs["no-open"] && !isEnabled(env.OMPDESK_NO_OPEN),
@@ -153,19 +149,15 @@ function withDefaults({ command = "start", env, cliArgs = {}, help = false, erro
   return error ? { ...options, error } : options;
 }
 
-/** Help text, built from the same table the parser accepts commands from. */
 function usageText() {
-  const commands = COMMANDS.map(([name, summary]) => `  ${name.padEnd(11)} ${summary}`);
   return [
-    "Usage: ompdesk [command] [options]",
+    "Usage: ompdesk [options]",
     "",
-    "Commands:",
-    ...commands,
+    "Starts the server in this terminal and stays attached to it.",
     "",
     "Options:",
-    `  -p, --port <port>       Listen port (default ${DEFAULT_PORT}); selects one instance for status/stop.`,
+    `  -p, --port <port>       Listen port (default ${DEFAULT_PORT}).`,
     "  -H, --hostname <host>   Listen address; non-loopback values are refused unless allowed.",
-    "  -f, --force             With stop: interrupt running tasks instead of refusing.",
     "      --no-open           Do not open the browser.",
     "      --authenticated     Turn the password lock on, now and for later runs.",
     "      --reset-password    Replace the stored password without knowing the old one.",
@@ -173,4 +165,11 @@ function usageText() {
   ].join("\n");
 }
 
-module.exports = { COMMAND_NAMES, COMMANDS, DEFAULT_PORT, parseLaunchOptions, loopbackBindingError, usageText };
+module.exports = {
+  DEFAULT_PORT,
+  parseLaunchOptions,
+  loopbackBindingError,
+  usageText,
+  connectableHost,
+  browserUrl,
+};

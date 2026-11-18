@@ -596,16 +596,6 @@
       "kind": "type"
     },
     {
-      "path": "lib/control-activity.ts",
-      "name": "ProjectActivity",
-      "kind": "type"
-    },
-    {
-      "path": "lib/control-activity.ts",
-      "name": "SessionActivity",
-      "kind": "type"
-    },
-    {
       "path": "lib/coverage-gate/cli.ts",
       "name": "CoverageGateDependencies",
       "kind": "type"

@@ -16,6 +16,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
+import net from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,6 +27,8 @@ const CONSUMER = join(WORK, "consumer");
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.OMPDESK_PACK_PORT ?? 30198);
 const STARTUP_TIMEOUT_MS = 120_000;
+// 收尾时等子进程退出的上限：SIGTERM 一次、SIGKILL 一次，两次都超时就是清理失败。
+const STOP_TIMEOUT_MS = 10_000;
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -105,8 +108,7 @@ if (existsSync(installedRouteCache)) {
   process.exit(1);
 }
 
-// 装好的 CLI 既用来启动，也用来收尾：`start` 把 next 拉成后台进程后自己就退出，
-// 光结束启动器进程接管不到真正在服务的那个。
+// 装好的 CLI 就是启动器本身：它在前台运行服务，结束它就把整棵进程树一起结束。
 const installedCli = join(installedPkg, "bin", "ompdesk.js");
 const consumerEnv = { ...process.env, PI_CODING_AGENT_DIR: join(CONSUMER, "agent") };
 // 断言针对默认产物目录，外部环境变量会把它换掉。
@@ -119,6 +121,13 @@ const legacyRouteCache = join(installedPkg, ".next", "server", "route-cache");
 const staleMarker = join(legacyRouteCache, "pack-check-stale.txt");
 mkdirSync(legacyRouteCache, { recursive: true });
 await Bun.write(staleMarker, "route cache from another build\n");
+
+// 端口必须是空的：被无关进程占着时 next 起不来，而等首页的循环会读到那个进程的
+// 回答，后面的产物断言与收尾断言都会指错方向。
+if (await portAnswers()) {
+  process.stderr.write(`[pack] 端口 ${PORT} 已被占用，先结束占用它的进程再运行\n`);
+  process.exit(1);
+}
 
 const server = spawn(process.execPath, [installedCli, "--no-open", "-p", String(PORT)], {
   cwd: CONSUMER,
@@ -133,32 +142,128 @@ const record = (chunk) => output.push(chunk.toString());
 server.stdout.on("data", record);
 server.stderr.on("data", record);
 
-function stopServer() {
-  // `start` 把 next 拉成后台进程后启动器自己就退出了，只结束启动器接管不到真正在
-  // 服务的那个进程；交给装好的 CLI 按端口停，免得遗留的 next 继续占着端口应答。
-  const stopped = spawnSync(process.execPath, [installedCli, "stop", "--force", "-p", String(PORT)], {
-    cwd: CONSUMER,
-    env: consumerEnv,
-    encoding: "utf8",
-  });
-  if (stopped.status !== 0) {
-    process.stderr.write(
-      `[pack] 停服务失败（退出码 ${stopped.status}），后续断言会读到上一个进程的回答：\n${stopped.stdout ?? ""}${stopped.stderr ?? ""}`,
-    );
-    process.exit(1);
-  }
-  if (server.exitCode !== null) return;
-  if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], {
-      stdio: "ignore",
+// 收尾要等 stdio 读空，所以这个 Promise 在 spawn 时就挂上：等到需要它的时候
+// `close` 可能已经触发过，之后再监听就永远等不到。
+const closed = new Promise((resolve) => server.once("close", resolve));
+
+/** 子进程是否已经退出：被信号结束时 `exitCode` 是 null，`signalCode` 才有值。 */
+function hasExited() {
+  return server.exitCode !== null || server.signalCode !== null;
+}
+
+/** 等到子进程退出；超时返回 false。 */
+function exitWithin(timeoutMs) {
+  if (hasExited()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    server.once("exit", () => {
+      clearTimeout(timer);
+      resolve(true);
     });
+  });
+}
+
+/**
+ * 等 stdio 读空；超时返回 false。
+ *
+ * `exit` 早于管道读完触发，紧接着读 `output` 打日志尾巴时，最后几行——往往正是
+ * 收尾失败或报错的那几行——可能还没到。
+ */
+async function drainedWithin(timeoutMs) {
+  let timer;
+  const timedOut = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+  });
+  const drained = await Promise.race([closed.then(() => true), timedOut]);
+  clearTimeout(timer);
+  return drained;
+}
+
+/** 失败收尾：连同采集到的服务端日志一起报出来，否则「为什么停不下来」无从判断。 */
+function fail(message) {
+  process.stderr.write(`${message}\n`);
+  process.stderr.write(output.join("").split(/\r?\n/).slice(-60).join("\n"));
+  process.exit(1);
+}
+
+/** 把信号送到整棵进程树。 */
+function signalTree(signal) {
+  if (process.platform === "win32") {
+    // Windows 没有进程组，带得走 next 的只有 taskkill 的强制结束。
+    spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], { stdio: "ignore" });
     return;
   }
   try {
-    process.kill(-server.pid, "SIGTERM");
-  } catch {
-    server.kill("SIGTERM");
+    process.kill(-server.pid, signal);
+  } catch (error) {
+    // ESRCH：投递这一刻组里已经没人了；别的错误照常抛。
+    if (error.code !== "ESRCH") throw error;
   }
+}
+
+/** 端口当前是否还有人应答。 */
+function portAnswers() {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: HOST, port: PORT });
+    const finish = (open) => {
+      socket.destroy();
+      resolve(open);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(1_000, () => finish(false));
+  });
+}
+
+/** 等端口空出来，超时返回 false。 */
+async function waitForPortRelease(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (await portAnswers()) {
+    if (Date.now() > deadline) return false;
+    await Bun.sleep(250);
+  }
+  return true;
+}
+
+/**
+ * 收尾：请求停止，等它真的退出，再确认端口空出来。
+ *
+ * 启动器与 next 都在前台，结束启动器就要连它的子进程一起结束，否则遗留的 next
+ * 继续占着端口应答，后面的断言会读到上一个进程的回答。发完信号就走会把「没停下
+ * 来」当成通过，所以这里等到退出为止；超时用 SIGKILL 收尾，再超时就判失败。
+ * 退出码不是判据：按信号结束的进程在 POSIX 上报 143/130、在 Windows 上报 1，
+ * 能说明清理成功的是「进程没了、端口空了」。
+ */
+async function stopServer() {
+  if (!hasExited()) {
+    signalTree("SIGTERM");
+    if (!(await exitWithin(STOP_TIMEOUT_MS))) {
+      signalTree("SIGKILL");
+      if (!(await exitWithin(STOP_TIMEOUT_MS))) {
+        fail(`[pack] 装出来的服务（pid ${server.pid}）结束不掉，端口 ${PORT} 仍被占用`);
+      }
+    }
+  }
+
+  // 启动器退出不等于整棵树退出：`exitWithin` 只看启动器，同组里卡住的 next 仍可能
+  // 应答端口，SIGKILL 升级就发不出去。先给收尾一个窗口，端口还有人应答就对整棵
+  // 进程树补一次 SIGKILL（进程组还在，组领导的 pid 可以用来投递），再判。
+  if (await waitForPortRelease(STOP_TIMEOUT_MS)) {
+    // 端口空了不代表日志读完了：等管道读空，失败分支才有完整的服务端输出。
+    await drainedWithin(STOP_TIMEOUT_MS);
+    return;
+  }
+  if (process.platform === "win32") {
+    // 启动器退出后 Windows 追不到 next：`taskkill /T` 按父进程的 pid 树枚举，父
+    // 进程没了就没有入口，补发信号只是空操作。这里直接判失败。
+    fail(`[pack] 启动器已退出，端口 ${PORT} 仍有进程应答，Windows 上无法再追到子进程`);
+  }
+  signalTree("SIGKILL");
+  if (await waitForPortRelease(STOP_TIMEOUT_MS)) {
+    await drainedWithin(STOP_TIMEOUT_MS);
+    return;
+  }
+  fail(`[pack] 收尾后端口 ${PORT} 仍有人应答，服务没有真正停下`);
 }
 
 const deadline = Date.now() + STARTUP_TIMEOUT_MS;
@@ -181,13 +286,11 @@ try {
     await Bun.sleep(1_000);
   }
 } finally {
-  stopServer();
+  await stopServer();
 }
 
 if (status !== 200) {
-  process.stderr.write(`[pack] 首页在 ${STARTUP_TIMEOUT_MS / 1000} 秒内没有返回 200\n`);
-  process.stderr.write(output.join("").split(/\r?\n/).slice(-60).join("\n"));
-  process.exit(1);
+  fail(`[pack] 首页在 ${STARTUP_TIMEOUT_MS / 1000} 秒内没有返回 200`);
 }
 
 // 首页引用的静态产物必须全都装在这次安装的产物目录里：能满足这一点的只有本次

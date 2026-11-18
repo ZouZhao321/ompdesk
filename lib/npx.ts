@@ -95,7 +95,7 @@ export async function runNpx(args: string[], opts: RunNpxOptions = {}): Promise<
     timeout: opts.timeout,
     cwd: opts.cwd,
     env: opts.env,
-    // npx 在 Windows 上会再起 cmd 一层；后台实例没有控制台时隐藏子进程窗口。
+    // npx 在 Windows 上会再起 cmd 一层；没有控制台时隐藏子进程窗口。
     windowsHide: HIDE_CHILD_WINDOW,
   });
 }
