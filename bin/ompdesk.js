@@ -245,9 +245,20 @@ function startServer() {
   const url = browserUrl(hostname, port);
 
   child.stdout.setEncoding("utf8");
+  // 输出被管道接走且下游提前关闭（`ompdesk | head`）时，`process.stdout` 会以 EPIPE
+  // 报错；没有监听器时这条错误升级成未捕获异常，把服务端的收尾打断。转发子进程输出
+  // 这件事本身不该因此失败，其余写入错误照常抛出。
+  process.stdout.on("error", (error) => {
+    if (error.code !== "EPIPE") throw error;
+  });
+  // `data` 的分块边界是任意的，就绪文案可能被拆在两块里：留一段尾巴拼起来再匹配，
+  // 并匹配 next 完整的就绪行（`Ready in 1.2s`），避免项目日志里单独出现的 `Ready` 误判。
+  let readyTail = "";
   child.stdout.on("data", (text) => {
     process.stdout.write(text);
-    if (openBrowser && !browserOpened && text.includes("Ready")) {
+    if (!openBrowser || browserOpened) return;
+    readyTail = (readyTail + text).slice(-64);
+    if (readyTail.includes("Ready in")) {
       browserOpened = true;
       openInBrowser(url);
     }
@@ -255,17 +266,37 @@ function startServer() {
 
   // 子进程被信号杀死时 `code` 是 null，退出码只能由 `signalExitCode` 给出；两者
   // 都拿不到（从未真正启动）才按失败收尾，报 0 会让服务管理器当成正常结束。
-  child.on("exit", (code, signal) => process.exit(code ?? signalExitCode(signal) ?? 1));
+  //
+  // 收尾用 `close`：`exit` 早于子进程 stdio 读空，直接退出会丢掉服务端最后那段日志
+  // （启动失败时往往正是错误行）。但 `close` 要等管道读端全部关闭，被孙进程拖住时
+  // 会迟迟不来，所以 `exit` 之后再挂一个兜底，退出码语义不受影响。
+  let finished = false;
+  const finish = (code, signal) => {
+    if (finished) return;
+    finished = true;
+    process.exit(code ?? signalExitCode(signal) ?? 1);
+  };
+  child.on("close", finish);
+  child.on("exit", (code, signal) => {
+    setTimeout(() => finish(code, signal), 1_000).unref();
+  });
 }
 
-configurePasswordAccess().then(
-  () => {
-    requireServerPrerequisites();
-    startServer();
-  },
-  (error) => {
-    if (error instanceof PromptAbortedError) process.exit(130);
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  },
-);
+/**
+ * Run the server in this terminal, in the order the user needs it.
+ *
+ * Prerequisites first: a run whose arguments can never start should say so before it
+ * asks for a password. Then settle the credential — a run asked to be locked must
+ * never come up unlocked — and only then spawn the server.
+ */
+async function main() {
+  requireServerPrerequisites();
+  await configurePasswordAccess();
+  startServer();
+}
+
+main().catch((error) => {
+  if (error instanceof PromptAbortedError) process.exit(130);
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});

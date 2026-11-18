@@ -41,18 +41,23 @@ function shouldForwardInterrupt({ hasConsole, pid }) {
  * 会拿到 EPIPE。接住之后启动器等子进程自己走完，超时按 130 收尾；重复按 Ctrl+C
  * 同样被接住，等待时间由这个超时兜底，不会无限挂着。
  *
- * 子进程已经退出时不再送信号；无论子进程回不回得来，超时后都按该信号的退出码
- * 收尾，启动器不会一直挂着。
+ * 子进程已经退出时不再送信号。超时后还活着就补一次 SIGKILL：启动器退出后管道读端
+ * 关闭、子进程成为孤儿继续占着端口，比强行结束一次卡住的收尾代价更大。
  */
 function forwardStopSignals(child, exit, { interrupt = true, timeoutMs = FORWARD_TIMEOUT_MS } = {}) {
   const handlers = [];
   // 先后到达的多个信号只按第一个设一次兜底：`exit` 是调用方注入的收尾动作，
   // 重复执行没有意义。
   let armed = false;
+  let fallback;
   const armExit = (signal) => {
     if (armed) return;
     armed = true;
-    setTimeout(() => exit(signalExitCode(signal)), timeoutMs).unref();
+    fallback = setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      exit(signalExitCode(signal));
+    }, timeoutMs);
+    fallback.unref();
   };
   const forward = (signal) => () => {
     if (child.exitCode === null && child.signalCode === null) child.kill(signal);
@@ -72,6 +77,7 @@ function forwardStopSignals(child, exit, { interrupt = true, timeoutMs = FORWARD
     handlers.push(["SIGINT", absorb]);
   }
   return () => {
+    clearTimeout(fallback);
     for (const [signal, handler] of handlers) process.off(signal, handler);
   };
 }

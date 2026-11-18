@@ -122,6 +122,13 @@ const staleMarker = join(legacyRouteCache, "pack-check-stale.txt");
 mkdirSync(legacyRouteCache, { recursive: true });
 await Bun.write(staleMarker, "route cache from another build\n");
 
+// 端口必须是空的：被无关进程占着时 next 起不来，而等首页的循环会读到那个进程的
+// 回答，后面的产物断言与收尾断言都会指错方向。
+if (await portAnswers()) {
+  process.stderr.write(`[pack] 端口 ${PORT} 已被占用，先结束占用它的进程再运行\n`);
+  process.exit(1);
+}
+
 const server = spawn(process.execPath, [installedCli, "--no-open", "-p", String(PORT)], {
   cwd: CONSUMER,
   env: consumerEnv,
@@ -150,6 +157,29 @@ function exitWithin(timeoutMs) {
       resolve(true);
     });
   });
+}
+
+/**
+ * 等 stdio 读空；超时返回 false。
+ *
+ * `exit` 早于管道读完触发，紧接着读 `output` 打日志尾巴时，最后几行——往往正是
+ * 收尾失败或报错的那几行——可能还没到。
+ */
+function drainedWithin(timeoutMs) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    server.once("close", () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+}
+
+/** 失败收尾：连同采集到的服务端日志一起报出来，否则「为什么停不下来」无从判断。 */
+function fail(message) {
+  process.stderr.write(`${message}\n`);
+  process.stderr.write(output.join("").split(/\r?\n/).slice(-60).join("\n"));
+  process.exit(1);
 }
 
 /** 把信号送到整棵进程树。 */
@@ -206,8 +236,7 @@ async function stopServer() {
     if (!(await exitWithin(STOP_TIMEOUT_MS))) {
       signalTree("SIGKILL");
       if (!(await exitWithin(STOP_TIMEOUT_MS))) {
-        process.stderr.write(`[pack] 装出来的服务（pid ${server.pid}）结束不掉，端口 ${PORT} 仍被占用\n`);
-        process.exit(1);
+        fail(`[pack] 装出来的服务（pid ${server.pid}）结束不掉，端口 ${PORT} 仍被占用`);
       }
     }
   }
@@ -215,17 +244,22 @@ async function stopServer() {
   // 启动器退出不等于整棵树退出：`exitWithin` 只看启动器，同组里卡住的 next 仍可能
   // 应答端口，SIGKILL 升级就发不出去。先给收尾一个窗口，端口还有人应答就对整棵
   // 进程树补一次 SIGKILL（进程组还在，组领导的 pid 可以用来投递），再判。
-  if (await waitForPortRelease(STOP_TIMEOUT_MS)) return;
+  if (await waitForPortRelease(STOP_TIMEOUT_MS)) {
+    // 端口空了不代表日志读完了：等管道读空，失败分支才有完整的服务端输出。
+    await drainedWithin(STOP_TIMEOUT_MS);
+    return;
+  }
   if (process.platform === "win32") {
     // 启动器退出后 Windows 追不到 next：`taskkill /T` 按父进程的 pid 树枚举，父
     // 进程没了就没有入口，补发信号只是空操作。这里直接判失败。
-    process.stderr.write(`[pack] 启动器已退出，端口 ${PORT} 仍有进程应答，Windows 上无法再追到子进程\n`);
-    process.exit(1);
+    fail(`[pack] 启动器已退出，端口 ${PORT} 仍有进程应答，Windows 上无法再追到子进程`);
   }
   signalTree("SIGKILL");
-  if (await waitForPortRelease(STOP_TIMEOUT_MS)) return;
-  process.stderr.write(`[pack] 收尾后端口 ${PORT} 仍有人应答，服务没有真正停下\n`);
-  process.exit(1);
+  if (await waitForPortRelease(STOP_TIMEOUT_MS)) {
+    await drainedWithin(STOP_TIMEOUT_MS);
+    return;
+  }
+  fail(`[pack] 收尾后端口 ${PORT} 仍有人应答，服务没有真正停下`);
 }
 
 const deadline = Date.now() + STARTUP_TIMEOUT_MS;
@@ -252,9 +286,7 @@ try {
 }
 
 if (status !== 200) {
-  process.stderr.write(`[pack] 首页在 ${STARTUP_TIMEOUT_MS / 1000} 秒内没有返回 200\n`);
-  process.stderr.write(output.join("").split(/\r?\n/).slice(-60).join("\n"));
-  process.exit(1);
+  fail(`[pack] 首页在 ${STARTUP_TIMEOUT_MS / 1000} 秒内没有返回 200`);
 }
 
 // 首页引用的静态产物必须全都装在这次安装的产物目录里：能满足这一点的只有本次
