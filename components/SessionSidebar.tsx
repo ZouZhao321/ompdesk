@@ -32,6 +32,7 @@ import {
   subscribeUnreadSessionIds,
 } from "@/lib/session-unread";
 import { sessionDisplayTitle } from "@/lib/session-title";
+import { fetchArchivedSessions, fetchSessionList } from "@/lib/session-list-client";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { MOBILE_HIT_TARGET_PX } from "@/lib/mobile-layout";
@@ -70,9 +71,6 @@ interface WorktreeState {
 
 /** 会话活动快照的客户端形态；字段可选是因为首次渲染时还没有拿到任何数据。 */
 type SessionActivitySnapshotState = { [K in keyof SessionActivitySnapshot]?: SessionActivitySnapshot[K] };
-
-/** 会话列表接口的响应：会话数组加上同一份活动快照。 */
-type SessionsResponse = SessionActivitySnapshotState & { sessions: SessionInfo[] };
 
 const MARKER_SEEDED_STORAGE_KEY = "ompdesk:session-marker-seeded";
 const RUNNING_SESSIONS_STORAGE_KEY = "ompdesk:running-session-ids";
@@ -428,6 +426,8 @@ export function SessionSidebar({
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
+  // 归档条数随主列表一起返回，归档区展开前不单独请求。
+  const [archivedCount, setArchivedCount] = useState(0);
   // 绿色完成提示点亮后自灭；计时器归 effect 管，卸载时清掉。
   useEffect(() => {
     if (!sessionRefreshDone) return;
@@ -474,13 +474,10 @@ export function SessionSidebar({
   const loadSessions = useCallback(async (showLoading = false, force = false) => {
     try {
       if (showLoading) setLoading(true);
-      const res = await fetch(force ? "/api/sessions?force=1" : "/api/sessions", {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as SessionsResponse;
+      const data = await fetchSessionList(force);
       listedRuntimeIdsRef.current = data.sessionIdsByRuntimeId ?? {};
       setAllSessions(data.sessions);
+      setArchivedCount(data.archivedCount);
       // Treat the fetched running set as an initial fallback only. Once the
       // lightweight poll is live, a slow session-list fetch cannot overwrite it.
       if (!runningPollAuthoritativeRef.current) {
@@ -510,11 +507,15 @@ export function SessionSidebar({
     loadSessions();
   }, [loadSessions]);
 
-  const initialLoadDone = useRef(false);
+  // 首屏与 refreshKey 变化各触发一次；同一次渲染周期内重复执行（开发模式的双调用）
+  // 直接跳过，避免把同一次打开变成两次列表请求。
+  const lastLoadedRefreshKeyRef = useRef<{ key: number | undefined } | null>(null);
   useEffect(() => {
-    const isFirst = !initialLoadDone.current;
-    initialLoadDone.current = true;
-    loadSessions(isFirst, !isFirst);
+    const lastKey = lastLoadedRefreshKeyRef.current;
+    const isFirstLoad = lastKey === null;
+    if (lastKey !== null && lastKey.key === refreshKey) return;
+    lastLoadedRefreshKeyRef.current = { key: refreshKey };
+    loadSessions(isFirstLoad, !isFirstLoad);
   }, [loadSessions, refreshKey]);
 
   // 首次加载时把浏览器的异常存量加入未读集合。播种只做一次：之后点开会话
@@ -1506,6 +1507,7 @@ export function SessionSidebar({
 
       <ArchivedSessionsSection
         refreshKey={archiveRefreshKey}
+        archivedCount={archivedCount}
         selectedSessionId={selectedSessionId}
         onSelectSession={handleSelectSessionFromList}
         onRestored={handleSessionArchived}
@@ -1516,11 +1518,13 @@ export function SessionSidebar({
 
 function ArchivedSessionsSection({
   refreshKey,
+  archivedCount,
   selectedSessionId,
   onSelectSession,
   onRestored,
 }: {
   refreshKey: number;
+  archivedCount: number;
   selectedSessionId: string | null;
   onSelectSession: (s: SessionInfo) => void;
   onRestored: (id: string) => void;
@@ -1528,15 +1532,18 @@ function ArchivedSessionsSection({
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
+  // 归档区只在展开后请求；收起时依赖主列表返回的计数，打开会话不再多拉一次列表。
   useEffect(() => {
+    if (!open) return;
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch("/api/sessions?archived=1", { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as { sessions: SessionInfo[] };
-        if (!cancelled) setSessions(data.sessions);
+        const rows = await fetchArchivedSessions();
+        if (cancelled) return;
+        setSessions(rows);
+        setLoaded(true);
       } catch {
         // Archived section is best-effort; a failed fetch just leaves it stale.
       }
@@ -1544,7 +1551,7 @@ function ArchivedSessionsSection({
     return () => {
       cancelled = true;
     };
-  }, [refreshKey]);
+  }, [refreshKey, open]);
 
   const restore = useCallback(
     async (e: React.MouseEvent, id: string) => {
@@ -1563,7 +1570,7 @@ function ArchivedSessionsSection({
     [onRestored],
   );
 
-  if (sessions.length === 0 && !open) return null;
+  if (!open && sessions.length === 0 && archivedCount === 0) return null;
 
   return (
     <section
@@ -1612,7 +1619,7 @@ function ArchivedSessionsSection({
         >
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
-        {t("sidebar.archived")} ({sessions.length})
+        {t("sidebar.archived")} ({loaded ? sessions.length : archivedCount})
       </button>
       {open && (
         <div style={{ paddingLeft: 12, flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>

@@ -36,6 +36,20 @@
       "expires": "2027-02-11"
     },
     {
+      "path": "app/api/sessions/route.ts",
+      "rule": "rule-1",
+      "reason": "Next 路由处理器由框架加载，测试进程不直接 import；列表合并、过滤与归档计数都在这条处理器里",
+      "alternativeVerification": "components/SessionSidebar.archived-layout.test.mjs 断言 archivedCount 决定归档入口；开发冒烟打开会话只发一次 /api/sessions，归档区展开才请求 ?archived=1",
+      "expires": "2027-02-11"
+    },
+    {
+      "path": "components/AppShell.tsx",
+      "rule": "rule-1",
+      "reason": "顶层组件只在浏览器挂载，依赖 useAgentSession 在渲染期写 ref，服务端渲染测试直接抛错；本次改动只是复用会话列表读取函数",
+      "alternativeVerification": "1440×900 与 390×844 两档浏览器实测打开会话、归档区展开与刷新按钮，配合 bun run typecheck",
+      "expires": "2027-02-11"
+    },
+    {
       "path": "components/ChatWindow.tsx",
       "rule": "rule-1",
       "reason": "组件依赖 useAgentSession，该 hook 在渲染期把 onIdentity 挂到 useRef 对象上；React 开发构建冻结 ref，服务端渲染测试直接抛错，仓库内只能用源码文本断言与浏览器实测覆盖",

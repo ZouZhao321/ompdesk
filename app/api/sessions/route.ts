@@ -15,11 +15,12 @@ export const GET = withRequestLog("/api/sessions", async (req: Request) => {
       attachSessionProjectInfo(getRpcSessionInfos()),
     ]);
     const archived = readArchivedIds();
-    const sessions = mergeSessionLists(persistedSessions, runtimeSessions).filter((s) =>
-      showArchived ? archived.has(s.id) : !archived.has(s.id),
-    );
+    const merged = mergeSessionLists(persistedSessions, runtimeSessions);
+    const sessions = merged.filter((s) => (showArchived ? archived.has(s.id) : !archived.has(s.id)));
+    // 归档区按需请求：主列表只带一个计数，够侧栏决定是否显示入口。
+    const archivedCount = merged.filter((s) => archived.has(s.id)).length;
     return NextResponse.json(
-      { sessions, ...getRpcSessionActivitySnapshot() },
+      { sessions, archivedCount, ...getRpcSessionActivitySnapshot() },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

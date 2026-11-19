@@ -44,6 +44,7 @@ import {
 import { getInitialNavigation } from "@/lib/initial-navigation";
 import { normalizeProjectKey } from "@/lib/project-order";
 import { sessionDisplayTitle } from "@/lib/session-title";
+import { fetchSessionList } from "@/lib/session-list-client";
 import { clearUnreadSessionIds } from "@/lib/session-unread";
 import {
   clearLastOpen,
@@ -646,20 +647,14 @@ export function AppShell() {
       const token = ++workspaceRestoreTokenRef.current;
       const lastOpenSessionId = getLastOpenSession(normalizeProjectKey(projectKey));
       if (!lastOpenSessionId) return;
-      void fetch("/api/sessions")
-        .then((r) =>
-          r.ok
-            ? (r.json() as Promise<{ sessions: SessionInfo[]; sessionIdsByRuntimeId?: Record<string, string> }>)
-            : null,
-        )
+      void fetchSessionList()
         .then((d) => {
           if (token !== workspaceRestoreTokenRef.current) return; // stale switch
-          const s = d ? restoreSessionContinuation(lastOpenSessionId, d.sessions, d.sessionIdsByRuntimeId) : undefined;
+          const s = restoreSessionContinuation(lastOpenSessionId, d.sessions, d.sessionIdsByRuntimeId);
           if (!s) {
             // The list loaded but the remembered session is gone — forget it.
-            // When the list itself failed (d === null) keep the memory so a
-            // later switch retries the restore.
-            if (d) clearLastOpen(normalizeProjectKey(projectKey));
+            // A failed read falls through to the catch and keeps the memory.
+            clearLastOpen(normalizeProjectKey(projectKey));
             return;
           }
           if (normalizeProjectKey(s.projectRoot ?? s.cwd) !== normalizeProjectKey(projectKey)) {
@@ -806,10 +801,9 @@ export function AppShell() {
   // handleCwdChange relies on. Hydrate it from the session list so switching
   // worktrees right after creating a session doesn't close the chat.
   const hydrateSelectedSession = useCallback((sessionId: string) => {
-    void fetch("/api/sessions", { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<{ sessions: SessionInfo[] }>) : null))
+    void fetchSessionList()
       .then((d) => {
-        const full = d?.sessions.find((s) => s.id === sessionId);
+        const full = d.sessions.find((s) => s.id === sessionId);
         if (!full) return;
         setSelectedSession((prev) =>
           prev?.id === sessionId ? { ...prev, ...full, transient: full.transient ?? false } : prev,
@@ -822,10 +816,8 @@ export function AppShell() {
   const handleOpenSessionById = useCallback(
     async (sessionId: string): Promise<boolean> => {
       try {
-        const response = await fetch("/api/sessions", { cache: "no-store" });
-        if (!response.ok) return false;
-        const data = (await response.json()) as { sessions?: SessionInfo[] };
-        const session = data.sessions?.find((candidate) => candidate.id === sessionId);
+        const data = await fetchSessionList();
+        const session = data.sessions.find((candidate) => candidate.id === sessionId);
         if (!session) return false;
         handleSelectSession(session);
         return true;
