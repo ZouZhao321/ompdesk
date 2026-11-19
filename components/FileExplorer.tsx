@@ -94,7 +94,8 @@ async function fetchEntries(dirPath: string): Promise<FileNode[]> {
   try {
     data = (await res.json()) as { entries?: FileEntry[] };
   } catch {
-    throw new FileListError(null);
+    // 拿到了响应但读不出 JSON（代理页、被拦断的流），与连接中断分开记。
+    throw new FileListError(null, "invalid-body");
   }
   return (data.entries ?? []).map((e) => ({
     name: e.name,
@@ -253,10 +254,14 @@ function TreeNode({
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [loadError, setLoadError] = useState<FileLoadFailureMessage | null>(null);
+  // 请求是否在途。用 ref 而不是 `loading` 状态做门闩，同一拍内的连续点击也拦得住。
+  const inFlightRef = useRef(false);
 
   const loadChildren = useCallback(
     async (force = false) => {
       if (loaded && !force) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       setLoading(true);
       try {
         const entries = await fetchEntries(node.fullPath);
@@ -268,6 +273,7 @@ function TreeNode({
         // 免得一次刷新抖动就把可看的目录清空。
         setLoadError(describeFileLoadFailure(failure));
       } finally {
+        inFlightRef.current = false;
         setLoading(false);
       }
     },
@@ -765,6 +771,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       setUploadSummary(null);
       setPendingConflict(null);
       setUploadError(null);
+      // 换项目是另一棵树的首次加载，旧项目的内容不能留在这块区域里。
+      setRoots([]);
     }
 
     if (cwdChanged) setLoading(true);
@@ -1164,28 +1172,36 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         <div style={{ padding: "2px 4px" }}>
           {loading ? (
             <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("files.loading")}</div>
-          ) : rootError ? (
-            <div role="alert" style={{ padding: "8px 12px", fontSize: 11, color: "#f87171", overflowWrap: "anywhere" }}>
-              {t(rootError.key, rootError.params)}
-            </div>
           ) : (
-            roots.map((node) => (
-              <TreeNode
-                key={node.fullPath}
-                node={node}
-                depth={0}
-                cwd={cwd}
-                onOpenFile={onOpenFile}
-                onAtMention={onAtMention}
-                expandedPaths={expandedPaths}
-                onToggleExpanded={handleToggleExpanded}
-                refreshToken={refreshToken}
-                highlightedPaths={highlightedPaths}
-                gitStatusByPath={gitStatusByPath}
-                changedDirectoryPaths={changedDirectoryPaths}
-                t={t}
-              />
-            ))
+            <>
+              {/* 已经显示过树时只叠加错误行，一次刷新抖动不该把可看的树换掉；
+                  首次加载失败（roots 为空）没有内容可留，才由错误行占用这块区域。 */}
+              {rootError && (
+                <div
+                  role="alert"
+                  style={{ padding: "8px 12px", fontSize: 11, color: "#f87171", overflowWrap: "anywhere" }}
+                >
+                  {t(rootError.key, rootError.params)}
+                </div>
+              )}
+              {roots.map((node) => (
+                <TreeNode
+                  key={node.fullPath}
+                  node={node}
+                  depth={0}
+                  cwd={cwd}
+                  onOpenFile={onOpenFile}
+                  onAtMention={onAtMention}
+                  expandedPaths={expandedPaths}
+                  onToggleExpanded={handleToggleExpanded}
+                  refreshToken={refreshToken}
+                  highlightedPaths={highlightedPaths}
+                  gitStatusByPath={gitStatusByPath}
+                  changedDirectoryPaths={changedDirectoryPaths}
+                  t={t}
+                />
+              ))}
+            </>
           )}
           {!loading && !rootError && roots.length === 0 && (
             <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("files.noFiles")}</div>

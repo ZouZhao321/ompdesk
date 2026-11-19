@@ -233,6 +233,7 @@ export const enLocale: LocalePlugin = {
     "files.unauthorized": "This directory is not authorized for access",
     "files.loadFailed": "Failed to load directory (HTTP {status})",
     "files.loadFailedNetwork": "Failed to load directory (network interrupted)",
+    "files.loadFailedInvalid": "Failed to load directory (unreadable response)",
     "files.uploadFilesTitle": "Upload files to project root",
     "files.refreshExplorer": "Refresh explorer",
     "files.changedFiles": "{count} changed files",

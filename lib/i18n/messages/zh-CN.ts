@@ -230,6 +230,7 @@ export const zhCNLocale: LocalePlugin = {
     "files.unauthorized": "该目录未被授权访问",
     "files.loadFailed": "目录加载失败（HTTP {status}）",
     "files.loadFailedNetwork": "目录加载失败（网络中断）",
+    "files.loadFailedInvalid": "目录加载失败（响应异常）",
     "files.uploadFilesTitle": "将文件上传到项目根目录",
     "files.refreshExplorer": "刷新文件浏览器",
     "files.changedFiles": "{count} 个变更文件",
