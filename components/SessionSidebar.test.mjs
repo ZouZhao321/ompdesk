@@ -111,10 +111,12 @@ test("offers the downstream context-menu hook only on a normal session row", () 
   assert.match(sessionItemSource, /onContextMenu=\{confirmDelete \|\| renaming \? undefined : handleContextMenu\}/);
 });
 
-test("manual and lifecycle refreshes bypass the server session-list cache", () => {
-  assert.match(source, /force \? "\/api\/sessions\?force=1" : "\/api\/sessions"/);
-  assert.match(source, /cache: "no-store"/);
-  assert.match(source, /loadSessions\(isFirst, !isFirst\)/);
+test("manual and lifecycle refreshes still ask the client for a fresh scan", () => {
+  // 列表请求统一走 lib/session-list-client：强制刷新表达为 fetchSessionList 的 force 参数，
+  // 缓存指令留在客户端模块里，侧栏不再自己拼 URL。
+  assert.match(source, /import \{ fetchArchivedSessions, fetchSessionList \} from "@\/lib\/session-list-client";/);
+  assert.match(source, /const data = await fetchSessionList\(force\);/);
+  assert.match(source, /loadSessions\(isFirstLoad, !isFirstLoad\)/);
   assert.match(source, /onClick=\{\(\) => loadSessions\(false, true\)\}/);
   assert.match(source, /loadSessions\(false, true\);[\s\S]*?onBackgroundTaskDone/);
 });
