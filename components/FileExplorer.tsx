@@ -14,6 +14,7 @@ import type { GitFileStatus, GitStatusResponse } from "@/lib/git-types";
 import type { OpenFileOptions } from "@/lib/panel-tabs";
 import { GIT_STATUS_COLORS, GitStatusBadge } from "./GitStatusBadge";
 import type { Translate } from "@/lib/i18n/types";
+import { describeFileLoadFailure, FileListError, type FileLoadFailureMessage } from "@/lib/file-load-error";
 import { useI18n } from "@/hooks/useI18n";
 
 /** 被 Git 忽略的条目颜色，由运行期主题变量推导，明暗两套主题通用。 */
@@ -82,18 +83,20 @@ interface PendingConflict {
 }
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
-  const res = await fetch(getFileApiUrl(dirPath, "list"));
-  if (!res.ok) {
-    let message = `Failed to load files (HTTP ${res.status})`;
-    try {
-      const data = (await res.json()) as { error?: string };
-      if (data.error) message = data.error;
-    } catch {
-      // ignore non-JSON error bodies
-    }
-    throw new Error(message);
+  let res: Response;
+  try {
+    res = await fetch(getFileApiUrl(dirPath, "list"));
+  } catch {
+    throw new FileListError(null);
   }
-  const data = (await res.json()) as { entries?: FileEntry[] };
+  if (!res.ok) throw new FileListError(res.status);
+  let data: { entries?: FileEntry[] };
+  try {
+    data = (await res.json()) as { entries?: FileEntry[] };
+  } catch {
+    // 拿到了响应但读不出 JSON（代理页、被拦断的流），与连接中断分开记。
+    throw new FileListError(null, "invalid-body");
+  }
   return (data.entries ?? []).map((e) => ({
     name: e.name,
     fullPath: joinFilePath(dirPath, e.name),
@@ -250,27 +253,37 @@ function TreeNode({
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [loadError, setLoadError] = useState<FileLoadFailureMessage | null>(null);
+  // 请求是否在途。用 ref 而不是 `loading` 状态做门闩，同一拍内的连续点击也拦得住。
+  const inFlightRef = useRef(false);
 
   const loadChildren = useCallback(
     async (force = false) => {
       if (loaded && !force) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       setLoading(true);
       try {
         const entries = await fetchEntries(node.fullPath);
         setChildren(entries);
+        setLoadError(null);
         setLoaded(true);
-      } catch {
-        // ignore
+      } catch (failure) {
+        // 失败时不标记已加载，下次展开或整树刷新会重新请求；已经显示过的内容保留，
+        // 免得一次刷新抖动就把可看的目录清空。
+        setLoadError(describeFileLoadFailure(failure));
       } finally {
+        inFlightRef.current = false;
         setLoading(false);
       }
     },
     [loaded, node.fullPath],
   );
 
-  // Re-fetch children when the tree refreshes and the directory is open.
+  // 整树刷新时重取已展开目录的子项。上一轮失败的节点不会被标记为已加载，因此必须
+  // 一并包含在这里，否则它永远等不到重试。
   useEffect(() => {
-    if (open && loaded) {
+    if (open) {
       loadChildren(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,13 +291,19 @@ function TreeNode({
 
   const handleClick = useCallback(() => {
     if (node.isDir) {
+      // 失败的目录仍处于展开状态，此时点击的含义是「重试」而不是「收起」，
+      // 用户才看得到自己这一下点击的结果。
+      if (open && loadError) {
+        void loadChildren(true);
+        return;
+      }
       const next = !open;
       onToggleExpanded(node.fullPath, next);
       if (next && !loaded) loadChildren();
     } else {
       onOpenFile(node.fullPath, node.name);
     }
-  }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onToggleExpanded]);
+  }, [node.isDir, node.fullPath, node.name, loaded, loadError, open, loadChildren, onOpenFile, onToggleExpanded]);
 
   return (
     <div>
@@ -463,6 +482,21 @@ function TreeNode({
       </div>
       {node.isDir && open && (
         <div>
+          {loadError && (
+            <div
+              role="alert"
+              style={{
+                paddingLeft: 8 + (depth + 1) * 14,
+                paddingRight: 8,
+                fontSize: 11,
+                lineHeight: 1.35,
+                color: "#f87171",
+                overflowWrap: "anywhere",
+              }}
+            >
+              {t(loadError.key, loadError.params)}
+            </div>
+          )}
           {children.map((child) => (
             <TreeNode
               key={child.fullPath}
@@ -480,7 +514,7 @@ function TreeNode({
               t={t}
             />
           ))}
-          {children.length === 0 && loaded && (
+          {children.length === 0 && loaded && !loadError && (
             <div
               style={{
                 paddingLeft: 8 + (depth + 1) * 14,
@@ -491,7 +525,7 @@ function TreeNode({
                 alignItems: "center",
               }}
             >
-              empty
+              {t("files.noFiles")}
             </div>
           )}
         </div>
@@ -571,7 +605,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [rootError, setRootError] = useState<FileLoadFailureMessage | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
   const [highlightedPaths, setHighlightedPaths] = useState<Set<string>>(new Set());
@@ -737,17 +771,21 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       setUploadSummary(null);
       setPendingConflict(null);
       setUploadError(null);
+      // 换项目是另一棵树的首次加载，旧项目的内容不能留在这块区域里。
+      setRoots([]);
     }
 
     if (cwdChanged) setLoading(true);
-    setError(null);
+    setRootError(null);
     let cancelled = false;
     fetchEntries(cwd)
       .then((entries) => {
         if (!cancelled) setRoots(entries);
       })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      .catch((failure) => {
+        if (!cancelled) {
+          setRootError(describeFileLoadFailure(failure));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -1134,28 +1172,38 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         <div style={{ padding: "2px 4px" }}>
           {loading ? (
             <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("files.loading")}</div>
-          ) : error ? (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "#f87171" }}>{error}</div>
           ) : (
-            roots.map((node) => (
-              <TreeNode
-                key={node.fullPath}
-                node={node}
-                depth={0}
-                cwd={cwd}
-                onOpenFile={onOpenFile}
-                onAtMention={onAtMention}
-                expandedPaths={expandedPaths}
-                onToggleExpanded={handleToggleExpanded}
-                refreshToken={refreshToken}
-                highlightedPaths={highlightedPaths}
-                gitStatusByPath={gitStatusByPath}
-                changedDirectoryPaths={changedDirectoryPaths}
-                t={t}
-              />
-            ))
+            <>
+              {/* 已经显示过树时只叠加错误行，一次刷新抖动不该把可看的树换掉；
+                  首次加载失败（roots 为空）没有内容可留，才由错误行占用这块区域。 */}
+              {rootError && (
+                <div
+                  role="alert"
+                  style={{ padding: "8px 12px", fontSize: 11, color: "#f87171", overflowWrap: "anywhere" }}
+                >
+                  {t(rootError.key, rootError.params)}
+                </div>
+              )}
+              {roots.map((node) => (
+                <TreeNode
+                  key={node.fullPath}
+                  node={node}
+                  depth={0}
+                  cwd={cwd}
+                  onOpenFile={onOpenFile}
+                  onAtMention={onAtMention}
+                  expandedPaths={expandedPaths}
+                  onToggleExpanded={handleToggleExpanded}
+                  refreshToken={refreshToken}
+                  highlightedPaths={highlightedPaths}
+                  gitStatusByPath={gitStatusByPath}
+                  changedDirectoryPaths={changedDirectoryPaths}
+                  t={t}
+                />
+              ))}
+            </>
           )}
-          {!loading && !error && roots.length === 0 && (
+          {!loading && !rootError && roots.length === 0 && (
             <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>{t("files.noFiles")}</div>
           )}
         </div>
