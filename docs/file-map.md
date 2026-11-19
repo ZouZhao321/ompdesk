@@ -118,6 +118,7 @@ session-marker.ts    侧栏标记判定、播种集合与运行结束的归属�
 session-unread.ts    未读会话集合的共享状态、订阅与本机持久化
 session-map.ts       .jsonl → 轮次树，并合并 fork 文件
 session-archive.ts   归档标记读写
+session-list-client.ts  客户端会话列表读取：并发请求合并，归档区展开时按需读取
 session-system-prompt.ts  按会话 cwd 解析 SYSTEM.md / APPEND_SYSTEM.md
 session-title.ts     omp 自带标题生成器的薄封装
 telemetry.ts         OTLP 导出：进程内注册一次 provider，每会话给配置，轮末 flush
